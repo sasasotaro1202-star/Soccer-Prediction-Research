@@ -38,7 +38,8 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     history = history.copy().sort_values("kickoff_utc")
     rows = []
     for r in matches.sort_values("kickoff_utc").itertuples():
-        cutoff = pd.Timestamp(r.kickoff_utc) - pd.Timedelta(minutes=60)
+        kickoff = pd.Timestamp(r.kickoff_utc)
+        cutoff = kickoff - pd.to_timedelta(60, unit="min")
         row = {
             "match_id": r.match_id,
             "competition": r.competition,
@@ -48,7 +49,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
             "away_team": r.away_team,
             "prediction_cutoff_at_utc": cutoff,
         }
-        prior = history[history.kickoff_utc < r.kickoff_utc]
+        prior = history[history.kickoff_utc < kickoff]
         pit_flags = []
         source_times = []
         for w in windows:
