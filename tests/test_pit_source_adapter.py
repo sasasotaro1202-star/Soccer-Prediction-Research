@@ -16,10 +16,11 @@ def test_all_15_competitions_are_explicitly_classified():
     assert set(matrix["competition"]) == set(COMPETITION_ADAPTERS)
 
 
-def test_source_url_uses_correct_football_data_mapping():
+def test_source_url_uses_fixed_and_acquisition_mappings():
     assert source_url("E0", 2025).endswith("/2526/E0.csv")
     assert source_url("CH", 2025).endswith("/2526/E1.csv")
-    assert source_url("D1", 2025).endswith("/2526/D1.csv")
+    assert source_url("EPL", 2025).endswith("/2526/E0.csv")
+    assert source_url("CHA", 2025).endswith("/2526/E1.csv")
 
 
 def test_unknown_competition_fails_closed():
@@ -31,34 +32,18 @@ def test_unknown_competition_fails_closed():
         raise AssertionError("unverified competition must not receive a source URL")
 
 
-def test_row_presence_requires_date_and_teams():
-    frame = pd.DataFrame({
-        "Date": ["01/09/25"],
-        "HomeTeam": ["Team A"],
-        "AwayTeam": ["Team B"],
-    })
+def test_row_key_contains_completed_result_identity():
     row = pd.Series({
         "home_team": "Team A",
         "away_team": "Team B",
         "kickoff_utc": "2025-09-01T18:00:00Z",
+        "home_goals": 2,
+        "away_goals": 1,
+        "result": "H",
     })
-    assert FootballDataWaybackAdapter._row_present(frame, row)
-
-
-def test_row_presence_rejects_wrong_team():
-    frame = pd.DataFrame({
-        "Date": ["01/09/25"],
-        "HomeTeam": ["Team A"],
-        "AwayTeam": ["Team B"],
-    })
-    row = pd.Series({
-        "home_team": "Team X",
-        "away_team": "Team B",
-        "kickoff_utc": "2025-09-01T18:00:00Z",
-    })
-    assert not FootballDataWaybackAdapter._row_present(frame, row)
+    assert FootballDataWaybackAdapter._row_key(row) == ("2025-09-01", "Team A", "Team B", 2.0, 1.0, "H")
 
 
 def test_source_evidence_never_invents_timestamp():
-    evidence = SourceEvidence(None, "UNVERIFIABLE", reason="no_archive_capture_before_cutoff")
+    evidence = SourceEvidence(None, "UNVERIFIABLE", reason="no_archive_snapshot_contains_completed_result")
     assert evidence.source_available_at_utc is None
