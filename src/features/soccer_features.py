@@ -34,12 +34,7 @@ def _state(history: pd.DataFrame, team: str, cutoff: pd.Timestamp, window: int =
 
 
 def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(3, 5, 10)) -> pd.DataFrame:
-    """Build features using only past results whose source was available by cutoff.
-
-    If any result required by a selected rolling window lacks independently
-    evidenced source availability, that window is invalid rather than silently
-    replacing the missing result with an older one.
-    """
+    """Build features using only past results whose source was available by cutoff."""
     history = history.copy().sort_values("kickoff_utc")
     rows = []
     for r in matches.sort_values("kickoff_utc").itertuples():
@@ -58,7 +53,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         source_times = []
         for w in windows:
             hs = _state(prior, r.home_team, r.kickoff_utc, w)
-            aws = _state(prior, r.away_team, r.away_team if False else r.kickoff_utc, w)
+            aws = _state(prior, r.away_team, r.kickoff_utc, w)
             for k, v in hs.items():
                 row[f"home_{k}_{w}"] = v
             for k, v in aws.items():
