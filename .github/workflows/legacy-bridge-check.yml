@@ -1,6 +1,8 @@
 name: Legacy V9/V12 Bridge Check
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -33,5 +35,9 @@ jobs:
       - name: Install Research Engine dependencies
         run: python -m pip install -r requirements.txt
 
-      - name: Run adapter and comparison tests
-        run: python -m pytest -q tests/test_v9_v12_adapter.py tests/test_baseline_comparison.py
+      - name: Run adapter, PIT, and comparison tests
+        run: |
+          python -m pytest -q \
+            tests/test_v9_v12_adapter.py \
+            tests/test_pit_source_adapter.py \
+            tests/test_baseline_comparison.py
