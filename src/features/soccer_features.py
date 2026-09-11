@@ -52,8 +52,8 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         pit_flags = []
         source_times = []
         for w in windows:
-            hs = _state(prior, r.home_team, r.kickoff_utc, w)
-            aws = _state(prior, r.away_team, r.kickoff_utc, w)
+            hs = _state(prior, r.home_team, cutoff, w)
+            aws = _state(prior, r.away_team, cutoff, w)
             for k, v in hs.items():
                 row[f"home_{k}_{w}"] = v
             for k, v in aws.items():
@@ -64,11 +64,17 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
                 team_rows = prior[(prior.home_team == team) | (prior.away_team == team)].sort_values("kickoff_utc").tail(w)
                 if len(team_rows) == w:
                     times = pd.to_datetime(team_rows.get("source_available_at_utc"), utc=True, errors="coerce")
-                    if not times.isna().any():
+                    if not times.isna().any() and (times <= cutoff).all():
                         source_times.append(times.max())
 
-        row["home_gd_5_minus_away_gd_5"] = row["home_gd_5"] - row["away_gd_5"]
-        row["home_points_5_minus_away_points_5"] = row["home_points_5"] - row["away_points_5"]
+        # Matchup features are emitted only when the requested 5-game window exists.
+        # This keeps custom test/research windows from raising unrelated KeyErrors.
+        if "home_gd_5" in row and "away_gd_5" in row:
+            row["home_gd_5_minus_away_gd_5"] = row["home_gd_5"] - row["away_gd_5"]
+            row["home_points_5_minus_away_points_5"] = row["home_points_5"] - row["away_points_5"]
+        else:
+            row["home_gd_5_minus_away_gd_5"] = np.nan
+            row["home_points_5_minus_away_points_5"] = np.nan
         row["home_advantage"] = 1.0
         row["feature_source_max_available_at_utc"] = max(source_times) if source_times else pd.NaT
         row["pit_verified"] = bool(pit_flags) and all(flag == 1.0 for flag in pit_flags)
