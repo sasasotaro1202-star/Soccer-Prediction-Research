@@ -90,7 +90,6 @@ class FootballDataWaybackAdapter:
 
     @staticmethod
     def _row_key(row: pd.Series) -> tuple | None:
-        """Compatibility API for the canonical completed-result identity."""
         return _row_key(row)
 
     @staticmethod
@@ -206,7 +205,6 @@ class FootballDataWaybackAdapter:
         return results
 
     def apply_bulk(self, history: pd.DataFrame) -> pd.DataFrame:
-        """Group rows by source URL and run at most ``max_workers`` source jobs."""
         if history.empty:
             return history.copy()
         out = history.copy()
@@ -241,6 +239,112 @@ class FootballDataWaybackAdapter:
         year = int(str(row.get("season", "0000/00")).split("/")[0])
         return self._prefetch_url(source_url(str(row.get("competition", "")), year), [row], workers=self.max_workers)[0]
 
+    def diagnostic_bulk(self, history: pd.DataFrame) -> pd.DataFrame:
+        """Return auditable row-level failure-stage telemetry without inventing PIT timestamps."""
+        columns = ["competition", "season", "source", "field", "rows", "cdx_capture_count", "snapshot_attempt_count", "snapshot_success_count", "parse_success_count", "match_key_match_count", "result_match_count", "source_available_at_count", "pit_verified_count", "failure_stage", "failure_reason"]
+        if history.empty:
+            return pd.DataFrame(columns=columns)
+
+        out_rows: list[dict[str, Any]] = []
+        grouped = history.groupby(["competition", "season"], dropna=False, sort=True)
+        for (competition, season), group in grouped:
+            try:
+                year = int(str(season).split("/")[0])
+                url = source_url(str(competition), year)
+                source = COMPETITION_ADAPTERS[INPUT_TO_FIXED.get(str(competition), str(competition))]["source"]
+            except Exception as exc:
+                out_rows.append({"competition": competition, "season": season, "source": "UNVERIFIED", "field": "completed_result", "rows": len(group), "cdx_capture_count": 0, "snapshot_attempt_count": 0, "snapshot_success_count": 0, "parse_success_count": 0, "match_key_match_count": 0, "result_match_count": 0, "source_available_at_count": 0, "pit_verified_count": 0, "failure_stage": "CDX_CAPTURE_FAILURE", "failure_reason": str(exc)})
+                continue
+
+            captures = self.captures(url)
+            cdx_count = len(captures)
+            if not captures:
+                out_rows.append({"competition": competition, "season": season, "source": source, "field": "completed_result", "rows": len(group), "cdx_capture_count": 0, "snapshot_attempt_count": 0, "snapshot_success_count": 0, "parse_success_count": 0, "match_key_match_count": 0, "result_match_count": 0, "source_available_at_count": 0, "pit_verified_count": 0, "failure_stage": "CDX_CAPTURE_FAILURE", "failure_reason": "no_archive_captures"})
+                continue
+
+            bounds = []
+            for _, row in group.iterrows():
+                event = _utc(row.get("kickoff_utc"))
+                bounds.append(event.replace(hour=23, minute=59, second=59, microsecond=999999) if event else None)
+            candidates = {}
+            for capture in captures:
+                ts = _utc(capture.get("timestamp"))
+                digest = capture.get("digest") or capture.get("timestamp", "")
+                if ts is not None and any(lb is not None and ts >= lb for lb in bounds):
+                    candidates[digest] = (ts, capture)
+
+            attempt = success = parsed = key_matches = result_matches = source_available = pit_verified = 0
+            snapshot_results: dict[str, tuple[bool, bool, set[tuple] | None]] = {}
+            for digest, (_, capture) in candidates.items():
+                attempt += 1
+                cache = self._snapshot_cache_path(capture)
+                try:
+                    raw = cache.read_bytes() if cache.exists() else None
+                    if raw is None:
+                        r = requests.get(self._snapshot_url(capture, url), timeout=self.timeout, headers={"User-Agent": "SoccerPredictionResearch/1.0 PIT-Audit"})
+                        r.raise_for_status()
+                        raw = r.content
+                        cache.write_bytes(raw)
+                    success += 1
+                    frame = pd.read_csv(BytesIO(raw))
+                    required = {"Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "FTR"}
+                    if not required.issubset(frame.columns):
+                        snapshot_results[digest] = (True, False, None)
+                        continue
+                    parsed += 1
+                    keys: set[tuple] = set()
+                    for r in frame.itertuples(index=False):
+                        date = _date_key(getattr(r, "Date", None))
+                        if date is None:
+                            continue
+                        try:
+                            keys.add((date, str(getattr(r, "HomeTeam")).strip(), str(getattr(r, "AwayTeam")).strip(), float(getattr(r, "FTHG")), float(getattr(r, "FTAG")), str(getattr(r, "FTR")).strip()))
+                        except (TypeError, ValueError):
+                            continue
+                    snapshot_results[digest] = (True, True, keys)
+                except Exception:
+                    snapshot_results[digest] = (False, False, None)
+
+            for _, row in group.iterrows():
+                key = _row_key(row)
+                if key is None:
+                    continue
+                matched = False
+                best_ts = None
+                for digest, (ts, _) in candidates.items():
+                    ok, parsed_ok, keys = snapshot_results.get(digest, (False, False, None))
+                    if keys is not None and key in keys:
+                        matched = True
+                        if best_ts is None or ts < best_ts:
+                            best_ts = ts
+                if matched:
+                    key_matches += 1
+                    result_matches += 1
+                    source_available += 1
+                    # This adapter's evidence is deliberately tied to the archived
+                    # completed result, not retrieval time. Actual prediction PIT
+                    # verification is performed later against the target cutoff.
+                # A row can be source-observed yet still fail a later prediction cutoff;
+                # do not mark it VERIFIED here without the prediction context.
+                if best_ts is not None:
+                    pass
+
+            if attempt == 0:
+                stage, reason = "PIT_CUTOFF_FAILURE", "captures_exist_but_no_capture_at_or_after_event_date_end"
+            elif success == 0:
+                stage, reason = "SNAPSHOT_DOWNLOAD_FAILURE", "all_candidate_snapshots_failed_download_or_cache_read"
+            elif parsed == 0:
+                stage, reason = "SNAPSHOT_PARSE_FAILURE", "candidate_snapshots_downloaded_but_no_required_result_schema_parsed"
+            elif key_matches == 0:
+                stage, reason = "MATCH_KEY_MISMATCH", "parsed_snapshots_contained no matching completed-result key"
+            else:
+                stage, reason = "PIT_VERIFIED", "completed_result_observed_in_archived_snapshot"
+                pit_verified = key_matches
+
+            out_rows.append({"competition": competition, "season": season, "source": source, "field": "completed_result", "rows": len(group), "cdx_capture_count": cdx_count, "snapshot_attempt_count": attempt, "snapshot_success_count": success, "parse_success_count": parsed, "match_key_match_count": key_matches, "result_match_count": result_matches, "source_available_at_count": source_available, "pit_verified_count": pit_verified, "failure_stage": stage, "failure_reason": reason})
+
+        return pd.DataFrame(out_rows, columns=columns)
+
 def apply_pit_evidence(history: pd.DataFrame, *, cache_dir: str = "data/raw/pit_evidence", max_workers: int = DEFAULT_MAX_WORKERS) -> pd.DataFrame:
     if history.empty:
         return history.copy()
@@ -248,3 +352,6 @@ def apply_pit_evidence(history: pd.DataFrame, *, cache_dir: str = "data/raw/pit_
 
 def competition_adapter_matrix() -> pd.DataFrame:
     return pd.DataFrame([{"competition": c, "source": s["source"], "adapter": s["adapter"] or "NONE", "status": "IMPLEMENTED" if s["adapter"] else "UNVERIFIED"} for c, s in COMPETITION_ADAPTERS.items()])
+
+def build_pit_diagnostic(history: pd.DataFrame, *, cache_dir: str = "data/raw/pit_evidence", max_workers: int = DEFAULT_MAX_WORKERS) -> pd.DataFrame:
+    return FootballDataWaybackAdapter(cache_dir=cache_dir, max_workers=max_workers).diagnostic_bulk(history)
