@@ -18,6 +18,13 @@ def season_folder(start_year: int) -> str:
     return f"{str(start_year)[-2:]}{str(start_year + 1)[-2:]}"
 
 
+def _parse_football_data_dates(series: pd.Series) -> pd.Series:
+    """Parse the historical DD/MM/YY-style dates without per-element fallback warnings."""
+    text = series.astype("string").str.strip()
+    parsed = pd.to_datetime(text, format="mixed", dayfirst=True, errors="coerce", utc=True)
+    return parsed
+
+
 def load_season(competition: str, start_year: int, cache_dir: str = "data/raw") -> pd.DataFrame:
     if competition not in LEAGUES:
         raise ValueError(f"No Football-Data.co.uk mapping for {competition}")
@@ -39,7 +46,7 @@ def load_season(competition: str, start_year: int, cache_dir: str = "data/raw") 
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"{url}: missing columns {sorted(missing)}")
-    date = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce", utc=True)
+    date = _parse_football_data_dates(df["Date"])
     # Football-Data rows represent completed historical matches. We intentionally
     # do not pretend retrieved_at is source_available_at; availability is unknown.
     out = pd.DataFrame({
@@ -57,7 +64,6 @@ def load_season(competition: str, start_year: int, cache_dir: str = "data/raw") 
         "source_available_at_utc": pd.NaT,
         "retrieved_at_utc": retrieved,
     })
-    # The raw snapshot is reproducible even when source publication time is absent.
     digest = hashlib.sha256(raw).hexdigest()
     out["raw_snapshot_id"] = digest
     return out.dropna(subset=["kickoff_utc", "home_goals", "away_goals"]).reset_index(drop=True)
