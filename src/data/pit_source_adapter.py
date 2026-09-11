@@ -2,11 +2,10 @@ from __future__ import annotations
 
 """Point-in-time source evidence adapters for the soccer research system.
 
-The key PIT distinction is that a historical match result is not expected to be
-available before that match. We therefore determine when each *past result*
-first appears in an archived source snapshot, then let the feature builder use
-that result only for predictions whose cutoff is at or after that availability
-time. A current retrieval timestamp is never promoted to source availability.
+A historical match result is not expected to be available before that match.
+The adapter therefore determines when each past result first appears in an
+archived source snapshot, then feature replay can use it only after that time.
+Current retrieval time is never promoted to source availability.
 """
 
 import hashlib
@@ -43,6 +42,10 @@ COMPETITION_ADAPTERS = {
     "EFL": {"source": "UNVERIFIED", "source_code": None, "adapter": None},
 }
 
+INPUT_TO_FIXED = {
+    "EPL": "E0", "CHA": "CH", "BL1": "D1", "SA": "I1", "LL": "SP1", "FL1": "F1", "ERE": "N1",
+}
+
 
 @dataclass(frozen=True)
 class SourceEvidence:
@@ -66,7 +69,8 @@ def _utc(value: Any) -> datetime | None:
 
 
 def source_url(competition: str, start_year: int) -> str:
-    spec = COMPETITION_ADAPTERS.get(competition)
+    fixed = INPUT_TO_FIXED.get(competition, competition)
+    spec = COMPETITION_ADAPTERS.get(fixed)
     if not spec or not spec["source_code"]:
         raise ValueError(f"No PIT source mapping for {competition}")
     return BASE.format(season_folder=season_folder(start_year), league=spec["source_code"])
@@ -184,7 +188,6 @@ class FootballDataWaybackAdapter:
             return None
 
     def evidence_for_row(self, row: pd.Series) -> SourceEvidence:
-        """Return the first source capture after the match containing its result."""
         competition = str(row.get("competition", ""))
         try:
             start_year = int(str(row.get("season", "0000/00")).split("/")[0])
@@ -219,7 +222,6 @@ class FootballDataWaybackAdapter:
 
 
 def apply_pit_evidence(history: pd.DataFrame, *, cache_dir: str = "data/raw/pit_evidence") -> pd.DataFrame:
-    """Annotate each historical result with independently evidenced availability."""
     if history.empty:
         return history.copy()
     out = history.copy()
