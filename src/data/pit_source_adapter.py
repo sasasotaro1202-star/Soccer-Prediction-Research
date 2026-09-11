@@ -2,20 +2,21 @@ from __future__ import annotations
 
 """Point-in-time source evidence adapters for the soccer research system.
 
-The adapter is deliberately fail-closed.  A current retrieval timestamp is
-never promoted to a historical availability timestamp.  For Football-Data.co.uk
+The adapter is deliberately fail-closed. A current retrieval timestamp is never
+promoted to a historical availability timestamp. For Football-Data.co.uk
 historical CSVs, Internet Archive captures are used as auditable evidence that
-the source file was accessible no later than the capture time.  Record-level
+the source file was accessible no later than the capture time. Record-level
 presence is also checked against the archived snapshot before a row is marked
 PIT-verified.
 """
 
+import hashlib
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 import pandas as pd
 import requests
@@ -25,24 +26,24 @@ from src.data.football_data import BASE, LEAGUES, season_folder
 WAYBACK_CDX = "https://web.archive.org/cdx/search/cdx"
 WAYBACK_WEB = "https://web.archive.org/web"
 
-# The fixed 15-competition universe.  Only sources with a concrete, auditable
+# The fixed 15-competition universe. Only sources with a concrete, auditable
 # adapter are marked implemented; API existence alone never becomes coverage.
 COMPETITION_ADAPTERS = {
-    "E0": {"source": "Football-Data.co.uk", "adapter": "football_data_wayback"},
-    "CH": {"source": "Football-Data.co.uk", "adapter": "football_data_wayback"},
-    "D1": {"source": "Football-Data.co.uk", "adapter": "football_data_wayback"},
-    "I1": {"source": "Football-Data.co.uk", "adapter": "football_data_wayback"},
-    "SP1": {"source": "Football-Data.co.uk", "adapter": "football_data_wayback"},
-    "F1": {"source": "Football-Data.co.uk", "adapter": "football_data_wayback"},
-    "N1": {"source": "Football-Data.co.uk", "adapter": "football_data_wayback"},
-    "UCL": {"source": "UNVERIFIED", "adapter": None},
-    "UEL": {"source": "UNVERIFIED", "adapter": None},
-    "J1": {"source": "UNVERIFIED", "adapter": None},
-    "J2": {"source": "UNVERIFIED", "adapter": None},
-    "J3": {"source": "UNVERIFIED", "adapter": None},
-    "DFBP": {"source": "UNVERIFIED", "adapter": None},
-    "FRIENDLY": {"source": "UNVERIFIED", "adapter": None},
-    "EFL": {"source": "UNVERIFIED", "adapter": None},
+    "E0": {"source": "Football-Data.co.uk", "source_code": "E0", "adapter": "football_data_wayback"},
+    "CH": {"source": "Football-Data.co.uk", "source_code": "E1", "adapter": "football_data_wayback"},
+    "D1": {"source": "Football-Data.co.uk", "source_code": "D1", "adapter": "football_data_wayback"},
+    "I1": {"source": "Football-Data.co.uk", "source_code": "I1", "adapter": "football_data_wayback"},
+    "SP1": {"source": "Football-Data.co.uk", "source_code": "SP1", "adapter": "football_data_wayback"},
+    "F1": {"source": "Football-Data.co.uk", "source_code": "F1", "adapter": "football_data_wayback"},
+    "N1": {"source": "Football-Data.co.uk", "source_code": "N1", "adapter": "football_data_wayback"},
+    "UCL": {"source": "UNVERIFIED", "source_code": None, "adapter": None},
+    "UEL": {"source": "UNVERIFIED", "source_code": None, "adapter": None},
+    "J1": {"source": "UNVERIFIED", "source_code": None, "adapter": None},
+    "J2": {"source": "UNVERIFIED", "source_code": None, "adapter": None},
+    "J3": {"source": "UNVERIFIED", "source_code": None, "adapter": None},
+    "DFBP": {"source": "UNVERIFIED", "source_code": None, "adapter": None},
+    "FRIENDLY": {"source": "UNVERIFIED", "source_code": None, "adapter": None},
+    "EFL": {"source": "UNVERIFIED", "source_code": None, "adapter": None},
 }
 
 
@@ -68,9 +69,10 @@ def _utc(value: Any) -> datetime | None:
 
 
 def source_url(competition: str, start_year: int) -> str:
-    if competition not in LEAGUES:
-        raise ValueError(f"No Football-Data.co.uk mapping for {competition}")
-    return BASE.format(season_folder=season_folder(start_year), league=LEAGUES[competition])
+    spec = COMPETITION_ADAPTERS.get(competition)
+    if not spec or not spec["source_code"]:
+        raise ValueError(f"No PIT source mapping for {competition}")
+    return BASE.format(season_folder=season_folder(start_year), league=spec["source_code"])
 
 
 class FootballDataWaybackAdapter:
@@ -85,8 +87,8 @@ class FootballDataWaybackAdapter:
         self._captures: dict[str, list[dict[str, str]]] = {}
         self._snapshot_rows: dict[str, pd.DataFrame] = {}
 
-    def _cache_key(self, url: str) -> str:
-        import hashlib
+    @staticmethod
+    def _cache_key(url: str) -> str:
         return hashlib.sha256(url.encode()).hexdigest()
 
     def captures(self, url: str) -> list[dict[str, str]]:
@@ -104,7 +106,6 @@ class FootballDataWaybackAdapter:
             "filter": "statuscode:200",
             "fl": "timestamp,digest,original,statuscode,mimetype",
             "collapse": "digest",
-            "filter": "statuscode:200",
         }
         try:
             response = self.session.get(WAYBACK_CDX, params=params, timeout=self.timeout)
@@ -123,9 +124,9 @@ class FootballDataWaybackAdapter:
         self._captures[url] = rows
         return rows
 
-    def _snapshot_url(self, capture: dict[str, str], original_url: str) -> str:
-        timestamp = capture["timestamp"]
-        return f"{WAYBACK_WEB}/{timestamp}id_/{original_url}"
+    @staticmethod
+    def _snapshot_url(capture: dict[str, str], original_url: str) -> str:
+        return f"{WAYBACK_WEB}/{capture['timestamp']}id_/{original_url}"
 
     def _snapshot_frame(self, capture: dict[str, str], original_url: str) -> pd.DataFrame | None:
         digest = capture.get("digest") or capture.get("timestamp", "")
@@ -135,7 +136,6 @@ class FootballDataWaybackAdapter:
         try:
             response = self.session.get(url, timeout=self.timeout)
             response.raise_for_status()
-            from io import BytesIO
             frame = pd.read_csv(BytesIO(response.content))
         except Exception:
             return None
@@ -155,16 +155,16 @@ class FootballDataWaybackAdapter:
         dates = pd.to_datetime(frame["Date"], dayfirst=True, errors="coerce", utc=True)
         mask = frame["HomeTeam"].astype(str).str.strip().eq(home)
         mask &= frame["AwayTeam"].astype(str).str.strip().eq(away)
-        if not mask.any():
-            return False
-        # Football-Data historical CSVs usually expose date but not a reliable
-        # kickoff clock. Match on calendar date in UTC; time availability is
-        # governed by the archive capture being before the prediction cutoff.
-        return bool(mask & dates.dt.date.eq(kickoff.date())).any()
+        mask &= dates.dt.date.eq(kickoff.date())
+        return bool(mask.any())
 
     def evidence_for_row(self, row: pd.Series) -> SourceEvidence:
         competition = str(row.get("competition", ""))
-        start_year = int(str(row.get("season", "0000/00")).split("/")[0])
+        season_text = str(row.get("season", "0000/00"))
+        try:
+            start_year = int(season_text.split("/")[0])
+        except ValueError:
+            return SourceEvidence(None, "UNVERIFIABLE", reason="invalid_season")
         cutoff = _utc(row.get("prediction_cutoff_at_utc"))
         if cutoff is None:
             return SourceEvidence(None, "UNVERIFIABLE", reason="missing_prediction_cutoff")
@@ -173,13 +173,13 @@ class FootballDataWaybackAdapter:
         except Exception as exc:
             return SourceEvidence(None, "UNVERIFIABLE", reason=str(exc))
 
-        captures = self.captures(url)
         eligible = []
-        for capture in captures:
+        for capture in self.captures(url):
             ts = _utc(capture.get("timestamp"))
             if ts is not None and ts <= cutoff:
                 eligible.append((ts, capture))
         eligible.sort(key=lambda item: item[0], reverse=True)
+
         for ts, capture in eligible:
             frame = self._snapshot_frame(capture, url)
             if frame is not None and self._row_present(frame, row):
@@ -196,11 +196,7 @@ class FootballDataWaybackAdapter:
 
 
 def apply_pit_evidence(history: pd.DataFrame, *, cache_dir: str = "data/raw/pit_evidence") -> pd.DataFrame:
-    """Return a copy with source availability evidence and PIT status.
-
-    Rows without independently verified evidence remain unverified.  No
-    timestamp is fabricated from retrieval time, file mtime, or event time.
-    """
+    """Add source-availability evidence without inventing timestamps."""
     if history.empty:
         return history.copy()
     out = history.copy()
