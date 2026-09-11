@@ -13,12 +13,18 @@ def multiclass_brier(y_true, proba):
 
 
 def ece(y_true, proba, bins=10):
-    y = np.asarray(y); p = np.asarray(proba)
-    conf = p.max(axis=1); pred = p.argmax(axis=1); correct = (pred == y)
+    y = np.asarray(y_true)
+    p = np.asarray(proba)
+    conf = p.max(axis=1)
+    pred = p.argmax(axis=1)
+    correct = pred == y
     total = 0.0
-    for lo, hi in zip(np.linspace(0, 1, bins, endpoint=False), np.linspace(0, 1, bins + 1)[1:]):
-        m = (conf >= lo) & (conf < hi if hi < 1 else conf <= hi)
-        if m.any(): total += m.mean() * abs(correct[m].mean() - conf[m].mean())
+    edges = np.linspace(0.0, 1.0, bins + 1)
+    for i in range(bins):
+        lo, hi = edges[i], edges[i + 1]
+        mask = (conf >= lo) & (conf < hi if i < bins - 1 else conf <= hi)
+        if mask.any():
+            total += mask.mean() * abs(correct[mask].mean() - conf[mask].mean())
     return float(total)
 
 
