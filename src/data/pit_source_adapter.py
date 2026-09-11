@@ -2,12 +2,11 @@ from __future__ import annotations
 
 """Point-in-time source evidence adapters for the soccer research system.
 
-The adapter is deliberately fail-closed. A current retrieval timestamp is never
-promoted to a historical availability timestamp. For Football-Data.co.uk
-historical CSVs, Internet Archive captures are used as auditable evidence that
-the source file was accessible no later than the capture time. Record-level
-presence is also checked against the archived snapshot before a row is marked
-PIT-verified.
+The key PIT distinction is that a historical match result is not expected to be
+available before that match. We therefore determine when each *past result*
+first appears in an archived source snapshot, then let the feature builder use
+that result only for predictions whose cutoff is at or after that availability
+time. A current retrieval timestamp is never promoted to source availability.
 """
 
 import hashlib
@@ -21,13 +20,11 @@ from typing import Any
 import pandas as pd
 import requests
 
-from src.data.football_data import BASE, LEAGUES, season_folder
+from src.data.football_data import BASE, season_folder
 
 WAYBACK_CDX = "https://web.archive.org/cdx/search/cdx"
 WAYBACK_WEB = "https://web.archive.org/web"
 
-# The fixed 15-competition universe. Only sources with a concrete, auditable
-# adapter are marked implemented; API existence alone never becomes coverage.
 COMPETITION_ADAPTERS = {
     "E0": {"source": "Football-Data.co.uk", "source_code": "E0", "adapter": "football_data_wayback"},
     "CH": {"source": "Football-Data.co.uk", "source_code": "E1", "adapter": "football_data_wayback"},
@@ -76,7 +73,7 @@ def source_url(competition: str, start_year: int) -> str:
 
 
 class FootballDataWaybackAdapter:
-    """Resolve record-level PIT evidence from archived source snapshots."""
+    """Find the first archived snapshot containing a completed match result."""
 
     def __init__(self, cache_dir: str = "data/raw/pit_evidence", timeout: int = 30):
         self.cache_dir = Path(cache_dir)
@@ -86,6 +83,7 @@ class FootballDataWaybackAdapter:
         self.session.headers.update({"User-Agent": "SoccerPredictionResearch/1.0 PIT-Audit"})
         self._captures: dict[str, list[dict[str, str]]] = {}
         self._snapshot_rows: dict[str, pd.DataFrame] = {}
+        self._snapshot_keys: dict[str, set[tuple]] = {}
 
     @staticmethod
     def _cache_key(url: str) -> str:
@@ -99,7 +97,6 @@ class FootballDataWaybackAdapter:
             rows = json.loads(cache.read_text(encoding="utf-8"))
             self._captures[url] = rows
             return rows
-
         params = {
             "url": url,
             "output": "json",
@@ -114,7 +111,6 @@ class FootballDataWaybackAdapter:
         except Exception:
             self._captures[url] = []
             return []
-
         if not payload or len(payload) <= 1:
             rows = []
         else:
@@ -132,9 +128,8 @@ class FootballDataWaybackAdapter:
         digest = capture.get("digest") or capture.get("timestamp", "")
         if digest in self._snapshot_rows:
             return self._snapshot_rows[digest]
-        url = self._snapshot_url(capture, original_url)
         try:
-            response = self.session.get(url, timeout=self.timeout)
+            response = self.session.get(self._snapshot_url(capture, original_url), timeout=self.timeout)
             response.raise_for_status()
             frame = pd.read_csv(BytesIO(response.content))
         except Exception:
@@ -142,61 +137,89 @@ class FootballDataWaybackAdapter:
         self._snapshot_rows[digest] = frame
         return frame
 
-    @staticmethod
-    def _row_present(frame: pd.DataFrame, row: pd.Series) -> bool:
-        required = {"HomeTeam", "AwayTeam", "Date"}
+    def _snapshot_keyset(self, capture: dict[str, str], original_url: str) -> set[tuple] | None:
+        digest = capture.get("digest") or capture.get("timestamp", "")
+        if digest in self._snapshot_keys:
+            return self._snapshot_keys[digest]
+        frame = self._snapshot_frame(capture, original_url)
+        if frame is None:
+            return None
+        required = {"Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "FTR"}
         if not required.issubset(frame.columns):
-            return False
-        home = str(row.get("home_team", "")).strip()
-        away = str(row.get("away_team", "")).strip()
+            return None
+        keys: set[tuple] = set()
+        for r in frame.itertuples(index=False):
+            try:
+                date = pd.to_datetime(getattr(r, "Date"), dayfirst=True, errors="coerce")
+                if pd.isna(date):
+                    continue
+                keys.add((
+                    date.date().isoformat(),
+                    str(getattr(r, "HomeTeam")).strip(),
+                    str(getattr(r, "AwayTeam")).strip(),
+                    float(getattr(r, "FTHG")),
+                    float(getattr(r, "FTAG")),
+                    str(getattr(r, "FTR")).strip(),
+                ))
+            except (TypeError, ValueError):
+                continue
+        self._snapshot_keys[digest] = keys
+        return keys
+
+    @staticmethod
+    def _row_key(row: pd.Series) -> tuple | None:
         kickoff = _utc(row.get("kickoff_utc"))
-        if not home or not away or kickoff is None:
-            return False
-        dates = pd.to_datetime(frame["Date"], dayfirst=True, errors="coerce", utc=True)
-        mask = frame["HomeTeam"].astype(str).str.strip().eq(home)
-        mask &= frame["AwayTeam"].astype(str).str.strip().eq(away)
-        mask &= dates.dt.date.eq(kickoff.date())
-        return bool(mask.any())
+        if kickoff is None:
+            return None
+        try:
+            return (
+                kickoff.date().isoformat(),
+                str(row.get("home_team", "")).strip(),
+                str(row.get("away_team", "")).strip(),
+                float(row.get("home_goals")),
+                float(row.get("away_goals")),
+                str(row.get("result", "")).strip(),
+            )
+        except (TypeError, ValueError):
+            return None
 
     def evidence_for_row(self, row: pd.Series) -> SourceEvidence:
+        """Return the first source capture after the match containing its result."""
         competition = str(row.get("competition", ""))
-        season_text = str(row.get("season", "0000/00"))
         try:
-            start_year = int(season_text.split("/")[0])
+            start_year = int(str(row.get("season", "0000/00")).split("/")[0])
         except ValueError:
             return SourceEvidence(None, "UNVERIFIABLE", reason="invalid_season")
-        cutoff = _utc(row.get("prediction_cutoff_at_utc"))
-        if cutoff is None:
-            return SourceEvidence(None, "UNVERIFIABLE", reason="missing_prediction_cutoff")
+        event = _utc(row.get("kickoff_utc"))
+        key = self._row_key(row)
+        if event is None or key is None:
+            return SourceEvidence(None, "UNVERIFIABLE", reason="missing_record_identity")
         try:
             url = source_url(competition, start_year)
         except Exception as exc:
             return SourceEvidence(None, "UNVERIFIABLE", reason=str(exc))
 
-        eligible = []
+        captures = []
         for capture in self.captures(url):
             ts = _utc(capture.get("timestamp"))
-            if ts is not None and ts <= cutoff:
-                eligible.append((ts, capture))
-        eligible.sort(key=lambda item: item[0], reverse=True)
-
-        for ts, capture in eligible:
-            frame = self._snapshot_frame(capture, url)
-            if frame is not None and self._row_present(frame, row):
+            if ts is not None and ts >= event:
+                captures.append((ts, capture))
+        captures.sort(key=lambda item: item[0])
+        for ts, capture in captures:
+            keys = self._snapshot_keyset(capture, url)
+            if keys is not None and key in keys:
                 return SourceEvidence(
                     source_available_at_utc=ts.isoformat(),
                     evidence_status="VERIFIED",
                     evidence_url=self._snapshot_url(capture, url),
                     capture_digest=capture.get("digest"),
-                    reason="archived_source_snapshot_before_cutoff_contains_record",
+                    reason="archived_completed_result_first_observed_after_event",
                 )
-        if eligible:
-            return SourceEvidence(None, "UNVERIFIABLE", reason="archive_capture_before_cutoff_without_record_match")
-        return SourceEvidence(None, "UNVERIFIABLE", reason="no_archive_capture_before_cutoff")
+        return SourceEvidence(None, "UNVERIFIABLE", reason="no_archive_snapshot_contains_completed_result")
 
 
 def apply_pit_evidence(history: pd.DataFrame, *, cache_dir: str = "data/raw/pit_evidence") -> pd.DataFrame:
-    """Add source-availability evidence without inventing timestamps."""
+    """Annotate each historical result with independently evidenced availability."""
     if history.empty:
         return history.copy()
     out = history.copy()
@@ -211,12 +234,12 @@ def apply_pit_evidence(history: pd.DataFrame, *, cache_dir: str = "data/raw/pit_
 
 
 def competition_adapter_matrix() -> pd.DataFrame:
-    rows = []
-    for competition, spec in COMPETITION_ADAPTERS.items():
-        rows.append({
+    return pd.DataFrame([
+        {
             "competition": competition,
             "source": spec["source"],
             "adapter": spec["adapter"] or "NONE",
             "status": "IMPLEMENTED" if spec["adapter"] else "UNVERIFIED",
-        })
-    return pd.DataFrame(rows)
+        }
+        for competition, spec in COMPETITION_ADAPTERS.items()
+    ])
