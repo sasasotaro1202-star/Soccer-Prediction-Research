@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import sys
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -15,7 +16,7 @@ from src.legacy.v9_v12_adapter import LegacyEngineAdapter, LegacyPrediction, mak
 
 
 def load_v9_adapter(legacy_root: str | os.PathLike[str], random_state: int = 42) -> LegacyEngineAdapter:
-    root = Path(legacy_root)
+    root = Path(legacy_root).resolve()
     source = root / "research_adapter_v9.py"
     if not source.exists():
         raise FileNotFoundError(f"Legacy V9 adapter not found: {source}")
@@ -23,25 +24,26 @@ def load_v9_adapter(legacy_root: str | os.PathLike[str], random_state: int = 42)
     if spec is None or spec.loader is None:
         raise ImportError(f"Could not load legacy adapter: {source}")
     module = importlib.util.module_from_spec(spec)
-    # The adapter imports backtest.py from the same legacy root.
     old_cwd = os.getcwd()
+    sys.path.insert(0, str(root))
     try:
         os.chdir(root)
         spec.loader.exec_module(module)
     finally:
         os.chdir(old_cwd)
+        try:
+            sys.path.remove(str(root))
+        except ValueError:
+            pass
     engine = module.V9ResearchAdapter(random_state=random_state)
 
     def predict_fn(context: Mapping[str, Any]) -> Mapping[str, Any]:
-        # PIT/OOS context has already been validated by the Research Engine.
         row = context.get("legacy_row")
         if row is None:
             raise ValueError("legacy_row is required for concrete V9 execution")
         return engine.predict(row, pit_verified=True, understat=context.get("understat"))
 
     adapter = LegacyEngineAdapter(predict_fn=predict_fn, source_version="V9")
-    # Keep the stateful legacy engine attached so the OOS driver can observe
-    # each realized match only after the prediction has been scored.
     setattr(adapter, "legacy_engine", engine)
     return adapter
 
