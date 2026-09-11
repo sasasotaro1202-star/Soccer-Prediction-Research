@@ -21,7 +21,8 @@ def _history():
 
 def test_unavailable_recent_result_invalidates_window():
     history = _history()
-    history.loc[5, "source_available_at_utc"] = pd.Timestamp("2025-01-07 01:00", tz="UTC")
+    # m6 becomes available after the prediction cutoff (2025-01-07 23:00 UTC).
+    history.loc[5, "source_available_at_utc"] = pd.Timestamp("2025-01-08 01:00", tz="UTC")
     match = pd.DataFrame([{
         "match_id": "m7", "competition": "EPL", "season": "2024/25",
         "kickoff_utc": pd.Timestamp("2025-01-08", tz="UTC"),
