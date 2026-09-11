@@ -24,6 +24,12 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Cache raw soccer data
+        uses: actions/cache@v4
+        with:
+          path: data/raw
+          key: soccer-raw-${{ runner.os }}-${{ hashFiles('src/data/football_data.py') }}
+          restore-keys: soccer-raw-${{ runner.os }}-
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Run tests
@@ -34,8 +40,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: soccer-research-artifacts
+          name: soccer-research-artifacts-${{ github.run_id }}
           path: artifacts/
+          retention-days: 30
       - name: Commit research artifacts
         if: success()
         run: |
