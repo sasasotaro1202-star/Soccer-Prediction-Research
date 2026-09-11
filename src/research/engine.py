@@ -8,7 +8,7 @@ import pandas as pd
 
 from src.data.coverage import build_coverage
 from src.data.football_data import load_available_history
-from src.data.pit_source_adapter import apply_pit_evidence, competition_adapter_matrix
+from src.data.pit_source_adapter import apply_pit_evidence, build_pit_diagnostic, competition_adapter_matrix
 from src.evaluation.walk_forward import run_walk_forward
 from src.features.soccer_features import add_target, build_match_features
 from src.research.llm import weakness_advice
@@ -40,6 +40,12 @@ def run(out_dir: str = "artifacts") -> dict:
         report = {"status": "BLOCKED", "reason": "No historical data acquired"}
         (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
         return report
+
+    # First perform the source-level 7-competition x 16-season PIT diagnostic.
+    # This is deliberately separated from model/research evaluation so a 0%
+    # result can be traced to CDX, snapshot I/O, parsing, matching, or PIT stage.
+    pit_diag = build_pit_diagnostic(history)
+    pit_diag.to_csv(out / "pit_diagnostic_7x16.csv", index=False)
 
     # Establish when each historical result first became observable in the
     # source. This timestamp is about the past result itself, not the target
