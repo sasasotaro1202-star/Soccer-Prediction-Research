@@ -43,4 +43,5 @@ def test_all_required_history_available_makes_window_pit_valid():
     }])
     features = build_match_features(history, match, windows=(3,))
     assert bool(features.iloc[0]["pit_verified"])
-    assert features.iloc[0]["home_gf_3"] == 5 / 3
+    # A's last three matches are m4 (1 goal), m5 (2 goals), m6 (1 goal): 4/3.
+    assert features.iloc[0]["home_gf_3"] == 4 / 3
