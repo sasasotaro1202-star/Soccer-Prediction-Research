@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import numpy as np
 from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier
 from sklearn.impute import SimpleImputer
@@ -20,8 +21,8 @@ def poisson_score_probs(home_lambda: float, away_lambda: float, max_goals: int =
     vals = []
     for h in range(max_goals + 1):
         for a in range(max_goals + 1):
-            p = np.exp(-home_lambda) * home_lambda**h / np.math.factorial(h)
-            p *= np.exp(-away_lambda) * away_lambda**a / np.math.factorial(a)
+            p = np.exp(-home_lambda) * home_lambda**h / math.factorial(h)
+            p *= np.exp(-away_lambda) * away_lambda**a / math.factorial(a)
             vals.append((h, a, p))
     total = sum(v[2] for v in vals) or 1.0
     return np.array([[h, a, p / total] for h, a, p in vals])
