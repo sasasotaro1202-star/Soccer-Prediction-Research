@@ -89,6 +89,11 @@ class FootballDataWaybackAdapter:
         self._snapshot_keys: dict[str, set[tuple]] = {}
 
     @staticmethod
+    def _row_key(row: pd.Series) -> tuple | None:
+        """Compatibility API for the canonical completed-result identity."""
+        return _row_key(row)
+
+    @staticmethod
     def _cache_key(value: str) -> str:
         return hashlib.sha256(value.encode()).hexdigest()
 
@@ -165,9 +170,6 @@ class FootballDataWaybackAdapter:
         lower_bounds = []
         for row in rows:
             event = _utc(row.get("kickoff_utc"))
-            # Football-Data historical files generally contain a date, not a
-            # trustworthy kickoff time.  Using end-of-day is conservative and
-            # prevents us from inventing an earlier source-availability time.
             lower_bounds.append(event.replace(hour=23, minute=59, second=59, microsecond=999999) if event else None)
         candidates: dict[str, tuple[datetime, dict[str, str]]] = {}
         for capture in captures:
@@ -217,9 +219,6 @@ class FootballDataWaybackAdapter:
             except (ValueError, TypeError) as exc:
                 evidence[idx] = SourceEvidence(None, "UNVERIFIABLE", reason=str(exc))
 
-        # Global concurrency is bounded: source groups run in parallel, while
-        # each group uses one snapshot request at a time.  Therefore the total
-        # number of concurrent archive HTTP requests never exceeds max_workers.
         def run_group(item):
             url, indexed = item
             return indexed, self._prefetch_url(url, [row for _, row in indexed], workers=1)
