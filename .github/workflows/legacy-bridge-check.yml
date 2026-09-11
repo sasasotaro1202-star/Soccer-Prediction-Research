@@ -1,0 +1,37 @@
+name: Legacy V9/V12 Bridge Check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bridge-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Research Engine
+        uses: actions/checkout@v4
+
+      - name: Checkout legacy soccer repository
+        uses: actions/checkout@v4
+        with:
+          repository: sasasotaro1202-star/soccer
+          path: legacy/soccer
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile legacy bridge without executing it
+        run: |
+          python -m py_compile legacy/soccer/backtest.py
+          python -m py_compile legacy/soccer/research_adapter_v9.py
+
+      - name: Install Research Engine dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run adapter and comparison tests
+        run: python -m pytest -q tests/test_v9_v12_adapter.py tests/test_baseline_comparison.py
