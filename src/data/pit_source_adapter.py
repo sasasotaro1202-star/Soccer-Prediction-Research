@@ -79,7 +79,7 @@ def _row_key(row: pd.Series) -> tuple | None:
         return None
 
 class FootballDataWaybackAdapter:
-    """Fetch archive metadata once, cache snapshots, then verify rows locally."""
+    """Fetch capture metadata once, cache snapshots, and verify rows locally."""
     def __init__(self, cache_dir: str = "data/raw/pit_evidence", timeout: int = 30, max_workers: int = DEFAULT_MAX_WORKERS):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -157,7 +157,7 @@ class FootballDataWaybackAdapter:
         self._snapshot_keys[digest] = keys
         return keys
 
-    def _prefetch_url(self, url: str, rows: list[pd.Series]) -> list[SourceEvidence]:
+    def _prefetch_url(self, url: str, rows: list[pd.Series], workers: int | None = None) -> list[SourceEvidence]:
         captures = self.captures(url)
         if not captures:
             return [SourceEvidence(None, "UNVERIFIABLE", reason="no_archive_captures") for _ in rows]
@@ -165,19 +165,28 @@ class FootballDataWaybackAdapter:
         lower_bounds = []
         for row in rows:
             event = _utc(row.get("kickoff_utc"))
+            # Football-Data historical files generally contain a date, not a
+            # trustworthy kickoff time.  Using end-of-day is conservative and
+            # prevents us from inventing an earlier source-availability time.
             lower_bounds.append(event.replace(hour=23, minute=59, second=59, microsecond=999999) if event else None)
         candidates: dict[str, tuple[datetime, dict[str, str]]] = {}
-        for c in captures:
-            ts = _utc(c.get("timestamp"))
-            digest = c.get("digest") or c.get("timestamp", "")
+        for capture in captures:
+            ts = _utc(capture.get("timestamp"))
+            digest = capture.get("digest") or capture.get("timestamp", "")
             if ts is not None and any(lb is not None and ts >= lb for lb in lower_bounds):
-                candidates[digest] = (ts, c)
-        def fetch(item: tuple[str, tuple[datetime, dict[str, str]]]):
+                candidates[digest] = (ts, capture)
+
+        def fetch(item):
             digest, (_, capture) = item
             return digest, self._snapshot_keyset(capture, url)
-        with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
-            futures = [pool.submit(fetch, item) for item in candidates.items()]
-            keysets = {future.result()[0]: future.result()[1] for future in futures}
+
+        with ThreadPoolExecutor(max_workers=workers or self.max_workers) as pool:
+            future_map = [pool.submit(fetch, item) for item in candidates.items()]
+            keysets = {}
+            for future in as_completed(future_map):
+                digest, keys = future.result()
+                keysets[digest] = keys
+
         results = []
         for key, lb in zip(row_keys, lower_bounds):
             if key is None or lb is None:
@@ -195,6 +204,7 @@ class FootballDataWaybackAdapter:
         return results
 
     def apply_bulk(self, history: pd.DataFrame) -> pd.DataFrame:
+        """Group rows by source URL and run at most ``max_workers`` source jobs."""
         if history.empty:
             return history.copy()
         out = history.copy()
@@ -206,15 +216,21 @@ class FootballDataWaybackAdapter:
                 groups.setdefault(source_url(str(row.get("competition", "")), year), []).append((idx, row))
             except (ValueError, TypeError) as exc:
                 evidence[idx] = SourceEvidence(None, "UNVERIFIABLE", reason=str(exc))
+
+        # Global concurrency is bounded: source groups run in parallel, while
+        # each group uses one snapshot request at a time.  Therefore the total
+        # number of concurrent archive HTTP requests never exceeds max_workers.
         def run_group(item):
             url, indexed = item
-            return indexed, self._prefetch_url(url, [row for _, row in indexed])
+            return indexed, self._prefetch_url(url, [row for _, row in indexed], workers=1)
+
         with ThreadPoolExecutor(max_workers=min(self.max_workers, max(1, len(groups)))) as pool:
             futures = [pool.submit(run_group, item) for item in groups.items()]
             for future in as_completed(futures):
                 indexed, results = future.result()
                 for (idx, _), result in zip(indexed, results):
                     evidence[idx] = result
+
         out["source_available_at_utc"] = [evidence[i].source_available_at_utc for i in out.index]
         out["pit_evidence_status"] = [evidence[i].evidence_status for i in out.index]
         out["pit_evidence_url"] = [evidence[i].evidence_url for i in out.index]
@@ -224,7 +240,7 @@ class FootballDataWaybackAdapter:
 
     def evidence_for_row(self, row: pd.Series) -> SourceEvidence:
         year = int(str(row.get("season", "0000/00")).split("/")[0])
-        return self._prefetch_url(source_url(str(row.get("competition", "")), year), [row])[0]
+        return self._prefetch_url(source_url(str(row.get("competition", "")), year), [row], workers=self.max_workers)[0]
 
 def apply_pit_evidence(history: pd.DataFrame, *, cache_dir: str = "data/raw/pit_evidence", max_workers: int = DEFAULT_MAX_WORKERS) -> pd.DataFrame:
     if history.empty:
