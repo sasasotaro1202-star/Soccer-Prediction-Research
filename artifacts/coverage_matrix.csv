@@ -1,0 +1,16 @@
+competition,source,status,rows,reason
+EPL,Football-Data.co.uk,AVAILABLE,6080.0,
+CHA,Football-Data.co.uk,AVAILABLE,8832.0,
+BL1,Football-Data.co.uk,AVAILABLE,4896.0,
+SA,Football-Data.co.uk,AVAILABLE,6080.0,
+LL,Football-Data.co.uk,AVAILABLE,6080.0,
+FL1,Football-Data.co.uk,AVAILABLE,5757.0,
+ERE,Football-Data.co.uk,AVAILABLE,4822.0,
+UCL,Football-Data.co.uk,UNAVAILABLE,,No adapter/mapping in current source
+UEL,Football-Data.co.uk,UNAVAILABLE,,No adapter/mapping in current source
+J1,Football-Data.co.uk,UNAVAILABLE,,No adapter/mapping in current source
+J2,Football-Data.co.uk,UNAVAILABLE,,No adapter/mapping in current source
+J3,Football-Data.co.uk,UNAVAILABLE,,No adapter/mapping in current source
+DFBP,Football-Data.co.uk,UNAVAILABLE,,No adapter/mapping in current source
+FRI,Football-Data.co.uk,UNAVAILABLE,,No adapter/mapping in current source
+CAR,Football-Data.co.uk,UNAVAILABLE,,No adapter/mapping in current source

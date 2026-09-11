@@ -1,0 +1,33 @@
+{
+  "status": "BLOCKED",
+  "reason": "PIT verification coverage is insufficient; source availability timestamps are required before OOS/model adoption.",
+  "acquired_rows": 42547,
+  "pit_verified_rows": 0,
+  "snapshot_id": "329bab2c227ad966fe84e84c60c6cd928aca78bdbe74f48e37897ac0667599d2",
+  "ai_research": {
+    "status": "OK",
+    "advice": {
+      "weaknesses": [
+        "Point-in-time verification coverage is 0 of 42,547 acquired rows, so the temporal validity of the data cannot be assessed.",
+        "Source availability timestamps are missing or insufficient, preventing confirmation that each feature was available before the relevant match or prediction time.",
+        "The supplied metrics contain no verified out-of-sample performance measures, such as calibration, log loss, Brier score, or accuracy.",
+        "The pipeline is explicitly blocked, so model results cannot currently be interpreted as reliable OOS evidence."
+      ],
+      "candidate_experiments": [
+        "Add source-availability timestamps and prediction-cutoff timestamps to every feature record, then measure the proportion of rows that pass point-in-time validation.",
+        "Build a historical replay test that reconstructs the exact information set available before each match and reports valid, invalid, and unverifiable rows.",
+        "Audit timestamp provenance for each data source, including timezone handling, publication delays, revisions, and backfills.",
+        "Create a leakage test suite using intentionally shifted or future-only features to verify that the validation process detects temporal contamination.",
+        "After PIT coverage is established, evaluate time-based OOS splits with pre-specified metrics and confidence intervals, separately reporting results by league, season, and data availability."
+      ],
+      "risks": [
+        "Potential look-ahead bias or target leakage cannot be ruled out because no rows are PIT verified.",
+        "Backfilled, revised, or retrospectively corrected source data may make historical inputs appear more complete or timely than they were in real time.",
+        "The 42,547 acquired rows may not represent the subset that would have been available at prediction time, creating unknown selection and coverage bias.",
+        "Timezone, publication-delay, and event-ordering errors could misclassify future information as available information.",
+        "Any apparent model performance derived before resolving the verification gap would be difficult to reproduce or trust.",
+        "The current evidence is insufficient to support model or OOS adoption."
+      ]
+    }
+  }
+}
