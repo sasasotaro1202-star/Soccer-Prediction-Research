@@ -1,4 +1,4 @@
-"""Compatibility exports for the time-precise PIT archive adapter."""
+"""Compatibility exports for the optimized, time-precise PIT archive adapter."""
 
 from datetime import datetime, timezone
 from typing import Any
@@ -6,8 +6,9 @@ from typing import Any
 import pandas as pd
 
 from src.data import pit_source_adapter_v2 as _impl
-from src.data.pit_source_adapter_v2 import *
-from src.data.pit_source_adapter_v2 import _result_lower_bound
+from src.data.pit_source_adapter_fast import *
+from src.data.pit_source_adapter_fast import FootballDataWaybackAdapter
+from src.data.pit_source_adapter_v2 import COMPETITION_ADAPTERS, _result_lower_bound
 
 
 def _utc(value: Any) -> datetime | None:
@@ -47,15 +48,25 @@ def _date_key(value: Any) -> str | None:
     text = str(value).strip()
     if not text:
         return None
-    parsed = pd.to_datetime(text, format="%Y-%m-%d", errors="coerce")
-    if pd.isna(parsed):
-        parsed = pd.to_datetime(text, dayfirst=True, errors="coerce")
+    if len(text) >= 10 and text[4] == "-" and text[7] == "-":
+        try:
+            return datetime.fromisoformat(text.replace("Z", "+00:00")).date().isoformat()
+        except ValueError:
+            try:
+                return datetime.strptime(text[:10], "%Y-%m-%d").date().isoformat()
+            except ValueError:
+                pass
+    for fmt in ("%d/%m/%y", "%d/%m/%Y", "%d-%m-%y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(text, fmt).date().isoformat()
+        except ValueError:
+            pass
+    parsed = pd.to_datetime(text, dayfirst=True, errors="coerce")
     return None if pd.isna(parsed) else parsed.date().isoformat()
 
 
-# Internal functions in v2 resolve helpers in the v2 module namespace.
-# Patch both parsers there so Wayback timestamps and ISO source dates use
-# unambiguous calendar semantics throughout PIT replay.
+# Internal v2 helpers are patched so the inherited archive parser uses the
+# same unambiguous UTC/ISO date semantics as the compatibility surface.
 _impl._utc = _utc
 _impl._date_key = _date_key
 
