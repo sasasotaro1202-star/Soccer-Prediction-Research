@@ -9,7 +9,7 @@ from src.data.pit_source_adapter_v2 import *
 from src.data.pit_source_adapter_v2 import (
     FootballDataWaybackAdapter as _BaseAdapter,
     SourceEvidence, CaptureDiagnostic, SnapshotDiagnostic,
-    _utc, _row_key, _result_lower_bound, COMPETITION_ADAPTERS,
+    _utc, _row_key, _result_lower_bound, _date_key, COMPETITION_ADAPTERS,
 )
 
 
