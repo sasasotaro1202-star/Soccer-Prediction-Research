@@ -18,6 +18,7 @@ on:
       - "src/data/pit_source_adapter.py"
       - "src/data/pit_source_adapter_v2.py"
       - "src/data/pit_source_adapter_fast.py"
+      - "src/data/pit_archive_fallback.py"
       - "src/data/football_data.py"
       - "src/research/pit_replay_audit.py"
       - "tests/test_pit_source_adapter.py"
@@ -63,4 +64,4 @@ jobs:
           path: artifacts/pit-audit/
           retention-days: 30
 
-# Triggered after layered Wayback/CDX acquisition hardening; audit remains the gate for 16/16 verification.
+# PIT remains a hard gate: downstream OOS/research work must not proceed until the audit reports 16/16 verified rows.
