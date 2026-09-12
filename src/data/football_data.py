@@ -64,6 +64,7 @@ def load_season(competition: str, start_year: int, cache_dir: str = "data/raw") 
     if missing:
         raise ValueError(f"{url}: missing columns {sorted(missing)}")
     kickoff, precision = _parse_kickoff(df, competition)
+    source_event_date = _parse_football_data_dates(df["Date"]).dt.date.astype("string")
     out = pd.DataFrame({
         "match_id": [f"fd:{competition}:{start_year}:{i}" for i in df.index],
         "competition": competition,
@@ -71,6 +72,7 @@ def load_season(competition: str, start_year: int, cache_dir: str = "data/raw") 
         "kickoff_utc": kickoff,
         "kickoff_time_available": precision.eq("MINUTE"),
         "event_time_precision": precision,
+        "source_event_date": source_event_date,
         "home_team": df["HomeTeam"].astype(str).str.strip(),
         "away_team": df["AwayTeam"].astype(str).str.strip(),
         "home_goals": pd.to_numeric(df["FTHG"], errors="coerce"),
