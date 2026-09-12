@@ -23,22 +23,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        continue-on-error: true
       - name: Setup Python
         uses: actions/setup-python@v5
-        continue-on-error: true
         with:
           python-version: "3.12"
           cache: pip
       - name: Cache raw soccer data
         uses: actions/cache@v4
-        continue-on-error: true
         with:
           path: data/raw
-          key: soccer-raw-${{ runner.os }}-${{ hashFiles('src/data/football_data.py') }}
+          key: soccer-raw-${{ runner.os }}-${{ hashFiles('src/data/football_data.py', 'src/data/openfootball_adapter.py') }}
           restore-keys: soccer-raw-${{ runner.os }}-
       - name: Install dependencies
-        continue-on-error: true
         run: python -m pip install -r requirements.txt
       - name: Run 14-competition fixture field PIT audit
         id: audit
@@ -75,19 +71,28 @@ jobs:
           PIT_ENABLE_ARCHIVE_AUDIT: "0"
         continue-on-error: true
         run: python -m src.research.safe_runner
-      - name: Validate research artifact
+      - name: Build final health record
         if: always()
         continue-on-error: true
         run: |
+          mkdir -p artifacts
           python - <<'PY'
           import json
           from pathlib import Path
           p = Path('artifacts/run_status.json')
-          if not p.exists():
-              p.parent.mkdir(parents=True, exist_ok=True)
-              p.write_text(json.dumps({'status':'DEGRADED','reason':'No run_status.json produced','oos_claimed':False}, indent=2), encoding='utf-8')
-          data = json.loads(p.read_text(encoding='utf-8'))
-          print(json.dumps(data, indent=2, ensure_ascii=False))
+          if p.exists():
+              data = json.loads(p.read_text(encoding='utf-8'))
+          else:
+              data = {'status':'DEGRADED','oos_claimed':False,'reason':'No run_status.json produced'}
+          data['workflow_health'] = {
+              'audit_step': '${{ steps.audit.outcome }}',
+              'tests_step': '${{ steps.tests.outcome }}',
+              'research_step': '${{ job.status }}',
+          }
+          if data.get('audit', {}).get('audit_complete') is False:
+              data['research_scope_warning'] = '14-competition audit is incomplete; results must not be represented as full 14-competition coverage.'
+          p.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str), encoding='utf-8')
+          print(json.dumps(data, indent=2, ensure_ascii=False, default=str))
           PY
       - name: Upload research artifacts
         if: always()
@@ -125,12 +130,3 @@ jobs:
             sleep $((attempt * 5))
           done
           exit 0
-      - name: Final health record
-        if: always()
-        continue-on-error: true
-        run: |
-          mkdir -p artifacts
-          if [ ! -f artifacts/run_status.json ]; then
-            printf '%s\n' '{"status":"DEGRADED","oos_claimed":false,"reason":"Workflow completed without a research status artifact"}' > artifacts/run_status.json
-          fi
-          echo "Soccer Research Robust finished; see artifacts/run_status.json for authoritative research status."
