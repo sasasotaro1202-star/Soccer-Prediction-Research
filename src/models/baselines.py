@@ -10,11 +10,14 @@ from sklearn.preprocessing import StandardScaler
 
 
 def candidates(random_state: int = 42):
+    """Return research candidates using current scikit-learn-compatible APIs."""
     return {
         "logistic": Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
             ("scale", StandardScaler()),
-            ("model", LogisticRegression(max_iter=2000, C=1.0, multi_class="auto", random_state=random_state)),
+            # ``multi_class`` is intentionally omitted: current scikit-learn
+            # removed that constructor argument; multiclass behavior is automatic.
+            ("model", LogisticRegression(max_iter=2000, C=1.0, random_state=random_state)),
         ]),
         "extra_trees": Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
