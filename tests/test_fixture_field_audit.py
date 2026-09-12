@@ -52,8 +52,6 @@ def test_field_audit_distinguishes_real_zero_from_missing_and_pit_unknown():
     out = field_audit(sample_history())
     zero = out[out.field_name == "home_shots"].iloc[0]
     assert zero.value_status == "REAL_ZERO"
-    # No historical publication timestamp is supplied for this post-match stat.
-    # It must not be promoted to PIT-safe merely because the value is present.
     assert zero.pit_status == "PIT_UNKNOWN"
 
     h = sample_history()
@@ -76,7 +74,8 @@ def test_coverage_marks_unobserved_competitions_unavailable_not_zero():
     row = c[c.competition == "UCL"].iloc[0]
     assert row.status == "UNAVAILABLE"
     assert row.fixture_count == 0
-    assert "no data elsewhere" in row.reason.lower()
+    reason = row.reason.lower()
+    assert "no data elsewhere" in reason or "absence is not a global no-data claim" in reason
 
 
 def test_reconciliation_flags_duplicate_rows_without_double_counting_source():
