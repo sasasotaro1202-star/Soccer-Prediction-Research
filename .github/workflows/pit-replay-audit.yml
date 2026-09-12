@@ -19,10 +19,13 @@ on:
       - "src/data/pit_source_adapter_v2.py"
       - "src/data/pit_source_adapter_fast.py"
       - "src/data/pit_archive_fallback.py"
+      - "src/data/pit_evidence.py"
       - "src/data/source_registry.py"
       - "src/data/football_data.py"
       - "src/research/pit_replay_audit.py"
       - "tests/test_pit_source_adapter.py"
+      - "tests/test_pit_feature_replay.py"
+      - "tests/test_pit_evidence.py"
       - "tests/test_source_registry.py"
       - ".github/workflows/pit-replay-audit.yml"
 
@@ -52,7 +55,7 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Run tests
-        run: python -m pytest -q tests/test_pit_source_adapter.py tests/test_pit_feature_replay.py tests/test_source_registry.py
+        run: python -m pytest -q tests/test_pit_source_adapter.py tests/test_pit_feature_replay.py tests/test_pit_evidence.py tests/test_source_registry.py
       - name: Run small PIT replay audit
         env:
           AUDIT_COMPETITION: ${{ inputs.competition || 'EPL' }}
@@ -66,6 +69,6 @@ jobs:
           path: artifacts/pit-audit/
           retention-days: 30
 
-# PIT remains a hard gate: downstream OOS/research work must not proceed until the audit reports 16/16 verified rows.
+# PIT is a hard gate: no OOS/research adoption is valid until every replayed row has exact timestamped evidence.
 # Multi-source registry is metadata only; actual row/field coverage remains evidence-driven.
-# Audit verification pass: force a fresh main-branch checkout after provider/parser hardening.
+# Provider-neutral evidence validation is intentionally separate from archive acquisition.
