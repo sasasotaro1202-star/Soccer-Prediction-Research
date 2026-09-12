@@ -69,9 +69,10 @@ def _update_elo(elo: dict, home: str, away: str, result: int, competition: str) 
 def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(3, 5, 10, 20)) -> pd.DataFrame:
     """Build chronological, leakage-safe features using explicit result availability.
 
-    If a source supplies source_available_at_utc, it is authoritative. Otherwise the
-    conservative result-availability policy is used. No unavailable result can enter
-    the rolling state. The implementation is deliberately single-pass for speed.
+    An explicit source_available_at_utc is authoritative. When it is absent, the
+    conservative 24-hour result-availability policy is used. PIT validity also
+    requires the full requested feature window for both teams; a partial recent
+    history is never silently treated as valid.
     """
     h = history.copy()
     h["kickoff_utc"] = pd.to_datetime(h["kickoff_utc"], utc=True, errors="coerce")
@@ -98,13 +99,13 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     h2h: dict[tuple[str, str], deque] = defaultdict(lambda: deque(maxlen=10))
     elo = {"global": {}, "competition": {}}
     ptr = 0; rows = []
+    required_window = max(windows) if windows else 0
 
     def ingest_until(cutoff: pd.Timestamp) -> None:
         nonlocal ptr
         while ptr < len(h_records):
             r = h_records[ptr]
             event = r["kickoff_utc"]
-            # We require both the event to have happened and the result to be available.
             source_available = r.get("source_available_at_utc")
             available = source_available if pd.notna(source_available) else result_feature_available_at(event)
             if event >= cutoff or pd.isna(available) or available > cutoff:
@@ -118,7 +119,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
             _update_elo(elo, home, away, result, str(r["competition"]))
             for team in (home, away):
                 gf, ga, pts, venue, gd = _team_result(r, team)
-                team_games[team].append({"time": event, "gf": gf, "ga": ga, "points": pts, "venue": venue, "gd": gd, "competition": str(r["competition"])})
+                team_games[team].append({"time": event, "gf": gf, "ga": ga, "points": pts, "venue": venue, "gd": gd, "competition": str(r["competition"]), "available": available})
                 team_last[team] = event
                 team_last_available[team] = available
             h2h[(home, away)].append(result)
@@ -157,7 +158,13 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         row["h2h_points_edge_5"] = float(np.mean([3 if x == 0 else 1 if x == 1 else 0 for x in meetings]) - np.mean([3 if x == 2 else 1 if x == 1 else 0 for x in meetings])) if meetings else np.nan
         available_times = [team_last_available[t] for t in (home, away) if t in team_last_available]
         row["feature_source_max_available_at_utc"] = max(available_times) if available_times else pd.NaT
-        row["pit_verified"] = all(t in team_last and team_last_available.get(t, pd.NaT) <= cutoff for t in (home, away))
+        # PIT validity is intentionally strict: every requested rolling window must
+        # have enough prior, available results for both teams.
+        home_history = list(team_games[home])[-required_window:] if required_window else []
+        away_history = list(team_games[away])[-required_window:] if required_window else []
+        history_complete = (required_window == 0) or (len(home_history) >= required_window and len(away_history) >= required_window)
+        history_available = history_complete and all(x["available"] <= cutoff for x in home_history + away_history)
+        row["pit_verified"] = bool(history_available)
         rows.append(row)
     return pd.DataFrame(rows)
 
