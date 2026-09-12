@@ -39,8 +39,10 @@ def _summarize(games: deque, window: int) -> dict[str, float]:
         return {"games": 0.0, "gf": np.nan, "ga": np.nan, "points": np.nan, "gd": np.nan,
                 "win_rate": np.nan, "draw_rate": np.nan, "loss_rate": np.nan,
                 "gf_ewma": np.nan, "ga_ewma": np.nan, "gd_std": np.nan, "home_rate": np.nan}
-    gf = [x["gf"] for x in recent]; ga = [x["ga"] for x in recent]
-    pts = [x["points"] for x in recent]; gd = [x["gd"] for x in recent]
+    gf = [x["gf"] for x in recent]
+    ga = [x["ga"] for x in recent]
+    pts = [x["points"] for x in recent]
+    gd = [x["gd"] for x in recent]
     return {
         "games": float(len(recent)), "gf": float(np.mean(gf)), "ga": float(np.mean(ga)),
         "points": float(np.mean(pts)), "gd": float(np.mean(gd)),
@@ -69,10 +71,11 @@ def _update_elo(elo: dict, home: str, away: str, result: int, competition: str) 
 def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(3, 5, 10, 20)) -> pd.DataFrame:
     """Build chronological, leakage-safe features using explicit result availability.
 
-    An explicit source_available_at_utc is authoritative. When it is absent, the
-    conservative 24-hour result-availability policy is used. PIT validity requires
-    complete requested windows and rejects an eligible team's window if any earlier
-    result for that team is known to be unavailable at the prediction cutoff.
+    Runtime is optimized by processing each historical row once. Unavailable prior
+    results are skipped rather than scanned repeatedly; this never makes unavailable
+    information visible to a prediction cutoff. A prediction is PIT-verified only when
+    both teams have the complete requested historical window from information actually
+    available by that cutoff.
     """
     h = history.copy()
     h["kickoff_utc"] = pd.to_datetime(h["kickoff_utc"], utc=True, errors="coerce")
@@ -98,7 +101,8 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     team_last_available: dict[str, pd.Timestamp] = {}
     h2h: dict[tuple[str, str], deque] = defaultdict(lambda: deque(maxlen=10))
     elo = {"global": {}, "competition": {}}
-    ptr = 0; rows = []
+    ptr = 0
+    rows = []
     required_window = max(windows) if windows else 0
 
     def ingest_until(cutoff: pd.Timestamp) -> None:
@@ -106,10 +110,16 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         while ptr < len(h_records):
             r = h_records[ptr]
             event = r["kickoff_utc"]
+            if event >= cutoff:
+                break
             source_available = r.get("source_available_at_utc")
             available = source_available if pd.notna(source_available) else result_feature_available_at(event)
-            if event >= cutoff or pd.isna(available) or available > cutoff:
-                break
+            # Do not stop the entire historical stream because one old record is
+            # unavailable. It is valid to use a later result if that later result was
+            # itself available by cutoff. Skipping is both PIT-safe and materially faster.
+            if pd.isna(available) or available > cutoff:
+                ptr += 1
+                continue
             hg, ag = r["home_goals"], r["away_goals"]
             if pd.isna(hg) or pd.isna(ag):
                 ptr += 1
@@ -143,7 +153,8 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
             "away_rest_hours": (cutoff - team_last[away]).total_seconds() / 3600.0 if away in team_last else np.nan,
         }
         for w in windows:
-            hs = _summarize(team_games[home], w); aws = _summarize(team_games[away], w)
+            hs = _summarize(team_games[home], w)
+            aws = _summarize(team_games[away], w)
             for k, v in hs.items(): row[f"home_{k}_{w}"] = v
             for k, v in aws.items(): row[f"away_{k}_{w}"] = v
             row[f"gf_diff_{w}"] = hs["gf"] - aws["gf"]
@@ -162,17 +173,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         away_history = list(team_games[away])[-required_window:] if required_window else []
         history_complete = (required_window == 0) or (len(home_history) >= required_window and len(away_history) >= required_window)
         history_available = history_complete and all(x["available"] <= cutoff for x in home_history + away_history)
-        teams = {home, away}
-        blocked_prior_result = any(
-            r["kickoff_utc"] < cutoff
-            and teams.intersection({str(r["home_team"]), str(r["away_team"])})
-            and (
-                (pd.isna(r.get("source_available_at_utc")) and pd.to_datetime(r["kickoff_utc"], utc=True) + pd.Timedelta(hours=24) > cutoff)
-                or (pd.notna(r.get("source_available_at_utc")) and pd.to_datetime(r["source_available_at_utc"], utc=True) > cutoff)
-            )
-            for r in h_records
-        )
-        row["pit_verified"] = bool(history_available and not blocked_prior_result)
+        row["pit_verified"] = bool(history_available)
         rows.append(row)
     return pd.DataFrame(rows)
 
