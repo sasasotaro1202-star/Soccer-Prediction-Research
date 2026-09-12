@@ -60,3 +60,4 @@ jobs:
           name: soccer-pit-audit-${{ github.run_id }}
           path: artifacts/pit-audit/
           retention-days: 30
+# Verification trigger for the current PIT adapter and deterministic audit path.
