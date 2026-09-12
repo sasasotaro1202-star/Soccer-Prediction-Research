@@ -27,7 +27,8 @@ def _team_result(row, team: str) -> tuple[float, float, int, str, float]:
 
 def _stat_value(row: dict, team: str, key: str) -> float:
     prefix = "home_" if row["home_team"] == team else "away_"
-    return float(row.get(f"{prefix}{key}", np.nan)) if pd.notna(row.get(f"{prefix}{key}", np.nan)) else np.nan
+    value = row.get(f"{prefix}{key}", np.nan)
+    return float(value) if pd.notna(value) else np.nan
 
 
 def _ewma(values: list[float], alpha: float = 0.35) -> float:
@@ -86,10 +87,11 @@ def _update_elo(elo: dict, home: str, away: str, result: int, competition: str) 
 def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(3, 5, 10, 20)) -> pd.DataFrame:
     """Build chronological PIT-safe features with linear-time history processing.
 
-    Result and match-stat features are admitted only when their availability time is
-    before the prediction cutoff. Missing statistics remain missing; they are never
-    converted to zero. If any prior result for either participant is not available at
-    the cutoff, result-derived rolling features are conservatively invalidated.
+    A history row is processed only when both its event time and availability time
+    are before the prediction cutoff. Crucially, an event that is temporarily not
+    available is *not discarded*: the history pointer stays there and the event can
+    enter a later cutoff once its availability condition becomes true. This avoids
+    permanently losing recent results from the rolling state.
     """
     h = history.copy()
     h["kickoff_utc"] = pd.to_datetime(h["kickoff_utc"], utc=True, errors="coerce")
@@ -116,10 +118,16 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     team_last_available: dict[str, pd.Timestamp] = {}
     h2h: dict[tuple[str, str], deque] = defaultdict(lambda: deque(maxlen=10))
     elo = {"global": {}, "competition": {}}
-    ptr = 0; block_ptr = 0
+    ptr = 0
+    block_ptr = 0
     team_max_prior_available: dict[str, pd.Timestamp] = {}
     rows = []
     required_window = max(windows) if windows else 0
+
+    def availability_for(r: dict) -> pd.Timestamp:
+        event = r["kickoff_utc"]
+        source_available = r.get("source_available_at_utc")
+        return source_available if pd.notna(source_available) else result_feature_available_at(event)
 
     def ingest_until(cutoff: pd.Timestamp) -> None:
         nonlocal ptr
@@ -128,11 +136,12 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
             event = r["kickoff_utc"]
             if event >= cutoff:
                 break
-            source_available = r.get("source_available_at_utc")
-            available = source_available if pd.notna(source_available) else result_feature_available_at(event)
+            available = availability_for(r)
+            # Do not advance past an unavailable historical event. Because records
+            # are chronological, waiting here is conservative and guarantees that
+            # the same event can be ingested on a later prediction cutoff.
             if pd.isna(available) or available > cutoff:
-                ptr += 1
-                continue
+                break
             hg, ag = r["home_goals"], r["away_goals"]
             if pd.isna(hg) or pd.isna(ag):
                 ptr += 1
@@ -159,8 +168,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
             event = r["kickoff_utc"]
             if event >= cutoff:
                 break
-            source_available = r.get("source_available_at_utc")
-            available = source_available if pd.notna(source_available) else result_feature_available_at(event)
+            available = availability_for(r)
             if pd.notna(available):
                 for team in (str(r["home_team"]), str(r["away_team"])):
                     prev = team_max_prior_available.get(team)
