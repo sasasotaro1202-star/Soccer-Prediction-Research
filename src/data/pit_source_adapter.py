@@ -49,3 +49,22 @@ def _utc(value: Any) -> datetime | None:
 # module namespace. Patch that single parser rather than duplicating the
 # adapter implementation in this compatibility module.
 _impl._utc = _utc
+
+
+def competition_adapter_matrix() -> pd.DataFrame:
+    """Return the explicit fixed 15-competition PIT adapter matrix.
+
+    This is deliberately derived from the canonical COMPETITION_ADAPTERS
+    mapping so tests and downstream diagnostics cannot silently drift from
+    the fixed competition classification.
+    """
+    rows = []
+    for competition, spec in COMPETITION_ADAPTERS.items():
+        rows.append({
+            "competition": competition,
+            "source": spec.get("source"),
+            "source_code": spec.get("source_code"),
+            "adapter": spec.get("adapter"),
+            "status": "IMPLEMENTED" if spec.get("adapter") else "UNVERIFIED",
+        })
+    return pd.DataFrame(rows)
