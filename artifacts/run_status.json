@@ -1,37 +1,8 @@
 {
   "status": "BLOCKED",
-  "reason": "PIT replay coverage is insufficient; historical result availability cannot yet support the required OOS sample.",
-  "acquired_rows": 42547,
-  "pit_verified_rows": 0,
-  "pit_verified_rate": 0.0,
-  "source_result_verified_rows": 0,
-  "snapshot_id": "f6413d80a3f292316f54c6ef1270071ada931385cf09ed8b0aecef1b22aa130a",
-  "ai_research": {
-    "status": "OK",
-    "advice": {
-      "weaknesses": [
-        "The evaluation is blocked because PIT replay coverage is insufficient.",
-        "All 42,547 acquired rows have a PIT-verified rate of 0.0%, so none are currently validated for the required out-of-sample analysis.",
-        "There are 0 source-result-verified rows, preventing confirmation that historical outcomes are accurate and appropriately aligned with prediction timestamps.",
-        "No conclusions can be drawn about predictive performance, calibration, discrimination, robustness, or generalization from these metrics.",
-        "The available row count may overstate the usable evaluation sample because verification has not been completed."
-      ],
-      "candidate_experiments": [
-        "Investigate and repair the PIT replay pipeline, then rerun verification against the fixed snapshot.",
-        "Validate historical results independently, including event identity, result timestamps, and final outcome alignment.",
-        "Run a small manually audited replay sample to identify systematic coverage or timestamp failures before processing the full dataset.",
-        "Measure PIT and source-result verification rates by competition, season, date range, and data source to detect uneven coverage.",
-        "Define minimum verification thresholds and exclusion rules for an OOS evaluation, and report the resulting eligible sample size.",
-        "After verification is available, conduct a strictly time-ordered OOS evaluation using the frozen snapshot and document all row exclusions."
-      ],
-      "risks": [
-        "Using unverified rows could produce invalid or irreproducible performance estimates.",
-        "Incomplete PIT coverage may create selection bias if the verifiable subset differs from the full historical population.",
-        "Incorrect timestamp alignment could introduce look-ahead leakage or misclassify information availability.",
-        "Unverified outcomes could distort metrics through labeling errors or mismatches between predictions and results.",
-        "A small or unevenly distributed verified sample may yield unstable estimates and misleading subgroup conclusions.",
-        "The blocked status may be overlooked because the acquired row count is large despite having no verified evaluation rows."
-      ]
-    }
-  }
+  "reason": "Preflight tests failed; research execution was intentionally skipped.",
+  "runner": {
+    "status": "SKIPPED_AFTER_TEST_FAILURE"
+  },
+  "oos_claimed": false
 }
