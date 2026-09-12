@@ -1,5 +1,6 @@
 """Compatibility exports for the optimized, time-precise PIT archive adapter."""
 
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -70,7 +71,27 @@ _impl._date_key = _date_key
 
 
 class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
-    """Fast adapter with a stable, testable diagnostic output contract."""
+    """Stable PIT adapter with low-concurrency retrieval and CDX retry hardening."""
+
+    def __init__(self, *args, cdx_retries: int = 4, cdx_retry_backoff: float = 1.5, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.max_workers = min(self.max_workers, 2)
+        self.cdx_retries = max(1, int(cdx_retries))
+        self.cdx_retry_backoff = max(0.0, float(cdx_retry_backoff))
+
+    def captures(self, url: str):
+        """Retry transient CDX failures; never turn a transport failure into no-capture."""
+        last = None
+        for attempt in range(1, self.cdx_retries + 1):
+            self._captures.pop(url, None)
+            rows = super().captures(url)
+            diag = self._capture_diag.get(url)
+            last = diag
+            if rows or diag is None or diag.status != "CDX_REQUEST_FAILURE":
+                return rows
+            if attempt < self.cdx_retries:
+                time.sleep(self.cdx_retry_backoff * attempt)
+        return self._captures.get(url, [])
 
     def diagnostic_bulk(self, history: pd.DataFrame) -> pd.DataFrame:
         rows = []
