@@ -10,6 +10,7 @@ import pandas as pd
 from src.data.coverage import build_coverage
 from src.data.football_data import load_available_history
 from src.data.pit_source_adapter import apply_pit_evidence, build_pit_diagnostic, competition_adapter_matrix
+from src.data.source_registry import SOCCER_SOURCES
 from src.evaluation.walk_forward import run_walk_forward
 from src.features.soccer_features import add_target, build_match_features
 from src.research.llm import weakness_advice
@@ -39,12 +40,7 @@ def _pit_sample(history: pd.DataFrame, rows_per_group: int) -> pd.DataFrame:
 
 
 def _pit_gate(history_replayed: pd.DataFrame, replay_input: pd.DataFrame) -> tuple[bool, dict]:
-    """Hard PIT gate: every replayed row must have auditable evidence.
-
-    A partial PIT sample is never sufficient for model research. In particular,
-    this prevents the research engine from silently training on a mixture of
-    verified and unverifiable historical outcomes.
-    """
+    """Hard PIT gate: every replayed row must have auditable evidence."""
     total = int(len(replay_input))
     verified = int(history_replayed["pit_evidence_status"].eq("VERIFIED").sum()) if "pit_evidence_status" in history_replayed else 0
     unverifiable = total - verified
@@ -60,10 +56,33 @@ def _pit_gate(history_replayed: pd.DataFrame, replay_input: pd.DataFrame) -> tup
     }
 
 
+def _write_source_registry(out: Path) -> None:
+    """Persist the source contract separately from observed coverage.
+
+    This is deliberately metadata-only: the registry never upgrades a source to
+    AVAILABLE/PIT-verified. Those states require row-level acquisition evidence.
+    """
+    pd.DataFrame([
+        {
+            "name": s.name,
+            "kind": s.kind,
+            "role": s.role,
+            "fields": ",".join(s.fields),
+            "historical": s.historical,
+            "pit_capable": s.pit_capable,
+            "live_capable": s.live_capable,
+            "auth_required": s.auth_required,
+            "primary_for": ",".join(s.primary_for),
+            "notes": s.notes,
+        }
+        for s in SOCCER_SOURCES
+    ]).to_csv(out / "source_registry.csv", index=False)
+
+
 def run(out_dir: str = "artifacts") -> dict:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-
+    _write_source_registry(out)
     competition_adapter_matrix().to_csv(out / "pit_competition_adapter_matrix.csv", index=False)
 
     history, acquisition = load_available_history()
@@ -85,15 +104,11 @@ def run(out_dir: str = "artifacts") -> dict:
     replay_input = _pit_sample(history, rows_per_group)
     history_replayed = apply_pit_evidence(replay_input)
 
-    # Secondary PIT evidence is intentionally isolated from the engine's core
-    # adapter. It may be enabled explicitly for audit/research, but every row
-    # still needs an exact archived-result match and timestamp.
     if os.getenv("PIT_ENABLE_SECONDARY_ARCHIVE", "1") == "1":
         try:
             from src.data.pit_archive_fallback import apply_arquivo_fallback
             history_replayed = apply_arquivo_fallback(history_replayed)
         except Exception as exc:
-            # Fail closed: a broken secondary provider cannot create evidence.
             history_replayed["secondary_archive_error"] = f"{type(exc).__name__}: {exc}"
 
     history_replayed["source_available_at_utc"] = pd.to_datetime(history_replayed["source_available_at_utc"], utc=True, errors="coerce")
