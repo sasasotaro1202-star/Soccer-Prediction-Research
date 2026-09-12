@@ -66,3 +66,4 @@ jobs:
 
 # PIT remains a hard gate: downstream OOS/research work must not proceed until the audit reports 16/16 verified rows.
 # Audit trigger refresh: execute the current main-branch implementation after provider/parser hardening.
+# Audit verification pass: force a fresh main-branch checkout after the previous run used an older SHA.
