@@ -33,7 +33,20 @@ def test_unknown_competition_fails_closed():
         raise AssertionError("unverified competition must not receive a source URL")
 
 
-def test_row_key_contains_completed_result_identity():
+def test_row_key_uses_source_local_event_date_when_available():
+    row = pd.Series({
+        "home_team": "Aston Villa",
+        "away_team": "West Ham",
+        "source_event_date": "2010-08-14",
+        "kickoff_utc": "2010-08-13T23:00:00Z",
+        "home_goals": 3,
+        "away_goals": 0,
+        "result": "H",
+    })
+    assert FootballDataWaybackAdapter._row_key(row) == ("2010-08-14", "Aston Villa", "West Ham", 3.0, 0.0, "H")
+
+
+def test_row_key_falls_back_to_kickoff_date_when_source_date_missing():
     row = pd.Series({
         "home_team": "Team A",
         "away_team": "Team B",
@@ -60,11 +73,8 @@ def test_cdx_no_capture_is_distinct_from_request_failure(tmp_path, monkeypatch):
 
 def test_cdx_empty_response_is_not_request_failure(tmp_path, monkeypatch):
     class Response:
-        def raise_for_status(self):
-            return None
-        def json(self):
-            return [["timestamp", "digest", "original", "statuscode", "mimetype"]]
-
+        def raise_for_status(self): return None
+        def json(self): return [["timestamp", "digest", "original", "statuscode", "mimetype"]]
     adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
     monkeypatch.setattr("src.data.pit_source_adapter_v2.requests.get", lambda *a, **k: Response())
     url = "https://example.invalid/test.csv"
@@ -74,12 +84,9 @@ def test_cdx_empty_response_is_not_request_failure(tmp_path, monkeypatch):
 
 def test_snapshot_parse_and_key_matching_are_observable(tmp_path, monkeypatch):
     csv = b"Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\n01/09/25,Team A,Team B,2,1,H\n"
-
     class Response:
         content = csv
-        def raise_for_status(self):
-            return None
-
+        def raise_for_status(self): return None
     adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
     monkeypatch.setattr("src.data.pit_source_adapter_v2.requests.get", lambda *a, **k: Response())
     capture = {"timestamp": "20250902000000", "digest": "digest-a"}
@@ -92,15 +99,8 @@ def test_diagnostic_bulk_exposes_cdx_failure_stage(tmp_path, monkeypatch):
     adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
     monkeypatch.setattr("src.data.pit_source_adapter_v2.requests.get", lambda *a, **k: (_ for _ in ()).throw(__import__("requests").RequestException("network down")))
     history = pd.DataFrame([{
-        "competition": "EPL",
-        "season": "2025/26",
-        "kickoff_utc": "2025-09-01T18:00:00Z",
-        "kickoff_time_available": True,
-        "home_team": "Team A",
-        "away_team": "Team B",
-        "home_goals": 2,
-        "away_goals": 1,
-        "result": "H",
+        "competition": "EPL", "season": "2025/26", "kickoff_utc": "2025-09-01T18:00:00Z", "kickoff_time_available": True,
+        "home_team": "Team A", "away_team": "Team B", "home_goals": 2, "away_goals": 1, "result": "H",
     }])
     diagnostic = adapter.diagnostic_bulk(history)
     assert diagnostic.loc[0, "cdx_status"] == "CDX_REQUEST_FAILURE"
