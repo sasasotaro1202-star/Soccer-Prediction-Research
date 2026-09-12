@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import numpy as np
-from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier
+from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
@@ -11,9 +11,23 @@ from sklearn.preprocessing import StandardScaler
 
 def candidates(random_state: int = 42):
     return {
-        "logistic": Pipeline([("imputer", SimpleImputer(strategy="median")), ("scale", StandardScaler()), ("model", LogisticRegression(max_iter=2000, C=1.0, multi_class="auto", random_state=random_state))]),
-        "extra_trees": Pipeline([("imputer", SimpleImputer(strategy="median")), ("model", ExtraTreesClassifier(n_estimators=500, min_samples_leaf=8, max_features="sqrt", n_jobs=-1, random_state=random_state))]),
-        "hist_gb": Pipeline([("imputer", SimpleImputer(strategy="median")), ("model", HistGradientBoostingClassifier(max_iter=250, learning_rate=0.05, max_leaf_nodes=15, l2_regularization=1.0, random_state=random_state))]),
+        "logistic": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scale", StandardScaler()),
+            ("model", LogisticRegression(max_iter=2000, C=1.0, multi_class="auto", random_state=random_state)),
+        ]),
+        "extra_trees": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("model", ExtraTreesClassifier(n_estimators=300, min_samples_leaf=8, max_features="sqrt", n_jobs=-1, random_state=random_state)),
+        ]),
+        "random_forest": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("model", RandomForestClassifier(n_estimators=300, min_samples_leaf=8, max_features="sqrt", n_jobs=-1, random_state=random_state, class_weight="balanced_subsample")),
+        ]),
+        "hist_gb": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("model", HistGradientBoostingClassifier(max_iter=220, learning_rate=0.05, max_leaf_nodes=15, l2_regularization=1.0, random_state=random_state)),
+        ]),
     }
 
 
