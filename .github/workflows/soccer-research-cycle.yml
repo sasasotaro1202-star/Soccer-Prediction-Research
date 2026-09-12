@@ -11,14 +11,14 @@ permissions:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OPENAI_RESEARCH_MODEL: gpt-5.6-luna
       PYTHONPATH: .
-      # CI first performs a deterministic PIT audit (1 row per competition/season)
-      # so a full 42k-row Wayback replay cannot consume the entire job timeout.
-      # Full replay remains the default when this variable is unset/0.
+      # Archive replay is a sampled reproducibility audit. It is independent of
+      # the deterministic feature-PIT gate and never blocks legal result features
+      # merely because a historical archive provider cannot replay a page today.
       PIT_REPLAY_ROWS_PER_GROUP: "1"
     steps:
       - name: Checkout
