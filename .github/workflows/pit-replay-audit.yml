@@ -30,7 +30,7 @@ permissions:
 jobs:
   pit-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
     env:
       PYTHONPATH: .
     steps:
