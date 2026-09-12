@@ -11,11 +11,7 @@ from src.data.pit_source_adapter import apply_pit_evidence, build_pit_diagnostic
 
 
 def select_sample(history: pd.DataFrame, *, rows_per_season: int = 1, competition: str = "EPL") -> pd.DataFrame:
-    """Select a deliberately small, deterministic PIT audit sample.
-
-    The sample is taken after normal acquisition so the audit exercises the real
-    canonical records, but it never runs the full 42k-row replay.
-    """
+    """Select a deterministic PIT audit sample from canonical acquired records."""
     if history.empty:
         return history.copy()
     sample = history[history["competition"].astype(str).eq(competition)].copy()
@@ -43,17 +39,24 @@ def run(out_dir: str = "artifacts/pit-audit", rows_per_season: int = 1, competit
 
     status_counts = replayed["pit_evidence_status"].value_counts(dropna=False).to_dict()
     reason_counts = replayed["pit_evidence_reason"].fillna("").value_counts().to_dict()
+    verified = int(replayed["pit_evidence_status"].eq("VERIFIED").sum())
+    total = int(len(replayed))
+    unverifiable = total - verified
     report = {
-        "status": "OK" if len(replayed) and int(replayed["pit_evidence_status"].eq("VERIFIED").sum()) > 0 else "BLOCKED",
+        # Audit is green only when every sampled row has independently verified PIT evidence.
+        "status": "OK" if total > 0 and verified == total else "BLOCKED",
         "competition": competition,
-        "sample_rows": int(len(sample)),
-        "verified_rows": int(replayed["pit_evidence_status"].eq("VERIFIED").sum()),
-        "verified_rate": float(replayed["pit_evidence_status"].eq("VERIFIED").mean()) if len(replayed) else 0.0,
+        "sample_rows": total,
+        "verified_rows": verified,
+        "unverifiable_rows": unverifiable,
+        "verified_rate": float(verified / total) if total else 0.0,
         "status_counts": {str(k): int(v) for k, v in status_counts.items()},
         "reason_counts": {str(k): int(v) for k, v in reason_counts.items()},
         "diagnostic": diagnostic.to_dict(orient="records"),
     }
-    (out / "pit_audit_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    (out / "pit_audit_status.json").write_text(
+        json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8"
+    )
     print(json.dumps(report, indent=2, ensure_ascii=False, default=str))
     return report
 
