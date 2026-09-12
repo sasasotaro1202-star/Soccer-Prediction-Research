@@ -11,13 +11,15 @@ import numpy as np
 import pandas as pd
 import requests
 
+from src.data.openfootball_adapter import load_openfootball_history
+
 LEAGUES = {
-    "EPL": "E0", "CHA": "E1", "BL1": "D1", "SA": "I1", "LL": "SP1", "FL1": "F1", "ERE": "N1"
+    "EPL": "E0", "CHA": "E1", "BL1": "D1", "SA": "I1", "LL": "SP1", "FL1": "F1"
 }
 BASE = "https://www.football-data.co.uk/mmz4281/{season_folder}/{league}.csv"
 COMPETITION_TZ = {
     "EPL": "Europe/London", "CHA": "Europe/London", "BL1": "Europe/Berlin",
-    "SA": "Europe/Rome", "LL": "Europe/Madrid", "FL1": "Europe/Paris", "ERE": "Europe/Amsterdam",
+    "SA": "Europe/Rome", "LL": "Europe/Madrid", "FL1": "Europe/Paris",
 }
 RAW_STAT_MAP = {
     "home_shots": "HS", "away_shots": "AS",
@@ -95,10 +97,7 @@ def load_season(competition: str, start_year: int, cache_dir: str = "data/raw") 
         "retrieved_at_utc": retrieved,
     })
     for target, source in RAW_STAT_MAP.items():
-        if source in df.columns:
-            out[target] = pd.to_numeric(df[source], errors="coerce")
-        else:
-            out[target] = np.nan
+        out[target] = pd.to_numeric(df[source], errors="coerce") if source in df.columns else np.nan
     out["raw_snapshot_id"] = hashlib.sha256(raw).hexdigest()
     return out.dropna(subset=["kickoff_utc", "home_goals", "away_goals"]).reset_index(drop=True)
 
@@ -107,16 +106,17 @@ def _load_one(args):
     comp, year, cache_dir = args
     try:
         d = load_season(comp, year, cache_dir)
-        return comp, year, d, {"competition": comp, "season": year, "status": "AVAILABLE", "rows": len(d)}
+        return comp, year, d, {"competition": comp, "season": year, "status": "AVAILABLE", "rows": len(d), "source": "Football-Data.co.uk"}
     except Exception as e:
-        return comp, year, None, {"competition": comp, "season": year, "status": "UNAVAILABLE", "rows": 0, "error": str(e)}
+        return comp, year, None, {"competition": comp, "season": year, "status": "UNAVAILABLE", "rows": 0, "source": "Football-Data.co.uk", "error": str(e)}
 
 
 def load_available_history(start_year: int = 2010, end_year: int = 2025, max_workers: int = 8) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Acquire independent competition-season files concurrently.
+    """Acquire all currently implemented primary and secondary historical sources.
 
-    Each file remains an immutable raw snapshot; concurrency changes only wall-clock
-    time, not the source bytes, parsing rules, or feature values.
+    Primary six league coverage comes from Football-Data.co.uk. UEFA cups and
+    domestic cups are acquired by the openfootball adapter. Acquisition coverage
+    remains source- and season-specific; no provider claim is promoted to coverage.
     """
     tasks = [(comp, year, "data/raw") for comp in LEAGUES for year in range(start_year, end_year + 1)]
     results = []
@@ -125,9 +125,13 @@ def load_available_history(start_year: int = 2010, end_year: int = 2025, max_wor
         for future in as_completed(futures):
             results.append(future.result())
     results.sort(key=lambda x: (list(LEAGUES).index(x[0]), x[1]))
-    frames = [r[2] for r in results if r[2] is not None]
-    coverage = [r[3] for r in results]
+    primary_frames = [r[2] for r in results if r[2] is not None]
+    primary_history = pd.concat(primary_frames, ignore_index=True) if primary_frames else pd.DataFrame()
+    secondary_history, secondary_coverage = load_openfootball_history(start_year=start_year, end_year=end_year, max_workers=max_workers)
+    frames = [x for x in [primary_history, secondary_history] if not x.empty]
     history = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
     if not history.empty:
-        history = history.sort_values(["competition", "kickoff_utc", "home_team", "away_team"], kind="mergesort").reset_index(drop=True)
-    return history, pd.DataFrame(coverage)
+        history = history.sort_values(["competition", "kickoff_utc", "home_team", "away_team", "source_name"], kind="mergesort").reset_index(drop=True)
+    primary_coverage = pd.DataFrame([r[3] for r in results])
+    coverage = pd.concat([primary_coverage, secondary_coverage], ignore_index=True)
+    return history, coverage
