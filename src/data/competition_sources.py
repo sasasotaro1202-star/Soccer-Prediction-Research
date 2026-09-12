@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.data.fixture_field_audit import TARGET_COMPETITIONS
+TARGET_COMPETITIONS = (
+    "EPL", "CHA", "BL1", "SA", "LL", "FL1", "UCL", "UEL",
+    "J1", "J2", "J3", "DFBP", "CAR", "FRI",
+)
 
 
 @dataclass(frozen=True)
@@ -14,18 +17,18 @@ class CompetitionSourcePlan:
     notes: str
 
 
-# This is a plan, not a coverage claim. Actual row/field coverage must come from
-# adapter execution and be written to the audit artifacts.
+# Candidate plan only. It is never a coverage claim. Actual row/field coverage
+# must be established by adapter execution and written to audit artifacts.
 PLANS = {
-    "EPL": ("Football-Data.co.uk", "football-data.org", "Sportmonks"),
-    "CHA": ("Football-Data.co.uk", "football-data.org", "Sportmonks"),
+    "EPL": ("Football-Data.co.uk", "football-data.org", "Sportmonks", "openfootball"),
+    "CHA": ("Football-Data.co.uk", "football-data.org", "Sportmonks", "openfootball"),
     "BL1": ("Football-Data.co.uk", "football-data.org", "Sportmonks"),
     "SA": ("Football-Data.co.uk", "football-data.org", "Sportmonks"),
     "LL": ("Football-Data.co.uk", "football-data.org", "Sportmonks"),
     "FL1": ("Football-Data.co.uk", "football-data.org", "Sportmonks"),
-    "UCL": ("football-data.org", "Sportmonks", "TheStatsAPI"),
-    "UEL": ("football-data.org", "Sportmonks"),
-    "J1": ("football-data.org", "Sportmonks", "TheStatsAPI"),
+    "UCL": ("football-data.org", "Sportmonks", "TheStatsAPI", "openfootball"),
+    "UEL": ("football-data.org", "Sportmonks", "openfootball"),
+    "J1": ("Sportmonks", "TheStatsAPI", "J.League"),
     "J2": ("Sportmonks", "TheStatsAPI", "J.League"),
     "J3": ("Sportmonks", "TheStatsAPI", "J.League"),
     "DFBP": ("Sportmonks",),
