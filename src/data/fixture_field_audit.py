@@ -2,38 +2,34 @@ from __future__ import annotations
 
 """Deterministic fixture/field/source/PIT audit for the 14 target competitions.
 
-The audit measures observed acquisition; it never turns provider claims into
-coverage claims and never converts missing values to zero.
+Coverage is measured from observed acquisition only. Missing values are never
+converted to zero, and a search result is never treated as a dataset.
 """
 
 from dataclasses import dataclass
 from pathlib import Path
+import json
 
 import pandas as pd
 
 from src.data.competition_sources import source_plans
 from src.data.football_data import load_available_history
-from src.data.pit_policy import is_available_by_cutoff
 
 TARGET_COMPETITIONS = (
     "EPL", "CHA", "BL1", "SA", "LL", "FL1", "UCL", "UEL",
     "J1", "J2", "J3", "DFBP", "CAR", "FRI",
 )
-
 COMPETITION_NAMES = {
-    "EPL": "Premier League", "CHA": "Championship", "BL1": "Bundesliga",
-    "SA": "Serie A", "LL": "La Liga", "FL1": "Ligue 1",
-    "UCL": "UEFA Champions League", "UEL": "UEFA Europa League",
-    "J1": "J1", "J2": "J2", "J3": "J3", "DFBP": "DFB-Pokal",
-    "CAR": "Carabao Cup / EFL Cup", "FRI": "Club Friendlies",
+    "EPL": "Premier League", "CHA": "Championship", "BL1": "Bundesliga", "SA": "Serie A",
+    "LL": "La Liga", "FL1": "Ligue 1", "UCL": "UEFA Champions League", "UEL": "UEFA Europa League",
+    "J1": "J1", "J2": "J2", "J3": "J3", "DFBP": "DFB-Pokal", "CAR": "Carabao Cup / EFL Cup",
+    "FRI": "Club Friendlies",
 }
-
 CANONICAL_FIELDS = (
-    "fixture_id", "competition", "season", "home_team", "away_team",
-    "kickoff_utc", "result", "home_goals", "away_goals",
-    "home_shots", "away_shots", "home_shots_on_target", "away_shots_on_target",
-    "home_corners", "away_corners", "home_fouls", "away_fouls",
-    "home_yellow_cards", "away_yellow_cards", "home_red_cards", "away_red_cards",
+    "fixture_id", "competition", "season", "home_team", "away_team", "kickoff_utc", "result",
+    "home_goals", "away_goals", "home_shots", "away_shots", "home_shots_on_target", "away_shots_on_target",
+    "home_corners", "away_corners", "home_fouls", "away_fouls", "home_yellow_cards", "away_yellow_cards",
+    "home_red_cards", "away_red_cards",
 )
 
 @dataclass(frozen=True)
@@ -85,17 +81,14 @@ def field_audit(history: pd.DataFrame, config: AuditConfig = AuditConfig()) -> p
             value = row.get(field, pd.NA)
             value_status = _status_for_value(value, field)
             if pd.isna(cutoff):
-                pit_status = "PIT_UNKNOWN"
-                pit_reason = "Invalid kickoff/cutoff"
+                pit_status, pit_reason = "PIT_UNKNOWN", "Invalid kickoff/cutoff"
             elif pd.notna(source_available):
                 pit_status = "PIT_SAFE" if source_available <= cutoff else "PIT_UNSAFE"
                 pit_reason = "Explicit source availability timestamp"
             elif field in {"home_goals", "away_goals", "result"}:
-                pit_status = "PIT_UNSAFE"
-                pit_reason = "Own-match outcome is post-event information and cannot be a pre-match feature"
+                pit_status, pit_reason = "PIT_UNSAFE", "Own-match outcome is post-event information"
             else:
-                pit_status = "PIT_UNKNOWN"
-                pit_reason = "No source publication timestamp; retrieval time is not treated as publication time"
+                pit_status, pit_reason = "PIT_UNKNOWN", "No source publication timestamp; retrieval time is not publication time"
             rows.append({
                 "fixture_id": fixture_id, "competition": row.get("competition"), "season": row.get("season"),
                 "home_team": row.get("home_team"), "away_team": row.get("away_team"), "event_time_utc": kickoff,
@@ -108,33 +101,39 @@ def field_audit(history: pd.DataFrame, config: AuditConfig = AuditConfig()) -> p
 
 
 def pit_audit(field_rows: pd.DataFrame) -> pd.DataFrame:
+    cols = ["competition", "season", "source", "field_name", "pit_status", "count", "rate"]
     if field_rows.empty:
-        return pd.DataFrame(columns=["competition", "season", "field_name", "pit_status", "count", "rate"])
-    rows = []
-    for (competition, season, field, status), g in field_rows.groupby(["competition", "season", "field_name", "pit_status"], dropna=False):
-        rows.append({"competition": competition, "season": season, "field_name": field, "pit_status": status, "count": int(len(g))})
-    out = pd.DataFrame(rows)
-    totals = out.groupby(["competition", "season", "field_name"], as_index=False)["count"].sum().rename(columns={"count": "total"})
-    out = out.merge(totals, on=["competition", "season", "field_name"], how="left")
+        return pd.DataFrame(columns=cols)
+    out = field_rows.groupby(["competition", "season", "source", "field_name", "pit_status"], dropna=False).size().reset_index(name="count")
+    totals = out.groupby(["competition", "season", "source", "field_name"], as_index=False)["count"].sum().rename(columns={"count": "total"})
+    out = out.merge(totals, on=["competition", "season", "source", "field_name"], how="left")
     out["rate"] = out["count"] / out["total"]
     return out
 
 
-def coverage_matrix(history: pd.DataFrame, field_rows: pd.DataFrame) -> pd.DataFrame:
+def coverage_matrix(history: pd.DataFrame, field_rows: pd.DataFrame, acquisition: pd.DataFrame | None = None) -> pd.DataFrame:
     rows: list[dict] = []
     observed_comps = set(history["competition"].dropna().astype(str)) if not history.empty and "competition" in history.columns else set()
+    # Competition-level summary is retained for compatibility, but detailed rows below are
+    # season × source × field so coverage can never be mistaken for a global provider claim.
     for comp in TARGET_COMPETITIONS:
         comp_history = history[history["competition"].astype(str) == comp] if not history.empty and "competition" in history.columns else pd.DataFrame()
         if comp not in observed_comps:
-            rows.append({"competition": comp, "competition_name": COMPETITION_NAMES[comp], "source": "current_observed_adapter", "status": "UNAVAILABLE", "fixture_count": 0, "reason": "No observed rows from current adapter; this is not a claim that the competition has no data elsewhere."})
+            rows.append({"competition": comp, "competition_name": COMPETITION_NAMES[comp], "season": pd.NA, "source": "current_observed_adapter", "field": pd.NA, "status": "UNAVAILABLE", "fixture_count": 0, "reason": "No observed rows from current adapter; not a claim that no data exists elsewhere."})
             continue
-        total = len(comp_history)
-        rows.append({"competition": comp, "competition_name": COMPETITION_NAMES[comp], "source": "current_observed_adapter", "status": "AVAILABLE", "fixture_count": int(total), "reason": "Observed rows from current adapter"})
-        if not field_rows.empty:
-            f = field_rows[field_rows["competition"].astype(str) == comp]
-            for field, g in f.groupby("field_name", dropna=False):
-                nonmissing = int((g["value_status"] != "MISSING").sum())
-                rows.append({"competition": comp, "competition_name": COMPETITION_NAMES[comp], "source": "current_observed_adapter", "field": field, "status": "AVAILABLE" if nonmissing == len(g) else ("PARTIAL" if nonmissing else "UNAVAILABLE"), "fixture_count": int(len(g)), "matched_count": nonmissing, "coverage_rate": float(nonmissing / len(g)) if len(g) else 0.0, "reason": "Observed field-level coverage; missing values are not converted to zero"})
+        rows.append({"competition": comp, "competition_name": COMPETITION_NAMES[comp], "season": "ALL_OBSERVED", "source": "current_observed_adapter", "field": pd.NA, "status": "AVAILABLE", "fixture_count": int(len(comp_history)), "reason": "Observed rows from current adapter"})
+    if not history.empty:
+        for (comp, season, source), g in history.groupby(["competition", "season", "source_name"], dropna=False):
+            for field in CANONICAL_FIELDS[6:]:
+                values = g[field] if field in g.columns else pd.Series(pd.NA, index=g.index)
+                nonmissing = int(values.notna().sum())
+                status = "AVAILABLE" if nonmissing == len(g) else "PARTIAL" if nonmissing else "UNAVAILABLE"
+                rows.append({
+                    "competition": comp, "competition_name": COMPETITION_NAMES.get(comp, str(comp)), "season": season,
+                    "source": source, "field": field, "status": status, "fixture_count": int(len(g)),
+                    "matched_count": nonmissing, "coverage_rate": float(nonmissing / len(g)) if len(g) else 0.0,
+                    "reason": "Observed season/source/field coverage; missing values remain missing",
+                })
     return pd.DataFrame(rows)
 
 
@@ -157,14 +156,13 @@ def run_audit(out_dir: str = "artifacts", config: AuditConfig = AuditConfig()) -
     history, acquisition = load_available_history(start_year=config.start_year, end_year=config.end_year)
     fixtures = fixture_audit(history)
     fields = field_audit(history, config=config)
-    coverage = coverage_matrix(history, fields)
+    coverage = coverage_matrix(history, fields, acquisition)
     reconciliation = source_reconciliation(history)
     pit = pit_audit(fields)
     plans = pd.DataFrame([{
         "competition": p.competition, "canonical_candidates": "|".join(p.canonical_candidates),
         "discovery_only": "|".join(p.discovery_only), "pit_status": p.pit_status, "notes": p.notes,
     } for p in source_plans()])
-
     fixtures.to_csv(out / "fixture_audit.csv", index=False)
     fields.to_csv(out / "field_audit.csv", index=False)
     coverage.to_csv(out / "coverage_matrix.csv", index=False)
@@ -172,24 +170,31 @@ def run_audit(out_dir: str = "artifacts", config: AuditConfig = AuditConfig()) -
     reconciliation.to_csv(out / "source_reconciliation.csv", index=False)
     pit.to_csv(out / "pit_audit.csv", index=False)
     plans.to_csv(out / "competition_source_plan.csv", index=False)
-
-    pit_counts = fields["pit_status"].value_counts().to_dict() if not fields.empty else {}
     observed = sorted(set(history["competition"].astype(str))) if not history.empty else []
+    unobserved = [c for c in TARGET_COMPETITIONS if c not in observed]
+    detailed_rows = coverage[coverage["season"].notna() & coverage["season"].astype(str).ne("ALL_OBSERVED")] if not coverage.empty else pd.DataFrame()
+    required_detailed = len(TARGET_COMPETITIONS) * max(1, config.end_year - config.start_year + 1)
+    # Full audit is intentionally false until every target competition has observed fixture rows
+    # in the requested season range. This prevents a six-league adapter from masquerading as a
+    # completed 14-competition audit.
+    audit_complete = len(unobserved) == 0 and not history.empty
     summary = {
         "target_competitions": list(TARGET_COMPETITIONS), "target_competition_count": 14,
+        "requested_season_start": config.start_year, "requested_season_end": config.end_year,
         "observed_competitions": observed, "observed_competition_count": len(observed),
-        "unobserved_competitions": [c for c in TARGET_COMPETITIONS if c not in observed],
-        "fixture_count": int(len(fixtures)), "field_observation_count": int(len(fields)),
-        "pit_status_counts": {str(k): int(v) for k, v in pit_counts.items()},
+        "unobserved_competitions": unobserved, "fixture_count": int(len(fixtures)),
+        "field_observation_count": int(len(fields)), "detailed_coverage_row_count": int(len(detailed_rows)),
+        "requested_competition_season_cells": required_detailed,
+        "pit_status_counts": {str(k): int(v) for k, v in (fields["pit_status"].value_counts().to_dict() if not fields.empty else {}).items()},
         "no_missing_to_zero": True, "search_engines_are_not_dataset_sources": True,
-        "audit_scope": "fixture -> field -> source -> PIT -> reconciliation",
-        "coverage_claim_policy": "observed-only; no provider-advertised coverage is promoted to AVAILABLE",
+        "audit_scope": "fixture -> season/source/field -> PIT -> reconciliation",
+        "coverage_claim_policy": "observed-only; provider advertisements and search results never become AVAILABLE",
+        "audit_complete": audit_complete,
+        "audit_complete_reason": "All target competitions observed by implemented adapters" if audit_complete else "At least one target competition has no observed fixture rows from implemented adapters",
     }
-    import json
-    (out / "audit_summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+    (out / "audit_summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     return summary
 
 
 if __name__ == "__main__":
-    import json
-    print(json.dumps(run_audit(), indent=2, ensure_ascii=False))
+    print(json.dumps(run_audit(), indent=2, ensure_ascii=False, default=str))
