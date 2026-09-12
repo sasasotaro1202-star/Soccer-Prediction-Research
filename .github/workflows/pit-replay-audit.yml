@@ -17,6 +17,7 @@ on:
     paths:
       - "src/data/pit_source_adapter.py"
       - "src/data/pit_source_adapter_v2.py"
+      - "src/data/pit_source_adapter_fast.py"
       - "src/data/football_data.py"
       - "tests/test_pit_source_adapter.py"
       - ".github/workflows/pit-replay-audit.yml"
