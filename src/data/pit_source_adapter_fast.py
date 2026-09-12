@@ -36,8 +36,6 @@ class FootballDataWaybackAdapter(_BaseAdapter):
             return [SourceEvidence(None, "UNVERIFIABLE", reason="missing_event_time") for _ in rows]
         min_bound = min(valid_bounds)
 
-        # Collapse repeated captures of identical file content. Keep the earliest
-        # timestamp for each digest while preserving chronological evidence order.
         unique = {}
         for capture in captures:
             ts = _utc(capture.get("timestamp"))
@@ -51,8 +49,6 @@ class FootballDataWaybackAdapter(_BaseAdapter):
         if not candidates:
             return [SourceEvidence(None, "UNVERIFIABLE", reason=f"captures_exist_but_no_capture_after_result_lower_bound:{reason}") for _, reason in bounds]
 
-        # Network completion order is irrelevant: assign evidence only after
-        # sorting snapshots by their actual archive timestamp.
         def fetch(capture):
             return capture, self._load_snapshot_keys(capture, url)
 
@@ -63,8 +59,6 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                 keysets.append(future.result())
         keysets.sort(key=lambda x: x[0].get("timestamp", ""))
 
-        # Match only unresolved identities instead of scanning every history row
-        # for every snapshot. This is the main CPU-side speedup.
         for capture, diagnostic in keysets:
             if not unresolved:
                 break
@@ -97,6 +91,49 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                 reason = "no_archive_snapshot_contains_completed_result"
             results[i] = SourceEvidence(None, "UNVERIFIABLE", reason=reason)
         return results
+
+    def diagnostic_bulk(self, history):
+        """Build CDX diagnostics without requiring a precomputed season_start column."""
+        if history is None or history.empty:
+            return pd.DataFrame(columns=["competition", "season_start", "url", "status", "capture_count", "error_type", "error"])
+
+        work = history.copy()
+        if "season_start" not in work.columns:
+            if "season" not in work.columns:
+                work["season_start"] = pd.NA
+            else:
+                work["season_start"] = pd.to_numeric(
+                    work["season"].astype(str).str.extract(r"(\d{4})", expand=False),
+                    errors="coerce",
+                ).astype("Int64")
+
+        rows = []
+        for (competition, start_year), _group in work.groupby(["competition", "season_start"], dropna=False):
+            try:
+                if pd.isna(start_year):
+                    raise ValueError("missing season_start")
+                url = source_url(str(competition), int(start_year))
+                diag = self.capture_diagnostic(url)
+                rows.append({
+                    "competition": competition,
+                    "season_start": int(start_year),
+                    "url": url,
+                    "status": diag.status,
+                    "capture_count": diag.capture_count,
+                    "error_type": diag.error_type,
+                    "error": diag.error,
+                })
+            except Exception as exc:
+                rows.append({
+                    "competition": competition,
+                    "season_start": start_year,
+                    "url": None,
+                    "status": "ADAPTER_MAPPING_FAILURE" if not isinstance(exc, requests.RequestException) else "CDX_REQUEST_FAILURE",
+                    "capture_count": 0,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                })
+        return pd.DataFrame(rows)
 
 
 def apply_pit_evidence(history, **kwargs):
