@@ -77,8 +77,18 @@ def source_url(competition: str, start_year: int) -> str:
 
 
 def _date_key(value: Any) -> str | None:
-    parsed = pd.to_datetime(value, dayfirst=True, errors="coerce")
-    return None if pd.isna(parsed) else parsed.date().isoformat()
+    if value is None or value == "" or pd.isna(value): return None
+    text = str(value).strip()
+    # ISO calendar dates must be parsed explicitly before day-first parsing.
+    # This prevents YYYY-MM-DD from being silently reordered.
+    for parser in (
+        lambda x: pd.to_datetime(x, format="%Y-%m-%d", errors="coerce"),
+        lambda x: pd.to_datetime(x, dayfirst=True, errors="coerce"),
+    ):
+        parsed = parser(text)
+        if not pd.isna(parsed):
+            return parsed.date().isoformat()
+    return None
 
 
 def _source_date_key(row: pd.Series) -> str | None:
@@ -147,104 +157,23 @@ class FootballDataWaybackAdapter:
 
     def _load_snapshot_keys(self, capture, original_url):
         identity = f"{capture.get('digest','')}|{capture.get('timestamp','')}|{capture.get('original','')}"
-        if identity in self._snapshot_diag: return self._snapshot_diag[identity]
+        if identity in self._snapshot_diag: return self._snapshot_diag[identity].keys or set()
         cache = self._snapshot_cache_path(capture)
         try:
-            raw = cache.read_bytes() if cache.exists() else None
-            if raw is None:
-                response = requests.get(self._snapshot_url(capture, original_url), timeout=self.timeout, headers={"User-Agent": "SoccerPredictionResearch/1.0 PIT-Audit"}); response.raise_for_status(); raw = response.content; cache.write_bytes(raw)
-        except requests.RequestException as exc:
-            diag = SnapshotDiagnostic("SNAPSHOT_DOWNLOAD_FAILURE", error_type=type(exc).__name__, error=str(exc)); self._snapshot_diag[identity] = diag; return diag
-        except OSError as exc:
-            diag = SnapshotDiagnostic("SNAPSHOT_CACHE_FAILURE", error_type=type(exc).__name__, error=str(exc)); self._snapshot_diag[identity] = diag; return diag
-        try: frame = pd.read_csv(BytesIO(raw))
-        except (ValueError, pd.errors.ParserError, UnicodeDecodeError) as exc:
-            diag = SnapshotDiagnostic("SNAPSHOT_PARSE_FAILURE", error_type=type(exc).__name__, error=str(exc)); self._snapshot_diag[identity] = diag; return diag
-        required = {"Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "FTR"}
-        if not required.issubset(frame.columns):
-            diag = SnapshotDiagnostic("SNAPSHOT_SCHEMA_FAILURE", error_type="MissingColumns", error=",".join(sorted(required - set(frame.columns)))); self._snapshot_diag[identity] = diag; return diag
-        keys = set()
-        for r in frame.itertuples(index=False):
-            date = _date_key(getattr(r, "Date", None))
-            if date is None: continue
-            try: keys.add((date, str(getattr(r, "HomeTeam")).strip(), str(getattr(r, "AwayTeam")).strip(), float(getattr(r, "FTHG")), float(getattr(r, "FTAG")), str(getattr(r, "FTR")).strip()))
-            except (TypeError, ValueError): continue
-        diag = SnapshotDiagnostic("SNAPSHOT_PARSED", keys=keys); self._snapshot_diag[identity] = diag; return diag
-
-    def _prefetch_url(self, url, rows, workers=None):
-        captures = self.captures(url)
-        if not captures:
-            diag = self._capture_diag.get(url, CaptureDiagnostic("CDX_REQUEST_FAILURE")); reason = "no_archive_captures" if diag.status == "CDX_NO_CAPTURE" else f"{diag.status.lower()}: {diag.error or ''}".strip(); return [SourceEvidence(None, "UNVERIFIABLE", reason=reason) for _ in rows]
-        row_keys = [_row_key(row) for row in rows]; bounds = [_result_lower_bound(row) for row in rows]
-        candidates = []
-        for capture in captures:
-            ts = _utc(capture.get("timestamp"))
-            if ts is not None and any(lb is not None and ts >= lb for lb, _ in bounds): candidates.append(capture)
-        candidates.sort(key=lambda c: c.get("timestamp", ""))
-        if not candidates: return [SourceEvidence(None, "UNVERIFIABLE", reason=f"captures_exist_but_no_capture_after_result_lower_bound:{reason}") for _, reason in bounds]
-        def fetch(capture): return capture, self._load_snapshot_keys(capture, url)
-        keysets = []
-        with ThreadPoolExecutor(max_workers=workers or self.max_workers) as pool:
-            futures = [pool.submit(fetch, c) for c in candidates]
-            for future in as_completed(futures): keysets.append(future.result())
-        keysets.sort(key=lambda x: x[0].get("timestamp", ""))
-        results = []
-        for key, (lb, bound_reason) in zip(row_keys, bounds):
-            if key is None or lb is None: results.append(SourceEvidence(None, "UNVERIFIABLE", reason="missing_record_identity")); continue
-            best = None; snapshot_errors = []
-            for capture, diag in keysets:
-                ts = _utc(capture.get("timestamp"))
-                if ts is None or ts < lb: continue
-                if diag.keys is None: snapshot_errors.append(diag.status); continue
-                if key in diag.keys: best = (ts, capture); break
-            if best is None:
-                reason = "no_archive_snapshot_contains_completed_result"
-                if snapshot_errors: reason += ":" + ",".join(sorted(set(snapshot_errors)))
-                results.append(SourceEvidence(None, "UNVERIFIABLE", reason=reason))
+            if cache.exists(): raw = cache.read_bytes()
             else:
-                ts, capture = best; results.append(SourceEvidence(ts.isoformat(), "VERIFIED", self._snapshot_url(capture, url), capture.get("digest"), f"archived_completed_result_first_observed_after_{bound_reason.lower()}"))
-        return results
-
-    def apply_bulk(self, history):
-        if history.empty: return history.copy()
-        out = history.copy(); groups = {}; evidence = {}
-        for idx, row in out.iterrows():
-            try:
-                year = int(str(row.get("season", "0000/00")).split("/")[0]); groups.setdefault(source_url(str(row.get("competition", "")), year), []).append((idx, row))
-            except (ValueError, TypeError) as exc: evidence[idx] = SourceEvidence(None, "UNVERIFIABLE", reason=str(exc))
-        def run_group(item):
-            url, indexed = item; return indexed, self._prefetch_url(url, [row for _, row in indexed], workers=1)
-        with ThreadPoolExecutor(max_workers=min(self.max_workers, max(1, len(groups)))) as pool:
-            futures = [pool.submit(run_group, item) for item in groups.items()]
-            for future in as_completed(futures):
-                indexed, results = future.result()
-                for (idx, _), result in zip(indexed, results): evidence[idx] = result
-        out["source_available_at_utc"] = [evidence[i].source_available_at_utc for i in out.index]
-        out["pit_evidence_status"] = [evidence[i].evidence_status for i in out.index]
-        out["pit_evidence_url"] = [evidence[i].evidence_url for i in out.index]
-        out["pit_evidence_digest"] = [evidence[i].capture_digest for i in out.index]
-        out["pit_evidence_reason"] = [evidence[i].reason for i in out.index]
-        return out
-
-    def evidence_for_row(self, row):
-        year = int(str(row.get("season", "0000/00")).split("/")[0]); return self._prefetch_url(source_url(str(row.get("competition", "")), year), [row], workers=self.max_workers)[0]
-
-    def diagnostic_bulk(self, history):
-        rows = []
-        for (competition, season), group in history.groupby(["competition", "season"], dropna=False):
-            try: year = int(str(season).split("/")[0]); url = source_url(str(competition), year)
-            except Exception as exc:
-                rows.append({"competition": competition, "season": season, "source": "UNVERIFIED", "cdx_status": "SOURCE_MAPPING_FAILURE", "cdx_capture_count": 0, "first_capture_at": None, "last_capture_at": None, "captures_after_result_lower_bound": 0, "snapshot_attempt_count": 0, "snapshot_success_count": 0, "result_match_count": 0, "pit_verified_count": 0, "failure_stage": "SOURCE_MAPPING_FAILURE", "failure_reason": str(exc)}); continue
-            captures = self.captures(url); cdiag = self._capture_diag.get(url, CaptureDiagnostic("CDX_REQUEST_FAILURE")); times = [_utc(c.get("timestamp")) for c in captures]; times = [t for t in times if t is not None]
-            lower_bounds = [_result_lower_bound(r)[0] for _, r in group.iterrows()]; eligible = [c for c in captures if (_utc(c.get("timestamp")) is not None and any(lb is not None and _utc(c.get("timestamp")) >= lb for lb in lower_bounds))]
-            snapshot_attempt_count = snapshot_success_count = result_match_count = 0
-            for capture in eligible:
-                snapshot_attempt_count += 1; diag = self._load_snapshot_keys(capture, url)
-                if diag.keys is not None:
-                    snapshot_success_count += 1; result_match_count += sum(1 for _, r in group.iterrows() if (_row_key(r) in diag.keys if _row_key(r) is not None else False))
-            rows.append({"competition": competition, "season": season, "source": "Football-Data.co.uk", "cdx_status": cdiag.status, "cdx_capture_count": len(captures), "first_capture_at": min(times).isoformat() if times else None, "last_capture_at": max(times).isoformat() if times else None, "captures_after_result_lower_bound": len(eligible), "snapshot_attempt_count": snapshot_attempt_count, "snapshot_success_count": snapshot_success_count, "result_match_count": result_match_count, "pit_verified_count": result_match_count, "failure_stage": "OK" if result_match_count else cdiag.status if not captures else "NO_RESULT_MATCH", "failure_reason": cdiag.error or ("no eligible snapshot" if not eligible else "no matching completed result")})
-        return pd.DataFrame(rows)
+                response = requests.get(self._snapshot_url(capture, original_url), timeout=self.timeout, headers={"User-Agent": "SoccerPredictionResearch/1.0 PIT-Audit"}); response.raise_for_status(); raw = response.content; cache.write_bytes(raw)
+            frame = pd.read_csv(BytesIO(raw)); keys = {_row_key(row) for _, row in frame.iterrows()}; keys.discard(None)
+            self._snapshot_diag[identity] = SnapshotDiagnostic("SNAPSHOT_PARSED", keys=keys); return keys
+        except requests.RequestException as exc:
+            self._snapshot_diag[identity] = SnapshotDiagnostic("SNAPSHOT_REQUEST_FAILURE", error_type=type(exc).__name__, error=str(exc))
+        except (OSError, ValueError, pd.errors.ParserError) as exc:
+            self._snapshot_diag[identity] = SnapshotDiagnostic("SNAPSHOT_PARSE_FAILURE", error_type=type(exc).__name__, error=str(exc))
+        return set()
 
 
-def apply_pit_evidence(history): return FootballDataWaybackAdapter().apply_bulk(history)
-def build_pit_diagnostic(history): return FootballDataWaybackAdapter().diagnostic_bulk(history)
+def competition_adapter_matrix() -> pd.DataFrame:
+    rows = []
+    for competition, spec in COMPETITION_ADAPTERS.items():
+        rows.append({"competition": competition, "source": spec.get("source"), "source_code": spec.get("source_code"), "adapter": spec.get("adapter"), "status": "IMPLEMENTED" if spec.get("adapter") else "UNVERIFIED"})
+    return pd.DataFrame(rows)
