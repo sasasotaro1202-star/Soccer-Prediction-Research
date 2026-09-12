@@ -12,11 +12,14 @@ from src.data.pit_source_adapter_v2 import (
     _utc, _row_key, _result_lower_bound, _date_key, COMPETITION_ADAPTERS,
 )
 
+# Explicitly bind private helpers locally; wildcard imports intentionally omit names beginning with '_'.
+_DATE_KEY = _date_key
+
 
 class FootballDataWaybackAdapter(_BaseAdapter):
     """Optimized PIT replay with resilient Wayback snapshot retrieval."""
 
-    _date_key = staticmethod(_date_key)
+    _date_key = staticmethod(_DATE_KEY)
 
     def __init__(self, *args, snapshot_retries: int = 4, retry_backoff: float = 1.5, **kwargs):
         super().__init__(*args, **kwargs)
