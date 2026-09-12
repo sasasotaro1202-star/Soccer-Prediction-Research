@@ -40,6 +40,18 @@ jobs:
       - name: Install dependencies
         continue-on-error: true
         run: python -m pip install -r requirements.txt
+      - name: Run 14-competition fixture field PIT audit
+        id: audit
+        continue-on-error: true
+        env:
+          PYTHONPATH: .
+        run: |
+          mkdir -p artifacts
+          set +e
+          python -m src.data.fixture_field_audit > artifacts/audit_stdout.json
+          rc=$?
+          printf '{"exit_code":%s,"passed":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/audit_status.json
+          exit "$rc"
       - name: Run tests
         id: tests
         continue-on-error: true
@@ -54,6 +66,7 @@ jobs:
         if: always()
         env:
           TESTS_PASSED: ${{ steps.tests.outcome == 'success' && 'true' || 'false' }}
+          AUDIT_PASSED: ${{ steps.audit.outcome == 'success' && 'true' || 'false' }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_RESEARCH_MODEL: gpt-5.6-luna
           PYTHONPATH: .
