@@ -61,4 +61,4 @@ jobs:
           name: soccer-pit-audit-${{ github.run_id }}
           path: artifacts/pit-audit/
           retention-days: 30
-# Re-audit trigger for the current PIT adapter fallback fix.
+# Re-audit trigger after resilient snapshot retry hardening.
