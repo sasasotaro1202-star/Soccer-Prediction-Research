@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import pandas as pd
 
@@ -15,8 +17,8 @@ def _fit_predict(model, fit, target):
 
 
 def _blend_weights(scores: dict[str, dict]) -> dict[str, float]:
-    # LogLoss remains the primary objective; inverse-loss weights are learned only
-    # from the historical validation slice and are never fitted on the OOS block.
+    # LogLoss remains the primary objective; weights are learned only from
+    # historical validation data, never from the OOS block.
     losses = np.array([max(float(v["logloss"]), 1e-6) for v in scores.values()])
     inv = 1.0 / losses
     inv /= inv.sum()
@@ -28,10 +30,20 @@ def run_walk_forward(
     feature_cols: list[str],
     min_train: int = 1000,
     validation_frac: float = 0.2,
-    oos_block: int = 500,
+    oos_block: int | None = None,
     random_state: int = 42,
 ):
-    d = df.sort_values("kickoff_utc").reset_index(drop=True).copy()
+    """Chronological walk-forward OOS with bounded refit frequency.
+
+    A larger OOS block reduces repeated full-model refits while preserving the
+    exact chronological train -> validation -> future-OOS ordering. The block
+    size is a compute optimization, not a data or target change.
+    """
+    if oos_block is None:
+        oos_block = max(500, int(os.getenv("SOCCER_OOS_BLOCK", "2000")))
+    validation_max = max(500, int(os.getenv("SOCCER_VALIDATION_MAX", "2000")))
+
+    d = df.sort_values("kickoff_utc", kind="mergesort").reset_index(drop=True).copy()
     d = d[d["pit_verified"] == True].reset_index(drop=True)
     d = d.dropna(subset=["target"])
     if len(d) < min_train + oos_block:
@@ -43,7 +55,7 @@ def run_walk_forward(
         oos_end = min(start + oos_block, len(d))
         train = d.iloc[:start]
         oos = d.iloc[start:oos_end]
-        val_n = min(max(60, int(len(train) * validation_frac)), max(60, len(train) - 300))
+        val_n = min(max(60, int(len(train) * validation_frac)), validation_max, max(60, len(train) - 300))
         fit = train.iloc[:-val_n]
         val = train.iloc[-val_n:]
         Xfit, yfit = fit[feature_cols], fit.target.astype(int)
@@ -73,13 +85,12 @@ def run_walk_forward(
         probs = np.clip(probs, 1e-9, 1.0)
         probs /= probs.sum(axis=1, keepdims=True)
         m = classification_metrics(oos.target.astype(int), probs)
-        result = {
+        results.append({
             "oos_start": str(oos.kickoff_utc.min()), "oos_end": str(oos.kickoff_utc.max()),
             "model": "ensemble", "best_single_model": best, **m, "n": len(oos),
             "target_accuracy": TARGET_ACCURACY, "target_met": bool(m["accuracy"] >= TARGET_ACCURACY),
             "target_gap": float(m["accuracy"] - TARGET_ACCURACY),
-        }
-        results.append(result)
+        })
         start = oos_end
 
     return pd.DataFrame(results), pd.DataFrame(selected)
