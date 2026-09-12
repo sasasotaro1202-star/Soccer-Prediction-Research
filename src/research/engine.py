@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from src.data.coverage import build_coverage
@@ -15,16 +16,13 @@ from src.evaluation.walk_forward import TARGET_ACCURACY, run_walk_forward
 from src.features.soccer_features import add_target, build_match_features
 from src.research.llm import weakness_advice
 
-
 EXCLUDED_MODEL_COLUMNS = {
     "match_id", "competition", "season", "season_start", "kickoff_utc", "home_team", "away_team",
-    "prediction_cutoff_at_utc", "home_goals", "away_goals", "target", "pit_verified",
-    "feature_source_max_available_at_utc",
+    "prediction_cutoff_at_utc", "home_goals", "away_goals", "target", "pit_verified", "feature_source_max_available_at_utc",
 }
 
 
 def snapshot_id(df: pd.DataFrame) -> str:
-    """Deterministic data hash; operational retrieval timestamps are excluded."""
     excluded = {"retrieved_at_utc", "source_available_at_utc"}
     cols = [c for c in df.columns if c not in excluded]
     stable = df[cols].copy()
@@ -49,11 +47,9 @@ def _pit_sample(history: pd.DataFrame, rows_per_group: int) -> pd.DataFrame:
 
 def _write_source_registry(out: Path) -> None:
     pd.DataFrame([
-        {
-            "name": s.name, "kind": s.kind, "role": s.role, "fields": ",".join(s.fields),
-            "historical": s.historical, "pit_capable": s.pit_capable, "live_capable": s.live_capable,
-            "auth_required": s.auth_required, "primary_for": ",".join(s.primary_for), "notes": s.notes,
-        }
+        {"name": s.name, "kind": s.kind, "role": s.role, "fields": ",".join(s.fields),
+         "historical": s.historical, "pit_capable": s.pit_capable, "live_capable": s.live_capable,
+         "auth_required": s.auth_required, "primary_for": ",".join(s.primary_for), "notes": s.notes}
         for s in SOCCER_SOURCES
     ]).to_csv(out / "source_registry.csv", index=False)
 
@@ -70,7 +66,6 @@ def run(out_dir: str = "artifacts") -> dict:
     out = Path(out_dir); out.mkdir(parents=True, exist_ok=True)
     _write_source_registry(out)
     competition_adapter_matrix().to_csv(out / "pit_competition_adapter_matrix.csv", index=False)
-
     history, acquisition = load_available_history()
     acquisition.to_csv(out / "acquisition_coverage.csv", index=False)
     coverage = build_coverage(history)
@@ -80,8 +75,6 @@ def run(out_dir: str = "artifacts") -> dict:
         (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
         return report
 
-    # Archive replay is an independent source-reproducibility audit. It is deliberately
-    # sampled and does NOT decide whether deterministic result features are legal to use.
     try:
         rows_per_group = max(1, int(os.getenv("PIT_REPLAY_ROWS_PER_GROUP", "1")))
     except ValueError:
@@ -99,16 +92,13 @@ def run(out_dir: str = "artifacts") -> dict:
             except Exception as exc:
                 history_replayed["secondary_archive_error"] = f"{type(exc).__name__}: {exc}"
         archive_audit = {
-            "status": "COMPLETED",
-            "rows": int(len(history_replayed)),
+            "status": "COMPLETED", "rows": int(len(history_replayed)),
             "pit_evidence_status_counts": history_replayed.get("pit_evidence_status", pd.Series(dtype=str)).astype(str).value_counts().to_dict(),
         }
         history_replayed.to_csv(out / "normalized_history_archive_audit.csv", index=False)
     except Exception as exc:
         archive_audit = {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
 
-    # Feature PIT is governed by deterministic availability rules and is independent of
-    # whether an archive provider can replay an old completed-results page today.
     feats = build_match_features(history, history)
     feats = add_target(feats, history)
     feats.to_csv(out / "pit_replay_features.csv", index=False)
@@ -117,9 +107,8 @@ def run(out_dir: str = "artifacts") -> dict:
     if pit_verified == 0:
         report = {
             "status": "BLOCKED", "reason": "No match rows have sufficient historical result state under the deterministic PIT policy.",
-            "acquired_rows": int(len(history)), "snapshot_id": snapshot_id(history),
-            "pit_policy": "result_plus_24h", "pit_verified_rows": 0, "pit_verified_rate": 0.0,
-            "archive_audit": archive_audit,
+            "acquired_rows": int(len(history)), "snapshot_id": snapshot_id(history), "pit_policy": "result_plus_24h",
+            "pit_verified_rows": 0, "pit_verified_rate": 0.0, "archive_audit": archive_audit,
         }
         report["ai_research"] = weakness_advice(report)
         (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
@@ -137,13 +126,10 @@ def run(out_dir: str = "artifacts") -> dict:
         "coverage": coverage.to_dict(orient="records"), "archive_audit": archive_audit,
         "pit_policy": "result_plus_24h", "pit_verified_rows": pit_verified, "pit_total_rows": pit_total,
         "pit_verified_rate": float(pit_verified / pit_total) if pit_total else 0.0,
-        "accuracy_target": {
-            "target_accuracy": TARGET_ACCURACY,
-            "locked_oos_accuracy": oos_acc,
-            "target_met": bool(oos_acc >= TARGET_ACCURACY) if oos_n else False,
-            "target_gap": float(oos_acc - TARGET_ACCURACY) if oos_n else float("nan"),
-            "oos_sample_size": oos_n,
-        },
+        "accuracy_target": {"target_accuracy": TARGET_ACCURACY, "locked_oos_accuracy": oos_acc,
+                            "target_met": bool(oos_acc >= TARGET_ACCURACY) if oos_n else False,
+                            "target_gap": float(oos_acc - TARGET_ACCURACY) if oos_n else float("nan"),
+                            "oos_sample_size": oos_n},
         "ai_research": weakness_advice(summary),
     }
     (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
@@ -151,5 +137,4 @@ def run(out_dir: str = "artifacts") -> dict:
 
 
 if __name__ == "__main__":
-    import numpy as np
     print(json.dumps(run(), indent=2, ensure_ascii=False, default=str))
