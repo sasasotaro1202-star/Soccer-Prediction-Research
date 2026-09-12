@@ -120,3 +120,35 @@ def test_date_only_does_not_claim_same_day_result_availability():
     bound, reason = _result_lower_bound(row)
     assert bound.isoformat() == "2025-09-02T00:00:00+00:00"
     assert reason == "DATE_ONLY_NEXT_DAY"
+
+
+def test_precise_replay_accepts_completed_result_observed_before_180m_but_after_kickoff(tmp_path, monkeypatch):
+    csv = b"Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\n01/09/25,Team A,Team B,2,1,H\n"
+
+    class Response:
+        content = csv
+        def raise_for_status(self): return None
+
+    adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
+    monkeypatch.setattr("src.data.pit_source_adapter_v2.requests.get", lambda *a, **k: Response())
+    monkeypatch.setattr(
+        adapter,
+        "captures",
+        lambda url: [{"timestamp": "20250901193000", "digest": "digest-early", "original": url}],
+    )
+    row = pd.Series({
+        "competition": "EPL",
+        "season_start": 2025,
+        "home_team": "Team A",
+        "away_team": "Team B",
+        "source_event_date": "2025-09-01",
+        "kickoff_utc": "2025-09-01T18:00:00Z",
+        "kickoff_time_available": True,
+        "home_goals": 2,
+        "away_goals": 1,
+        "result": "H",
+    })
+    evidence = adapter._prefetch_url("https://example.invalid/test.csv", [row], workers=1)[0]
+    assert evidence.evidence_status == "VERIFIED"
+    assert evidence.source_available_at_utc == "2025-09-01T19:30:00+00:00"
+    assert evidence.reason.endswith("after_kickoff")
