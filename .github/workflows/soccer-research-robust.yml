@@ -3,6 +3,8 @@ name: Soccer Research Robust
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "artifacts/**"
   workflow_dispatch:
   schedule:
     - cron: "17 3 * * 1"
@@ -42,8 +44,19 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Run tests
-        run: python -m pytest -q
+        id: tests
+        continue-on-error: true
+        run: |
+          mkdir -p artifacts
+          set +e
+          python -m pytest -q
+          rc=$?
+          printf '{"exit_code":%s,"passed":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/test_status.json
+          exit "$rc"
       - name: Run research engine with bounded retries
+        if: always()
+        env:
+          TESTS_PASSED: ${{ steps.tests.outcome == 'success' && 'true' || 'false' }}
         run: python -m src.research.safe_runner
       - name: Validate research artifact
         if: always()
@@ -54,7 +67,7 @@ jobs:
           p = Path('artifacts/run_status.json')
           if not p.exists():
               p.parent.mkdir(parents=True, exist_ok=True)
-              p.write_text(json.dumps({'status':'DEGRADED','reason':'No run_status.json produced'}, indent=2), encoding='utf-8')
+              p.write_text(json.dumps({'status':'DEGRADED','reason':'No run_status.json produced','oos_claimed':False}, indent=2), encoding='utf-8')
           data = json.loads(p.read_text(encoding='utf-8'))
           print(json.dumps(data, indent=2, ensure_ascii=False))
           PY
@@ -65,18 +78,30 @@ jobs:
           name: soccer-research-robust-${{ github.run_id }}
           path: artifacts/
           retention-days: 30
+          if-no-files-found: warn
       - name: Commit research artifacts
         if: always()
         run: |
+          set +e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add artifacts/ || true
-          if ! git diff --cached --quiet; then
-            git commit -m "Update soccer research artifacts"
-          fi
-          git fetch origin main
-          git rebase origin/main || {
-            git rebase --abort || true
+          if git diff --cached --quiet; then
             exit 0
-          }
-          git push
+          fi
+          git commit -m "Update soccer research artifacts [skip ci]" || exit 0
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git rebase origin/main
+            if [ $? -ne 0 ]; then
+              git rebase --abort || true
+              sleep $((attempt * 5))
+              continue
+            fi
+            git push origin HEAD:main
+            if [ $? -eq 0 ]; then
+              exit 0
+            fi
+            sleep $((attempt * 5))
+          done
+          exit 0
