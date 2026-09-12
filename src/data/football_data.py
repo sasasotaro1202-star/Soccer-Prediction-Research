@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
@@ -69,6 +70,7 @@ def load_season(competition: str, start_year: int, cache_dir: str = "data/raw") 
         "match_id": [f"fd:{competition}:{start_year}:{i}" for i in df.index],
         "competition": competition,
         "season": f"{start_year}/{str(start_year + 1)[-2:]}",
+        "season_start": start_year,
         "kickoff_utc": kickoff,
         "kickoff_time_available": precision.eq("MINUTE"),
         "event_time_precision": precision,
@@ -87,15 +89,31 @@ def load_season(competition: str, start_year: int, cache_dir: str = "data/raw") 
     return out.dropna(subset=["kickoff_utc", "home_goals", "away_goals"]).reset_index(drop=True)
 
 
-def load_available_history(start_year: int = 2010, end_year: int = 2025) -> tuple[pd.DataFrame, pd.DataFrame]:
-    frames, coverage = [], []
-    for comp in LEAGUES:
-        for year in range(start_year, end_year + 1):
-            try:
-                d = load_season(comp, year)
-                frames.append(d)
-                coverage.append({"competition": comp, "season": year, "status": "AVAILABLE", "rows": len(d)})
-            except Exception as e:
-                coverage.append({"competition": comp, "season": year, "status": "UNAVAILABLE", "rows": 0, "error": str(e)})
+def _load_one(args):
+    comp, year, cache_dir = args
+    try:
+        d = load_season(comp, year, cache_dir)
+        return comp, year, d, {"competition": comp, "season": year, "status": "AVAILABLE", "rows": len(d)}
+    except Exception as e:
+        return comp, year, None, {"competition": comp, "season": year, "status": "UNAVAILABLE", "rows": 0, "error": str(e)}
+
+
+def load_available_history(start_year: int = 2010, end_year: int = 2025, max_workers: int = 8) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Acquire independent competition-season files concurrently.
+
+    Each file remains an immutable raw snapshot; concurrency changes only wall-clock
+    time, not the source bytes, parsing rules, or feature values.
+    """
+    tasks = [(comp, year, "data/raw") for comp in LEAGUES for year in range(start_year, end_year + 1)]
+    results = []
+    with ThreadPoolExecutor(max_workers=max(1, min(int(max_workers), len(tasks)))) as pool:
+        futures = [pool.submit(_load_one, t) for t in tasks]
+        for future in as_completed(futures):
+            results.append(future.result())
+    results.sort(key=lambda x: (list(LEAGUES).index(x[0]), x[1]))
+    frames = [r[2] for r in results if r[2] is not None]
+    coverage = [r[3] for r in results]
     history = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    if not history.empty:
+        history = history.sort_values(["competition", "kickoff_utc", "home_team", "away_team"], kind="mergesort").reset_index(drop=True)
     return history, pd.DataFrame(coverage)
