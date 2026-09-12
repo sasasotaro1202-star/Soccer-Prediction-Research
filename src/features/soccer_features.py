@@ -67,13 +67,16 @@ def _update_elo(elo: dict, home: str, away: str, result: int, competition: str) 
 
 
 def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(3, 5, 10, 20)) -> pd.DataFrame:
-    """Build chronological, leakage-safe features using a conservative 24h result lag.
+    """Build chronological, leakage-safe features using explicit result availability.
 
-    Performance-critical path uses pre-materialized records instead of repeated
-    DataFrame iloc access. This changes execution cost, not feature semantics.
+    If a source supplies source_available_at_utc, it is authoritative. Otherwise the
+    conservative result-availability policy is used. No unavailable result can enter
+    the rolling state. The implementation is deliberately single-pass for speed.
     """
     h = history.copy()
     h["kickoff_utc"] = pd.to_datetime(h["kickoff_utc"], utc=True, errors="coerce")
+    if "source_available_at_utc" in h.columns:
+        h["source_available_at_utc"] = pd.to_datetime(h["source_available_at_utc"], utc=True, errors="coerce")
     h = h.dropna(subset=["kickoff_utc"]).sort_values(
         ["kickoff_utc", "competition", "home_team", "away_team", "match_id"], kind="mergesort"
     ).reset_index(drop=True)
@@ -83,12 +86,15 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         ["kickoff_utc", "competition", "home_team", "away_team", "match_id"], kind="mergesort"
     ).reset_index(drop=True)
 
-    # itertuples once: substantially cheaper than h.iloc[ptr] for tens of thousands of rows.
-    h_records = h[["kickoff_utc", "home_team", "away_team", "home_goals", "away_goals", "competition", "match_id"]].to_dict("records")
+    cols = ["kickoff_utc", "home_team", "away_team", "home_goals", "away_goals", "competition", "match_id"]
+    if "source_available_at_utc" in h.columns:
+        cols.append("source_available_at_utc")
+    h_records = h[cols].to_dict("records")
     m_records = m[[c for c in ["match_id", "competition", "season", "season_start", "kickoff_utc", "home_team", "away_team"] if c in m.columns]].to_dict("records")
 
     team_games: dict[str, deque] = defaultdict(lambda: deque(maxlen=40))
     team_last: dict[str, pd.Timestamp] = {}
+    team_last_available: dict[str, pd.Timestamp] = {}
     h2h: dict[tuple[str, str], deque] = defaultdict(lambda: deque(maxlen=10))
     elo = {"global": {}, "competition": {}}
     ptr = 0; rows = []
@@ -98,7 +104,10 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         while ptr < len(h_records):
             r = h_records[ptr]
             event = r["kickoff_utc"]
-            if event >= cutoff or not _result_available(event, cutoff):
+            # We require both the event to have happened and the result to be available.
+            source_available = r.get("source_available_at_utc")
+            available = source_available if pd.notna(source_available) else result_feature_available_at(event)
+            if event >= cutoff or pd.isna(available) or available > cutoff:
                 break
             hg, ag = r["home_goals"], r["away_goals"]
             if pd.isna(hg) or pd.isna(ag):
@@ -111,6 +120,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
                 gf, ga, pts, venue, gd = _team_result(r, team)
                 team_games[team].append({"time": event, "gf": gf, "ga": ga, "points": pts, "venue": venue, "gd": gd, "competition": str(r["competition"])})
                 team_last[team] = event
+                team_last_available[team] = available
             h2h[(home, away)].append(result)
             h2h[(away, home)].append(2 - result if result != 1 else 1)
             ptr += 1
@@ -145,10 +155,9 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         row["h2h_draw_rate_5"] = float(np.mean([x == 1 for x in meetings])) if meetings else np.nan
         row["h2h_away_win_rate_5"] = float(np.mean([x == 2 for x in meetings])) if meetings else np.nan
         row["h2h_points_edge_5"] = float(np.mean([3 if x == 0 else 1 if x == 1 else 0 for x in meetings]) - np.mean([3 if x == 2 else 1 if x == 1 else 0 for x in meetings])) if meetings else np.nan
-        available_times = [result_feature_available_at(team_last[t]) for t in (home, away) if t in team_last]
+        available_times = [team_last_available[t] for t in (home, away) if t in team_last_available]
         row["feature_source_max_available_at_utc"] = max(available_times) if available_times else pd.NaT
-        # A row is PIT-valid only when both teams have usable prior state.
-        row["pit_verified"] = all(t in team_last and _result_available(team_last[t], cutoff) for t in (home, away))
+        row["pit_verified"] = all(t in team_last and team_last_available.get(t, pd.NaT) <= cutoff for t in (home, away))
         rows.append(row)
     return pd.DataFrame(rows)
 
