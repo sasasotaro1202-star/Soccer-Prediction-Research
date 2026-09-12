@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -22,10 +23,8 @@ EXCLUDED_MODEL_COLUMNS = {
 
 
 def snapshot_id(df: pd.DataFrame) -> str:
-    """Deterministic content hash; operational retrieval timestamps are excluded."""
     excluded = {"retrieved_at_utc", "source_available_at_utc", "pit_evidence_url", "capture_digest"}
-    cols = [c for c in df.columns if c not in excluded]
-    stable = df[cols].copy()
+    stable = df[[c for c in df.columns if c not in excluded]].copy()
     for c in stable.columns:
         if pd.api.types.is_datetime64_any_dtype(stable[c]):
             stable[c] = pd.to_datetime(stable[c], utc=True, errors="coerce").astype("string")
@@ -53,8 +52,7 @@ def _model_features(feats: pd.DataFrame) -> list[str]:
 
 
 def _archive_audit_sample(history: pd.DataFrame, out: Path) -> dict:
-    """Optional, bounded archive audit. Never blocks feature research."""
-    import os
+    """Optional reproducibility audit; never blocks feature research."""
     if os.getenv("PIT_ENABLE_ARCHIVE_AUDIT", "0") != "1":
         return {"status": "SKIPPED", "reason": "disabled_in_main_research"}
     try:
@@ -67,8 +65,7 @@ def _archive_audit_sample(history: pd.DataFrame, out: Path) -> dict:
     try:
         from src.data.pit_source_adapter import apply_pit_evidence, build_pit_diagnostic
         replayed = apply_pit_evidence(sample)
-        diag = build_pit_diagnostic(sample)
-        diag.to_csv(out / "pit_diagnostic_sample.csv", index=False)
+        build_pit_diagnostic(sample).to_csv(out / "pit_diagnostic_sample.csv", index=False)
         if os.getenv("PIT_ENABLE_SECONDARY_ARCHIVE", "0") == "1":
             from src.data.pit_archive_fallback import apply_arquivo_fallback
             replayed = apply_arquivo_fallback(replayed)
@@ -94,47 +91,34 @@ def run(out_dir: str = "artifacts") -> dict:
         return report
 
     archive_audit = _archive_audit_sample(history, out)
-
-    # Main research uses the deterministic feature-level PIT policy. Archive replay
-    # is evidence/audit only and is deliberately absent from the critical path.
-    feats = build_match_features(history, history)
-    feats = add_target(feats, history)
+    feats = add_target(build_match_features(history, history), history)
     feats.to_csv(out / "pit_replay_features.csv", index=False)
 
     pit_verified = int(feats["pit_verified"].sum()) if "pit_verified" in feats.columns else 0
     pit_total = int(len(feats))
     if pit_verified == 0:
-        report = {
-            "status": "BLOCKED",
-            "reason": "No match rows have sufficient historical result state under the deterministic PIT policy.",
-            "acquired_rows": int(len(history)), "snapshot_id": snapshot_id(history),
-            "pit_policy": "result_plus_24h", "pit_verified_rows": 0, "pit_verified_rate": 0.0,
-            "archive_audit": archive_audit,
-        }
+        report = {"status": "BLOCKED", "reason": "No match rows have sufficient historical result state under deterministic PIT.",
+                  "acquired_rows": int(len(history)), "snapshot_id": snapshot_id(history), "pit_policy": "result_plus_24h",
+                  "pit_verified_rows": 0, "pit_verified_rate": 0.0, "archive_audit": archive_audit}
         report["ai_research"] = weakness_advice(report)
         (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
         return report
 
-    feature_cols = _model_features(feats)
-    wf, selections = run_walk_forward(feats, feature_cols)
+    wf, selections = run_walk_forward(feats, _model_features(feats))
     wf.to_csv(out / "oos_metrics.csv", index=False)
     selections.to_csv(out / "model_selection.csv", index=False)
-
-    summary = wf.mean(numeric_only=True).to_dict()
     oos_n = int(wf["n"].sum()) if "n" in wf.columns else 0
     oos_acc = float(np.average(wf["accuracy"], weights=wf["n"])) if oos_n else float("nan")
     report = {
-        "status": "OK", "snapshot_id": snapshot_id(history), "oos": summary,
+        "status": "OK", "snapshot_id": snapshot_id(history), "oos": wf.mean(numeric_only=True).to_dict(),
         "coverage": coverage.to_dict(orient="records"), "archive_audit": archive_audit,
         "pit_policy": "result_plus_24h", "pit_verified_rows": pit_verified, "pit_total_rows": pit_total,
         "pit_verified_rate": float(pit_verified / pit_total) if pit_total else 0.0,
-        "accuracy_target": {
-            "target_accuracy": TARGET_ACCURACY, "locked_oos_accuracy": oos_acc,
-            "target_met": bool(oos_acc >= TARGET_ACCURACY) if oos_n else False,
-            "target_gap": float(oos_acc - TARGET_ACCURACY) if oos_n else float("nan"),
-            "oos_sample_size": oos_n,
-        },
-        "ai_research": weakness_advice(summary),
+        "accuracy_target": {"target_accuracy": TARGET_ACCURACY, "locked_oos_accuracy": oos_acc,
+                            "target_met": bool(oos_acc >= TARGET_ACCURACY) if oos_n else False,
+                            "target_gap": float(oos_acc - TARGET_ACCURACY) if oos_n else float("nan"),
+                            "oos_sample_size": oos_n},
+        "ai_research": weakness_advice(wf.mean(numeric_only=True).to_dict()),
     }
     (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     return report
