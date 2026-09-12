@@ -53,8 +53,8 @@ jobs:
           from pathlib import Path
           p = Path('artifacts/run_status.json')
           if not p.exists():
+              p.parent.mkdir(parents=True, exist_ok=True)
               p.write_text(json.dumps({'status':'DEGRADED','reason':'No run_status.json produced'}, indent=2), encoding='utf-8')
-              raise SystemExit(0)
           data = json.loads(p.read_text(encoding='utf-8'))
           print(json.dumps(data, indent=2, ensure_ascii=False))
           PY
@@ -71,5 +71,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add artifacts/ || true
-          git diff --cached --quiet || git commit -m "Update soccer research artifacts"
-          git push || true
+          if ! git diff --cached --quiet; then
+            git commit -m "Update soccer research artifacts"
+          fi
+          git fetch origin main
+          git rebase origin/main || {
+            git rebase --abort || true
+            exit 0
+          }
+          git push
