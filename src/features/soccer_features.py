@@ -9,6 +9,7 @@ from src.data.pit_policy import is_available_by_cutoff, result_feature_available
 
 ELO_K = 20.0
 ELO_HOME_ADV = 55.0
+STAT_KEYS = ("shots", "shots_on_target", "corners", "fouls", "yellow_cards", "red_cards")
 
 
 def _result_available(ts: pd.Timestamp, cutoff: pd.Timestamp) -> bool:
@@ -24,7 +25,13 @@ def _team_result(row, team: str) -> tuple[float, float, int, str, float]:
     return gf, ga, pts, venue, gf - ga
 
 
+def _stat_value(row: dict, team: str, key: str) -> float:
+    prefix = "home_" if row["home_team"] == team else "away_"
+    return float(row.get(f"{prefix}{key}", np.nan)) if pd.notna(row.get(f"{prefix}{key}", np.nan)) else np.nan
+
+
 def _ewma(values: list[float], alpha: float = 0.35) -> float:
+    values = [float(v) for v in values if pd.notna(v)]
     if not values:
         return np.nan
     out = float(values[0])
@@ -36,14 +43,17 @@ def _ewma(values: list[float], alpha: float = 0.35) -> float:
 def _summarize(games: deque, window: int) -> dict[str, float]:
     recent = list(games)[-window:]
     if not recent:
-        return {"games": 0.0, "gf": np.nan, "ga": np.nan, "points": np.nan, "gd": np.nan,
+        base = {"games": 0.0, "gf": np.nan, "ga": np.nan, "points": np.nan, "gd": np.nan,
                 "win_rate": np.nan, "draw_rate": np.nan, "loss_rate": np.nan,
                 "gf_ewma": np.nan, "ga_ewma": np.nan, "gd_std": np.nan, "home_rate": np.nan}
+        base.update({f"{k}_avg": np.nan for k in STAT_KEYS})
+        base.update({f"{k}_ewma": np.nan for k in STAT_KEYS})
+        return base
     gf = [x["gf"] for x in recent]
     ga = [x["ga"] for x in recent]
     pts = [x["points"] for x in recent]
     gd = [x["gd"] for x in recent]
-    return {
+    out = {
         "games": float(len(recent)), "gf": float(np.mean(gf)), "ga": float(np.mean(ga)),
         "points": float(np.mean(pts)), "gd": float(np.mean(gd)),
         "win_rate": float(np.mean([p == 3 for p in pts])),
@@ -53,6 +63,11 @@ def _summarize(games: deque, window: int) -> dict[str, float]:
         "gd_std": float(np.std(gd)) if len(gd) > 1 else 0.0,
         "home_rate": float(np.mean([x["venue"] == "H" for x in recent])),
     }
+    for k in STAT_KEYS:
+        vals = [x.get(k, np.nan) for x in recent]
+        out[f"{k}_avg"] = float(np.nanmean(vals)) if any(pd.notna(v) for v in vals) else np.nan
+        out[f"{k}_ewma"] = _ewma(vals)
+    return out
 
 
 def _update_elo(elo: dict, home: str, away: str, result: int, competition: str) -> None:
@@ -69,12 +84,12 @@ def _update_elo(elo: dict, home: str, away: str, result: int, competition: str) 
 
 
 def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(3, 5, 10, 20)) -> pd.DataFrame:
-    """Build chronological, leakage-safe features using explicit result availability.
+    """Build chronological PIT-safe features with linear-time history processing.
 
-    The historical stream is processed once. PIT blockers are tracked in a second
-    linear pass over the same sorted stream, avoiding the previous O(matches*history)
-    scan while retaining the conservative rule: if any prior result for either team
-    is unavailable at the prediction cutoff, the rolling history features are invalid.
+    Result and match-stat features are admitted only when their availability time is
+    before the prediction cutoff. Missing statistics remain missing; they are never
+    converted to zero. If any prior result for either participant is not available at
+    the cutoff, result-derived rolling features are conservatively invalidated.
     """
     h = history.copy()
     h["kickoff_utc"] = pd.to_datetime(h["kickoff_utc"], utc=True, errors="coerce")
@@ -90,6 +105,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     ).reset_index(drop=True)
 
     cols = ["kickoff_utc", "home_team", "away_team", "home_goals", "away_goals", "competition", "match_id"]
+    cols += [c for c in ("home_shots", "away_shots", "home_shots_on_target", "away_shots_on_target", "home_corners", "away_corners", "home_fouls", "away_fouls", "home_yellow_cards", "away_yellow_cards", "home_red_cards", "away_red_cards") if c in h.columns]
     if "source_available_at_utc" in h.columns:
         cols.append("source_available_at_utc")
     h_records = h[cols].to_dict("records")
@@ -100,8 +116,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     team_last_available: dict[str, pd.Timestamp] = {}
     h2h: dict[tuple[str, str], deque] = defaultdict(lambda: deque(maxlen=10))
     elo = {"global": {}, "competition": {}}
-    ptr = 0
-    block_ptr = 0
+    ptr = 0; block_ptr = 0
     team_max_prior_available: dict[str, pd.Timestamp] = {}
     rows = []
     required_window = max(windows) if windows else 0
@@ -127,7 +142,10 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
             _update_elo(elo, home, away, result, str(r["competition"]))
             for team in (home, away):
                 gf, ga, pts, venue, gd = _team_result(r, team)
-                team_games[team].append({"time": event, "gf": gf, "ga": ga, "points": pts, "venue": venue, "gd": gd, "competition": str(r["competition"]), "available": available})
+                entry = {"time": event, "gf": gf, "ga": ga, "points": pts, "venue": venue, "gd": gd, "competition": str(r["competition"]), "available": available}
+                for k in STAT_KEYS:
+                    entry[k] = _stat_value(r, team, k)
+                team_games[team].append(entry)
                 team_last[team] = event
                 team_last_available[team] = available
             h2h[(home, away)].append(result)
@@ -170,22 +188,18 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
             "away_rest_hours": (cutoff - team_last[away]).total_seconds() / 3600.0 if away in team_last else np.nan,
         }
         for w in windows:
-            hs = _summarize(team_games[home], w)
-            aws = _summarize(team_games[away], w)
+            hs = _summarize(team_games[home], w); aws = _summarize(team_games[away], w)
             if pit_blocked:
-                # Conservative policy: do not expose any rolling result-derived state
-                # when a prior result for either participant is not yet available.
-                hs = {k: np.nan for k in hs}
-                aws = {k: np.nan for k in aws}
+                hs = {k: np.nan for k in hs}; aws = {k: np.nan for k in aws}
             for k, v in hs.items(): row[f"home_{k}_{w}"] = v
             for k, v in aws.items(): row[f"away_{k}_{w}"] = v
             row[f"gf_diff_{w}"] = hs["gf"] - aws["gf"]
             row[f"ga_diff_{w}"] = hs["ga"] - aws["ga"]
             row[f"points_diff_{w}"] = hs["points"] - aws["points"]
             row[f"win_rate_diff_{w}"] = hs["win_rate"] - aws["win_rate"]
-        meetings = list(h2h[(home, away)])[-5:]
-        if pit_blocked:
-            meetings = []
+            for k in STAT_KEYS:
+                row[f"{k}_diff_{w}"] = hs[f"{k}_avg"] - aws[f"{k}_avg"]
+        meetings = [] if pit_blocked else list(h2h[(home, away)])[-5:]
         row["h2h_games_5"] = float(len(meetings))
         row["h2h_home_win_rate_5"] = float(np.mean([x == 0 for x in meetings])) if meetings else np.nan
         row["h2h_draw_rate_5"] = float(np.mean([x == 1 for x in meetings])) if meetings else np.nan
