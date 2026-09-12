@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import requests
 
+from src.data.espn_friendlies_adapter import load_friendlies_history
 from src.data.jleague_adapter import load_jleague_history
 from src.data.openfootball_adapter import load_openfootball_history
 
@@ -49,7 +50,7 @@ def load_available_history(start_year:int=2010,end_year:int=2025,max_workers:int
     tasks=[(c,y,"data/raw") for c in LEAGUES for y in range(start_year,end_year+1)]
     with ThreadPoolExecutor(max_workers=max(1,min(int(max_workers),len(tasks)))) as pool: results=[f.result() for f in as_completed([pool.submit(_load_one,t) for t in tasks])]
     results.sort(key=lambda x:(list(LEAGUES).index(x[0]),x[1])); primary_frames=[r[2] for r in results if r[2] is not None]; primary_history=pd.concat(primary_frames,ignore_index=True) if primary_frames else pd.DataFrame(); primary_coverage=pd.DataFrame([r[3] for r in results])
-    jleague_history,jleague_coverage=load_jleague_history(start_year=start_year,end_year=end_year); cup_history,cup_coverage=load_openfootball_history(start_year=start_year,end_year=end_year,max_workers=max_workers)
-    frames=[x for x in (primary_history,jleague_history,cup_history) if not x.empty]; history=pd.concat(frames,ignore_index=True) if frames else pd.DataFrame()
+    jleague_history,jleague_coverage=load_jleague_history(start_year=start_year,end_year=end_year); cup_history,cup_coverage=load_openfootball_history(start_year=start_year,end_year=end_year,max_workers=max_workers); friendly_history,friendly_coverage=load_friendlies_history(start_year=start_year,end_year=end_year)
+    frames=[x for x in (primary_history,jleague_history,cup_history,friendly_history) if not x.empty]; history=pd.concat(frames,ignore_index=True) if frames else pd.DataFrame()
     if not history.empty: history=history.sort_values(["competition","kickoff_utc","home_team","away_team","source_name"],kind="mergesort").reset_index(drop=True)
-    return history,pd.concat([primary_coverage,jleague_coverage,cup_coverage],ignore_index=True)
+    return history,pd.concat([primary_coverage,jleague_coverage,cup_coverage,friendly_coverage],ignore_index=True)
