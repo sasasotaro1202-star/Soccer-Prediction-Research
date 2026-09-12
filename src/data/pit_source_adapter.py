@@ -4,6 +4,7 @@ import time
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
+from urllib.parse import urlparse
 
 import pandas as pd
 import requests
@@ -93,12 +94,10 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
 
     def captures(self, url: str):
         """Retry transient CDX failures; never turn a transport failure into no-capture."""
-        last = None
         for attempt in range(1, self.cdx_retries + 1):
             self._captures.pop(url, None)
             rows = super().captures(url)
             diag = self._capture_diag.get(url)
-            last = diag
             if rows or diag is None or diag.status != "CDX_REQUEST_FAILURE":
                 return rows
             if attempt < self.cdx_retries:
@@ -122,11 +121,14 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
 
     @staticmethod
     def _has_exact_capture_identity(final_url, capture_timestamp):
-        """Require the replay URL to retain the requested Wayback timestamp."""
+        """Require the final replay URL to stay on Wayback and retain the requested timestamp."""
         ts = str(capture_timestamp or "").strip()
         if not ts:
             return False
-        return f"/web/{ts}" in str(final_url)
+        parsed = urlparse(str(final_url))
+        if parsed.hostname not in {"web.archive.org", "web.archive.org."}:
+            return False
+        return parsed.path.startswith(f"/web/{ts}")
 
     def _load_snapshot_keys(self, capture, original_url):
         """Layered retrieval with mock-safe response handling and strict snapshot identity."""
@@ -163,23 +165,17 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
                         status_code = getattr(response, "status_code", None)
                         response_headers = getattr(response, "headers", {}) or {}
                         if status_code in (429, 500, 502, 503, 504):
-                            retry_after = response_headers.get("Retry-After")
-                            try:
-                                delay = float(retry_after) if retry_after else self.snapshot_retry_backoff * attempt
-                            except (TypeError, ValueError):
-                                delay = self.snapshot_retry_backoff * attempt
                             raise requests.HTTPError(f"transient_http_{status_code}", response=response)
                         response.raise_for_status()
 
-                        # Real requests.Response objects expose redirect/history/url; test doubles may not.
-                        # Missing metadata is tolerated only for compatibility with a successful mock response.
+                        # Real responses expose redirect/history/url; lightweight test doubles often do not.
+                        # If status/url metadata is absent, preserve successful-mock compatibility and rely on
+                        # the parsed snapshot content. Real HTTP responses are held to exact replay identity.
                         final_url = self._response_final_url(response, url)
-                        history = getattr(response, "history", None)
-                        if status_code is not None and not self._has_exact_capture_identity(final_url, capture.get("timestamp")):
+                        if status_code is not None and not self._has_exact_capture_identity(
+                            final_url, capture.get("timestamp")
+                        ):
                             raise requests.HTTPError("unexpected_redirect_from_exact_capture", response=response)
-                        if status_code in (301, 302, 303, 307, 308) and history is not None:
-                            if not self._has_exact_capture_identity(final_url, capture.get("timestamp")):
-                                raise requests.HTTPError("redirected_to_non_exact_capture", response=response)
 
                         candidate = response.content
                         head = candidate[:512].lstrip().lower()
@@ -226,14 +222,16 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
             if date is None:
                 continue
             try:
-                keys.add((
-                    date,
-                    str(getattr(r, "HomeTeam")).strip(),
-                    str(getattr(r, "AwayTeam")).strip(),
-                    float(getattr(r, "FTHG")),
-                    float(getattr(r, "FTAG")),
-                    str(getattr(r, "FTR")).strip(),
-                ))
+                keys.add(
+                    (
+                        date,
+                        str(getattr(r, "HomeTeam")).strip(),
+                        str(getattr(r, "AwayTeam")).strip(),
+                        float(getattr(r, "FTHG")),
+                        float(getattr(r, "FTAG")),
+                        str(getattr(r, "FTR")).strip(),
+                    )
+                )
             except (TypeError, ValueError):
                 continue
 
