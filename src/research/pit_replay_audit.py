@@ -8,6 +8,7 @@ import pandas as pd
 
 from src.data.football_data import load_available_history
 from src.data.pit_source_adapter import apply_pit_evidence, build_pit_diagnostic
+from src.data.pit_archive_fallback import apply_arquivo_fallback
 
 
 def select_sample(history: pd.DataFrame, *, rows_per_season: int = 1, competition: str = "EPL") -> pd.DataFrame:
@@ -34,7 +35,12 @@ def run(out_dir: str = "artifacts/pit-audit", rows_per_season: int = 1, competit
     diagnostic = build_pit_diagnostic(sample)
     diagnostic.to_csv(out / "pit_audit_diagnostic.csv", index=False)
 
+    # Primary evidence: Internet Archive / Wayback.
+    # Secondary evidence: Arquivo.pt, used only for rows that remain unverified.
+    # Both providers must independently expose the completed result in an
+    # archived snapshot at/after the conservative PIT lower bound.
     replayed = apply_pit_evidence(sample)
+    replayed = apply_arquivo_fallback(replayed)
     replayed.to_csv(out / "pit_audit_replayed.csv", index=False)
 
     status_counts = replayed["pit_evidence_status"].value_counts(dropna=False).to_dict()
