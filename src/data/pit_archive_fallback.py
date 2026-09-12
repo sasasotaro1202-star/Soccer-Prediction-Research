@@ -2,6 +2,8 @@ from __future__ import annotations
 
 """Bounded secondary PIT evidence provider using Arquivo.pt."""
 
+# Regression guard: CDX payloads may be mappings, not sliceable lists.
+
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
