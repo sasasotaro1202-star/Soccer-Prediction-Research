@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -26,6 +27,17 @@ def snapshot_id(df: pd.DataFrame) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
+def _pit_sample(history: pd.DataFrame, rows_per_group: int) -> pd.DataFrame:
+    """Deterministic PIT sample: earliest chronological rows per competition/season."""
+    if rows_per_group <= 0:
+        return history.copy()
+    h = history.copy()
+    sort_cols = [c for c in ["competition", "season_start", "kickoff_utc", "home_team", "away_team"] if c in h.columns]
+    if sort_cols:
+        h = h.sort_values(sort_cols, kind="mergesort")
+    return h.groupby(["competition", "season_start"], sort=False, dropna=False, group_keys=False).head(rows_per_group).copy()
+
+
 def run(out_dir: str = "artifacts") -> dict:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -41,25 +53,25 @@ def run(out_dir: str = "artifacts") -> dict:
         (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
         return report
 
-    # First perform the source-level 7-competition x 16-season PIT diagnostic.
-    # This is deliberately separated from model/research evaluation so a 0%
-    # result can be traced to CDX, snapshot I/O, parsing, matching, or PIT stage.
+    # Source-level diagnostic is cheap and remains full coverage.
     pit_diag = build_pit_diagnostic(history)
     pit_diag.to_csv(out / "pit_diagnostic_7x16.csv", index=False)
 
-    # Establish when each historical result first became observable in the
-    # source. This timestamp is about the past result itself, not the target
-    # match being predicted.
-    history = apply_pit_evidence(history)
-    history["source_available_at_utc"] = pd.to_datetime(history["source_available_at_utc"], utc=True, errors="coerce")
-    history["retrieved_at_utc"] = pd.to_datetime(history["retrieved_at_utc"], utc=True, errors="coerce")
-    history.to_csv(out / "normalized_history.csv", index=False)
+    # The full 42k-row PIT replay can require a large number of Wayback
+    # snapshots. CI therefore supports a deterministic audit mode. Production
+    # research remains full replay when PIT_REPLAY_ROWS_PER_GROUP is unset/0.
+    try:
+        rows_per_group = max(0, int(os.getenv("PIT_REPLAY_ROWS_PER_GROUP", "0")))
+    except ValueError:
+        rows_per_group = 0
+    replay_input = _pit_sample(history, rows_per_group)
+    history_replayed = apply_pit_evidence(replay_input)
+    history_replayed["source_available_at_utc"] = pd.to_datetime(history_replayed["source_available_at_utc"], utc=True, errors="coerce")
+    history_replayed["retrieved_at_utc"] = pd.to_datetime(history_replayed["retrieved_at_utc"], utc=True, errors="coerce")
+    history_replayed.to_csv(out / "normalized_history.csv", index=False)
 
-    # Chronological replay: build every prediction row from past matches only;
-    # the feature builder rejects any rolling window containing a result whose
-    # source was not available by that prediction cutoff.
-    feats = build_match_features(history, history)
-    feats = add_target(feats, history)
+    feats = build_match_features(history_replayed, history_replayed)
+    feats = add_target(feats, history_replayed)
     feats.to_csv(out / "pit_replay_features.csv", index=False)
 
     verified = feats[feats["pit_verified"] == True].copy()
@@ -67,10 +79,13 @@ def run(out_dir: str = "artifacts") -> dict:
         report = {
             "status": "BLOCKED",
             "reason": "PIT replay coverage is insufficient; historical result availability cannot yet support the required OOS sample.",
+            "replay_mode": "sampled" if rows_per_group else "full",
+            "rows_per_competition_season": rows_per_group if rows_per_group else None,
             "acquired_rows": int(len(history)),
+            "replayed_rows": int(len(replay_input)),
             "pit_verified_rows": int(len(verified)),
             "pit_verified_rate": float(len(verified) / len(feats)) if len(feats) else 0.0,
-            "source_result_verified_rows": int(history["pit_evidence_status"].eq("VERIFIED").sum()),
+            "source_result_verified_rows": int(history_replayed["pit_evidence_status"].eq("VERIFIED").sum()),
             "snapshot_id": snapshot_id(history),
         }
         report["ai_research"] = weakness_advice(report)
