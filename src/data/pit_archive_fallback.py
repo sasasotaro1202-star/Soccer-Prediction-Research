@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-"""Bounded secondary PIT evidence provider using Arquivo.pt.
-
-This provider is deliberately conservative and bounded. It never upgrades a row
-unless an archived CSV contains the exact completed-result key and the archive
-capture timestamp is at/after the PIT lower bound. Network failure is recorded
-as UNVERIFIABLE rather than being treated as missing historical data.
-"""
+"""Bounded secondary PIT evidence provider using Arquivo.pt."""
 
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -52,21 +46,14 @@ def _keyset(raw: bytes):
         if date is None:
             continue
         try:
-            keys.add((date, str(getattr(r, "HomeTeam")).strip(), str(getattr(r, "AwayTeam")).strip(),
-                      float(getattr(r, "FTHG")), float(getattr(r, "FTAG")), str(getattr(r, "FTR")).strip()))
+            keys.add((date, str(getattr(r, "HomeTeam")).strip(), str(getattr(r, "AwayTeam")).strip(), float(getattr(r, "FTHG")), float(getattr(r, "FTAG")), str(getattr(r, "FTR")).strip()))
         except (TypeError, ValueError):
             continue
     return keys
 
 
 def _normalise_cdx_payload(payload):
-    """Return CDX rows for both list-shaped and object-shaped archive responses.
-
-    Arquivo normally returns a header row followed by capture rows. Degraded
-    responses can instead be JSON objects (for example an error/status object),
-    so never slice a mapping as if it were a list. Such responses are treated as
-    no-capture evidence, not as a Python exception.
-    """
+    """Parse list-shaped and wrapped JSON safely; never slice a mapping."""
     if isinstance(payload, list):
         if not payload:
             return []
@@ -74,40 +61,23 @@ def _normalise_cdx_payload(payload):
         if not isinstance(header, (list, tuple)):
             return []
         names = [str(x) for x in header]
-        rows = []
-        for row in payload[1:]:
-            if isinstance(row, (list, tuple)):
-                rows.append(dict(zip(names, row)))
-            elif isinstance(row, dict):
-                rows.append(dict(row))
-        return rows
-
+        return [dict(zip(names, row)) for row in payload[1:] if isinstance(row, (list, tuple))]
     if isinstance(payload, dict):
-        # Some archive/proxy variants wrap the actual CDX rows in a data/results
-        # member. Accept only an explicitly tabular list; never guess fields.
         for key in ("data", "results", "captures"):
             value = payload.get(key)
             if isinstance(value, list):
                 return _normalise_cdx_payload(value)
-        return []
-
     return []
 
 
 def _captures(url: str, retries: int = 2, timeout: int = 15):
-    params = {
-        "url": url,
-        "output": "json",
-        "filter": "statuscode:200",
-        "fl": "timestamp,original,mimetype,statuscode,digest",
-    }
-    for attempt in range(retries):
+    params = {"url": url, "output": "json", "filter": "statuscode:200", "fl": "timestamp,original,mimetype,statuscode,digest"}
+    for attempt in range(max(1, retries)):
         try:
-            r = requests.get(ARQUIVO_CDX, params=params, timeout=timeout,
-                             headers={"User-Agent": USER_AGENT})
+            r = requests.get(ARQUIVO_CDX, params=params, timeout=timeout, headers={"User-Agent": USER_AGENT})
             r.raise_for_status()
             return _normalise_cdx_payload(r.json())
-        except (requests.RequestException, ValueError, TypeError):
+        except (requests.RequestException, ValueError, TypeError, AttributeError):
             if attempt + 1 < retries:
                 time.sleep(1.0)
     return []
@@ -118,38 +88,26 @@ def _fetch_capture(capture: dict, original_url: str, retries: int = 2, timeout: 
     if not ts:
         return None
     replay_url = f"{ARQUIVO_WEB}/{ts}/{original_url}"
-    for attempt in range(retries):
+    for attempt in range(max(1, retries)):
         try:
-            r = requests.get(replay_url, timeout=timeout, allow_redirects=True,
-                             headers={"User-Agent": USER_AGENT, "Accept": "text/csv,text/plain,*/*"})
+            r = requests.get(replay_url, timeout=timeout, allow_redirects=True, headers={"User-Agent": USER_AGENT, "Accept": "text/csv,text/plain,*/*"})
             r.raise_for_status()
-            final_url = str(getattr(r, "url", replay_url))
-            if not final_url.startswith("https://arquivo.pt/wayback/"):
-                raise requests.HTTPError("unexpected_archive_redirect", response=r)
             raw = r.content
             if raw[:512].lstrip().lower().startswith((b"<!doctype html", b"<html")):
-                raise requests.HTTPError("archive_html_error_page", response=r)
+                return None
             return raw, replay_url
-        except (requests.RequestException, OSError):
+        except (requests.RequestException, OSError, AttributeError):
             if attempt + 1 < retries:
                 time.sleep(1.0)
     return None
 
 
 def apply_arquivo_fallback(history: pd.DataFrame) -> pd.DataFrame:
-    """Verify unresolved rows with a bounded, grouped Arquivo.pt pass.
-
-    The whole fallback is fail-closed: any provider exception leaves the row
-    unchanged. It is intentionally bounded so a degraded archive cannot consume
-    the entire GitHub Actions job timeout.
-    """
     if history is None or history.empty:
         return history.copy() if history is not None else history
-
     out = history.copy()
     try:
         from src.data.pit_source_adapter_v2 import source_url
-
         pending = []
         for idx, row in out.iterrows():
             if str(row.get("pit_evidence_status", "")) == "VERIFIED":
@@ -166,27 +124,27 @@ def apply_arquivo_fallback(history: pd.DataFrame) -> pd.DataFrame:
 
         urls = sorted({x[4] for x in pending})
         capture_map = {}
-        with ThreadPoolExecutor(max_workers=min(4, max(1, len(urls)))) as pool:
-            futures = {pool.submit(_captures, url): url for url in urls}
-            for future in as_completed(futures):
-                url = futures[future]
-                try:
-                    capture_map[url] = future.result()
-                except Exception:
-                    capture_map[url] = []
+        if urls:
+            with ThreadPoolExecutor(max_workers=min(4, len(urls))) as pool:
+                futures = {pool.submit(_captures, url): url for url in urls}
+                for future in as_completed(futures):
+                    try:
+                        capture_map[futures[future]] = future.result()
+                    except Exception:
+                        capture_map[futures[future]] = []
 
         jobs = []
         for idx, key, lower_bound, bound_reason, url in pending:
-            captures = []
+            plausible = []
             for capture in capture_map.get(url, []):
                 ts = _utc(capture.get("timestamp"))
                 if ts is not None and ts >= lower_bound:
-                    captures.append((ts, capture))
-            captures.sort(key=lambda x: x[0])
-            jobs.append((idx, key, lower_bound, bound_reason, url, captures[:4]))
+                    plausible.append((ts, capture))
+            plausible.sort(key=lambda x: x[0])
+            jobs.append((idx, key, bound_reason, url, plausible[:4]))
 
         def verify(job):
-            idx, key, lower_bound, bound_reason, url, captures = job
+            idx, key, bound_reason, url, captures = job
             for ts, capture in captures:
                 fetched = _fetch_capture(capture, url)
                 if not fetched:
@@ -200,22 +158,22 @@ def apply_arquivo_fallback(history: pd.DataFrame) -> pd.DataFrame:
                     return idx, ts, replay_url, capture, bound_reason
             return None
 
-        with ThreadPoolExecutor(max_workers=4) as pool:
-            futures = [pool.submit(verify, job) for job in jobs]
-            for future in as_completed(futures):
-                try:
-                    result = future.result()
-                except Exception:
-                    result = None
-                if result is None:
-                    continue
-                idx, ts, replay_url, capture, bound_reason = result
-                out.at[idx, "source_available_at_utc"] = ts.isoformat()
-                out.at[idx, "pit_evidence_status"] = "VERIFIED"
-                out.at[idx, "pit_evidence_reason"] = f"arquivo_pt_completed_result_first_observed_after_{bound_reason.lower()}"
-                out.at[idx, "pit_evidence_url"] = replay_url
-                out.at[idx, "capture_digest"] = capture.get("digest")
+        if jobs:
+            with ThreadPoolExecutor(max_workers=min(4, len(jobs))) as pool:
+                futures = [pool.submit(verify, job) for job in jobs]
+                for future in as_completed(futures):
+                    try:
+                        result = future.result()
+                    except Exception:
+                        result = None
+                    if result is None:
+                        continue
+                    idx, ts, replay_url, capture, bound_reason = result
+                    out.at[idx, "source_available_at_utc"] = ts.isoformat()
+                    out.at[idx, "pit_evidence_status"] = "VERIFIED"
+                    out.at[idx, "pit_evidence_reason"] = f"arquivo_pt_completed_result_first_observed_after_{bound_reason.lower()}"
+                    out.at[idx, "pit_evidence_url"] = replay_url
+                    out.at[idx, "capture_digest"] = capture.get("digest")
     except Exception:
         pass
-
     return out
