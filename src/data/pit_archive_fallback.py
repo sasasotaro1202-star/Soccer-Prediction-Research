@@ -59,6 +59,41 @@ def _keyset(raw: bytes):
     return keys
 
 
+def _normalise_cdx_payload(payload):
+    """Return CDX rows for both list-shaped and object-shaped archive responses.
+
+    Arquivo normally returns a header row followed by capture rows. Degraded
+    responses can instead be JSON objects (for example an error/status object),
+    so never slice a mapping as if it were a list. Such responses are treated as
+    no-capture evidence, not as a Python exception.
+    """
+    if isinstance(payload, list):
+        if not payload:
+            return []
+        header = payload[0]
+        if not isinstance(header, (list, tuple)):
+            return []
+        names = [str(x) for x in header]
+        rows = []
+        for row in payload[1:]:
+            if isinstance(row, (list, tuple)):
+                rows.append(dict(zip(names, row)))
+            elif isinstance(row, dict):
+                rows.append(dict(row))
+        return rows
+
+    if isinstance(payload, dict):
+        # Some archive/proxy variants wrap the actual CDX rows in a data/results
+        # member. Accept only an explicitly tabular list; never guess fields.
+        for key in ("data", "results", "captures"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return _normalise_cdx_payload(value)
+        return []
+
+    return []
+
+
 def _captures(url: str, retries: int = 2, timeout: int = 15):
     params = {
         "url": url,
@@ -66,18 +101,13 @@ def _captures(url: str, retries: int = 2, timeout: int = 15):
         "filter": "statuscode:200",
         "fl": "timestamp,original,mimetype,statuscode,digest",
     }
-    last_error = None
     for attempt in range(retries):
         try:
             r = requests.get(ARQUIVO_CDX, params=params, timeout=timeout,
                              headers={"User-Agent": USER_AGENT})
             r.raise_for_status()
-            payload = r.json()
-            if not payload or len(payload) <= 1:
-                return []
-            return [dict(zip(payload[0], row)) for row in payload[1:]]
-        except (requests.RequestException, ValueError, TypeError) as exc:
-            last_error = exc
+            return _normalise_cdx_payload(r.json())
+        except (requests.RequestException, ValueError, TypeError):
             if attempt + 1 < retries:
                 time.sleep(1.0)
     return []
@@ -134,7 +164,6 @@ def apply_arquivo_fallback(history: pd.DataFrame) -> pd.DataFrame:
                 continue
             pending.append((idx, key, lower_bound, bound_reason, url))
 
-        # One CDX request per source URL, not one per row. Parallelism is bounded.
         urls = sorted({x[4] for x in pending})
         capture_map = {}
         with ThreadPoolExecutor(max_workers=min(4, max(1, len(urls)))) as pool:
@@ -146,8 +175,6 @@ def apply_arquivo_fallback(history: pd.DataFrame) -> pd.DataFrame:
                 except Exception:
                     capture_map[url] = []
 
-        # Fetch only the earliest plausible captures. Later captures cannot be
-        # needed once an exact result match has been established.
         jobs = []
         for idx, key, lower_bound, bound_reason, url in pending:
             captures = []
@@ -189,7 +216,6 @@ def apply_arquivo_fallback(history: pd.DataFrame) -> pd.DataFrame:
                 out.at[idx, "pit_evidence_url"] = replay_url
                 out.at[idx, "capture_digest"] = capture.get("digest")
     except Exception:
-        # Secondary provider is never allowed to break the audit itself.
         pass
 
     return out
