@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import numpy as np
 from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier, RandomForestClassifier
+from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
@@ -10,14 +11,23 @@ from sklearn.preprocessing import StandardScaler
 
 
 def candidates(random_state: int = 42):
-    """Return research candidates using current scikit-learn-compatible APIs."""
+    """Return a compact, diverse candidate set using PIT-safe sklearn APIs.
+
+    The selector variants are deliberately regularized: they reduce redundant/noisy
+    feature exposure without changing the chronological evaluation protocol.
+    Candidate selection remains validation-only in the walk-forward evaluator.
+    """
     return {
         "logistic": Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
             ("scale", StandardScaler()),
-            # ``multi_class`` is intentionally omitted: current scikit-learn
-            # removed that constructor argument; multiclass behavior is automatic.
             ("model", LogisticRegression(max_iter=2000, C=1.0, random_state=random_state)),
+        ]),
+        "logistic_select": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("select", SelectKBest(score_func=f_classif, k=100)),
+            ("scale", StandardScaler()),
+            ("model", LogisticRegression(max_iter=2000, C=0.5, random_state=random_state)),
         ]),
         "extra_trees": Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
