@@ -96,6 +96,7 @@ def source_url(competition: str, start_year: int) -> str:
 
 
 def _date_key(value: Any) -> str | None:
+    """Normalize source dates without reordering ISO dates."""
     if value is None or value == "":
         return None
     try:
@@ -106,9 +107,22 @@ def _date_key(value: Any) -> str | None:
     text = str(value).strip()
     if not text:
         return None
-    parsed = pd.to_datetime(text, format="%Y-%m-%d", errors="coerce")
-    if pd.isna(parsed):
-        parsed = pd.to_datetime(text, dayfirst=True, errors="coerce")
+    # Football-Data uses DD/MM/YY, while PIT fallback can supply ISO timestamps.
+    if len(text) >= 10 and text[4] == "-" and text[7] == "-":
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            return parsed.date().isoformat()
+        except ValueError:
+            try:
+                return datetime.strptime(text[:10], "%Y-%m-%d").date().isoformat()
+            except ValueError:
+                pass
+    for fmt in ("%d/%m/%y", "%d/%m/%Y", "%d-%m-%y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(text, fmt).date().isoformat()
+        except ValueError:
+            pass
+    parsed = pd.to_datetime(text, dayfirst=True, errors="coerce")
     return None if pd.isna(parsed) else parsed.date().isoformat()
 
 
@@ -266,7 +280,7 @@ class FootballDataWaybackAdapter:
                 candidates.append(capture)
         candidates.sort(key=lambda c: c.get("timestamp", ""))
         if not candidates:
-            return [SourceEvidence(None, "UNVERIFIABLE", reason=f"captures_exist_but_no_capture_after_result_lower_bound:{reason}") for _, reason in bounds]
+            return [SourceEvidence(None, "UNVERIFIABLE", reason=f"captures_exist_but_no_capture_after_result_lower_bound:{bound_reason}") for _, bound_reason in bounds]
         def fetch(capture):
             return capture, self._load_snapshot_keys(capture, url)
         keysets = []
@@ -306,8 +320,8 @@ class FootballDataWaybackAdapter:
         if history.empty:
             return history.copy()
         out = history.copy()
-        groups = {}
-        evidence = {}
+        groups: dict[str, list[tuple[int, pd.Series]]] = {}
+        evidence: dict[int, SourceEvidence] = {}
         for idx, row in out.iterrows():
             try:
                 year = int(str(row.get("season", "0000/00")).split("/")[0])
