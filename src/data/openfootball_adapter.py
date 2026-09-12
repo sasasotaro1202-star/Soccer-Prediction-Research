@@ -18,7 +18,7 @@ BASE_URLS = {
 }
 SEASON_START = {"UCL": 2011, "UEL": 2011, "DFBP": 2010, "CAR": 2010}
 DATE_RE = re.compile(r"^\s{2}(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Z][a-z]{2})\s+(\d{1,2})(?:\s+(\d{4}))?\s*$")
-MATCH_RE = re.compile(r"^\s{4}(?:(\d{1,2}:\d{2})\s+)?(.+?)\s+v\s+(.+?)\s+(\d+)\s*-\s*(\d+)(?:\s+(pen\.|aet\.))?\s*(?:\((\d+)\s*-\s*(\d+)(?:,\s*[^)]*)?\))?\s*$")
+MATCH_RE = re.compile(r"^\s{4}(?:(\d{1,2}:\d{2})\s+)?(.+?)\s+v\s+(.+?)\s+(\d+)\s*-\s*(\d+)(.*)$")
 MONTHS = {m: i for i, m in enumerate(["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], 1)}
 
 
@@ -26,21 +26,34 @@ def _season_folder(start_year: int) -> str:
     return f"{start_year}-{str(start_year + 1)[-2:]}"
 
 
-def _parse_date(line: str, season_start: int, current_year: int | None) -> pd.Timestamp:
+def _parse_date(line: str, season_start: int, current_year: int | None, previous_month: int | None) -> tuple[pd.Timestamp, int | None, int | None]:
     m = DATE_RE.match(line)
     if not m:
-        return pd.NaT
-    year = int(m.group(3)) if m.group(3) else (current_year or (season_start if MONTHS[m.group(1)] >= 7 else season_start + 1))
+        return pd.NaT, current_year, previous_month
+    month = MONTHS[m.group(1)]
+    if m.group(3):
+        year = int(m.group(3))
+    elif current_year is None:
+        year = season_start if month >= 7 else season_start + 1
+    elif previous_month is not None and month < previous_month:
+        year = current_year + 1
+    else:
+        year = current_year
     try:
-        return pd.Timestamp(datetime(year, MONTHS[m.group(1)], int(m.group(2)), tzinfo=timezone.utc))
+        ts = pd.Timestamp(datetime(year, month, int(m.group(2)), tzinfo=timezone.utc))
     except ValueError:
-        return pd.NaT
+        return pd.NaT, year, month
+    return ts, year, month
 
 
-def _outcome(final_h: int, final_a: int, marker: str, reg_h: str | None, reg_a: str | None) -> tuple[int, int, str]:
-    if marker == "pen.":
-        if reg_h is not None and reg_a is not None:
-            return int(reg_h), int(reg_a), "D"
+def _outcome(final_h: int, final_a: int, suffix: str) -> tuple[int, int, str]:
+    text = suffix.strip()
+    # Football.TXT can encode shootouts as: "1-4 pen. 0-1 a.e.t.".
+    # The competition target remains a draw because regulation was level.
+    if re.search(r"\bpen\.\b", text):
+        reg = re.search(r"(\d+)\s*-\s*(\d+)\s+a\.e\.t\.", text)
+        if reg:
+            return int(reg.group(1)), int(reg.group(2)), "D"
         return final_h, final_a, "D"
     return final_h, final_a, "H" if final_h > final_a else "A" if final_a > final_h else "D"
 
@@ -49,12 +62,10 @@ def parse_football_txt(text: str, competition: str, season_start: int, source_ur
     rows: list[dict] = []
     current_date = pd.NaT
     current_year: int | None = None
+    previous_month: int | None = None
     for line_no, line in enumerate(text.splitlines(), 1):
-        dm = DATE_RE.match(line)
-        if dm:
-            if dm.group(3):
-                current_year = int(dm.group(3))
-            current_date = _parse_date(line, season_start, current_year)
+        if DATE_RE.match(line):
+            current_date, current_year, previous_month = _parse_date(line, season_start, current_year, previous_month)
             continue
         m = MATCH_RE.match(line)
         if not m or pd.isna(current_date):
@@ -66,8 +77,7 @@ def parse_football_txt(text: str, competition: str, season_start: int, source_ur
                 hh, mm = map(int, time_text.split(":"))
                 kickoff = kickoff + pd.Timedelta(hours=hh, minutes=mm)
             final_h, final_a = int(m.group(4)), int(m.group(5))
-            marker = (m.group(6) or "").strip()
-            hg, ag, result = _outcome(final_h, final_a, marker, m.group(7), m.group(8))
+            hg, ag, result = _outcome(final_h, final_a, m.group(6))
         except (TypeError, ValueError):
             continue
         sid = hashlib.sha1(f"{competition}|{season_start}|{line_no}|{home}|{away}|{kickoff.isoformat()}".encode()).hexdigest()[:16]
