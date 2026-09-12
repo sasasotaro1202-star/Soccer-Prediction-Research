@@ -16,9 +16,9 @@ def _result_available(ts: pd.Timestamp, cutoff: pd.Timestamp) -> bool:
 
 
 def _team_result(row, team: str) -> tuple[float, float, int, str, float]:
-    home = row.home_team == team
-    gf = float(row.home_goals if home else row.away_goals)
-    ga = float(row.away_goals if home else row.home_goals)
+    home = row["home_team"] == team
+    gf = float(row["home_goals"] if home else row["away_goals"])
+    ga = float(row["away_goals"] if home else row["home_goals"])
     pts = 3 if gf > ga else 1 if gf == ga else 0
     venue = "H" if home else "A"
     return gf, ga, pts, venue, gf - ga
@@ -39,10 +39,8 @@ def _summarize(games: deque, window: int) -> dict[str, float]:
         return {"games": 0.0, "gf": np.nan, "ga": np.nan, "points": np.nan, "gd": np.nan,
                 "win_rate": np.nan, "draw_rate": np.nan, "loss_rate": np.nan,
                 "gf_ewma": np.nan, "ga_ewma": np.nan, "gd_std": np.nan, "home_rate": np.nan}
-    gf = [x["gf"] for x in recent]
-    ga = [x["ga"] for x in recent]
-    pts = [x["points"] for x in recent]
-    gd = [x["gd"] for x in recent]
+    gf = [x["gf"] for x in recent]; ga = [x["ga"] for x in recent]
+    pts = [x["points"] for x in recent]; gd = [x["gd"] for x in recent]
     return {
         "games": float(len(recent)), "gf": float(np.mean(gf)), "ga": float(np.mean(ga)),
         "points": float(np.mean(pts)), "gd": float(np.mean(gd)),
@@ -69,11 +67,25 @@ def _update_elo(elo: dict, home: str, away: str, result: int, competition: str) 
 
 
 def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(3, 5, 10, 20)) -> pd.DataFrame:
-    """Build chronological, leakage-safe features using a conservative 24h result lag."""
-    h = history.copy(); h["kickoff_utc"] = pd.to_datetime(h["kickoff_utc"], utc=True, errors="coerce")
-    h = h.dropna(subset=["kickoff_utc"]).sort_values(["kickoff_utc", "competition", "home_team", "away_team", "match_id"], kind="mergesort").reset_index(drop=True)
-    m = matches.copy(); m["kickoff_utc"] = pd.to_datetime(m["kickoff_utc"], utc=True, errors="coerce")
-    m = m.dropna(subset=["kickoff_utc"]).sort_values(["kickoff_utc", "competition", "home_team", "away_team", "match_id"], kind="mergesort").reset_index(drop=True)
+    """Build chronological, leakage-safe features using a conservative 24h result lag.
+
+    Performance-critical path uses pre-materialized records instead of repeated
+    DataFrame iloc access. This changes execution cost, not feature semantics.
+    """
+    h = history.copy()
+    h["kickoff_utc"] = pd.to_datetime(h["kickoff_utc"], utc=True, errors="coerce")
+    h = h.dropna(subset=["kickoff_utc"]).sort_values(
+        ["kickoff_utc", "competition", "home_team", "away_team", "match_id"], kind="mergesort"
+    ).reset_index(drop=True)
+    m = matches.copy()
+    m["kickoff_utc"] = pd.to_datetime(m["kickoff_utc"], utc=True, errors="coerce")
+    m = m.dropna(subset=["kickoff_utc"]).sort_values(
+        ["kickoff_utc", "competition", "home_team", "away_team", "match_id"], kind="mergesort"
+    ).reset_index(drop=True)
+
+    # itertuples once: substantially cheaper than h.iloc[ptr] for tens of thousands of rows.
+    h_records = h[["kickoff_utc", "home_team", "away_team", "home_goals", "away_goals", "competition", "match_id"]].to_dict("records")
+    m_records = m[[c for c in ["match_id", "competition", "season", "season_start", "kickoff_utc", "home_team", "away_team"] if c in m.columns]].to_dict("records")
 
     team_games: dict[str, deque] = defaultdict(lambda: deque(maxlen=40))
     team_last: dict[str, pd.Timestamp] = {}
@@ -83,30 +95,35 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
 
     def ingest_until(cutoff: pd.Timestamp) -> None:
         nonlocal ptr
-        while ptr < len(h):
-            r = h.iloc[ptr]; event = r.kickoff_utc
+        while ptr < len(h_records):
+            r = h_records[ptr]
+            event = r["kickoff_utc"]
             if event >= cutoff or not _result_available(event, cutoff):
                 break
-            if pd.isna(r.home_goals) or pd.isna(r.away_goals):
-                ptr += 1; continue
-            home, away = str(r.home_team), str(r.away_team)
-            result = 0 if r.home_goals > r.away_goals else 1 if r.home_goals == r.away_goals else 2
-            _update_elo(elo, home, away, result, str(r.competition))
+            hg, ag = r["home_goals"], r["away_goals"]
+            if pd.isna(hg) or pd.isna(ag):
+                ptr += 1
+                continue
+            home, away = str(r["home_team"]), str(r["away_team"])
+            result = 0 if hg > ag else 1 if hg == ag else 2
+            _update_elo(elo, home, away, result, str(r["competition"]))
             for team in (home, away):
                 gf, ga, pts, venue, gd = _team_result(r, team)
-                team_games[team].append({"time": event, "gf": gf, "ga": ga, "points": pts, "venue": venue, "gd": gd, "competition": str(r.competition)})
+                team_games[team].append({"time": event, "gf": gf, "ga": ga, "points": pts, "venue": venue, "gd": gd, "competition": str(r["competition"])})
                 team_last[team] = event
             h2h[(home, away)].append(result)
             h2h[(away, home)].append(2 - result if result != 1 else 1)
             ptr += 1
 
-    for r in m.itertuples():
-        kickoff = r.kickoff_utc; cutoff = kickoff - pd.Timedelta(minutes=60); ingest_until(cutoff)
-        home, away, comp = str(r.home_team), str(r.away_team), str(r.competition)
+    for r in m_records:
+        kickoff = r["kickoff_utc"]
+        cutoff = kickoff - pd.Timedelta(minutes=60)
+        ingest_until(cutoff)
+        home, away, comp = str(r["home_team"]), str(r["away_team"]), str(r["competition"])
         he = float(elo["global"].get(home, 1500.0)); ae = float(elo["global"].get(away, 1500.0))
         ce = elo["competition"].get(comp, {}); hce = float(ce.get(home, 1500.0)); cae = float(ce.get(away, 1500.0))
         row = {
-            "match_id": r.match_id, "competition": comp, "season": r.season, "season_start": getattr(r, "season_start", np.nan),
+            "match_id": r["match_id"], "competition": comp, "season": r.get("season"), "season_start": r.get("season_start", np.nan),
             "kickoff_utc": kickoff, "home_team": home, "away_team": away, "prediction_cutoff_at_utc": cutoff,
             "home_advantage": 1.0, "home_elo": he, "away_elo": ae, "elo_diff": he - ae,
             "home_comp_elo": hce, "away_comp_elo": cae, "comp_elo_diff": hce - cae,
@@ -130,7 +147,8 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         row["h2h_points_edge_5"] = float(np.mean([3 if x == 0 else 1 if x == 1 else 0 for x in meetings]) - np.mean([3 if x == 2 else 1 if x == 1 else 0 for x in meetings])) if meetings else np.nan
         available_times = [result_feature_available_at(team_last[t]) for t in (home, away) if t in team_last]
         row["feature_source_max_available_at_utc"] = max(available_times) if available_times else pd.NaT
-        row["pit_verified"] = bool(available_times) and all(_result_available(team_last[t], cutoff) for t in (home, away) if t in team_last)
+        # A row is PIT-valid only when both teams have usable prior state.
+        row["pit_verified"] = all(t in team_last and _result_available(team_last[t], cutoff) for t in (home, away))
         rows.append(row)
     return pd.DataFrame(rows)
 
