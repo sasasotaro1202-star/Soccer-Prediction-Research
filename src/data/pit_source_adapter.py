@@ -7,7 +7,7 @@ import pandas as pd
 
 from src.data import pit_source_adapter_v2 as _impl
 from src.data.pit_source_adapter_fast import *
-from src.data.pit_source_adapter_fast import FootballDataWaybackAdapter
+from src.data.pit_source_adapter_fast import FootballDataWaybackAdapter as _FastFootballDataWaybackAdapter
 from src.data.pit_source_adapter_v2 import COMPETITION_ADAPTERS, _result_lower_bound
 
 
@@ -65,10 +65,63 @@ def _date_key(value: Any) -> str | None:
     return None if pd.isna(parsed) else parsed.date().isoformat()
 
 
-# Internal v2 helpers are patched so the inherited archive parser uses the
-# same unambiguous UTC/ISO date semantics as the compatibility surface.
 _impl._utc = _utc
 _impl._date_key = _date_key
+
+
+class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
+    """Fast adapter with a stable, testable diagnostic output contract."""
+
+    def diagnostic_bulk(self, history: pd.DataFrame) -> pd.DataFrame:
+        rows = []
+        if history.empty:
+            return pd.DataFrame(columns=[
+                "competition", "season_start", "url", "status", "capture_count",
+                "error_type", "error", "cdx_status", "failure_stage", "failure_reason",
+            ])
+
+        work = history.copy()
+        if "season_start" not in work.columns and "season" in work.columns:
+            work["season_start"] = work["season"].astype(str).str.extract(r"(\d{4})", expand=False)
+        if "season_start" in work.columns:
+            work["season_start"] = pd.to_numeric(work["season_start"], errors="coerce")
+
+        for (competition, start_year), group in work.groupby(
+            ["competition", "season_start"], dropna=False
+        ):
+            try:
+                url = source_url(str(competition), int(start_year))
+                diag = self.capture_diagnostic(url)
+                cdx_status = diag.status
+                failure_stage = cdx_status if cdx_status != "CDX_CAPTURE_FOUND" else ""
+                failure_reason = diag.error or ("no archive capture" if cdx_status == "CDX_NO_CAPTURE" else "")
+                rows.append({
+                    "competition": competition,
+                    "season_start": start_year,
+                    "url": url,
+                    "status": diag.status,
+                    "capture_count": diag.capture_count,
+                    "error_type": diag.error_type,
+                    "error": diag.error,
+                    "cdx_status": cdx_status,
+                    "failure_stage": failure_stage,
+                    "failure_reason": failure_reason,
+                })
+            except Exception as exc:
+                reason = str(exc)
+                rows.append({
+                    "competition": competition,
+                    "season_start": start_year,
+                    "url": None,
+                    "status": "ADAPTER_MAPPING_FAILURE",
+                    "capture_count": 0,
+                    "error_type": type(exc).__name__,
+                    "error": reason,
+                    "cdx_status": "NOT_ATTEMPTED",
+                    "failure_stage": "ADAPTER_MAPPING_FAILURE",
+                    "failure_reason": reason,
+                })
+        return pd.DataFrame(rows)
 
 
 def competition_adapter_matrix() -> pd.DataFrame:
@@ -82,3 +135,7 @@ def competition_adapter_matrix() -> pd.DataFrame:
             "status": "IMPLEMENTED" if spec.get("adapter") else "UNVERIFIED",
         })
     return pd.DataFrame(rows)
+
+
+def build_pit_diagnostic(history: pd.DataFrame, **kwargs) -> pd.DataFrame:
+    return FootballDataWaybackAdapter(**kwargs).diagnostic_bulk(history)
