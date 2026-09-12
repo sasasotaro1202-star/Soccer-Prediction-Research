@@ -38,6 +38,28 @@ def _pit_sample(history: pd.DataFrame, rows_per_group: int) -> pd.DataFrame:
     return h.groupby(["competition", "season_start"], sort=False, dropna=False, group_keys=False).head(rows_per_group).copy()
 
 
+def _pit_gate(history_replayed: pd.DataFrame, replay_input: pd.DataFrame) -> tuple[bool, dict]:
+    """Hard PIT gate: every replayed row must have auditable evidence.
+
+    A partial PIT sample is never sufficient for model research. In particular,
+    this prevents the research engine from silently training on a mixture of
+    verified and unverifiable historical outcomes.
+    """
+    total = int(len(replay_input))
+    verified = int(history_replayed["pit_evidence_status"].eq("VERIFIED").sum()) if "pit_evidence_status" in history_replayed else 0
+    unverifiable = total - verified
+    reasons = {}
+    if "pit_evidence_reason" in history_replayed:
+        reasons = {str(k): int(v) for k, v in history_replayed["pit_evidence_reason"].fillna("").value_counts().items()}
+    return total > 0 and verified == total, {
+        "replayed_rows": total,
+        "pit_verified_rows": verified,
+        "pit_unverifiable_rows": unverifiable,
+        "pit_verified_rate": float(verified / total) if total else 0.0,
+        "pit_reason_counts": reasons,
+    }
+
+
 def run(out_dir: str = "artifacts") -> dict:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -53,40 +75,58 @@ def run(out_dir: str = "artifacts") -> dict:
         (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
         return report
 
-    # Source-level diagnostic is cheap and remains full coverage.
     pit_diag = build_pit_diagnostic(history)
     pit_diag.to_csv(out / "pit_diagnostic_7x16.csv", index=False)
 
-    # The full 42k-row PIT replay can require a large number of Wayback
-    # snapshots. CI therefore supports a deterministic audit mode. Production
-    # research remains full replay when PIT_REPLAY_ROWS_PER_GROUP is unset/0.
     try:
         rows_per_group = max(0, int(os.getenv("PIT_REPLAY_ROWS_PER_GROUP", "0")))
     except ValueError:
         rows_per_group = 0
     replay_input = _pit_sample(history, rows_per_group)
     history_replayed = apply_pit_evidence(replay_input)
+
+    # Secondary PIT evidence is intentionally isolated from the engine's core
+    # adapter. It may be enabled explicitly for audit/research, but every row
+    # still needs an exact archived-result match and timestamp.
+    if os.getenv("PIT_ENABLE_SECONDARY_ARCHIVE", "1") == "1":
+        try:
+            from src.data.pit_archive_fallback import apply_arquivo_fallback
+            history_replayed = apply_arquivo_fallback(history_replayed)
+        except Exception as exc:
+            # Fail closed: a broken secondary provider cannot create evidence.
+            history_replayed["secondary_archive_error"] = f"{type(exc).__name__}: {exc}"
+
     history_replayed["source_available_at_utc"] = pd.to_datetime(history_replayed["source_available_at_utc"], utc=True, errors="coerce")
     history_replayed["retrieved_at_utc"] = pd.to_datetime(history_replayed["retrieved_at_utc"], utc=True, errors="coerce")
     history_replayed.to_csv(out / "normalized_history.csv", index=False)
+
+    pit_ok, pit_summary = _pit_gate(history_replayed, replay_input)
+    if not pit_ok:
+        report = {
+            "status": "BLOCKED",
+            "reason": "PIT hard gate failed; research/OOS is forbidden until every replayed row has exact archive evidence.",
+            "replay_mode": "sampled" if rows_per_group else "full",
+            "rows_per_competition_season": rows_per_group if rows_per_group else None,
+            "acquired_rows": int(len(history)),
+            "snapshot_id": snapshot_id(history),
+            **pit_summary,
+        }
+        report["ai_research"] = weakness_advice(report)
+        (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+        return report
 
     feats = build_match_features(history_replayed, history_replayed)
     feats = add_target(feats, history_replayed)
     feats.to_csv(out / "pit_replay_features.csv", index=False)
 
-    verified = feats[feats["pit_verified"] == True].copy()
-    if len(verified) < 400:
+    if len(feats) < 400:
         report = {
             "status": "BLOCKED",
-            "reason": "PIT replay coverage is insufficient; historical result availability cannot yet support the required OOS sample.",
+            "reason": "PIT evidence passed, but the verified sample is too small for the required OOS research sample.",
             "replay_mode": "sampled" if rows_per_group else "full",
-            "rows_per_competition_season": rows_per_group if rows_per_group else None,
             "acquired_rows": int(len(history)),
-            "replayed_rows": int(len(replay_input)),
-            "pit_verified_rows": int(len(verified)),
-            "pit_verified_rate": float(len(verified) / len(feats)) if len(feats) else 0.0,
-            "source_result_verified_rows": int(history_replayed["pit_evidence_status"].eq("VERIFIED").sum()),
             "snapshot_id": snapshot_id(history),
+            **pit_summary,
         }
         report["ai_research"] = weakness_advice(report)
         (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
@@ -101,8 +141,7 @@ def run(out_dir: str = "artifacts") -> dict:
         "snapshot_id": snapshot_id(history),
         "oos": summary,
         "coverage": coverage.to_dict(orient="records"),
-        "pit_verified_rows": int(len(verified)),
-        "pit_verified_rate": float(len(verified) / len(feats)),
+        **pit_summary,
         "ai_research": weakness_advice(summary),
     }
     (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
