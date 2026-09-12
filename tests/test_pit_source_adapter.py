@@ -4,6 +4,7 @@ from src.data.pit_source_adapter import (
     COMPETITION_ADAPTERS,
     FootballDataWaybackAdapter,
     SourceEvidence,
+    _result_lower_bound,
     competition_adapter_matrix,
     source_url,
 )
@@ -51,7 +52,7 @@ def test_source_evidence_never_invents_timestamp():
 
 def test_cdx_no_capture_is_distinct_from_request_failure(tmp_path, monkeypatch):
     adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
-    monkeypatch.setattr("src.data.pit_source_adapter.requests.get", lambda *a, **k: (_ for _ in ()).throw(__import__("requests").RequestException("network down")))
+    monkeypatch.setattr("src.data.pit_source_adapter_v2.requests.get", lambda *a, **k: (_ for _ in ()).throw(__import__("requests").RequestException("network down")))
     url = "https://example.invalid/test.csv"
     assert adapter.captures(url) == []
     assert adapter.capture_diagnostic(url).status == "CDX_REQUEST_FAILURE"
@@ -65,7 +66,7 @@ def test_cdx_empty_response_is_not_request_failure(tmp_path, monkeypatch):
             return [["timestamp", "digest", "original", "statuscode", "mimetype"]]
 
     adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
-    monkeypatch.setattr("src.data.pit_source_adapter.requests.get", lambda *a, **k: Response())
+    monkeypatch.setattr("src.data.pit_source_adapter_v2.requests.get", lambda *a, **k: Response())
     url = "https://example.invalid/test.csv"
     assert adapter.captures(url) == []
     assert adapter.capture_diagnostic(url).status == "CDX_NO_CAPTURE"
@@ -80,7 +81,7 @@ def test_snapshot_parse_and_key_matching_are_observable(tmp_path, monkeypatch):
             return None
 
     adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
-    monkeypatch.setattr("src.data.pit_source_adapter.requests.get", lambda *a, **k: Response())
+    monkeypatch.setattr("src.data.pit_source_adapter_v2.requests.get", lambda *a, **k: Response())
     capture = {"timestamp": "20250902000000", "digest": "digest-a"}
     diag = adapter._load_snapshot_keys(capture, "https://example.invalid/test.csv")
     assert diag.status == "SNAPSHOT_PARSED"
@@ -89,11 +90,12 @@ def test_snapshot_parse_and_key_matching_are_observable(tmp_path, monkeypatch):
 
 def test_diagnostic_bulk_exposes_cdx_failure_stage(tmp_path, monkeypatch):
     adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
-    monkeypatch.setattr("src.data.pit_source_adapter.requests.get", lambda *a, **k: (_ for _ in ()).throw(__import__("requests").RequestException("network down")))
+    monkeypatch.setattr("src.data.pit_source_adapter_v2.requests.get", lambda *a, **k: (_ for _ in ()).throw(__import__("requests").RequestException("network down")))
     history = pd.DataFrame([{
         "competition": "EPL",
         "season": "2025/26",
         "kickoff_utc": "2025-09-01T18:00:00Z",
+        "kickoff_time_available": True,
         "home_team": "Team A",
         "away_team": "Team B",
         "home_goals": 2,
@@ -104,3 +106,17 @@ def test_diagnostic_bulk_exposes_cdx_failure_stage(tmp_path, monkeypatch):
     assert diagnostic.loc[0, "cdx_status"] == "CDX_REQUEST_FAILURE"
     assert diagnostic.loc[0, "failure_stage"] == "CDX_REQUEST_FAILURE"
     assert "network down" in diagnostic.loc[0, "failure_reason"]
+
+
+def test_precise_kickoff_uses_conservative_completion_lower_bound():
+    row = pd.Series({"kickoff_utc": "2025-09-01T18:00:00Z", "kickoff_time_available": True})
+    bound, reason = _result_lower_bound(row)
+    assert bound.isoformat() == "2025-09-01T21:00:00+00:00"
+    assert reason == "KICKOFF_PLUS_180M"
+
+
+def test_date_only_does_not_claim_same_day_result_availability():
+    row = pd.Series({"kickoff_utc": "2025-09-01T00:00:00Z", "kickoff_time_available": False})
+    bound, reason = _result_lower_bound(row)
+    assert bound.isoformat() == "2025-09-02T00:00:00+00:00"
+    assert reason == "DATE_ONLY_NEXT_DAY"
