@@ -7,6 +7,7 @@ from io import BytesIO
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import numpy as np
 import pandas as pd
 import requests
 
@@ -17,6 +18,14 @@ BASE = "https://www.football-data.co.uk/mmz4281/{season_folder}/{league}.csv"
 COMPETITION_TZ = {
     "EPL": "Europe/London", "CHA": "Europe/London", "BL1": "Europe/Berlin",
     "SA": "Europe/Rome", "LL": "Europe/Madrid", "FL1": "Europe/Paris", "ERE": "Europe/Amsterdam",
+}
+RAW_STAT_MAP = {
+    "home_shots": "HS", "away_shots": "AS",
+    "home_shots_on_target": "HST", "away_shots_on_target": "AST",
+    "home_corners": "HC", "away_corners": "AC",
+    "home_fouls": "HF", "away_fouls": "AF",
+    "home_yellow_cards": "HY", "away_yellow_cards": "AY",
+    "home_red_cards": "HR", "away_red_cards": "AR",
 }
 
 
@@ -85,6 +94,11 @@ def load_season(competition: str, start_year: int, cache_dir: str = "data/raw") 
         "source_available_at_utc": pd.NaT,
         "retrieved_at_utc": retrieved,
     })
+    for target, source in RAW_STAT_MAP.items():
+        if source in df.columns:
+            out[target] = pd.to_numeric(df[source], errors="coerce")
+        else:
+            out[target] = np.nan
     out["raw_snapshot_id"] = hashlib.sha256(raw).hexdigest()
     return out.dropna(subset=["kickoff_utc", "home_goals", "away_goals"]).reset_index(drop=True)
 
