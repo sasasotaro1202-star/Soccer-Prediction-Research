@@ -10,6 +10,7 @@ import pandas as pd
 
 from src.data.coverage import build_coverage
 from src.data.football_data import load_available_history
+from src.data.fixture_field_audit import run_audit
 from src.data.pit_source_adapter import competition_adapter_matrix
 from src.data.source_registry import SOCCER_SOURCES
 from src.evaluation.walk_forward import TARGET_ACCURACY, run_walk_forward
@@ -76,13 +77,23 @@ def run(out_dir: str = "artifacts") -> dict:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     _write_source_registry(out)
+
+    # The audit is the authoritative pre-research gate. It measures the current
+    # adapters only; provider advertisements and search-engine discovery never
+    # promote a competition or field to AVAILABLE.
+    try:
+        audit_report = run_audit(str(out))
+    except Exception as exc:
+        audit_report = {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}", "audit_complete": False}
+    (out / "audit_gate.json").write_text(json.dumps(audit_report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+
     competition_adapter_matrix().to_csv(out / "pit_competition_adapter_matrix.csv", index=False)
     history, acquisition = load_available_history()
     acquisition.to_csv(out / "acquisition_coverage.csv", index=False)
     coverage = build_coverage(history)
     coverage.to_csv(out / "coverage_matrix.csv", index=False)
     if history.empty:
-        report = {"status": "BLOCKED", "reason": "No historical data acquired", "oos_claimed": False}
+        report = {"status": "BLOCKED", "reason": "No historical data acquired", "oos_claimed": False, "audit": audit_report}
         _write_status(out, report)
         return report
 
@@ -92,7 +103,7 @@ def run(out_dir: str = "artifacts") -> dict:
     pit_verified = int(feats["pit_verified"].sum()) if "pit_verified" in feats.columns else 0
     pit_total = int(len(feats))
     if pit_verified == 0:
-        report = {"status": "BLOCKED", "reason": "No match rows have sufficient historical result state under deterministic PIT.", "acquired_rows": int(len(history)), "snapshot_id": snapshot_id(history), "pit_policy": "result_plus_24h", "pit_verified_rows": 0, "pit_verified_rate": 0.0, "archive_audit": archive_audit, "oos_claimed": False}
+        report = {"status": "BLOCKED", "reason": "No match rows have sufficient historical result state under deterministic PIT.", "acquired_rows": int(len(history)), "snapshot_id": snapshot_id(history), "pit_policy": "result_plus_24h", "pit_verified_rows": 0, "pit_verified_rate": 0.0, "archive_audit": archive_audit, "audit": audit_report, "oos_claimed": False}
         report["ai_research"] = weakness_advice(report)
         _write_status(out, report)
         return report
@@ -100,12 +111,8 @@ def run(out_dir: str = "artifacts") -> dict:
     wf, selections = run_walk_forward(feats, _model_features(feats))
     wf.to_csv(out / "oos_metrics.csv", index=False)
     selections.to_csv(out / "model_selection.csv", index=False)
-
-    # The final TWO chronological OOS blocks form the locked holdout. Candidate
-    # selection is restricted to historical validation and earlier development OOS.
-    # This materially reduces the chance that one unusually easy final block drives adoption.
     if len(wf) < 3:
-        report = {"status": "BLOCKED", "reason": "At least three chronological OOS blocks are required: development plus two locked holdout blocks.", "snapshot_id": snapshot_id(history), "pit_policy": "result_plus_24h", "pit_verified_rows": pit_verified, "pit_total_rows": pit_total, "archive_audit": archive_audit, "oos_claimed": False}
+        report = {"status": "BLOCKED", "reason": "At least three chronological OOS blocks are required: development plus two locked holdout blocks.", "snapshot_id": snapshot_id(history), "pit_policy": "result_plus_24h", "pit_verified_rows": pit_verified, "pit_total_rows": pit_total, "archive_audit": archive_audit, "audit": audit_report, "oos_claimed": False}
         _write_status(out, report)
         return report
 
@@ -113,18 +120,7 @@ def run(out_dir: str = "artifacts") -> dict:
     locked = wf.tail(2).copy()
     development_oos.to_csv(out / "development_oos_metrics.csv", index=False)
     locked.to_csv(out / "locked_oos_metrics.csv", index=False)
-
-    candidate_lock = {
-        "status": "LOCKED",
-        "selection_source": "historical_validation_only",
-        "selection_artifact": "model_selection.csv",
-        "development_oos_blocks": int(len(development_oos)),
-        "locked_oos_blocks": int(len(locked)),
-        "locked_oos_untouched": True,
-        "target_accuracy": TARGET_ACCURACY,
-        "model_family": "validation-selected ensemble",
-        "feature_policy": "PIT-safe numeric features only",
-    }
+    candidate_lock = {"status": "LOCKED", "selection_source": "historical_validation_only", "selection_artifact": "model_selection.csv", "development_oos_blocks": int(len(development_oos)), "locked_oos_blocks": int(len(locked)), "locked_oos_untouched": True, "target_accuracy": TARGET_ACCURACY, "model_family": "validation-selected ensemble", "feature_policy": "PIT-safe numeric features only"}
     (out / "candidate_lock.json").write_text(json.dumps(candidate_lock, indent=2, ensure_ascii=False), encoding="utf-8")
 
     baseline = locked[["oos_start", "oos_end", "baseline_logistic_logloss", "baseline_logistic_accuracy", "baseline_logistic_brier", "baseline_logistic_ece", "n"]].rename(columns={"baseline_logistic_logloss": "logloss", "baseline_logistic_accuracy": "accuracy", "baseline_logistic_brier": "brier", "baseline_logistic_ece": "ece"})
@@ -136,22 +132,7 @@ def run(out_dir: str = "artifacts") -> dict:
     oos_acc = float(np.average(wf["accuracy"], weights=wf["n"])) if oos_n else float("nan")
     locked_n = int(locked["n"].sum())
     locked_acc = float(np.average(locked["accuracy"], weights=locked["n"])) if locked_n else float("nan")
-    report = {
-        "status": "OK",
-        "snapshot_id": snapshot_id(history),
-        "oos": wf.mean(numeric_only=True).to_dict(),
-        "coverage": coverage.to_dict(orient="records"),
-        "archive_audit": archive_audit,
-        "pit_policy": "result_plus_24h",
-        "pit_verified_rows": pit_verified,
-        "pit_total_rows": pit_total,
-        "pit_verified_rate": float(pit_verified / pit_total) if pit_total else 0.0,
-        "oos_protocol": {"development_blocks": int(len(development_oos)), "locked_blocks": 2, "locked_oos_untouched": True, "selection_source": "historical_validation_only"},
-        "accuracy_target": {"target_accuracy": TARGET_ACCURACY, "locked_oos_accuracy": locked_acc, "weighted_oos_accuracy": oos_acc, "target_met": bool(locked_acc >= TARGET_ACCURACY) if locked_n else False, "target_gap": float(locked_acc - TARGET_ACCURACY) if locked_n else float("nan"), "oos_sample_size": oos_n, "locked_oos_sample_size": locked_n},
-        "adoption": adoption,
-        "production_model": "ensemble" if adoption.get("status") == "ADOPT" else "baseline_logistic",
-        "ai_research": weakness_advice(wf.mean(numeric_only=True).to_dict()),
-    }
+    report = {"status": "OK", "snapshot_id": snapshot_id(history), "oos": wf.mean(numeric_only=True).to_dict(), "coverage": coverage.to_dict(orient="records"), "archive_audit": archive_audit, "pit_policy": "result_plus_24h", "pit_verified_rows": pit_verified, "pit_total_rows": pit_total, "pit_verified_rate": float(pit_verified / pit_total) if pit_total else 0.0, "oos_protocol": {"development_blocks": int(len(development_oos)), "locked_blocks": 2, "locked_oos_untouched": True, "selection_source": "historical_validation_only"}, "accuracy_target": {"target_accuracy": TARGET_ACCURACY, "locked_oos_accuracy": locked_acc, "weighted_oos_accuracy": oos_acc, "target_met": bool(locked_acc >= TARGET_ACCURACY) if locked_n else False, "target_gap": float(locked_acc - TARGET_ACCURACY) if locked_n else float("nan"), "oos_sample_size": oos_n, "locked_oos_sample_size": locked_n}, "adoption": adoption, "production_model": "ensemble" if adoption.get("status") == "ADOPT" else "baseline_logistic", "audit": audit_report, "ai_research": weakness_advice(wf.mean(numeric_only=True).to_dict())}
     _write_status(out, report)
     return report
 
