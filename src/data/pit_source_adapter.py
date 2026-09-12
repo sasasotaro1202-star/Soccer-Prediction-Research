@@ -75,8 +75,21 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
 
     @staticmethod
     def _snapshot_variants(capture, original_url):
+        """Try the two replay modifiers plus the canonical non-modifier URL.
+
+        Some archived CSV responses are served differently depending on the
+        replay modifier and network path. Every accepted response is still
+        required to identify the exact capture timestamp and archive host.
+        """
         ts = str(capture.get("timestamp", "")).strip()
-        return (f"https://web.archive.org/web/{ts}id_/{original_url}", f"https://web.archive.org/web/{ts}if_/{original_url}")
+        if not ts:
+            return ()
+        return (
+            f"https://web.archive.org/web/{ts}id_/{original_url}",
+            f"https://web.archive.org/web/{ts}if_/{original_url}",
+            f"https://web.archive.org/web/{ts}/{original_url}",
+            f"http://web.archive.org/web/{ts}id_/{original_url}",
+        )
 
     @staticmethod
     def _response_final_url(response, fallback_url):
@@ -112,15 +125,18 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
                         if status_code is not None and not self._has_exact_capture_identity(final_url, capture.get("timestamp")):
                             raise requests.HTTPError("unexpected_redirect_from_exact_capture", response=response)
                         candidate = response.content; head = candidate[:512].lstrip().lower()
-                        if head.startswith(b"<!doctype html") or (b"wayback machine" in head and b"error" in head):
+                        if head.startswith(b"<!doctype html") or head.startswith(b"<html") or (b"wayback machine" in head and b"error" in head):
                             raise requests.HTTPError("wayback_html_error_page", response=response)
+                        if not candidate.strip():
+                            raise requests.HTTPError("empty_wayback_snapshot", response=response)
                         raw = candidate; break
                     except (requests.RequestException, OSError, AttributeError) as exc:
                         last_error = exc
                         if attempt < self.snapshot_retries: time.sleep(self.snapshot_retry_backoff * attempt)
                 if raw is not None: break
         if raw is None:
-            diag = SnapshotDiagnostic("SNAPSHOT_DOWNLOAD_FAILURE", error_type=type(last_error).__name__ if last_error else "UnknownError", error=f"after_{self.snapshot_retries}_attempts_per_variant: {last_error}")
+            err = str(last_error) if last_error else "no_response"
+            diag = SnapshotDiagnostic("SNAPSHOT_DOWNLOAD_FAILURE", error_type=type(last_error).__name__ if last_error else "UnknownError", error=f"after_{self.snapshot_retries}_attempts_per_variant: {err}")
             self._snapshot_diag[identity] = diag; return diag
         try: frame = pd.read_csv(BytesIO(raw))
         except (ValueError, pd.errors.ParserError, UnicodeDecodeError) as exc:
