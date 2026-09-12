@@ -21,7 +21,6 @@ def _history():
 
 def test_unavailable_recent_result_invalidates_window():
     history = _history()
-    # m6 becomes available after the prediction cutoff (2025-01-07 23:00 UTC).
     history.loc[5, "source_available_at_utc"] = pd.Timestamp("2025-01-08 01:00", tz="UTC")
     match = pd.DataFrame([{
         "match_id": "m7", "competition": "EPL", "season": "2024/25",
@@ -31,6 +30,26 @@ def test_unavailable_recent_result_invalidates_window():
     features = build_match_features(history, match, windows=(3,))
     assert not bool(features.iloc[0]["pit_verified"])
     assert pd.isna(features.iloc[0]["home_gf_3"])
+
+
+def test_delayed_result_is_available_at_later_cutoff():
+    history = _history()
+    history.loc[5, "source_available_at_utc"] = pd.Timestamp("2025-01-08 01:00", tz="UTC")
+    matches = pd.DataFrame([
+        {
+            "match_id": "m7", "competition": "EPL", "season": "2024/25",
+            "kickoff_utc": pd.Timestamp("2025-01-08", tz="UTC"),
+            "home_team": "A", "away_team": "B",
+        },
+        {
+            "match_id": "m8", "competition": "EPL", "season": "2024/25",
+            "kickoff_utc": pd.Timestamp("2025-01-09", tz="UTC"),
+            "home_team": "A", "away_team": "B",
+        },
+    ])
+    features = build_match_features(history, matches, windows=(3,))
+    assert pd.notna(features.iloc[1]["home_gf_3"])
+    assert bool(features.iloc[1]["pit_verified"])
 
 
 def test_all_required_history_available_makes_window_pit_valid():
@@ -43,5 +62,4 @@ def test_all_required_history_available_makes_window_pit_valid():
     }])
     features = build_match_features(history, match, windows=(3,))
     assert bool(features.iloc[0]["pit_verified"])
-    # A's last three matches are m4 (1 goal), m5 (2 goals), m6 (1 goal): 4/3.
     assert features.iloc[0]["home_gf_3"] == 4 / 3
