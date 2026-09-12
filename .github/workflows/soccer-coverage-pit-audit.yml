@@ -1,6 +1,13 @@
 name: Soccer Coverage PIT Audit
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "src/data/**"
+      - "tests/test_*audit*.py"
+      - "tests/test_espn_friendlies_adapter.py"
+      - ".github/workflows/soccer-coverage-pit-audit.yml"
   workflow_dispatch:
   schedule:
     - cron: "37 2 * * 1"
@@ -15,7 +22,7 @@ concurrency:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,7 +34,7 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Run unit tests
-        run: python -m pytest -q tests/test_fixture_field_audit.py tests/test_audit_completeness.py
+        run: python -m pytest -q tests/test_fixture_field_audit.py tests/test_audit_completeness.py tests/test_espn_friendlies_adapter.py
       - name: Run coverage and PIT audit
         env:
           PYTHONPATH: .
@@ -35,20 +42,42 @@ jobs:
         run: |
           mkdir -p artifacts/coverage-pit-audit
           python -m src.data.fixture_field_audit > artifacts/coverage-pit-audit/audit_stdout.json
-      - name: Validate completion gate
+      - name: Run explicit completion gate
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m src.data.completion_gate > artifacts/coverage-pit-audit/completion_gate_stdout.json
+      - name: Validate audit invariants
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          p = Path('artifacts/coverage-pit-audit/audit_summary.json')
-          data = json.loads(p.read_text(encoding='utf-8'))
-          print(json.dumps(data, indent=2, ensure_ascii=False))
-          if data.get('target_competition_count') != 14:
+          summary = json.loads(Path('artifacts/coverage-pit-audit/audit_summary.json').read_text(encoding='utf-8'))
+          gate = json.loads(Path('artifacts/coverage-pit-audit/completion_gate.json').read_text(encoding='utf-8'))
+          print(json.dumps(summary, indent=2, ensure_ascii=False))
+          print(json.dumps(gate, indent=2, ensure_ascii=False))
+          if summary.get('target_competition_count') != 14:
               raise SystemExit('Target competition count is not 14')
-          if not data.get('no_missing_to_zero', False):
+          if summary.get('no_missing_to_zero') is not True:
               raise SystemExit('Missing-to-zero invariant failed')
-          if data.get('search_engines_are_not_dataset_sources') is not True:
+          if summary.get('search_engines_are_not_dataset_sources') is not True:
               raise SystemExit('Search-source invariant failed')
+          if gate.get('requested_competition_season_cells') != 224:
+              raise SystemExit('Expected 224 competition-season cells')
+          if not gate.get('technical_audit_ok', False):
+              raise SystemExit('Technical audit matrix is incomplete')
+          if not gate.get('coverage_scope_complete', False):
+              raise SystemExit('One or more competition-season cells lack explicit acquisition status')
+          if gate.get('parse_error_cells', 0) != 0:
+              raise SystemExit('Parse-error cells remain')
+          if gate.get('duplicate_source_rows', 0) != 0:
+              raise SystemExit('Duplicate source identities remain')
+          if not gate.get('collision_audit_available', False):
+              raise SystemExit('Collision audit is unavailable')
+          if gate.get('team_mapping_issues', 0) != 0:
+              raise SystemExit('Team mapping issues remain')
+          if not gate.get('pit_publication_time_gate', False):
+              raise SystemExit('Publication-time PIT gate is not safe')
           PY
       - name: Upload audit artifacts
         if: always()
