@@ -17,32 +17,22 @@ def _fit_predict(model, fit, target):
 
 
 def _blend_weights(scores: dict[str, dict]) -> dict[str, float]:
-    # LogLoss remains the primary objective; weights are learned only from
-    # historical validation data, never from the OOS block.
     losses = np.array([max(float(v["logloss"]), 1e-6) for v in scores.values()])
     inv = 1.0 / losses
     inv /= inv.sum()
     return {name: float(w) for name, w in zip(scores, inv)}
 
 
-def run_walk_forward(
-    df: pd.DataFrame,
-    feature_cols: list[str],
-    min_train: int = 1000,
-    validation_frac: float = 0.2,
-    oos_block: int | None = None,
-    random_state: int = 42,
-):
-    """Chronological walk-forward OOS with bounded refit frequency.
+def run_walk_forward(df: pd.DataFrame, feature_cols: list[str], min_train: int = 1000, validation_frac: float = 0.2, oos_block: int | None = None, random_state: int = 42):
+    """Chronological PIT-safe walk-forward evaluation.
 
-    A larger OOS block reduces repeated full-model refits while preserving the
-    exact chronological train -> validation -> future-OOS ordering. The block
-    size is a compute optimization, not a data or target change.
+    Model/ensemble selection uses only the historical validation tail of each
+    training window. The immediately following OOS block is never used for
+    selection. The final OOS block is the locked holdout used by the adoption gate.
     """
     if oos_block is None:
         oos_block = max(500, int(os.getenv("SOCCER_OOS_BLOCK", "2000")))
     validation_max = max(500, int(os.getenv("SOCCER_VALIDATION_MAX", "2000")))
-
     d = df.sort_values("kickoff_utc", kind="mergesort").reset_index(drop=True).copy()
     d = d[d["pit_verified"] == True].reset_index(drop=True)
     d = d.dropna(subset=["target"])
@@ -67,29 +57,23 @@ def run_walk_forward(
             scores[name] = classification_metrics(yval, model.predict_proba(Xval))
         weights = _blend_weights(scores)
         best = min(scores, key=lambda k: scores[k]["logloss"])
-        selected.append({
-            "oos_start": str(oos.kickoff_utc.min()),
-            "selected_model": best,
-            "blend": "validation_inverse_logloss",
-            "weights": weights,
-            "validation_logloss": scores[best]["logloss"],
-            "validation_accuracy": scores[best]["accuracy"],
-        })
+        selected.append({"oos_start": str(oos.kickoff_utc.min()), "selected_model": best, "blend": "validation_inverse_logloss", "weights": weights, "validation_logloss": scores[best]["logloss"], "validation_accuracy": scores[best]["accuracy"]})
 
-        fitted = {}
-        for name, model in candidates(random_state).items():
-            fitted[name] = _fit_predict(model, train[feature_cols], train.target.astype(int))
+        fitted = {name: _fit_predict(model, train[feature_cols], train.target.astype(int)) for name, model in candidates(random_state).items()}
         probs = np.zeros((len(oos), 3), dtype=float)
         for name, model in fitted.items():
             probs += weights[name] * model.predict_proba(oos[feature_cols])
-        probs = np.clip(probs, 1e-9, 1.0)
-        probs /= probs.sum(axis=1, keepdims=True)
-        m = classification_metrics(oos.target.astype(int), probs)
+        probs = np.clip(probs, 1e-9, 1.0); probs /= probs.sum(axis=1, keepdims=True)
+        candidate_metrics = classification_metrics(oos.target.astype(int), probs)
+        baseline_model = fitted["logistic"]
+        baseline_metrics = classification_metrics(oos.target.astype(int), baseline_model.predict_proba(oos[feature_cols]))
         results.append({
             "oos_start": str(oos.kickoff_utc.min()), "oos_end": str(oos.kickoff_utc.max()),
-            "model": "ensemble", "best_single_model": best, **m, "n": len(oos),
-            "target_accuracy": TARGET_ACCURACY, "target_met": bool(m["accuracy"] >= TARGET_ACCURACY),
-            "target_gap": float(m["accuracy"] - TARGET_ACCURACY),
+            "model": "ensemble", "best_single_model": best, **candidate_metrics,
+            "baseline_logistic_logloss": baseline_metrics["logloss"], "baseline_logistic_accuracy": baseline_metrics["accuracy"],
+            "baseline_logistic_brier": baseline_metrics["brier"], "baseline_logistic_ece": baseline_metrics["ece"],
+            "n": len(oos), "target_accuracy": TARGET_ACCURACY,
+            "target_met": bool(candidate_metrics["accuracy"] >= TARGET_ACCURACY), "target_gap": float(candidate_metrics["accuracy"] - TARGET_ACCURACY),
         })
         start = oos_end
 
