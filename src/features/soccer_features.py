@@ -71,8 +71,9 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
 
     An explicit source_available_at_utc is authoritative. When it is absent, the
     conservative 24-hour result-availability policy is used. PIT validity also
-    requires the full requested feature window for both teams; a partial recent
-    history is never silently treated as valid.
+    requires the full requested feature window for both teams and rejects a match
+    if any earlier result is known to be unavailable at the cutoff; this prevents
+    an unavailable result from being silently skipped while a later result is used.
     """
     h = history.copy()
     h["kickoff_utc"] = pd.to_datetime(h["kickoff_utc"], utc=True, errors="coerce")
@@ -158,13 +159,21 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         row["h2h_points_edge_5"] = float(np.mean([3 if x == 0 else 1 if x == 1 else 0 for x in meetings]) - np.mean([3 if x == 2 else 1 if x == 1 else 0 for x in meetings])) if meetings else np.nan
         available_times = [team_last_available[t] for t in (home, away) if t in team_last_available]
         row["feature_source_max_available_at_utc"] = max(available_times) if available_times else pd.NaT
-        # PIT validity is intentionally strict: every requested rolling window must
-        # have enough prior, available results for both teams.
         home_history = list(team_games[home])[-required_window:] if required_window else []
         away_history = list(team_games[away])[-required_window:] if required_window else []
         history_complete = (required_window == 0) or (len(home_history) >= required_window and len(away_history) >= required_window)
         history_available = history_complete and all(x["available"] <= cutoff for x in home_history + away_history)
-        row["pit_verified"] = bool(history_available)
+        # If an earlier result exists but was not available by the cutoff, do not
+        # allow the pointer logic to silently skip it and declare the later window valid.
+        blocked_prior_result = any(
+            r["kickoff_utc"] < cutoff and (
+                pd.isna(r.get("source_available_at_utc"))
+                and pd.to_datetime(r["kickoff_utc"], utc=True) + pd.Timedelta(hours=24) > cutoff
+                or pd.notna(r.get("source_available_at_utc")) and pd.to_datetime(r.get("source_available_at_utc"), utc=True) > cutoff
+            )
+            for r in h_records
+        )
+        row["pit_verified"] = bool(history_available and not blocked_prior_result)
         rows.append(row)
     return pd.DataFrame(rows)
 
