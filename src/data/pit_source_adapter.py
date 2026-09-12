@@ -2,14 +2,16 @@
 
 import time
 from datetime import datetime, timezone
+from io import BytesIO
 from typing import Any
 
 import pandas as pd
+import requests
 
 from src.data import pit_source_adapter_v2 as _impl
 from src.data.pit_source_adapter_fast import *
 from src.data.pit_source_adapter_fast import FootballDataWaybackAdapter as _FastFootballDataWaybackAdapter
-from src.data.pit_source_adapter_v2 import COMPETITION_ADAPTERS, _result_lower_bound
+from src.data.pit_source_adapter_v2 import COMPETITION_ADAPTERS, SnapshotDiagnostic, _result_lower_bound
 
 
 def _utc(value: Any) -> datetime | None:
@@ -71,13 +73,23 @@ _impl._date_key = _date_key
 
 
 class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
-    """Stable PIT adapter with low-concurrency retrieval and CDX retry hardening."""
+    """Stable PIT adapter with low-concurrency retrieval and layered Wayback retries."""
 
-    def __init__(self, *args, cdx_retries: int = 4, cdx_retry_backoff: float = 1.5, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        *args,
+        cdx_retries: int = 5,
+        cdx_retry_backoff: float = 1.5,
+        snapshot_retries: int = 6,
+        snapshot_retry_backoff: float = 1.5,
+        **kwargs,
+    ):
+        super().__init__(*args, snapshot_retries=snapshot_retries, retry_backoff=snapshot_retry_backoff, **kwargs)
         self.max_workers = min(self.max_workers, 2)
         self.cdx_retries = max(1, int(cdx_retries))
         self.cdx_retry_backoff = max(0.0, float(cdx_retry_backoff))
+        self.snapshot_retries = max(1, int(snapshot_retries))
+        self.snapshot_retry_backoff = max(0.0, float(snapshot_retry_backoff))
 
     def captures(self, url: str):
         """Retry transient CDX failures; never turn a transport failure into no-capture."""
@@ -93,6 +105,118 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
                 time.sleep(self.cdx_retry_backoff * attempt)
         return self._captures.get(url, [])
 
+    @staticmethod
+    def _snapshot_variants(capture, original_url):
+        """Return exact-capture URLs only; variants must never silently follow to a later capture."""
+        ts = str(capture.get("timestamp", "")).strip()
+        return (
+            f"https://web.archive.org/web/{ts}id_/{original_url}",
+            f"https://web.archive.org/web/{ts}if_/{original_url}",
+        )
+
+    def _load_snapshot_keys(self, capture, original_url):
+        """Layered retrieval: cache -> exact id_ -> exact if_ -> retry, with strict timestamp identity."""
+        identity = f"{capture.get('digest','')}|{capture.get('timestamp','')}|{capture.get('original','')}"
+        if identity in self._snapshot_diag:
+            return self._snapshot_diag[identity]
+
+        cache = self._snapshot_cache_path(capture)
+        raw = None
+        last_error = None
+        urls = self._snapshot_variants(capture, original_url)
+        headers = {
+            "User-Agent": "SoccerPredictionResearch/1.0 (+PIT-audit)",
+            "Accept": "text/csv,text/plain,*/*",
+            "Cache-Control": "no-cache",
+        }
+
+        if cache.exists():
+            try:
+                raw = cache.read_bytes()
+            except OSError as exc:
+                last_error = exc
+
+        if raw is None:
+            # First try the canonical exact-capture id_ URL. If the archive edge returns a
+            # transient gateway/rate-limit error, retry; then try the if_ representation.
+            for url in urls:
+                for attempt in range(1, self.snapshot_retries + 1):
+                    try:
+                        response = requests.get(url, timeout=max(self.timeout, 45), headers=headers, allow_redirects=False)
+                        if response.status_code in (429, 500, 502, 503, 504):
+                            retry_after = response.headers.get("Retry-After")
+                            delay = float(retry_after) if retry_after and retry_after.replace('.', '', 1).isdigit() else self.snapshot_retry_backoff * attempt
+                            raise requests.HTTPError(f"transient_http_{response.status_code}", response=response)
+                        response.raise_for_status()
+                        # Exact PIT evidence must not be accepted if the archive redirected us.
+                        if response.is_redirect or response.is_permanent_redirect:
+                            raise requests.HTTPError("unexpected_redirect_from_exact_capture", response=response)
+                        candidate = response.content
+                        # Reject obvious HTML/WAYBACK error pages before caching/parsing.
+                        head = candidate[:512].lstrip().lower()
+                        if head.startswith(b"<!doctype html") or b"wayback machine" in head and b"error" in head:
+                            raise requests.HTTPError("wayback_html_error_page", response=response)
+                        raw = candidate
+                        break
+                    except (requests.RequestException, OSError) as exc:
+                        last_error = exc
+                        if attempt < self.snapshot_retries:
+                            time.sleep(self.snapshot_retry_backoff * attempt)
+                if raw is not None:
+                    break
+
+        if raw is None:
+            diag = SnapshotDiagnostic(
+                "SNAPSHOT_DOWNLOAD_FAILURE",
+                error_type=type(last_error).__name__ if last_error else "UnknownError",
+                error=f"after_{self.snapshot_retries}_attempts_per_variant: {last_error}",
+            )
+            self._snapshot_diag[identity] = diag
+            return diag
+
+        try:
+            frame = pd.read_csv(BytesIO(raw))
+        except (ValueError, pd.errors.ParserError, UnicodeDecodeError) as exc:
+            diag = SnapshotDiagnostic("SNAPSHOT_PARSE_FAILURE", error_type=type(exc).__name__, error=str(exc))
+            self._snapshot_diag[identity] = diag
+            return diag
+
+        required = {"Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "FTR"}
+        if not required.issubset(frame.columns):
+            diag = SnapshotDiagnostic(
+                "SNAPSHOT_SCHEMA_FAILURE",
+                error_type="MissingColumns",
+                error=",".join(sorted(required - set(frame.columns))),
+            )
+            self._snapshot_diag[identity] = diag
+            return diag
+
+        keys = set()
+        for r in frame.itertuples(index=False):
+            date = self._date_key(getattr(r, "Date", None))
+            if date is None:
+                continue
+            try:
+                keys.add((
+                    date,
+                    str(getattr(r, "HomeTeam")).strip(),
+                    str(getattr(r, "AwayTeam")).strip(),
+                    float(getattr(r, "FTHG")),
+                    float(getattr(r, "FTAG")),
+                    str(getattr(r, "FTR")).strip(),
+                ))
+            except (TypeError, ValueError):
+                continue
+
+        try:
+            if not cache.exists():
+                cache.write_bytes(raw)
+        except OSError:
+            pass
+        diag = SnapshotDiagnostic("SNAPSHOT_PARSED", keys=keys)
+        self._snapshot_diag[identity] = diag
+        return diag
+
     def diagnostic_bulk(self, history: pd.DataFrame) -> pd.DataFrame:
         rows = []
         if history.empty:
@@ -107,9 +231,7 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
         if "season_start" in work.columns:
             work["season_start"] = pd.to_numeric(work["season_start"], errors="coerce")
 
-        for (competition, start_year), group in work.groupby(
-            ["competition", "season_start"], dropna=False
-        ):
+        for (competition, start_year), group in work.groupby(["competition", "season_start"], dropna=False):
             try:
                 url = source_url(str(competition), int(start_year))
                 diag = self.capture_diagnostic(url)
@@ -146,16 +268,16 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
 
 
 def competition_adapter_matrix() -> pd.DataFrame:
-    rows = []
-    for competition, spec in COMPETITION_ADAPTERS.items():
-        rows.append({
+    return pd.DataFrame([
+        {
             "competition": competition,
             "source": spec.get("source"),
             "source_code": spec.get("source_code"),
             "adapter": spec.get("adapter"),
             "status": "IMPLEMENTED" if spec.get("adapter") else "UNVERIFIED",
-        })
-    return pd.DataFrame(rows)
+        }
+        for competition, spec in COMPETITION_ADAPTERS.items()
+    ])
 
 
 def build_pit_diagnostic(history: pd.DataFrame, **kwargs) -> pd.DataFrame:
