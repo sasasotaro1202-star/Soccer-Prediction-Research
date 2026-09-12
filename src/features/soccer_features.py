@@ -1,82 +1,136 @@
 from __future__ import annotations
 
+from collections import defaultdict, deque
+
 import numpy as np
 import pandas as pd
 
 from src.data.pit_policy import is_available_by_cutoff, result_feature_available_at
 
+ELO_K = 20.0
+ELO_HOME_ADV = 55.0
 
-def _state(history: pd.DataFrame, team: str, cutoff: pd.Timestamp, window: int = 5) -> dict[str, float]:
-    h = history[(history.home_team == team) | (history.away_team == team)].copy()
-    h = h[h.kickoff_utc < cutoff].sort_values("kickoff_utc")
-    # Only results whose conservative deterministic availability time has passed
-    # may enter the state. No archive retrieval timestamp is treated as source time.
-    h = h[h["kickoff_utc"].map(lambda x: is_available_by_cutoff(x, cutoff))].tail(window)
-    base = {"games": 0, "gf": np.nan, "ga": np.nan, "points": np.nan, "gd": np.nan, "pit_ok": 0.0}
-    if len(h) < window:
-        return base
 
-    gf, ga, pts = [], [], []
-    for r in h.itertuples():
-        home = r.home_team == team
-        f = r.home_goals if home else r.away_goals
-        a = r.away_goals if home else r.home_goals
-        gf.append(float(f))
-        ga.append(float(a))
-        pts.append(3 if f > a else 1 if f == a else 0)
+def _result_available(ts: pd.Timestamp, cutoff: pd.Timestamp) -> bool:
+    return bool(is_available_by_cutoff(ts, cutoff))
+
+
+def _team_result(row, team: str) -> tuple[float, float, int, str, float]:
+    home = row.home_team == team
+    gf = float(row.home_goals if home else row.away_goals)
+    ga = float(row.away_goals if home else row.home_goals)
+    pts = 3 if gf > ga else 1 if gf == ga else 0
+    venue = "H" if home else "A"
+    return gf, ga, pts, venue, gf - ga
+
+
+def _ewma(values: list[float], alpha: float = 0.35) -> float:
+    if not values:
+        return np.nan
+    out = float(values[0])
+    for v in values[1:]:
+        out = alpha * float(v) + (1.0 - alpha) * out
+    return out
+
+
+def _summarize(games: deque, window: int) -> dict[str, float]:
+    recent = list(games)[-window:]
+    if not recent:
+        return {"games": 0.0, "gf": np.nan, "ga": np.nan, "points": np.nan, "gd": np.nan,
+                "win_rate": np.nan, "draw_rate": np.nan, "loss_rate": np.nan,
+                "gf_ewma": np.nan, "ga_ewma": np.nan, "gd_std": np.nan, "home_rate": np.nan}
+    gf = [x["gf"] for x in recent]
+    ga = [x["ga"] for x in recent]
+    pts = [x["points"] for x in recent]
+    gd = [x["gd"] for x in recent]
     return {
-        "games": len(h),
-        "gf": np.mean(gf),
-        "ga": np.mean(ga),
-        "points": np.mean(pts),
-        "gd": np.mean(np.array(gf) - np.array(ga)),
-        "pit_ok": 1.0,
+        "games": float(len(recent)), "gf": float(np.mean(gf)), "ga": float(np.mean(ga)),
+        "points": float(np.mean(pts)), "gd": float(np.mean(gd)),
+        "win_rate": float(np.mean([p == 3 for p in pts])),
+        "draw_rate": float(np.mean([p == 1 for p in pts])),
+        "loss_rate": float(np.mean([p == 0 for p in pts])),
+        "gf_ewma": _ewma(gf), "ga_ewma": _ewma(ga),
+        "gd_std": float(np.std(gd)) if len(gd) > 1 else 0.0,
+        "home_rate": float(np.mean([x["venue"] == "H" for x in recent])),
     }
 
 
-def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(3, 5, 10)) -> pd.DataFrame:
-    """Build leakage-safe features using a conservative result-availability policy."""
-    history = history.copy().sort_values("kickoff_utc")
-    rows = []
-    for r in matches.sort_values("kickoff_utc").itertuples():
-        kickoff = pd.Timestamp(r.kickoff_utc)
-        cutoff = kickoff - pd.to_timedelta(60, unit="min")
+def _update_elo(elo: dict, home: str, away: str, result: int, competition: str) -> None:
+    actual = 1.0 if result == 0 else 0.5 if result == 1 else 0.0
+    he = float(elo["global"].get(home, 1500.0)); ae = float(elo["global"].get(away, 1500.0))
+    expected = 1.0 / (1.0 + 10.0 ** (-(he + ELO_HOME_ADV - ae) / 400.0))
+    delta = ELO_K * (actual - expected)
+    elo["global"][home] = he + delta; elo["global"][away] = ae - delta
+    ce = elo["competition"].setdefault(competition, {})
+    che = float(ce.get(home, 1500.0)); cae = float(ce.get(away, 1500.0))
+    expected_c = 1.0 / (1.0 + 10.0 ** (-(che + ELO_HOME_ADV - cae) / 400.0))
+    delta_c = ELO_K * (actual - expected_c)
+    ce[home] = che + delta_c; ce[away] = cae - delta_c
+
+
+def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(3, 5, 10, 20)) -> pd.DataFrame:
+    """Build chronological, leakage-safe features using a conservative 24h result lag."""
+    h = history.copy(); h["kickoff_utc"] = pd.to_datetime(h["kickoff_utc"], utc=True, errors="coerce")
+    h = h.dropna(subset=["kickoff_utc"]).sort_values(["kickoff_utc", "competition", "home_team", "away_team", "match_id"], kind="mergesort").reset_index(drop=True)
+    m = matches.copy(); m["kickoff_utc"] = pd.to_datetime(m["kickoff_utc"], utc=True, errors="coerce")
+    m = m.dropna(subset=["kickoff_utc"]).sort_values(["kickoff_utc", "competition", "home_team", "away_team", "match_id"], kind="mergesort").reset_index(drop=True)
+
+    team_games: dict[str, deque] = defaultdict(lambda: deque(maxlen=40))
+    team_last: dict[str, pd.Timestamp] = {}
+    h2h: dict[tuple[str, str], deque] = defaultdict(lambda: deque(maxlen=10))
+    elo = {"global": {}, "competition": {}}
+    ptr = 0; rows = []
+
+    def ingest_until(cutoff: pd.Timestamp) -> None:
+        nonlocal ptr
+        while ptr < len(h):
+            r = h.iloc[ptr]; event = r.kickoff_utc
+            if event >= cutoff or not _result_available(event, cutoff):
+                break
+            if pd.isna(r.home_goals) or pd.isna(r.away_goals):
+                ptr += 1; continue
+            home, away = str(r.home_team), str(r.away_team)
+            result = 0 if r.home_goals > r.away_goals else 1 if r.home_goals == r.away_goals else 2
+            _update_elo(elo, home, away, result, str(r.competition))
+            for team in (home, away):
+                gf, ga, pts, venue, gd = _team_result(r, team)
+                team_games[team].append({"time": event, "gf": gf, "ga": ga, "points": pts, "venue": venue, "gd": gd, "competition": str(r.competition)})
+                team_last[team] = event
+            h2h[(home, away)].append(result)
+            h2h[(away, home)].append(2 - result if result != 1 else 1)
+            ptr += 1
+
+    for r in m.itertuples():
+        kickoff = r.kickoff_utc; cutoff = kickoff - pd.Timedelta(minutes=60); ingest_until(cutoff)
+        home, away, comp = str(r.home_team), str(r.away_team), str(r.competition)
+        he = float(elo["global"].get(home, 1500.0)); ae = float(elo["global"].get(away, 1500.0))
+        ce = elo["competition"].get(comp, {}); hce = float(ce.get(home, 1500.0)); cae = float(ce.get(away, 1500.0))
         row = {
-            "match_id": r.match_id,
-            "competition": r.competition,
-            "season": r.season,
-            "kickoff_utc": r.kickoff_utc,
-            "home_team": r.home_team,
-            "away_team": r.away_team,
-            "prediction_cutoff_at_utc": cutoff,
+            "match_id": r.match_id, "competition": comp, "season": r.season, "season_start": getattr(r, "season_start", np.nan),
+            "kickoff_utc": kickoff, "home_team": home, "away_team": away, "prediction_cutoff_at_utc": cutoff,
+            "home_advantage": 1.0, "home_elo": he, "away_elo": ae, "elo_diff": he - ae,
+            "home_comp_elo": hce, "away_comp_elo": cae, "comp_elo_diff": hce - cae,
+            "home_elo_expected": 1.0 / (1.0 + 10.0 ** (-((he + ELO_HOME_ADV) - ae) / 400.0)),
+            "home_rest_hours": (cutoff - team_last[home]).total_seconds() / 3600.0 if home in team_last else np.nan,
+            "away_rest_hours": (cutoff - team_last[away]).total_seconds() / 3600.0 if away in team_last else np.nan,
         }
-        prior = history[history.kickoff_utc < kickoff]
-        pit_flags = []
-        source_times = []
         for w in windows:
-            hs = _state(prior, r.home_team, cutoff, w)
-            aws = _state(prior, r.away_team, cutoff, w)
-            for k, v in hs.items():
-                row[f"home_{k}_{w}"] = v
-            for k, v in aws.items():
-                row[f"away_{k}_{w}"] = v
-            pit_flags.extend([hs["pit_ok"], aws["pit_ok"]])
-
-            for team in (r.home_team, r.away_team):
-                team_rows = prior[(prior.home_team == team) | (prior.away_team == team)].copy()
-                team_rows = team_rows[team_rows["kickoff_utc"].map(lambda x: is_available_by_cutoff(x, cutoff))]
-                team_rows = team_rows.sort_values("kickoff_utc").tail(w)
-                if len(team_rows) == w:
-                    times = team_rows["kickoff_utc"].map(result_feature_available_at)
-                    source_times.append(times.max())
-
-        row["home_gd_5_minus_away_gd_5"] = row.get("home_gd_5", np.nan) - row.get("away_gd_5", np.nan)
-        row["home_points_5_minus_away_points_5"] = row.get("home_points_5", np.nan) - row.get("away_points_5", np.nan)
-        row["home_advantage"] = 1.0
-        row["feature_source_max_available_at_utc"] = max(source_times) if source_times else pd.NaT
-        # PIT is determined from the conservative availability policy, not from
-        # whether an archive download happened to succeed.
-        row["pit_verified"] = bool(pit_flags) and all(flag == 1.0 for flag in pit_flags)
+            hs = _summarize(team_games[home], w); aws = _summarize(team_games[away], w)
+            for k, v in hs.items(): row[f"home_{k}_{w}"] = v
+            for k, v in aws.items(): row[f"away_{k}_{w}"] = v
+            row[f"gf_diff_{w}"] = hs["gf"] - aws["gf"]
+            row[f"ga_diff_{w}"] = hs["ga"] - aws["ga"]
+            row[f"points_diff_{w}"] = hs["points"] - aws["points"]
+            row[f"win_rate_diff_{w}"] = hs["win_rate"] - aws["win_rate"]
+        meetings = list(h2h[(home, away)])[-5:]
+        row["h2h_games_5"] = float(len(meetings))
+        row["h2h_home_win_rate_5"] = float(np.mean([x == 0 for x in meetings])) if meetings else np.nan
+        row["h2h_draw_rate_5"] = float(np.mean([x == 1 for x in meetings])) if meetings else np.nan
+        row["h2h_away_win_rate_5"] = float(np.mean([x == 2 for x in meetings])) if meetings else np.nan
+        row["h2h_points_edge_5"] = float(np.mean([3 if x == 0 else 1 if x == 1 else 0 for x in meetings]) - np.mean([3 if x == 2 else 1 if x == 1 else 0 for x in meetings])) if meetings else np.nan
+        available_times = [result_feature_available_at(team_last[t]) for t in (home, away) if t in team_last]
+        row["feature_source_max_available_at_utc"] = max(available_times) if available_times else pd.NaT
+        row["pit_verified"] = bool(available_times) and all(_result_available(team_last[t], cutoff) for t in (home, away) if t in team_last)
         rows.append(row)
     return pd.DataFrame(rows)
 
