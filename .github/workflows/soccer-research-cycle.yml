@@ -16,6 +16,10 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OPENAI_RESEARCH_MODEL: gpt-5.6-luna
       PYTHONPATH: .
+      # CI first performs a deterministic PIT audit (1 row per competition/season)
+      # so a full 42k-row Wayback replay cannot consume the entire job timeout.
+      # Full replay remains the default when this variable is unset/0.
+      PIT_REPLAY_ROWS_PER_GROUP: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
