@@ -19,6 +19,7 @@ on:
       - "src/data/pit_source_adapter_v2.py"
       - "src/data/pit_source_adapter_fast.py"
       - "src/data/football_data.py"
+      - "src/research/pit_replay_audit.py"
       - "tests/test_pit_source_adapter.py"
       - ".github/workflows/pit-replay-audit.yml"
 
@@ -61,4 +62,3 @@ jobs:
           name: soccer-pit-audit-${{ github.run_id }}
           path: artifacts/pit-audit/
           retention-days: 30
-# Re-audit trigger after resilient snapshot retry hardening.
