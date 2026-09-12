@@ -3,16 +3,17 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from src.data.pit_policy import is_available_by_cutoff, result_feature_available_at
+
 
 def _state(history: pd.DataFrame, team: str, cutoff: pd.Timestamp, window: int = 5) -> dict[str, float]:
     h = history[(history.home_team == team) | (history.away_team == team)].copy()
-    h = h[h.kickoff_utc < cutoff].sort_values("kickoff_utc").tail(window)
+    h = h[h.kickoff_utc < cutoff].sort_values("kickoff_utc")
+    # Only results whose conservative deterministic availability time has passed
+    # may enter the state. No archive retrieval timestamp is treated as source time.
+    h = h[h["kickoff_utc"].map(lambda x: is_available_by_cutoff(x, cutoff))].tail(window)
     base = {"games": 0, "gf": np.nan, "ga": np.nan, "points": np.nan, "gd": np.nan, "pit_ok": 0.0}
     if len(h) < window:
-        return base
-
-    availability = pd.to_datetime(h.get("source_available_at_utc"), utc=True, errors="coerce")
-    if availability.isna().any() or (availability > cutoff).any():
         return base
 
     gf, ga, pts = [], [], []
@@ -34,7 +35,7 @@ def _state(history: pd.DataFrame, team: str, cutoff: pd.Timestamp, window: int =
 
 
 def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(3, 5, 10)) -> pd.DataFrame:
-    """Build features using only past results whose source was available by cutoff."""
+    """Build leakage-safe features using a conservative result-availability policy."""
     history = history.copy().sort_values("kickoff_utc")
     rows = []
     for r in matches.sort_values("kickoff_utc").itertuples():
@@ -62,22 +63,19 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
             pit_flags.extend([hs["pit_ok"], aws["pit_ok"]])
 
             for team in (r.home_team, r.away_team):
-                team_rows = prior[(prior.home_team == team) | (prior.away_team == team)].sort_values("kickoff_utc").tail(w)
+                team_rows = prior[(prior.home_team == team) | (prior.away_team == team)].copy()
+                team_rows = team_rows[team_rows["kickoff_utc"].map(lambda x: is_available_by_cutoff(x, cutoff))]
+                team_rows = team_rows.sort_values("kickoff_utc").tail(w)
                 if len(team_rows) == w:
-                    times = pd.to_datetime(team_rows.get("source_available_at_utc"), utc=True, errors="coerce")
-                    if not times.isna().any() and (times <= cutoff).all():
-                        source_times.append(times.max())
+                    times = team_rows["kickoff_utc"].map(result_feature_available_at)
+                    source_times.append(times.max())
 
-        # Matchup features are emitted only when the requested 5-game window exists.
-        # This keeps custom test/research windows from raising unrelated KeyErrors.
-        if "home_gd_5" in row and "away_gd_5" in row:
-            row["home_gd_5_minus_away_gd_5"] = row["home_gd_5"] - row["away_gd_5"]
-            row["home_points_5_minus_away_points_5"] = row["home_points_5"] - row["away_points_5"]
-        else:
-            row["home_gd_5_minus_away_gd_5"] = np.nan
-            row["home_points_5_minus_away_points_5"] = np.nan
+        row["home_gd_5_minus_away_gd_5"] = row.get("home_gd_5", np.nan) - row.get("away_gd_5", np.nan)
+        row["home_points_5_minus_away_points_5"] = row.get("home_points_5", np.nan) - row.get("away_points_5", np.nan)
         row["home_advantage"] = 1.0
         row["feature_source_max_available_at_utc"] = max(source_times) if source_times else pd.NaT
+        # PIT is determined from the conservative availability policy, not from
+        # whether an archive download happened to succeed.
         row["pit_verified"] = bool(pit_flags) and all(flag == 1.0 for flag in pit_flags)
         rows.append(row)
     return pd.DataFrame(rows)
