@@ -15,6 +15,22 @@ from src.data.pit_source_adapter_v2 import (
 class FootballDataWaybackAdapter(_BaseAdapter):
     """Optimized PIT replay: digest-deduplicated chronological snapshot scan."""
 
+    @staticmethod
+    def _with_season_start(history):
+        """Normalize acquisition history so season_start is always available."""
+        work = history.copy()
+        if "season_start" not in work.columns:
+            if "season" in work.columns:
+                work["season_start"] = pd.to_numeric(
+                    work["season"].astype(str).str.extract(r"(\d{4})", expand=False),
+                    errors="coerce",
+                ).astype("Int64")
+            else:
+                work["season_start"] = pd.Series(pd.NA, index=work.index, dtype="Int64")
+        else:
+            work["season_start"] = pd.to_numeric(work["season_start"], errors="coerce").astype("Int64")
+        return work
+
     def _prefetch_url(self, url, rows, workers=None):
         if not rows:
             return []
@@ -43,11 +59,24 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                 continue
             digest = capture.get("digest") or f"{capture.get('timestamp','')}|{capture.get('original','')}"
             previous = unique.get(digest)
-            if previous is None or ts < _utc(previous.get("timestamp")):
+            if previous is None:
                 unique[digest] = capture
+            else:
+                previous_ts = _utc(previous.get("timestamp"))
+                if previous_ts is None or ts < previous_ts:
+                    unique[digest] = capture
+
         candidates = sorted(unique.values(), key=lambda c: c.get("timestamp", ""))
         if not candidates:
-            return [SourceEvidence(None, "UNVERIFIABLE", reason=f"captures_exist_but_no_capture_after_result_lower_bound:{reason}") for _, reason in bounds]
+            reasons = ";".join(sorted(set(reason for _, reason in bounds)))
+            return [
+                SourceEvidence(
+                    None,
+                    "UNVERIFIABLE",
+                    reason=f"captures_exist_but_no_capture_after_result_lower_bound:{reasons}",
+                )
+                for _ in rows
+            ]
 
         def fetch(capture):
             return capture, self._load_snapshot_keys(capture, url)
@@ -92,21 +121,18 @@ class FootballDataWaybackAdapter(_BaseAdapter):
             results[i] = SourceEvidence(None, "UNVERIFIABLE", reason=reason)
         return results
 
+    def apply_bulk(self, history):
+        """Apply PIT evidence while accepting either season_start or season."""
+        if history is None or history.empty:
+            return history.copy() if history is not None else history
+        return super().apply_bulk(self._with_season_start(history))
+
     def diagnostic_bulk(self, history):
         """Build CDX diagnostics without requiring a precomputed season_start column."""
         if history is None or history.empty:
-            return pd.DataFrame(columns=["competition", "season_start", "url", "status", "capture_count", "error_type", "error"])
+            return pd.DataFrame(columns=["competition", "season_start", "url", "status", "capture_count", "error_type", "error", "cdx_status", "failure_stage", "failure_reason"])
 
-        work = history.copy()
-        if "season_start" not in work.columns:
-            if "season" not in work.columns:
-                work["season_start"] = pd.NA
-            else:
-                work["season_start"] = pd.to_numeric(
-                    work["season"].astype(str).str.extract(r"(\d{4})", expand=False),
-                    errors="coerce",
-                ).astype("Int64")
-
+        work = self._with_season_start(history)
         rows = []
         for (competition, start_year), _group in work.groupby(["competition", "season_start"], dropna=False):
             try:
@@ -114,6 +140,9 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                     raise ValueError("missing season_start")
                 url = source_url(str(competition), int(start_year))
                 diag = self.capture_diagnostic(url)
+                cdx_status = diag.status
+                failure_stage = cdx_status if cdx_status != "CDX_CAPTURE_FOUND" else ""
+                failure_reason = diag.error or ("no archive capture" if cdx_status == "CDX_NO_CAPTURE" else "")
                 rows.append({
                     "competition": competition,
                     "season_start": int(start_year),
@@ -122,16 +151,23 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                     "capture_count": diag.capture_count,
                     "error_type": diag.error_type,
                     "error": diag.error,
+                    "cdx_status": cdx_status,
+                    "failure_stage": failure_stage,
+                    "failure_reason": failure_reason,
                 })
             except Exception as exc:
+                reason = str(exc)
                 rows.append({
                     "competition": competition,
                     "season_start": start_year,
                     "url": None,
-                    "status": "ADAPTER_MAPPING_FAILURE" if not isinstance(exc, requests.RequestException) else "CDX_REQUEST_FAILURE",
+                    "status": "ADAPTER_MAPPING_FAILURE",
                     "capture_count": 0,
                     "error_type": type(exc).__name__,
-                    "error": str(exc),
+                    "error": reason,
+                    "cdx_status": "NOT_ATTEMPTED",
+                    "failure_stage": "ADAPTER_MAPPING_FAILURE",
+                    "failure_reason": reason,
                 })
         return pd.DataFrame(rows)
 
