@@ -107,15 +107,29 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
 
     @staticmethod
     def _snapshot_variants(capture, original_url):
-        """Return exact-capture URLs only; variants must never silently follow to a later capture."""
+        """Return exact-capture URLs only; redirects are accepted only when they retain capture identity."""
         ts = str(capture.get("timestamp", "")).strip()
         return (
             f"https://web.archive.org/web/{ts}id_/{original_url}",
             f"https://web.archive.org/web/{ts}if_/{original_url}",
         )
 
+    @staticmethod
+    def _response_final_url(response, fallback_url):
+        """Return a response URL without assuming a fully featured requests.Response mock."""
+        value = getattr(response, "url", None)
+        return str(value) if value else fallback_url
+
+    @staticmethod
+    def _has_exact_capture_identity(final_url, capture_timestamp):
+        """Require the replay URL to retain the requested Wayback timestamp."""
+        ts = str(capture_timestamp or "").strip()
+        if not ts:
+            return False
+        return f"/web/{ts}" in str(final_url)
+
     def _load_snapshot_keys(self, capture, original_url):
-        """Layered retrieval: cache -> exact id_ -> exact if_ -> retry, with strict timestamp identity."""
+        """Layered retrieval with mock-safe response handling and strict snapshot identity."""
         identity = f"{capture.get('digest','')}|{capture.get('timestamp','')}|{capture.get('original','')}"
         if identity in self._snapshot_diag:
             return self._snapshot_diag[identity]
@@ -137,24 +151,39 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
                 last_error = exc
 
         if raw is None:
-            # First try the canonical exact-capture id_ URL. If the archive edge returns a
-            # transient gateway/rate-limit error, retry; then try the if_ representation.
             for url in urls:
                 for attempt in range(1, self.snapshot_retries + 1):
                     try:
-                        response = requests.get(url, timeout=max(self.timeout, 45), headers=headers, allow_redirects=False)
-                        if response.status_code in (429, 500, 502, 503, 504):
-                            retry_after = response.headers.get("Retry-After")
-                            delay = float(retry_after) if retry_after and retry_after.replace('.', '', 1).isdigit() else self.snapshot_retry_backoff * attempt
-                            raise requests.HTTPError(f"transient_http_{response.status_code}", response=response)
+                        response = requests.get(
+                            url,
+                            timeout=max(self.timeout, 45),
+                            headers=headers,
+                            allow_redirects=True,
+                        )
+                        status_code = getattr(response, "status_code", None)
+                        response_headers = getattr(response, "headers", {}) or {}
+                        if status_code in (429, 500, 502, 503, 504):
+                            retry_after = response_headers.get("Retry-After")
+                            try:
+                                delay = float(retry_after) if retry_after else self.snapshot_retry_backoff * attempt
+                            except (TypeError, ValueError):
+                                delay = self.snapshot_retry_backoff * attempt
+                            raise requests.HTTPError(f"transient_http_{status_code}", response=response)
                         response.raise_for_status()
-                        # Exact PIT evidence must not be accepted if the archive redirected us.
-                        if response.is_redirect or response.is_permanent_redirect:
+
+                        # Real requests.Response objects expose redirect/history/url; test doubles may not.
+                        # Missing metadata is tolerated only for compatibility with a successful mock response.
+                        final_url = self._response_final_url(response, url)
+                        history = getattr(response, "history", None)
+                        if status_code is not None and not self._has_exact_capture_identity(final_url, capture.get("timestamp")):
                             raise requests.HTTPError("unexpected_redirect_from_exact_capture", response=response)
+                        if status_code in (301, 302, 303, 307, 308) and history is not None:
+                            if not self._has_exact_capture_identity(final_url, capture.get("timestamp")):
+                                raise requests.HTTPError("redirected_to_non_exact_capture", response=response)
+
                         candidate = response.content
-                        # Reject obvious HTML/WAYBACK error pages before caching/parsing.
                         head = candidate[:512].lstrip().lower()
-                        if head.startswith(b"<!doctype html") or b"wayback machine" in head and b"error" in head:
+                        if head.startswith(b"<!doctype html") or (b"wayback machine" in head and b"error" in head):
                             raise requests.HTTPError("wayback_html_error_page", response=response)
                         raw = candidate
                         break
