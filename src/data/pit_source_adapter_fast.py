@@ -31,6 +31,23 @@ class FootballDataWaybackAdapter(_BaseAdapter):
             work["season_start"] = pd.to_numeric(work["season_start"], errors="coerce").astype("Int64")
         return work
 
+    @staticmethod
+    def _search_floor(row, conservative_bound):
+        """Return the earliest PIT-safe archive timestamp worth inspecting.
+
+        The normal completion bound remains kickoff+180m. If that misses a result,
+        a second pass may inspect captures from kickoff onward. A snapshot is only
+        accepted when it actually contains the completed result and its own archive
+        timestamp is >= kickoff, so this fallback does not invent an earlier
+        source-availability timestamp.
+        """
+        kickoff = _utc(row.get("kickoff_utc"))
+        if kickoff is None:
+            return conservative_bound
+        if bool(row.get("kickoff_time_available", False)):
+            return kickoff
+        return conservative_bound
+
     def _prefetch_url(self, url, rows, workers=None):
         if not rows:
             return []
@@ -42,20 +59,23 @@ class FootballDataWaybackAdapter(_BaseAdapter):
 
         row_keys = [_row_key(r) for r in rows]
         bounds = [_result_lower_bound(r) for r in rows]
-        unresolved = {k: i for i, k in enumerate(row_keys) if k is not None}
         results = [None] * len(rows)
+        unresolved = {k: i for i, k in enumerate(row_keys) if k is not None}
         if not unresolved:
             return [SourceEvidence(None, "UNVERIFIABLE", reason="missing_record_identity") for _ in rows]
 
         valid_bounds = [b for b, _ in bounds if b is not None]
         if not valid_bounds:
             return [SourceEvidence(None, "UNVERIFIABLE", reason="missing_event_time") for _ in rows]
-        min_bound = min(valid_bounds)
+        min_conservative_bound = min(valid_bounds)
+        search_bounds = [self._search_floor(r, b) for r, (b, _) in zip(rows, bounds)]
+        valid_search_bounds = [b for b in search_bounds if b is not None]
+        min_search_bound = min(valid_search_bounds) if valid_search_bounds else min_conservative_bound
 
         unique = {}
         for capture in captures:
             ts = _utc(capture.get("timestamp"))
-            if ts is None or ts < min_bound:
+            if ts is None or ts < min_search_bound:
                 continue
             digest = capture.get("digest") or f"{capture.get('timestamp','')}|{capture.get('original','')}"
             previous = unique.get(digest)
@@ -88,25 +108,50 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                 keysets.append(future.result())
         keysets.sort(key=lambda x: x[0].get("timestamp", ""))
 
-        for capture, diagnostic in keysets:
-            if not unresolved:
-                break
-            ts = _utc(capture.get("timestamp"))
-            if ts is None or diagnostic.keys is None:
-                continue
-            for key in diagnostic.keys.intersection(unresolved.keys()):
-                i = unresolved[key]
-                lower_bound, bound_reason = bounds[i]
-                if lower_bound is not None and ts >= lower_bound:
-                    results[i] = SourceEvidence(
-                        ts.isoformat(),
-                        "VERIFIED",
-                        self._snapshot_url(capture, url),
-                        capture.get("digest"),
-                        f"archived_completed_result_first_observed_after_{bound_reason.lower()}",
-                    )
-                    del unresolved[key]
+        def scan(allow_early_precise_capture=False):
+            for capture, diagnostic in keysets:
+                if not unresolved:
+                    break
+                ts = _utc(capture.get("timestamp"))
+                if ts is None or diagnostic.keys is None:
+                    continue
+                for key in diagnostic.keys.intersection(unresolved.keys()):
+                    i = unresolved[key]
+                    conservative_bound, bound_reason = bounds[i]
+                    if conservative_bound is None:
+                        continue
+                    accepted_bound = conservative_bound
+                    accepted_reason = bound_reason.lower()
+                    if allow_early_precise_capture and bool(rows[i].get("kickoff_time_available", False)):
+                        kickoff = _utc(rows[i].get("kickoff_utc"))
+                        if kickoff is not None and kickoff <= ts < conservative_bound:
+                            accepted_bound = kickoff
+                            accepted_reason = "kickoff"
+                    if ts >= accepted_bound:
+                        results[i] = SourceEvidence(
+                            ts.isoformat(),
+                            "VERIFIED",
+                            self._snapshot_url(capture, url),
+                            capture.get("digest"),
+                            f"archived_completed_result_first_observed_after_{accepted_reason}",
+                        )
+                        del unresolved[key]
 
+        # First use the original conservative completion rule.
+        scan(allow_early_precise_capture=False)
+        # If still unresolved, accept a completed result observed after the exact
+        # kickoff. The snapshot itself is the evidence that the result was already
+        # published, so this is PIT-safe and avoids assuming every match lasts 180m.
+        if unresolved:
+            scan(allow_early_precise_capture=True)
+
+        # Preserve detailed snapshot failure information instead of hiding it behind
+        # the generic "no snapshot" message.
+        snapshot_errors = sorted({
+            diagnostic.status
+            for _, diagnostic in keysets
+            if diagnostic.keys is None and diagnostic.status
+        })
         for i, value in enumerate(results):
             if value is not None:
                 continue
@@ -116,6 +161,8 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                 reason = "missing_record_identity"
             elif lower_bound is None:
                 reason = "missing_event_time"
+            elif snapshot_errors:
+                reason = "no_archive_snapshot_contains_completed_result:" + ",".join(snapshot_errors)
             else:
                 reason = "no_archive_snapshot_contains_completed_result"
             results[i] = SourceEvidence(None, "UNVERIFIABLE", reason=reason)
