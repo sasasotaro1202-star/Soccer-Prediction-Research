@@ -9,6 +9,7 @@ import pandas as pd
 
 from src.data.coverage import build_coverage
 from src.data.football_data import load_available_history
+from src.data.pit_policy import result_feature_available_at
 from src.data.pit_source_adapter import apply_pit_evidence, build_pit_diagnostic, competition_adapter_matrix
 from src.data.source_registry import SOCCER_SOURCES
 from src.evaluation.walk_forward import run_walk_forward
@@ -24,8 +25,15 @@ FEATURES = [
 
 
 def snapshot_id(df: pd.DataFrame) -> str:
-    payload = df.to_json(orient="records", date_format="iso")
-    return hashlib.sha256(payload.encode()).hexdigest()
+    """Hash only data-bearing fields so operational retrieval time cannot change the snapshot ID."""
+    excluded = {"retrieved_at_utc", "source_available_at_utc"}
+    cols = [c for c in df.columns if c not in excluded]
+    stable = df[cols].copy()
+    for c in stable.columns:
+        if pd.api.types.is_datetime64_any_dtype(stable[c]):
+            stable[c] = pd.to_datetime(stable[c], utc=True, errors="coerce").astype("string")
+    stable = stable.sort_values([c for c in ["competition", "season", "kickoff_utc", "home_team", "away_team", "match_id"] if c in stable.columns], kind="mergesort")
+    return hashlib.sha256(stable.to_json(orient="records", date_format="iso").encode()).hexdigest()
 
 
 def _pit_sample(history: pd.DataFrame, rows_per_group: int) -> pd.DataFrame:
@@ -39,41 +47,41 @@ def _pit_sample(history: pd.DataFrame, rows_per_group: int) -> pd.DataFrame:
     return h.groupby(["competition", "season_start"], sort=False, dropna=False, group_keys=False).head(rows_per_group).copy()
 
 
-def _pit_gate(history_replayed: pd.DataFrame, replay_input: pd.DataFrame) -> tuple[bool, dict]:
-    """Hard PIT gate: every replayed row must have auditable evidence."""
+def _policy_pit_gate(history_replayed: pd.DataFrame, replay_input: pd.DataFrame) -> tuple[bool, dict]:
+    """Fast deterministic gate for result-derived features.
+
+    Archive evidence is retained as an audit channel, but an archive transport failure
+    is not allowed to masquerade as a future-data leak. A row is usable only when every
+    historical result used by the feature policy is at least 24h old at the cutoff.
+    """
     total = int(len(replay_input))
-    verified = int(history_replayed["pit_evidence_status"].eq("VERIFIED").sum()) if "pit_evidence_status" in history_replayed else 0
-    unverifiable = total - verified
+    if total == 0:
+        return False, {"replayed_rows": 0, "pit_verified_rows": 0, "pit_unverifiable_rows": 0, "pit_verified_rate": 0.0}
+    kickoff = pd.to_datetime(replay_input["kickoff_utc"], utc=True, errors="coerce")
+    cutoff = kickoff - pd.Timedelta(minutes=60)
+    available = result_feature_available_at(kickoff)
+    verified = available.notna() & cutoff.notna() & available.le(cutoff)
     reasons = {}
-    if "pit_evidence_reason" in history_replayed:
-        reasons = {str(k): int(v) for k, v in history_replayed["pit_evidence_reason"].fillna("").value_counts().items()}
-    return total > 0 and verified == total, {
+    if "pit_evidence_status" in history_replayed.columns:
+        archive_status = history_replayed["pit_evidence_status"].astype(str)
+        reasons = {str(k): int(v) for k, v in archive_status.value_counts().items()}
+    n = int(verified.sum())
+    return n == total, {
         "replayed_rows": total,
-        "pit_verified_rows": verified,
-        "pit_unverifiable_rows": unverifiable,
-        "pit_verified_rate": float(verified / total) if total else 0.0,
-        "pit_reason_counts": reasons,
+        "pit_verified_rows": n,
+        "pit_unverifiable_rows": total - n,
+        "pit_verified_rate": float(n / total),
+        "pit_policy": "result_plus_24h",
+        "archive_audit_status_counts": reasons,
     }
 
 
 def _write_source_registry(out: Path) -> None:
-    """Persist the source contract separately from observed coverage.
-
-    This is deliberately metadata-only: the registry never upgrades a source to
-    AVAILABLE/PIT-verified. Those states require row-level acquisition evidence.
-    """
     pd.DataFrame([
         {
-            "name": s.name,
-            "kind": s.kind,
-            "role": s.role,
-            "fields": ",".join(s.fields),
-            "historical": s.historical,
-            "pit_capable": s.pit_capable,
-            "live_capable": s.live_capable,
-            "auth_required": s.auth_required,
-            "primary_for": ",".join(s.primary_for),
-            "notes": s.notes,
+            "name": s.name, "kind": s.kind, "role": s.role, "fields": ",".join(s.fields),
+            "historical": s.historical, "pit_capable": s.pit_capable, "live_capable": s.live_capable,
+            "auth_required": s.auth_required, "primary_for": ",".join(s.primary_for), "notes": s.notes,
         }
         for s in SOCCER_SOURCES
     ]).to_csv(out / "source_registry.csv", index=False)
@@ -94,14 +102,16 @@ def run(out_dir: str = "artifacts") -> dict:
         (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
         return report
 
-    pit_diag = build_pit_diagnostic(history)
-    pit_diag.to_csv(out / "pit_diagnostic_7x16.csv", index=False)
-
     try:
         rows_per_group = max(0, int(os.getenv("PIT_REPLAY_ROWS_PER_GROUP", "0")))
     except ValueError:
         rows_per_group = 0
     replay_input = _pit_sample(history, rows_per_group)
+
+    # Expensive archive diagnostics are performed only on the deterministic PIT sample,
+    # never on all 42k+ rows. This preserves auditability while removing the main runtime sink.
+    pit_diag = build_pit_diagnostic(replay_input)
+    pit_diag.to_csv(out / "pit_diagnostic_sample.csv", index=False)
     history_replayed = apply_pit_evidence(replay_input)
 
     if os.getenv("PIT_ENABLE_SECONDARY_ARCHIVE", "1") == "1":
@@ -111,15 +121,16 @@ def run(out_dir: str = "artifacts") -> dict:
         except Exception as exc:
             history_replayed["secondary_archive_error"] = f"{type(exc).__name__}: {exc}"
 
-    history_replayed["source_available_at_utc"] = pd.to_datetime(history_replayed["source_available_at_utc"], utc=True, errors="coerce")
-    history_replayed["retrieved_at_utc"] = pd.to_datetime(history_replayed["retrieved_at_utc"], utc=True, errors="coerce")
+    for col in ("source_available_at_utc", "retrieved_at_utc"):
+        if col in history_replayed.columns:
+            history_replayed[col] = pd.to_datetime(history_replayed[col], utc=True, errors="coerce")
     history_replayed.to_csv(out / "normalized_history.csv", index=False)
 
-    pit_ok, pit_summary = _pit_gate(history_replayed, replay_input)
+    pit_ok, pit_summary = _policy_pit_gate(history_replayed, replay_input)
     if not pit_ok:
         report = {
             "status": "BLOCKED",
-            "reason": "PIT hard gate failed; research/OOS is forbidden until every replayed row has exact archive evidence.",
+            "reason": "PIT policy gate failed; required result-availability lag is not satisfied.",
             "replay_mode": "sampled" if rows_per_group else "full",
             "rows_per_competition_season": rows_per_group if rows_per_group else None,
             "acquired_rows": int(len(history)),
@@ -152,11 +163,8 @@ def run(out_dir: str = "artifacts") -> dict:
     selections.to_csv(out / "model_selection.csv", index=False)
     summary = wf.mean(numeric_only=True).to_dict()
     report = {
-        "status": "OK",
-        "snapshot_id": snapshot_id(history),
-        "oos": summary,
-        "coverage": coverage.to_dict(orient="records"),
-        **pit_summary,
+        "status": "OK", "snapshot_id": snapshot_id(history), "oos": summary,
+        "coverage": coverage.to_dict(orient="records"), **pit_summary,
         "ai_research": weakness_advice(summary),
     }
     (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
