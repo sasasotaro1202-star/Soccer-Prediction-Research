@@ -16,6 +16,8 @@ from src.data.pit_source_adapter_v2 import (
 class FootballDataWaybackAdapter(_BaseAdapter):
     """Optimized PIT replay with resilient Wayback snapshot retrieval."""
 
+    _date_key = staticmethod(_date_key)
+
     def __init__(self, *args, snapshot_retries: int = 4, retry_backoff: float = 1.5, **kwargs):
         super().__init__(*args, **kwargs)
         self.snapshot_retries = max(1, int(snapshot_retries))
