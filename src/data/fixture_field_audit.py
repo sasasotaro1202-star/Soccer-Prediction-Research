@@ -52,25 +52,19 @@ def pit_audit(field_rows):
 
 def _season_key(comp,year):
     if comp in {"J1","J2","J3","FRI"}: return str(year)
-    return f"{year}/{str(year+1)[-2:] }"
+    return f"{year}/{str(year+1)[-2:]}"
 
 def coverage_matrix(history,field_rows,acquisition=None,config=AuditConfig()):
     rows=[]
     observed=set(history["competition"].dropna().astype(str)) if not history.empty else set()
-    # Always materialize every requested competition x season cell. A zero-row
-    # cell is a measured audit state, never an inferred zero-data claim.
     for comp in TARGET_COMPETITIONS:
         for year in range(config.start_year,config.end_year+1):
             season=_season_key(comp,year)
             ch=history[(history["competition"].astype(str)==comp) & (history["season"].astype(str)==season)] if not history.empty else pd.DataFrame()
-            if len(ch):
-                status="AVAILABLE"; reason="Observed parseable fixture rows from current adapter"
-            elif comp not in observed:
-                status="UNAVAILABLE"; reason="No data elsewhere has been established by this adapter audit; absence is not a global no-data claim."
-            elif comp=="J3" and year<2014:
-                status="NOT_APPLICABLE"; reason="J3 did not exist in this season cell"
-            else:
-                status="COVERAGE_GAP"; reason="Target season cell has no observed fixture rows from current adapter"
+            if len(ch): status="AVAILABLE"; reason="Observed parseable fixture rows from current adapter"
+            elif comp=="J3" and year<2014: status="NOT_APPLICABLE"; reason="J3 did not exist in this season cell"
+            elif comp not in observed: status="UNAVAILABLE"; reason="No data elsewhere has been established by this adapter audit; absence is not a global no-data claim."
+            else: status="COVERAGE_GAP"; reason="Target season cell has no observed fixture rows from current adapter"
             rows.append({"competition":comp,"competition_name":COMPETITION_NAMES[comp],"season":season,"source":"current_observed_adapter","field":"__FIXTURE_CELL__","status":status,"fixture_count":int(len(ch)),"reason":reason})
     if acquisition is not None and not acquisition.empty:
         for _,r in acquisition.iterrows():
