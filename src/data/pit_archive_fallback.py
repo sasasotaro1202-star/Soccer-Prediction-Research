@@ -6,6 +6,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from io import BytesIO
+from urllib.parse import urlparse
 
 import pandas as pd
 import requests
@@ -53,7 +54,7 @@ def _keyset(raw: bytes):
 
 
 def _normalise_cdx_payload(payload):
-    """Parse list-shaped and wrapped JSON safely; never slice a mapping."""
+    """Parse all known CDX JSON shapes without ever slicing a mapping."""
     if isinstance(payload, list):
         if not payload:
             return []
@@ -63,9 +64,13 @@ def _normalise_cdx_payload(payload):
         names = [str(x) for x in header]
         return [dict(zip(names, row)) for row in payload[1:] if isinstance(row, (list, tuple))]
     if isinstance(payload, dict):
-        for key in ("data", "results", "captures"):
+        for key in ("data", "results", "captures", "rows"):
             value = payload.get(key)
             if isinstance(value, list):
+                if not value:
+                    return []
+                if isinstance(value[0], dict):
+                    return [dict(x) for x in value if isinstance(x, dict)]
                 return _normalise_cdx_payload(value)
     return []
 
@@ -88,12 +93,18 @@ def _fetch_capture(capture: dict, original_url: str, retries: int = 2, timeout: 
     if not ts:
         return None
     replay_url = f"{ARQUIVO_WEB}/{ts}/{original_url}"
+    expected_prefix = f"/wayback/{ts}"
     for attempt in range(max(1, retries)):
         try:
             r = requests.get(replay_url, timeout=timeout, allow_redirects=True, headers={"User-Agent": USER_AGENT, "Accept": "text/csv,text/plain,*/*"})
             r.raise_for_status()
+            final_url = str(getattr(r, "url", replay_url))
+            parsed = urlparse(final_url)
+            if parsed.hostname not in {"arquivo.pt", "www.arquivo.pt"} or not parsed.path.startswith(expected_prefix):
+                return None
             raw = r.content
-            if raw[:512].lstrip().lower().startswith((b"<!doctype html", b"<html")):
+            head = raw[:512].lstrip().lower()
+            if head.startswith((b"<!doctype html", b"<html")):
                 return None
             return raw, replay_url
         except (requests.RequestException, OSError, AttributeError):
