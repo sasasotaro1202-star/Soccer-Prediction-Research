@@ -1,8 +1,13 @@
 {
-  "status": "BLOCKED",
-  "reason": "Preflight tests failed; research execution was intentionally skipped.",
+  "status": "DEGRADED",
+  "reason": "Research engine failed after bounded retries; no OOS result was claimed.",
   "runner": {
-    "status": "SKIPPED_AFTER_TEST_FAILURE"
+    "attempts": 2,
+    "status": "FAILED_AFTER_RETRIES"
   },
+  "errors": [
+    "attempt=1 TypeError: LogisticRegression.__init__() got an unexpected keyword argument 'multi_class'",
+    "attempt=2 TypeError: LogisticRegression.__init__() got an unexpected keyword argument 'multi_class'"
+  ],
   "oos_claimed": false
 }
