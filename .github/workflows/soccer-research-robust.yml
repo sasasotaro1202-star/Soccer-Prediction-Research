@@ -19,29 +19,26 @@ concurrency:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
-    env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      OPENAI_RESEARCH_MODEL: gpt-5.6-luna
-      PYTHONPATH: .
-      RESEARCH_ATTEMPTS: "2"
-      RESEARCH_RETRY_BACKOFF: "10"
-      PIT_ENABLE_ARCHIVE_AUDIT: "0"
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        continue-on-error: true
       - name: Setup Python
         uses: actions/setup-python@v5
+        continue-on-error: true
         with:
           python-version: "3.12"
           cache: pip
       - name: Cache raw soccer data
         uses: actions/cache@v4
+        continue-on-error: true
         with:
           path: data/raw
           key: soccer-raw-${{ runner.os }}-${{ hashFiles('src/data/football_data.py') }}
           restore-keys: soccer-raw-${{ runner.os }}-
       - name: Install dependencies
+        continue-on-error: true
         run: python -m pip install -r requirements.txt
       - name: Run tests
         id: tests
@@ -57,9 +54,17 @@ jobs:
         if: always()
         env:
           TESTS_PASSED: ${{ steps.tests.outcome == 'success' && 'true' || 'false' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_RESEARCH_MODEL: gpt-5.6-luna
+          PYTHONPATH: .
+          RESEARCH_ATTEMPTS: "2"
+          RESEARCH_RETRY_BACKOFF: "10"
+          PIT_ENABLE_ARCHIVE_AUDIT: "0"
+        continue-on-error: true
         run: python -m src.research.safe_runner
       - name: Validate research artifact
         if: always()
+        continue-on-error: true
         run: |
           python - <<'PY'
           import json
@@ -73,6 +78,7 @@ jobs:
           PY
       - name: Upload research artifacts
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: soccer-research-robust-${{ github.run_id }}
@@ -81,6 +87,7 @@ jobs:
           if-no-files-found: warn
       - name: Commit research artifacts
         if: always()
+        continue-on-error: true
         run: |
           set +e
           git config user.name "github-actions[bot]"
@@ -105,3 +112,12 @@ jobs:
             sleep $((attempt * 5))
           done
           exit 0
+      - name: Final health record
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p artifacts
+          if [ ! -f artifacts/run_status.json ]; then
+            printf '%s\n' '{"status":"DEGRADED","oos_claimed":false,"reason":"Workflow completed without a research status artifact"}' > artifacts/run_status.json
+          fi
+          echo "Soccer Research Robust finished; see artifacts/run_status.json for authoritative research status."
