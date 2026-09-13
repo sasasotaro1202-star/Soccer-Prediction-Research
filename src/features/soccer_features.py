@@ -46,7 +46,10 @@ def _summarize(games: deque, window: int) -> dict[str, float]:
     if not recent:
         base = {"games": 0.0, "gf": np.nan, "ga": np.nan, "points": np.nan, "gd": np.nan,
                 "win_rate": np.nan, "draw_rate": np.nan, "loss_rate": np.nan,
-                "gf_ewma": np.nan, "ga_ewma": np.nan, "gd_std": np.nan, "home_rate": np.nan}
+                "gf_ewma": np.nan, "ga_ewma": np.nan, "gd_ewma": np.nan,
+                "points_ewma": np.nan, "gd_std": np.nan, "home_rate": np.nan,
+                "goal_total_avg": np.nan, "clean_sheet_rate": np.nan,
+                "failed_to_score_rate": np.nan}
         base.update({f"{k}_avg": np.nan for k in STAT_KEYS})
         base.update({f"{k}_ewma": np.nan for k in STAT_KEYS})
         return base
@@ -60,9 +63,13 @@ def _summarize(games: deque, window: int) -> dict[str, float]:
         "win_rate": float(np.mean([p == 3 for p in pts])),
         "draw_rate": float(np.mean([p == 1 for p in pts])),
         "loss_rate": float(np.mean([p == 0 for p in pts])),
-        "gf_ewma": _ewma(gf), "ga_ewma": _ewma(ga),
+        "gf_ewma": _ewma(gf), "ga_ewma": _ewma(ga), "gd_ewma": _ewma(gd),
+        "points_ewma": _ewma(pts),
         "gd_std": float(np.std(gd)) if len(gd) > 1 else 0.0,
         "home_rate": float(np.mean([x["venue"] == "H" for x in recent])),
+        "goal_total_avg": float(np.mean([g + a for g, a in zip(gf, ga)])),
+        "clean_sheet_rate": float(np.mean([g == 0 for g in ga])),
+        "failed_to_score_rate": float(np.mean([g == 0 for g in gf])),
     }
     for k in STAT_KEYS:
         vals = [x.get(k, np.nan) for x in recent]
@@ -109,8 +116,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
 
     cols = ["kickoff_utc", "home_team", "away_team", "home_goals", "away_goals", "competition", "match_id"]
     cols += [c for c in ("home_shots", "away_shots", "home_shots_on_target", "away_shots_on_target", "home_corners", "away_corners", "home_fouls", "away_fouls", "home_yellow_cards", "away_yellow_cards", "home_red_cards", "away_red_cards") if c in h.columns]
-    if "source_available_at_utc" in h.columns:
-        cols.append("source_available_at_utc")
+    if "source_available_at_utc" in h.columns: cols.append("source_available_at_utc")
     h_records = h[cols].to_dict("records")
     m_records = m[[c for c in ["match_id", "competition", "season", "season_start", "kickoff_utc", "home_team", "away_team"] if c in m.columns]].to_dict("records")
 
@@ -119,10 +125,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     team_last_available: dict[str, pd.Timestamp] = {}
     h2h: dict[tuple[str, str], deque] = defaultdict(lambda: deque(maxlen=10))
     elo = {"global": {}, "competition": {}}
-    ptr = 0
-    block_ptr = 0
-    team_max_prior_available: dict[str, pd.Timestamp] = {}
-    rows = []
+    ptr = 0; block_ptr = 0; team_max_prior_available: dict[str, pd.Timestamp] = {}; rows = []
     required_window = min(windows) if windows else 0
 
     def availability_for(r: dict) -> pd.Timestamp:
@@ -133,92 +136,57 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     def ingest_until(cutoff: pd.Timestamp) -> None:
         nonlocal ptr
         while ptr < len(h_records):
-            r = h_records[ptr]
-            event = r["kickoff_utc"]
-            if event >= cutoff:
-                break
+            r = h_records[ptr]; event = r["kickoff_utc"]
+            if event >= cutoff: break
             available = availability_for(r)
-            if pd.isna(available) or available > cutoff:
-                break
+            if pd.isna(available) or available > cutoff: break
             hg, ag = r["home_goals"], r["away_goals"]
-            if pd.isna(hg) or pd.isna(ag):
-                ptr += 1
-                continue
-            home, away = str(r["home_team"]), str(r["away_team"])
-            result = 0 if hg > ag else 1 if hg == ag else 2
+            if pd.isna(hg) or pd.isna(ag): ptr += 1; continue
+            home, away = str(r["home_team"]), str(r["away_team"]); result = 0 if hg > ag else 1 if hg == ag else 2
             _update_elo(elo, home, away, result, str(r["competition"]))
             for team in (home, away):
                 gf, ga, pts, venue, gd = _team_result(r, team)
                 entry = {"time": event, "gf": gf, "ga": ga, "points": pts, "venue": venue, "gd": gd, "competition": str(r["competition"]), "available": available}
-                for k in STAT_KEYS:
-                    entry[k] = _stat_value(r, team, k)
-                team_games[team].append(entry)
-                team_last[team] = event
-                team_last_available[team] = available
-            h2h[(home, away)].append(result)
-            h2h[(away, home)].append(2 - result if result != 1 else 1)
-            ptr += 1
+                for k in STAT_KEYS: entry[k] = _stat_value(r, team, k)
+                team_games[team].append(entry); team_last[team] = event; team_last_available[team] = available
+            h2h[(home, away)].append(result); h2h[(away, home)].append(2 - result if result != 1 else 1); ptr += 1
 
     def update_pit_blockers(cutoff: pd.Timestamp) -> None:
         nonlocal block_ptr
         while block_ptr < len(h_records):
-            r = h_records[block_ptr]
-            event = r["kickoff_utc"]
-            if event >= cutoff:
-                break
+            r = h_records[block_ptr]; event = r["kickoff_utc"]
+            if event >= cutoff: break
             available = availability_for(r)
             if pd.notna(available):
                 for team in (str(r["home_team"]), str(r["away_team"])):
                     prev = team_max_prior_available.get(team)
-                    if prev is None or available > prev:
-                        team_max_prior_available[team] = available
+                    if prev is None or available > prev: team_max_prior_available[team] = available
             block_ptr += 1
 
     for r in m_records:
-        kickoff = r["kickoff_utc"]
-        cutoff = kickoff - pd.Timedelta(minutes=60)
-        ingest_until(cutoff)
-        update_pit_blockers(cutoff)
+        kickoff = r["kickoff_utc"]; cutoff = kickoff - pd.Timedelta(minutes=60); ingest_until(cutoff); update_pit_blockers(cutoff)
         home, away, comp = str(r["home_team"]), str(r["away_team"]), str(r["competition"])
-        he = float(elo["global"].get(home, 1500.0)); ae = float(elo["global"].get(away, 1500.0))
-        ce = elo["competition"].get(comp, {}); hce = float(ce.get(home, 1500.0)); cae = float(ce.get(away, 1500.0))
-        blocker_times = [team_max_prior_available.get(t) for t in (home, away) if t in team_max_prior_available]
-        pit_blocked = bool(blocker_times and max(blocker_times) > cutoff)
-        row = {
-            "match_id": r["match_id"], "competition": comp, "season": r.get("season"), "season_start": r.get("season_start", np.nan),
-            "kickoff_utc": kickoff, "home_team": home, "away_team": away, "prediction_cutoff_at_utc": cutoff,
-            "home_advantage": 1.0, "home_elo": he, "away_elo": ae, "elo_diff": he - ae,
-            "home_comp_elo": hce, "away_comp_elo": cae, "comp_elo_diff": hce - cae,
-            "home_elo_expected": 1.0 / (1.0 + 10.0 ** (-((he + ELO_HOME_ADV) - ae) / 400.0)),
-            "home_rest_hours": (cutoff - team_last[home]).total_seconds() / 3600.0 if home in team_last else np.nan,
-            "away_rest_hours": (cutoff - team_last[away]).total_seconds() / 3600.0 if away in team_last else np.nan,
-        }
+        he = float(elo["global"].get(home, 1500.0)); ae = float(elo["global"].get(away, 1500.0)); ce = elo["competition"].get(comp, {}); hce = float(ce.get(home, 1500.0)); cae = float(ce.get(away, 1500.0))
+        blocker_times = [team_max_prior_available.get(t) for t in (home, away) if t in team_max_prior_available]; pit_blocked = bool(blocker_times and max(blocker_times) > cutoff)
+        row = {"match_id": r["match_id"], "competition": comp, "season": r.get("season"), "season_start": r.get("season_start", np.nan), "kickoff_utc": kickoff, "home_team": home, "away_team": away, "prediction_cutoff_at_utc": cutoff, "home_advantage": 1.0, "home_elo": he, "away_elo": ae, "elo_diff": he - ae, "home_comp_elo": hce, "away_comp_elo": cae, "comp_elo_diff": hce - cae, "home_elo_expected": 1.0 / (1.0 + 10.0 ** (-((he + ELO_HOME_ADV) - ae) / 400.0)), "home_rest_hours": (cutoff - team_last[home]).total_seconds() / 3600.0 if home in team_last else np.nan, "away_rest_hours": (cutoff - team_last[away]).total_seconds() / 3600.0 if away in team_last else np.nan}
+        row["rest_diff_hours"] = row["home_rest_hours"] - row["away_rest_hours"] if pd.notna(row["home_rest_hours"]) and pd.notna(row["away_rest_hours"]) else np.nan
+        row["elo_gap_abs"] = abs(row["elo_diff"])
         for w in windows:
             hs = _summarize(team_games[home], w); aws = _summarize(team_games[away], w)
-            if pit_blocked:
-                hs = {k: np.nan for k in hs}; aws = {k: np.nan for k in aws}
+            if pit_blocked: hs = {k: np.nan for k in hs}; aws = {k: np.nan for k in aws}
             for k, v in hs.items(): row[f"home_{k}_{w}"] = v
             for k, v in aws.items(): row[f"away_{k}_{w}"] = v
-            row[f"gf_diff_{w}"] = hs["gf"] - aws["gf"]
-            row[f"ga_diff_{w}"] = hs["ga"] - aws["ga"]
-            row[f"points_diff_{w}"] = hs["points"] - aws["points"]
-            row[f"win_rate_diff_{w}"] = hs["win_rate"] - aws["win_rate"]
-            for k in STAT_KEYS:
-                row[f"{k}_diff_{w}"] = hs[f"{k}_avg"] - aws[f"{k}_avg"]
+            row[f"gf_diff_{w}"] = hs["gf"] - aws["gf"]; row[f"ga_diff_{w}"] = hs["ga"] - aws["ga"]; row[f"points_diff_{w}"] = hs["points"] - aws["points"]; row[f"win_rate_diff_{w}"] = hs["win_rate"] - aws["win_rate"]
+            row[f"goal_total_diff_{w}"] = hs["goal_total_avg"] - aws["goal_total_avg"]
+            row[f"clean_sheet_diff_{w}"] = hs["clean_sheet_rate"] - aws["clean_sheet_rate"]
+            row[f"failed_to_score_diff_{w}"] = hs["failed_to_score_rate"] - aws["failed_to_score_rate"]
+            row[f"gd_ewma_diff_{w}"] = hs["gd_ewma"] - aws["gd_ewma"]
+            row[f"points_ewma_diff_{w}"] = hs["points_ewma"] - aws["points_ewma"]
+            for k in STAT_KEYS: row[f"{k}_diff_{w}"] = hs[f"{k}_avg"] - aws[f"{k}_avg"]
         meetings = [] if pit_blocked else list(h2h[(home, away)])[-5:]
-        row["h2h_games_5"] = float(len(meetings))
-        row["h2h_home_win_rate_5"] = float(np.mean([x == 0 for x in meetings])) if meetings else np.nan
-        row["h2h_draw_rate_5"] = float(np.mean([x == 1 for x in meetings])) if meetings else np.nan
-        row["h2h_away_win_rate_5"] = float(np.mean([x == 2 for x in meetings])) if meetings else np.nan
-        row["h2h_points_edge_5"] = float(np.mean([3 if x == 0 else 1 if x == 1 else 0 for x in meetings]) - np.mean([3 if x == 2 else 1 if x == 1 else 0 for x in meetings])) if meetings else np.nan
-        available_times = [team_last_available[t] for t in (home, away) if t in team_last_available]
-        row["feature_source_max_available_at_utc"] = max(available_times) if available_times else pd.NaT
-        home_history = list(team_games[home])[-required_window:] if required_window else []
-        away_history = list(team_games[away])[-required_window:] if required_window else []
-        history_complete = (required_window == 0) or (len(home_history) >= required_window and len(away_history) >= required_window)
-        history_available = history_complete and all(x["available"] <= cutoff for x in home_history + away_history)
-        row["pit_verified"] = bool(history_available and not pit_blocked)
-        rows.append(row)
+        row["h2h_games_5"] = float(len(meetings)); row["h2h_home_win_rate_5"] = float(np.mean([x == 0 for x in meetings])) if meetings else np.nan; row["h2h_draw_rate_5"] = float(np.mean([x == 1 for x in meetings])) if meetings else np.nan; row["h2h_away_win_rate_5"] = float(np.mean([x == 2 for x in meetings])) if meetings else np.nan; row["h2h_points_edge_5"] = float(np.mean([3 if x == 0 else 1 if x == 1 else 0 for x in meetings]) - np.mean([3 if x == 2 else 1 if x == 1 else 0 for x in meetings])) if meetings else np.nan
+        available_times = [team_last_available[t] for t in (home, away) if t in team_last_available]; row["feature_source_max_available_at_utc"] = max(available_times) if available_times else pd.NaT
+        home_history = list(team_games[home])[-required_window:] if required_window else []; away_history = list(team_games[away])[-required_window:] if required_window else []; history_complete = (required_window == 0) or (len(home_history) >= required_window and len(away_history) >= required_window); history_available = history_complete and all(x["available"] <= cutoff for x in home_history + away_history); row["pit_verified"] = bool(history_available and not pit_blocked); rows.append(row)
     return pd.DataFrame(rows)
 
 
