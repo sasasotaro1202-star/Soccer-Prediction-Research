@@ -32,10 +32,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: data/raw
-          key: soccer-raw-${{ runner.os }}-${{ hashFiles('src/data/football_data.py', 'src/data/openfootball_adapter.py') }}
+          key: soccer-raw-${{ runner.os }}-${{ hashFiles('src/data/football_data.py', 'src/data/openfootball_adapter.py', 'src/data/jleague_adapter.py', 'src/data/espn_friendlies_adapter.py') }}
           restore-keys: soccer-raw-${{ runner.os }}-
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Compile source and tests
+        id: compile
+        continue-on-error: true
+        env:
+          PYTHONPATH: .
+        run: python -m compileall -q src tests
       - name: Run 14-competition fixture field PIT audit
         id: audit
         continue-on-error: true
@@ -48,6 +54,20 @@ jobs:
           rc=$?
           printf '{"exit_code":%s,"passed":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/audit_status.json
           exit "$rc"
+      - name: Run strict completion gate
+        id: gate
+        continue-on-error: true
+        env:
+          PYTHONPATH: .
+        run: |
+          mkdir -p artifacts
+          set +e
+          python -m src.data.completion_gate > artifacts/completion_gate_stdout.json
+          rc=$?
+          if [ ! -f artifacts/completion_gate.json ]; then
+            printf '{"full_gate_passed":false,"blocking_reasons":["completion gate did not produce an artifact"]}\n' > artifacts/completion_gate.json
+          fi
+          exit "$rc"
       - name: Run tests
         id: tests
         continue-on-error: true
@@ -59,6 +79,7 @@ jobs:
           printf '{"exit_code":%s,"passed":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/test_status.json
           exit "$rc"
       - name: Run research engine with bounded retries
+        id: research_engine
         if: always()
         env:
           TESTS_PASSED: ${{ steps.tests.outcome == 'success' && 'true' || 'false' }}
@@ -85,9 +106,11 @@ jobs:
           else:
               data = {'status':'DEGRADED','oos_claimed':False,'reason':'No run_status.json produced'}
           data['workflow_health'] = {
+              'compile_step': '${{ steps.compile.outcome }}',
               'audit_step': '${{ steps.audit.outcome }}',
+              'completion_gate_step': '${{ steps.gate.outcome }}',
               'tests_step': '${{ steps.tests.outcome }}',
-              'research_step': '${{ job.status }}',
+              'research_step': '${{ steps.research_engine.outcome }}',
           }
           if data.get('audit', {}).get('audit_complete') is False:
               data['research_scope_warning'] = '14-competition audit is incomplete; results must not be represented as full 14-competition coverage.'
