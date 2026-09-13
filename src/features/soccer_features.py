@@ -88,10 +88,11 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     """Build chronological PIT-safe features with linear-time history processing.
 
     A history row is processed only when both its event time and availability time
-    are before the prediction cutoff. Crucially, an event that is temporarily not
-    available is *not discarded*: the history pointer stays there and the event can
-    enter a later cutoff once its availability condition becomes true. This avoids
-    permanently losing recent results from the rolling state.
+    are before the prediction cutoff. Temporarily unavailable results remain in
+    the history pointer and can enter a later cutoff once they become available.
+    PIT verification requires only the minimum configured history window; longer
+    rolling windows are allowed to remain partially populated and are imputed by
+    the model pipeline. This increases sample efficiency without using future data.
     """
     h = history.copy()
     h["kickoff_utc"] = pd.to_datetime(h["kickoff_utc"], utc=True, errors="coerce")
@@ -122,7 +123,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     block_ptr = 0
     team_max_prior_available: dict[str, pd.Timestamp] = {}
     rows = []
-    required_window = max(windows) if windows else 0
+    required_window = min(windows) if windows else 0
 
     def availability_for(r: dict) -> pd.Timestamp:
         event = r["kickoff_utc"]
@@ -137,9 +138,6 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
             if event >= cutoff:
                 break
             available = availability_for(r)
-            # Do not advance past an unavailable historical event. Because records
-            # are chronological, waiting here is conservative and guarantees that
-            # the same event can be ingested on a later prediction cutoff.
             if pd.isna(available) or available > cutoff:
                 break
             hg, ag = r["home_goals"], r["away_goals"]
