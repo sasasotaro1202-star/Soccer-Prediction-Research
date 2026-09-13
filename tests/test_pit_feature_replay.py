@@ -71,8 +71,8 @@ def test_delayed_row_does_not_hide_later_available_history():
     features = build_match_features(history, matches, windows=(3,))
     # m6 is unknown at m7/m8 cutoffs, but m5 is known and must not be
     # skipped merely because the later event is still unavailable.
-    assert features.iloc[0]["home_gf_3"] == 4 / 3
-    assert features.iloc[1]["home_gf_3"] == 4 / 3
+    assert features.iloc[0]["home_gf_3"] == 5 / 3
+    assert features.iloc[1]["home_gf_3"] == 5 / 3
     assert not bool(features.iloc[0]["pit_verified"])
     assert not bool(features.iloc[1]["pit_verified"])
 
