@@ -82,6 +82,44 @@ jobs:
           rc=$?
           printf '{"exit_code":%s,"passed":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/audit_status.json
           exit "$rc"
+      - name: Build explicit audit gate artifact
+        id: audit_gate
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p artifacts
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          out = Path('artifacts')
+          summary_path = out / 'audit_summary.json'
+          if not summary_path.exists():
+              payload = {
+                  'full_gate_passed': False,
+                  'blocking_reasons': ['audit summary artifact is missing'],
+              }
+          else:
+              summary = json.loads(summary_path.read_text(encoding='utf-8'))
+              reasons = []
+              if not summary.get('audit_execution_ok', False):
+                  reasons.append('audit execution did not complete successfully')
+              if int(summary.get('duplicate_source_rows', 0)) != 0:
+                  reasons.append('same-source duplicate fixture identities remain')
+              if int(summary.get('collision_rows', 0)) != 0:
+                  reasons.append('cross-source fixture outcome collisions remain')
+              if int(summary.get('team_mapping_invalid_rows', 0)) != 0:
+                  reasons.append('team identity mapping issues remain')
+              if not summary.get('coverage_scope_complete', False):
+                  reasons.append('fixture audit coverage matrix is incomplete')
+              payload = {
+                  'full_gate_passed': not reasons,
+                  'blocking_reasons': reasons,
+                  'pit_publication_time_gate': bool(summary.get('pit_publication_time_gate', False)),
+                  'scope': 'structural fixture/source audit; strict publication-time PIT is separately enforced by completion_gate',
+              }
+          (out / 'audit_gate.json').write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding='utf-8')
+          print(json.dumps(payload, indent=2, ensure_ascii=False))
+          PY
       - name: Run supplemental international / non-league audit
         id: auxiliary_audit
         continue-on-error: true
@@ -131,8 +169,6 @@ jobs:
         env:
           TESTS_PASSED: ${{ steps.tests.outcome == 'success' && 'true' || 'false' }}
           AUDIT_PASSED: ${{ steps.audit.outcome == 'success' && 'true' || 'false' }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_RESEARCH_MODEL: gpt-5.6-luna
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
           RESEARCH_ATTEMPTS: "2"
@@ -161,15 +197,18 @@ jobs:
               'dependencies_step': '${{ steps.dependencies.outcome }}',
               'tests_step': '${{ steps.tests.outcome }}',
               'audit_step': '${{ steps.audit.outcome }}',
+              'audit_gate_step': '${{ steps.audit_gate.outcome }}',
               'auxiliary_audit_step': '${{ steps.auxiliary_audit.outcome }}',
               'completion_gate_step': '${{ steps.gate.outcome }}',
               'research_step': '${{ steps.research_engine.outcome }}',
+              'production_contract_step': '${{ steps.production_contract.outcome }}',
           }
           data['automation_policy'] = {
               'job_success_does_not_imply_research_success': True,
               'production_requires_audit_and_completion_gates': True,
               'failed_gates_fail_closed': True,
               'historical_artifacts_are_actions_only': True,
+              'openai_api_is_optional': True,
           }
           if data.get('audit', {}).get('audit_complete') is False:
               data['research_scope_warning'] = '14-competition audit is incomplete; results must not be represented as full 14-competition coverage.'
