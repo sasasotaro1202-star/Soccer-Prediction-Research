@@ -75,7 +75,8 @@ def test_coverage_marks_unobserved_competitions_unavailable_not_zero():
     assert row.status == "UNAVAILABLE"
     assert row.fixture_count == 0
     reason = row.reason.lower()
-    assert "no data elsewhere" in reason or "absence is not a global no-data claim" in reason
+    assert "not a claim" in reason
+    assert "data exists elsewhere" in reason
 
 
 def test_reconciliation_flags_duplicate_rows_without_double_counting_source():
