@@ -29,20 +29,25 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Cache raw soccer data
+        continue-on-error: true
         uses: actions/cache@v4
         with:
           path: data/raw
           key: soccer-raw-${{ runner.os }}-${{ hashFiles('src/data/football_data.py', 'src/data/openfootball_adapter.py', 'src/data/jleague_adapter.py', 'src/data/espn_friendlies_adapter.py') }}
           restore-keys: soccer-raw-${{ runner.os }}-
       - name: Install dependencies with retry
+        continue-on-error: true
         run: |
-          set -e
+          set +e
           python -m pip install --disable-pip-version-check --upgrade pip setuptools wheel
+          rc=1
           for attempt in 1 2 3; do
-            python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt && exit 0
+            python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+            rc=$?
+            if [ "$rc" -eq 0 ]; then exit 0; fi
             sleep $((attempt * 5))
           done
-          exit 1
+          exit "$rc"
       - name: Compile source and tests
         id: compile
         continue-on-error: true
