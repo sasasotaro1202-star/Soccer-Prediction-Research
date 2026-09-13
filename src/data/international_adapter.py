@@ -20,9 +20,6 @@ import requests
 
 BASE = "https://raw.githubusercontent.com/openfootball/internationals/master/{directory}/{year}_{filename}.txt"
 
-# Senior competitions that materially improve international-strength context.
-# Youth/high-school competitions are intentionally separate because the public
-# senior dataset explicitly excludes U23/youth and league-select matches.
 TOURNAMENTS = {
     "WORLD_CUP": ("fifa_world_cup", "fifa_world_cup"),
     "WORLD_CUP_QUALI": ("fifa_world_cup_qualification", "fifa_world_cup_qualification"),
@@ -34,13 +31,8 @@ TOURNAMENTS = {
 }
 
 DATE_RE = re.compile(r"^\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Z][a-z]{2})\s+(\d{1,2})(?:\s+(\d{4}))?.*$")
-MATCH_RE = re.compile(r"^\s*(?:\(\d+\)\s*)?(?:(\d{1,2}:\d{2})\s+)?(.+?)\s+(\d+)\s*-\s*(\d+)(.*?)(?:\s+@.*)?$")
 MONTHS = {m: i for i, m in enumerate(["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], 1)}
 HEADERS = {"User-Agent": "SoccerPredictionResearch/1.0"}
-
-
-def _season_start_year(year: int) -> int:
-    return int(year)
 
 
 def _parse_date(line: str, season_year: int, current_year: int | None, previous_month: int | None):
@@ -65,12 +57,8 @@ def _parse_date(line: str, season_year: int, current_year: int | None, previous_
 
 def _target_from_score(home_goals: int, away_goals: int, suffix: str):
     text = str(suffix or "")
-    # Shootout-only suffixes mean regulation was a draw. This preserves the
-    # same 1X2 target convention as the core model.
     if re.search(r"penalties|on pens|wins on penalties|won on penalties", text, flags=re.I):
         return home_goals, away_goals, "D", True
-    # When extra time is explicitly present but no regulation score is given,
-    # keep the final score but flag the target as not regulation-verified.
     regulation_verified = not bool(re.search(r"\ba\.e\.t\.?\b|\baet\b", text, flags=re.I))
     result = "H" if home_goals > away_goals else "A" if away_goals > home_goals else "D"
     return home_goals, away_goals, result, regulation_verified
@@ -88,52 +76,35 @@ def parse_football_txt(text: str, competition: str, season_year: int, source_url
             continue
         if pd.isna(current_date):
             continue
-        m = MATCH_RE.match(line)
-        if not m:
+        # Strip venue and leading match number, then locate the score. This is
+        # intentionally independent of team-name width/alignment.
+        line_core = re.sub(r"\s+@.*$", "", line).strip()
+        line_core = re.sub(r"^\(\d+\)\s*", "", line_core)
+        score_match = re.search(r"\s(\d+)\s*-\s*(\d+)(?=\s|$)", line_core)
+        if not score_match:
             continue
         try:
-            time_text, home, away = m.group(1), m.group(2).strip(), None
-            # MATCH_RE's final suffix is deliberately broad; recover the away
-            # team from the portion between the score and the optional venue.
-            # The first two numeric groups are always the score.
-            hg, ag = int(m.group(3)), int(m.group(4))
-            tail = m.group(5).strip()
-            # Re-run a stricter split on the full match line to avoid treating
-            # a team name containing punctuation as metadata.
-            line_core = re.sub(r"\s+@.*$", "", line).strip()
-            score_match = re.search(r"\s(\d+)\s*-\s*(\d+)(?:\s|$)", line_core)
-            if not score_match:
+            left = line_core[:score_match.start()].strip()
+            right = line_core[score_match.end():].strip()
+            time_match = re.match(r"^(\d{1,2}:\d{2})\s+", left)
+            time_text = time_match.group(1) if time_match else None
+            if time_match:
+                left = left[time_match.end():].strip()
+            if not left or not right:
                 continue
-            left = line_core[: score_match.start()].strip()
-            right = line_core[score_match.end() :].strip()
-            if time_text and left.startswith(time_text):
-                left = left[len(time_text):].strip()
-            left = re.sub(r"^\(\d+\)\s*", "", left).strip()
-            # A single run of 2+ spaces is the standard Football.TXT team
-            # separator. Fall back to a conservative midpoint split.
-            parts = re.split(r"\s{2,}", left, maxsplit=1)
-            if len(parts) == 2:
-                home, away = parts[0].strip(), parts[1].strip()
-            else:
-                # Most datasets align the two team names in fixed-width text;
-                # use the score position as the final separator.
-                words = left.split()
-                if len(words) < 2:
-                    continue
-                midpoint = max(1, len(words) // 2)
-                home, away = " ".join(words[:midpoint]), " ".join(words[midpoint:])
-            if not home or not away or home.lower() == away.lower():
-                continue
+            home, away = left, right
+            hg, ag = int(score_match.group(1)), int(score_match.group(2))
+            suffix = line[score_match.end():].strip()
             kickoff = current_date
             if time_text:
                 hh, mm = map(int, time_text.split(":"))
                 kickoff = kickoff + pd.Timedelta(hours=hh, minutes=mm)
-            hg, ag, result, regulation_verified = _target_from_score(hg, ag, tail)
+            hg, ag, result, regulation_verified = _target_from_score(hg, ag, suffix)
         except (TypeError, ValueError):
             continue
-        source_id = hashlib.sha1(
-            f"{competition}|{season_year}|{line_no}|{home}|{away}|{kickoff.isoformat()}".encode()
-        ).hexdigest()[:20]
+        if home.lower() == away.lower():
+            continue
+        source_id = hashlib.sha1(f"{competition}|{season_year}|{line_no}|{home}|{away}|{kickoff.isoformat()}".encode()).hexdigest()[:20]
         rows.append({
             "match_id": f"intl:{competition}:{season_year}:{source_id}",
             "competition": competition,
@@ -181,31 +152,12 @@ def load_international_season(competition: str, season_year: int, cache_dir: str
 
 def load_international_history(start_year: int = 2010, end_year: int = 2026, max_workers: int = 8):
     tasks = [(c, y) for c in TOURNAMENTS for y in range(start_year, end_year + 1)]
-
     def one(c: str, y: int):
         try:
             frame = load_international_season(c, y)
-            return c, y, frame, {
-                "competition": c,
-                "season": str(y),
-                "status": "AVAILABLE" if not frame.empty else "UNAVAILABLE",
-                "rows": len(frame),
-                "source": "openfootball/internationals",
-                "pit_status": "PIT_UNKNOWN",
-                "production_eligible": False,
-            }
+            return c, y, frame, {"competition": c, "season": str(y), "status": "AVAILABLE" if not frame.empty else "UNAVAILABLE", "rows": len(frame), "source": "openfootball/internationals", "pit_status": "PIT_UNKNOWN", "production_eligible": False}
         except Exception as exc:
-            return c, y, pd.DataFrame(), {
-                "competition": c,
-                "season": str(y),
-                "status": "UNAVAILABLE",
-                "rows": 0,
-                "source": "openfootball/internationals",
-                "pit_status": "PIT_UNKNOWN",
-                "production_eligible": False,
-                "error": f"{type(exc).__name__}: {exc}",
-            }
-
+            return c, y, pd.DataFrame(), {"competition": c, "season": str(y), "status": "UNAVAILABLE", "rows": 0, "source": "openfootball/internationals", "pit_status": "PIT_UNKNOWN", "production_eligible": False, "error": f"{type(exc).__name__}: {exc}"}
     results = []
     with ThreadPoolExecutor(max_workers=max(1, min(int(max_workers), len(tasks)))) as pool:
         futures = [pool.submit(one, c, y) for c, y in tasks]
