@@ -14,9 +14,9 @@ SEASONS = [f"{y}/{str(y + 1)[-2:]}" for y in range(2010, 2026)]
 IMPLEMENTED_SOURCES = {
     "EPL": "Football-Data.co.uk", "CHA": "Football-Data.co.uk", "BL1": "Football-Data.co.uk",
     "SA": "Football-Data.co.uk", "LL": "Football-Data.co.uk", "FL1": "Football-Data.co.uk",
-    "UCL": "openfootball", "UEL": "openfootball", "J1": "Football-Data.co.uk:JPN.csv",
-    "J2": "Football-Data.co.uk:JPN.csv", "J3": "Football-Data.co.uk:JPN.csv", "DFBP": "openfootball",
-    "CAR": "openfootball", "FRI": "ESPN:club.friendly",
+    "UCL": "openfootball", "UEL": "openfootball", "J1": ("Football-Data.co.uk:JPN.csv", "J.League Data Site"),
+    "J2": ("Football-Data.co.uk:JPN.csv", "J.League Data Site"), "J3": ("Football-Data.co.uk:JPN.csv", "J.League Data Site"),
+    "DFBP": "openfootball", "CAR": "openfootball", "FRI": "ESPN:club.friendly",
 }
 
 # J3 was created for the 2014 season. Those four pre-launch cells are not
@@ -55,12 +55,14 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
     observed: set[tuple[str, str]] = set()
     rows = []
     for comp in TARGET_COMPETITIONS:
-        source = IMPLEMENTED_SOURCES[comp]
+        configured_sources = IMPLEMENTED_SOURCES[comp]
+        source_candidates = (configured_sources,) if isinstance(configured_sources, str) else configured_sources
+        canonical_source = "|".join(source_candidates)
         for season in SEASONS:
             if (comp, season) in NON_APPLICABLE_CELLS:
-                rows.append({"competition": comp, "season": season, "canonical_source": source, "status": "NOT_APPLICABLE", "rows": 0, "reason": "Competition did not exist in this historical season"})
+                rows.append({"competition": comp, "season": season, "canonical_source": canonical_source, "status": "NOT_APPLICABLE", "rows": 0, "reason": "Competition did not exist in this historical season"})
                 continue
-            candidates = acquisition[(acquisition.competition == comp) & (acquisition.source == source)]
+            candidates = acquisition[(acquisition.competition == comp) & (acquisition.source.isin(source_candidates))]
             if comp in {"J1", "J2", "J3"}:
                 candidates = candidates[candidates.season.map(lambda x: _season_from_value(comp, x) == season)]
             elif comp == "FRI":
@@ -74,7 +76,7 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
                 reason = "Explicit acquisition status from adapter"
             else:
                 status, rows_count, reason = "MISSING_AUDIT_CELL", 0, "Adapter did not emit an explicit season/source status"
-            rows.append({"competition": comp, "season": season, "canonical_source": source, "status": status, "rows": rows_count, "reason": reason})
+            rows.append({"competition": comp, "season": season, "canonical_source": canonical_source, "status": status, "rows": rows_count, "reason": reason})
     matrix = pd.DataFrame(rows)
     matrix.to_csv(root / "competition_season_gate.csv", index=False)
 
