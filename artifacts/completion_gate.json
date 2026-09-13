@@ -1,0 +1,6 @@
+{
+  "full_gate_passed": false,
+  "blocking_reasons": [
+    "completion gate was not executed because an earlier preflight step failed"
+  ]
+}

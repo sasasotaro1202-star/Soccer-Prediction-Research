@@ -1,13 +1,19 @@
 {
-  "status": "DEGRADED",
-  "reason": "Research engine failed after bounded retries; no OOS result was claimed.",
-  "runner": {
-    "attempts": 2,
-    "status": "FAILED_AFTER_RETRIES"
-  },
-  "errors": [
-    "attempt=1 TypeError: LogisticRegression.__init__() got an unexpected keyword argument 'multi_class'",
-    "attempt=2 TypeError: LogisticRegression.__init__() got an unexpected keyword argument 'multi_class'"
+  "status": "BLOCKED",
+  "reason": "Research execution was intentionally skipped because one or more mandatory preflight gates failed.",
+  "blockers": [
+    "completion gate was not executed because an earlier preflight step failed",
+    "preflight tests failed"
   ],
-  "oos_claimed": false
+  "runner": {
+    "status": "SKIPPED_AFTER_PREFLIGHT_FAILURE"
+  },
+  "oos_claimed": false,
+  "workflow_health": {
+    "compile_step": "success",
+    "tests_step": "failure",
+    "audit_step": "success",
+    "completion_gate_step": "skipped",
+    "research_step": "success"
+  }
 }

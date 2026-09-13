@@ -1,0 +1,2761 @@
+competition,season,source,field_name,pit_status,count,total,rate
+BL1,2010/11,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2010/11,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2010/11,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+BL1,2010/11,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2010/11,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2010/11,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2010/11,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2010/11,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2010/11,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2010/11,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+BL1,2010/11,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2010/11,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2010/11,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2010/11,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2010/11,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+BL1,2011/12,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2011/12,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2011/12,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+BL1,2011/12,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2011/12,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2011/12,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2011/12,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2011/12,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2011/12,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2011/12,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+BL1,2011/12,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2011/12,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2011/12,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2011/12,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2011/12,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+BL1,2012/13,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2012/13,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2012/13,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+BL1,2012/13,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2012/13,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2012/13,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2012/13,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2012/13,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2012/13,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2012/13,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+BL1,2012/13,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2012/13,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2012/13,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2012/13,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2012/13,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+BL1,2013/14,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2013/14,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2013/14,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+BL1,2013/14,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2013/14,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2013/14,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2013/14,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2013/14,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2013/14,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2013/14,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+BL1,2013/14,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2013/14,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2013/14,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2013/14,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2013/14,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+BL1,2014/15,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2014/15,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2014/15,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+BL1,2014/15,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2014/15,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2014/15,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2014/15,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2014/15,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2014/15,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2014/15,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+BL1,2014/15,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2014/15,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2014/15,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2014/15,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2014/15,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+BL1,2015/16,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2015/16,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2015/16,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+BL1,2015/16,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2015/16,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2015/16,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2015/16,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2015/16,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2015/16,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2015/16,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+BL1,2015/16,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2015/16,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2015/16,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2015/16,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2015/16,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+BL1,2016/17,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2016/17,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2016/17,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+BL1,2016/17,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2016/17,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2016/17,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2016/17,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2016/17,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2016/17,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2016/17,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+BL1,2016/17,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2016/17,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2016/17,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2016/17,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2016/17,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+BL1,2017/18,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2017/18,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2017/18,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+BL1,2017/18,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2017/18,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2017/18,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2017/18,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2017/18,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2017/18,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2017/18,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+BL1,2017/18,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2017/18,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2017/18,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2017/18,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2017/18,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+BL1,2018/19,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2018/19,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2018/19,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+BL1,2018/19,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2018/19,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2018/19,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2018/19,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2018/19,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2018/19,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2018/19,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+BL1,2018/19,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2018/19,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2018/19,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2018/19,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2018/19,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+BL1,2019/20,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2019/20,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2019/20,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+BL1,2019/20,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2019/20,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2019/20,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2019/20,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2019/20,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2019/20,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2019/20,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+BL1,2019/20,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2019/20,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2019/20,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2019/20,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2019/20,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+BL1,2020/21,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2020/21,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2020/21,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+BL1,2020/21,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2020/21,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2020/21,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2020/21,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2020/21,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2020/21,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2020/21,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+BL1,2020/21,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2020/21,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2020/21,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2020/21,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2020/21,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+BL1,2021/22,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2021/22,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2021/22,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+BL1,2021/22,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2021/22,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2021/22,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2021/22,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2021/22,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2021/22,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2021/22,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+BL1,2021/22,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2021/22,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2021/22,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2021/22,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2021/22,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+BL1,2022/23,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2022/23,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2022/23,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+BL1,2022/23,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2022/23,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2022/23,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2022/23,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2022/23,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2022/23,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2022/23,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+BL1,2022/23,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2022/23,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2022/23,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2022/23,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2022/23,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+BL1,2023/24,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2023/24,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2023/24,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+BL1,2023/24,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2023/24,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2023/24,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2023/24,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2023/24,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2023/24,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2023/24,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+BL1,2023/24,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2023/24,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2023/24,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2023/24,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2023/24,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+BL1,2024/25,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2024/25,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2024/25,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+BL1,2024/25,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2024/25,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2024/25,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2024/25,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2024/25,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2024/25,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2024/25,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+BL1,2024/25,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2024/25,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2024/25,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2024/25,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2024/25,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+BL1,2025/26,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2025/26,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2025/26,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+BL1,2025/26,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2025/26,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2025/26,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2025/26,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2025/26,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+BL1,2025/26,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+BL1,2025/26,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+BL1,2025/26,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2025/26,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+BL1,2025/26,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+BL1,2025/26,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+BL1,2025/26,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+CAR,2018/19,openfootball,away_corners,PIT_UNKNOWN,93,93,1.0
+CAR,2018/19,openfootball,away_fouls,PIT_UNKNOWN,93,93,1.0
+CAR,2018/19,openfootball,away_goals,PIT_UNSAFE,93,93,1.0
+CAR,2018/19,openfootball,away_red_cards,PIT_UNKNOWN,93,93,1.0
+CAR,2018/19,openfootball,away_shots,PIT_UNKNOWN,93,93,1.0
+CAR,2018/19,openfootball,away_shots_on_target,PIT_UNKNOWN,93,93,1.0
+CAR,2018/19,openfootball,away_yellow_cards,PIT_UNKNOWN,93,93,1.0
+CAR,2018/19,openfootball,home_corners,PIT_UNKNOWN,93,93,1.0
+CAR,2018/19,openfootball,home_fouls,PIT_UNKNOWN,93,93,1.0
+CAR,2018/19,openfootball,home_goals,PIT_UNSAFE,93,93,1.0
+CAR,2018/19,openfootball,home_red_cards,PIT_UNKNOWN,93,93,1.0
+CAR,2018/19,openfootball,home_shots,PIT_UNKNOWN,93,93,1.0
+CAR,2018/19,openfootball,home_shots_on_target,PIT_UNKNOWN,93,93,1.0
+CAR,2018/19,openfootball,home_yellow_cards,PIT_UNKNOWN,93,93,1.0
+CAR,2018/19,openfootball,result,PIT_UNSAFE,93,93,1.0
+CAR,2019/20,openfootball,away_corners,PIT_UNKNOWN,92,92,1.0
+CAR,2019/20,openfootball,away_fouls,PIT_UNKNOWN,92,92,1.0
+CAR,2019/20,openfootball,away_goals,PIT_UNSAFE,92,92,1.0
+CAR,2019/20,openfootball,away_red_cards,PIT_UNKNOWN,92,92,1.0
+CAR,2019/20,openfootball,away_shots,PIT_UNKNOWN,92,92,1.0
+CAR,2019/20,openfootball,away_shots_on_target,PIT_UNKNOWN,92,92,1.0
+CAR,2019/20,openfootball,away_yellow_cards,PIT_UNKNOWN,92,92,1.0
+CAR,2019/20,openfootball,home_corners,PIT_UNKNOWN,92,92,1.0
+CAR,2019/20,openfootball,home_fouls,PIT_UNKNOWN,92,92,1.0
+CAR,2019/20,openfootball,home_goals,PIT_UNSAFE,92,92,1.0
+CAR,2019/20,openfootball,home_red_cards,PIT_UNKNOWN,92,92,1.0
+CAR,2019/20,openfootball,home_shots,PIT_UNKNOWN,92,92,1.0
+CAR,2019/20,openfootball,home_shots_on_target,PIT_UNKNOWN,92,92,1.0
+CAR,2019/20,openfootball,home_yellow_cards,PIT_UNKNOWN,92,92,1.0
+CAR,2019/20,openfootball,result,PIT_UNSAFE,92,92,1.0
+CAR,2020/21,openfootball,away_corners,PIT_UNKNOWN,90,90,1.0
+CAR,2020/21,openfootball,away_fouls,PIT_UNKNOWN,90,90,1.0
+CAR,2020/21,openfootball,away_goals,PIT_UNSAFE,90,90,1.0
+CAR,2020/21,openfootball,away_red_cards,PIT_UNKNOWN,90,90,1.0
+CAR,2020/21,openfootball,away_shots,PIT_UNKNOWN,90,90,1.0
+CAR,2020/21,openfootball,away_shots_on_target,PIT_UNKNOWN,90,90,1.0
+CAR,2020/21,openfootball,away_yellow_cards,PIT_UNKNOWN,90,90,1.0
+CAR,2020/21,openfootball,home_corners,PIT_UNKNOWN,90,90,1.0
+CAR,2020/21,openfootball,home_fouls,PIT_UNKNOWN,90,90,1.0
+CAR,2020/21,openfootball,home_goals,PIT_UNSAFE,90,90,1.0
+CAR,2020/21,openfootball,home_red_cards,PIT_UNKNOWN,90,90,1.0
+CAR,2020/21,openfootball,home_shots,PIT_UNKNOWN,90,90,1.0
+CAR,2020/21,openfootball,home_shots_on_target,PIT_UNKNOWN,90,90,1.0
+CAR,2020/21,openfootball,home_yellow_cards,PIT_UNKNOWN,90,90,1.0
+CAR,2020/21,openfootball,result,PIT_UNSAFE,90,90,1.0
+CAR,2021/22,openfootball,away_corners,PIT_UNKNOWN,92,92,1.0
+CAR,2021/22,openfootball,away_fouls,PIT_UNKNOWN,92,92,1.0
+CAR,2021/22,openfootball,away_goals,PIT_UNSAFE,92,92,1.0
+CAR,2021/22,openfootball,away_red_cards,PIT_UNKNOWN,92,92,1.0
+CAR,2021/22,openfootball,away_shots,PIT_UNKNOWN,92,92,1.0
+CAR,2021/22,openfootball,away_shots_on_target,PIT_UNKNOWN,92,92,1.0
+CAR,2021/22,openfootball,away_yellow_cards,PIT_UNKNOWN,92,92,1.0
+CAR,2021/22,openfootball,home_corners,PIT_UNKNOWN,92,92,1.0
+CAR,2021/22,openfootball,home_fouls,PIT_UNKNOWN,92,92,1.0
+CAR,2021/22,openfootball,home_goals,PIT_UNSAFE,92,92,1.0
+CAR,2021/22,openfootball,home_red_cards,PIT_UNKNOWN,92,92,1.0
+CAR,2021/22,openfootball,home_shots,PIT_UNKNOWN,92,92,1.0
+CAR,2021/22,openfootball,home_shots_on_target,PIT_UNKNOWN,92,92,1.0
+CAR,2021/22,openfootball,home_yellow_cards,PIT_UNKNOWN,92,92,1.0
+CAR,2021/22,openfootball,result,PIT_UNSAFE,92,92,1.0
+CAR,2022/23,openfootball,away_corners,PIT_UNKNOWN,93,93,1.0
+CAR,2022/23,openfootball,away_fouls,PIT_UNKNOWN,93,93,1.0
+CAR,2022/23,openfootball,away_goals,PIT_UNSAFE,93,93,1.0
+CAR,2022/23,openfootball,away_red_cards,PIT_UNKNOWN,93,93,1.0
+CAR,2022/23,openfootball,away_shots,PIT_UNKNOWN,93,93,1.0
+CAR,2022/23,openfootball,away_shots_on_target,PIT_UNKNOWN,93,93,1.0
+CAR,2022/23,openfootball,away_yellow_cards,PIT_UNKNOWN,93,93,1.0
+CAR,2022/23,openfootball,home_corners,PIT_UNKNOWN,93,93,1.0
+CAR,2022/23,openfootball,home_fouls,PIT_UNKNOWN,93,93,1.0
+CAR,2022/23,openfootball,home_goals,PIT_UNSAFE,93,93,1.0
+CAR,2022/23,openfootball,home_red_cards,PIT_UNKNOWN,93,93,1.0
+CAR,2022/23,openfootball,home_shots,PIT_UNKNOWN,93,93,1.0
+CAR,2022/23,openfootball,home_shots_on_target,PIT_UNKNOWN,93,93,1.0
+CAR,2022/23,openfootball,home_yellow_cards,PIT_UNKNOWN,93,93,1.0
+CAR,2022/23,openfootball,result,PIT_UNSAFE,93,93,1.0
+CAR,2023/24,openfootball,away_corners,PIT_UNKNOWN,93,93,1.0
+CAR,2023/24,openfootball,away_fouls,PIT_UNKNOWN,93,93,1.0
+CAR,2023/24,openfootball,away_goals,PIT_UNSAFE,93,93,1.0
+CAR,2023/24,openfootball,away_red_cards,PIT_UNKNOWN,93,93,1.0
+CAR,2023/24,openfootball,away_shots,PIT_UNKNOWN,93,93,1.0
+CAR,2023/24,openfootball,away_shots_on_target,PIT_UNKNOWN,93,93,1.0
+CAR,2023/24,openfootball,away_yellow_cards,PIT_UNKNOWN,93,93,1.0
+CAR,2023/24,openfootball,home_corners,PIT_UNKNOWN,93,93,1.0
+CAR,2023/24,openfootball,home_fouls,PIT_UNKNOWN,93,93,1.0
+CAR,2023/24,openfootball,home_goals,PIT_UNSAFE,93,93,1.0
+CAR,2023/24,openfootball,home_red_cards,PIT_UNKNOWN,93,93,1.0
+CAR,2023/24,openfootball,home_shots,PIT_UNKNOWN,93,93,1.0
+CAR,2023/24,openfootball,home_shots_on_target,PIT_UNKNOWN,93,93,1.0
+CAR,2023/24,openfootball,home_yellow_cards,PIT_UNKNOWN,93,93,1.0
+CAR,2023/24,openfootball,result,PIT_UNSAFE,93,93,1.0
+CAR,2024/25,openfootball,away_corners,PIT_UNKNOWN,93,93,1.0
+CAR,2024/25,openfootball,away_fouls,PIT_UNKNOWN,93,93,1.0
+CAR,2024/25,openfootball,away_goals,PIT_UNSAFE,93,93,1.0
+CAR,2024/25,openfootball,away_red_cards,PIT_UNKNOWN,93,93,1.0
+CAR,2024/25,openfootball,away_shots,PIT_UNKNOWN,93,93,1.0
+CAR,2024/25,openfootball,away_shots_on_target,PIT_UNKNOWN,93,93,1.0
+CAR,2024/25,openfootball,away_yellow_cards,PIT_UNKNOWN,93,93,1.0
+CAR,2024/25,openfootball,home_corners,PIT_UNKNOWN,93,93,1.0
+CAR,2024/25,openfootball,home_fouls,PIT_UNKNOWN,93,93,1.0
+CAR,2024/25,openfootball,home_goals,PIT_UNSAFE,93,93,1.0
+CAR,2024/25,openfootball,home_red_cards,PIT_UNKNOWN,93,93,1.0
+CAR,2024/25,openfootball,home_shots,PIT_UNKNOWN,93,93,1.0
+CAR,2024/25,openfootball,home_shots_on_target,PIT_UNKNOWN,93,93,1.0
+CAR,2024/25,openfootball,home_yellow_cards,PIT_UNKNOWN,93,93,1.0
+CAR,2024/25,openfootball,result,PIT_UNSAFE,93,93,1.0
+CHA,2010/11,Football-Data.co.uk,away_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2010/11,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2010/11,Football-Data.co.uk,away_goals,PIT_UNSAFE,552,552,1.0
+CHA,2010/11,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2010/11,Football-Data.co.uk,away_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2010/11,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2010/11,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2010/11,Football-Data.co.uk,home_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2010/11,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2010/11,Football-Data.co.uk,home_goals,PIT_UNSAFE,552,552,1.0
+CHA,2010/11,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2010/11,Football-Data.co.uk,home_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2010/11,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2010/11,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2010/11,Football-Data.co.uk,result,PIT_UNSAFE,552,552,1.0
+CHA,2011/12,Football-Data.co.uk,away_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2011/12,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2011/12,Football-Data.co.uk,away_goals,PIT_UNSAFE,552,552,1.0
+CHA,2011/12,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2011/12,Football-Data.co.uk,away_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2011/12,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2011/12,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2011/12,Football-Data.co.uk,home_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2011/12,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2011/12,Football-Data.co.uk,home_goals,PIT_UNSAFE,552,552,1.0
+CHA,2011/12,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2011/12,Football-Data.co.uk,home_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2011/12,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2011/12,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2011/12,Football-Data.co.uk,result,PIT_UNSAFE,552,552,1.0
+CHA,2012/13,Football-Data.co.uk,away_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2012/13,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2012/13,Football-Data.co.uk,away_goals,PIT_UNSAFE,552,552,1.0
+CHA,2012/13,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2012/13,Football-Data.co.uk,away_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2012/13,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2012/13,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2012/13,Football-Data.co.uk,home_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2012/13,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2012/13,Football-Data.co.uk,home_goals,PIT_UNSAFE,552,552,1.0
+CHA,2012/13,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2012/13,Football-Data.co.uk,home_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2012/13,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2012/13,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2012/13,Football-Data.co.uk,result,PIT_UNSAFE,552,552,1.0
+CHA,2013/14,Football-Data.co.uk,away_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2013/14,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2013/14,Football-Data.co.uk,away_goals,PIT_UNSAFE,552,552,1.0
+CHA,2013/14,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2013/14,Football-Data.co.uk,away_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2013/14,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2013/14,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2013/14,Football-Data.co.uk,home_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2013/14,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2013/14,Football-Data.co.uk,home_goals,PIT_UNSAFE,552,552,1.0
+CHA,2013/14,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2013/14,Football-Data.co.uk,home_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2013/14,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2013/14,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2013/14,Football-Data.co.uk,result,PIT_UNSAFE,552,552,1.0
+CHA,2014/15,Football-Data.co.uk,away_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2014/15,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2014/15,Football-Data.co.uk,away_goals,PIT_UNSAFE,552,552,1.0
+CHA,2014/15,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2014/15,Football-Data.co.uk,away_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2014/15,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2014/15,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2014/15,Football-Data.co.uk,home_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2014/15,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2014/15,Football-Data.co.uk,home_goals,PIT_UNSAFE,552,552,1.0
+CHA,2014/15,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2014/15,Football-Data.co.uk,home_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2014/15,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2014/15,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2014/15,Football-Data.co.uk,result,PIT_UNSAFE,552,552,1.0
+CHA,2015/16,Football-Data.co.uk,away_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2015/16,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2015/16,Football-Data.co.uk,away_goals,PIT_UNSAFE,552,552,1.0
+CHA,2015/16,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2015/16,Football-Data.co.uk,away_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2015/16,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2015/16,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2015/16,Football-Data.co.uk,home_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2015/16,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2015/16,Football-Data.co.uk,home_goals,PIT_UNSAFE,552,552,1.0
+CHA,2015/16,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2015/16,Football-Data.co.uk,home_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2015/16,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2015/16,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2015/16,Football-Data.co.uk,result,PIT_UNSAFE,552,552,1.0
+CHA,2016/17,Football-Data.co.uk,away_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2016/17,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2016/17,Football-Data.co.uk,away_goals,PIT_UNSAFE,552,552,1.0
+CHA,2016/17,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2016/17,Football-Data.co.uk,away_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2016/17,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2016/17,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2016/17,Football-Data.co.uk,home_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2016/17,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2016/17,Football-Data.co.uk,home_goals,PIT_UNSAFE,552,552,1.0
+CHA,2016/17,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2016/17,Football-Data.co.uk,home_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2016/17,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2016/17,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2016/17,Football-Data.co.uk,result,PIT_UNSAFE,552,552,1.0
+CHA,2017/18,Football-Data.co.uk,away_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2017/18,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2017/18,Football-Data.co.uk,away_goals,PIT_UNSAFE,552,552,1.0
+CHA,2017/18,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2017/18,Football-Data.co.uk,away_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2017/18,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2017/18,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2017/18,Football-Data.co.uk,home_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2017/18,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2017/18,Football-Data.co.uk,home_goals,PIT_UNSAFE,552,552,1.0
+CHA,2017/18,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2017/18,Football-Data.co.uk,home_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2017/18,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2017/18,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2017/18,Football-Data.co.uk,result,PIT_UNSAFE,552,552,1.0
+CHA,2018/19,Football-Data.co.uk,away_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2018/19,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2018/19,Football-Data.co.uk,away_goals,PIT_UNSAFE,552,552,1.0
+CHA,2018/19,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2018/19,Football-Data.co.uk,away_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2018/19,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2018/19,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2018/19,Football-Data.co.uk,home_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2018/19,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2018/19,Football-Data.co.uk,home_goals,PIT_UNSAFE,552,552,1.0
+CHA,2018/19,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2018/19,Football-Data.co.uk,home_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2018/19,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2018/19,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2018/19,Football-Data.co.uk,result,PIT_UNSAFE,552,552,1.0
+CHA,2019/20,Football-Data.co.uk,away_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2019/20,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2019/20,Football-Data.co.uk,away_goals,PIT_UNSAFE,552,552,1.0
+CHA,2019/20,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2019/20,Football-Data.co.uk,away_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2019/20,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2019/20,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2019/20,Football-Data.co.uk,home_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2019/20,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2019/20,Football-Data.co.uk,home_goals,PIT_UNSAFE,552,552,1.0
+CHA,2019/20,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2019/20,Football-Data.co.uk,home_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2019/20,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2019/20,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2019/20,Football-Data.co.uk,result,PIT_UNSAFE,552,552,1.0
+CHA,2020/21,Football-Data.co.uk,away_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2020/21,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2020/21,Football-Data.co.uk,away_goals,PIT_UNSAFE,552,552,1.0
+CHA,2020/21,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2020/21,Football-Data.co.uk,away_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2020/21,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2020/21,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2020/21,Football-Data.co.uk,home_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2020/21,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2020/21,Football-Data.co.uk,home_goals,PIT_UNSAFE,552,552,1.0
+CHA,2020/21,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2020/21,Football-Data.co.uk,home_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2020/21,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2020/21,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2020/21,Football-Data.co.uk,result,PIT_UNSAFE,552,552,1.0
+CHA,2021/22,Football-Data.co.uk,away_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2021/22,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2021/22,Football-Data.co.uk,away_goals,PIT_UNSAFE,552,552,1.0
+CHA,2021/22,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2021/22,Football-Data.co.uk,away_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2021/22,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2021/22,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2021/22,Football-Data.co.uk,home_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2021/22,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2021/22,Football-Data.co.uk,home_goals,PIT_UNSAFE,552,552,1.0
+CHA,2021/22,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2021/22,Football-Data.co.uk,home_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2021/22,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2021/22,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2021/22,Football-Data.co.uk,result,PIT_UNSAFE,552,552,1.0
+CHA,2022/23,Football-Data.co.uk,away_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2022/23,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2022/23,Football-Data.co.uk,away_goals,PIT_UNSAFE,552,552,1.0
+CHA,2022/23,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2022/23,Football-Data.co.uk,away_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2022/23,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2022/23,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2022/23,Football-Data.co.uk,home_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2022/23,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2022/23,Football-Data.co.uk,home_goals,PIT_UNSAFE,552,552,1.0
+CHA,2022/23,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2022/23,Football-Data.co.uk,home_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2022/23,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2022/23,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2022/23,Football-Data.co.uk,result,PIT_UNSAFE,552,552,1.0
+CHA,2023/24,Football-Data.co.uk,away_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2023/24,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2023/24,Football-Data.co.uk,away_goals,PIT_UNSAFE,552,552,1.0
+CHA,2023/24,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2023/24,Football-Data.co.uk,away_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2023/24,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2023/24,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2023/24,Football-Data.co.uk,home_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2023/24,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2023/24,Football-Data.co.uk,home_goals,PIT_UNSAFE,552,552,1.0
+CHA,2023/24,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2023/24,Football-Data.co.uk,home_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2023/24,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2023/24,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2023/24,Football-Data.co.uk,result,PIT_UNSAFE,552,552,1.0
+CHA,2024/25,Football-Data.co.uk,away_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2024/25,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2024/25,Football-Data.co.uk,away_goals,PIT_UNSAFE,552,552,1.0
+CHA,2024/25,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2024/25,Football-Data.co.uk,away_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2024/25,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2024/25,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2024/25,Football-Data.co.uk,home_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2024/25,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2024/25,Football-Data.co.uk,home_goals,PIT_UNSAFE,552,552,1.0
+CHA,2024/25,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2024/25,Football-Data.co.uk,home_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2024/25,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2024/25,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2024/25,Football-Data.co.uk,result,PIT_UNSAFE,552,552,1.0
+CHA,2025/26,Football-Data.co.uk,away_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2025/26,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2025/26,Football-Data.co.uk,away_goals,PIT_UNSAFE,552,552,1.0
+CHA,2025/26,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2025/26,Football-Data.co.uk,away_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2025/26,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2025/26,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2025/26,Football-Data.co.uk,home_corners,PIT_UNKNOWN,552,552,1.0
+CHA,2025/26,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,552,552,1.0
+CHA,2025/26,Football-Data.co.uk,home_goals,PIT_UNSAFE,552,552,1.0
+CHA,2025/26,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2025/26,Football-Data.co.uk,home_shots,PIT_UNKNOWN,552,552,1.0
+CHA,2025/26,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,552,552,1.0
+CHA,2025/26,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,552,552,1.0
+CHA,2025/26,Football-Data.co.uk,result,PIT_UNSAFE,552,552,1.0
+DFBP,2018/19,openfootball,away_corners,PIT_UNKNOWN,63,63,1.0
+DFBP,2018/19,openfootball,away_fouls,PIT_UNKNOWN,63,63,1.0
+DFBP,2018/19,openfootball,away_goals,PIT_UNSAFE,63,63,1.0
+DFBP,2018/19,openfootball,away_red_cards,PIT_UNKNOWN,63,63,1.0
+DFBP,2018/19,openfootball,away_shots,PIT_UNKNOWN,63,63,1.0
+DFBP,2018/19,openfootball,away_shots_on_target,PIT_UNKNOWN,63,63,1.0
+DFBP,2018/19,openfootball,away_yellow_cards,PIT_UNKNOWN,63,63,1.0
+DFBP,2018/19,openfootball,home_corners,PIT_UNKNOWN,63,63,1.0
+DFBP,2018/19,openfootball,home_fouls,PIT_UNKNOWN,63,63,1.0
+DFBP,2018/19,openfootball,home_goals,PIT_UNSAFE,63,63,1.0
+DFBP,2018/19,openfootball,home_red_cards,PIT_UNKNOWN,63,63,1.0
+DFBP,2018/19,openfootball,home_shots,PIT_UNKNOWN,63,63,1.0
+DFBP,2018/19,openfootball,home_shots_on_target,PIT_UNKNOWN,63,63,1.0
+DFBP,2018/19,openfootball,home_yellow_cards,PIT_UNKNOWN,63,63,1.0
+DFBP,2018/19,openfootball,result,PIT_UNSAFE,63,63,1.0
+DFBP,2019/20,openfootball,away_corners,PIT_UNKNOWN,63,63,1.0
+DFBP,2019/20,openfootball,away_fouls,PIT_UNKNOWN,63,63,1.0
+DFBP,2019/20,openfootball,away_goals,PIT_UNSAFE,63,63,1.0
+DFBP,2019/20,openfootball,away_red_cards,PIT_UNKNOWN,63,63,1.0
+DFBP,2019/20,openfootball,away_shots,PIT_UNKNOWN,63,63,1.0
+DFBP,2019/20,openfootball,away_shots_on_target,PIT_UNKNOWN,63,63,1.0
+DFBP,2019/20,openfootball,away_yellow_cards,PIT_UNKNOWN,63,63,1.0
+DFBP,2019/20,openfootball,home_corners,PIT_UNKNOWN,63,63,1.0
+DFBP,2019/20,openfootball,home_fouls,PIT_UNKNOWN,63,63,1.0
+DFBP,2019/20,openfootball,home_goals,PIT_UNSAFE,63,63,1.0
+DFBP,2019/20,openfootball,home_red_cards,PIT_UNKNOWN,63,63,1.0
+DFBP,2019/20,openfootball,home_shots,PIT_UNKNOWN,63,63,1.0
+DFBP,2019/20,openfootball,home_shots_on_target,PIT_UNKNOWN,63,63,1.0
+DFBP,2019/20,openfootball,home_yellow_cards,PIT_UNKNOWN,63,63,1.0
+DFBP,2019/20,openfootball,result,PIT_UNSAFE,63,63,1.0
+DFBP,2024/25,openfootball,away_corners,PIT_UNKNOWN,63,63,1.0
+DFBP,2024/25,openfootball,away_fouls,PIT_UNKNOWN,63,63,1.0
+DFBP,2024/25,openfootball,away_goals,PIT_UNSAFE,63,63,1.0
+DFBP,2024/25,openfootball,away_red_cards,PIT_UNKNOWN,63,63,1.0
+DFBP,2024/25,openfootball,away_shots,PIT_UNKNOWN,63,63,1.0
+DFBP,2024/25,openfootball,away_shots_on_target,PIT_UNKNOWN,63,63,1.0
+DFBP,2024/25,openfootball,away_yellow_cards,PIT_UNKNOWN,63,63,1.0
+DFBP,2024/25,openfootball,home_corners,PIT_UNKNOWN,63,63,1.0
+DFBP,2024/25,openfootball,home_fouls,PIT_UNKNOWN,63,63,1.0
+DFBP,2024/25,openfootball,home_goals,PIT_UNSAFE,63,63,1.0
+DFBP,2024/25,openfootball,home_red_cards,PIT_UNKNOWN,63,63,1.0
+DFBP,2024/25,openfootball,home_shots,PIT_UNKNOWN,63,63,1.0
+DFBP,2024/25,openfootball,home_shots_on_target,PIT_UNKNOWN,63,63,1.0
+DFBP,2024/25,openfootball,home_yellow_cards,PIT_UNKNOWN,63,63,1.0
+DFBP,2024/25,openfootball,result,PIT_UNSAFE,63,63,1.0
+DFBP,2025/26,openfootball,away_corners,PIT_UNKNOWN,48,48,1.0
+DFBP,2025/26,openfootball,away_fouls,PIT_UNKNOWN,48,48,1.0
+DFBP,2025/26,openfootball,away_goals,PIT_UNSAFE,48,48,1.0
+DFBP,2025/26,openfootball,away_red_cards,PIT_UNKNOWN,48,48,1.0
+DFBP,2025/26,openfootball,away_shots,PIT_UNKNOWN,48,48,1.0
+DFBP,2025/26,openfootball,away_shots_on_target,PIT_UNKNOWN,48,48,1.0
+DFBP,2025/26,openfootball,away_yellow_cards,PIT_UNKNOWN,48,48,1.0
+DFBP,2025/26,openfootball,home_corners,PIT_UNKNOWN,48,48,1.0
+DFBP,2025/26,openfootball,home_fouls,PIT_UNKNOWN,48,48,1.0
+DFBP,2025/26,openfootball,home_goals,PIT_UNSAFE,48,48,1.0
+DFBP,2025/26,openfootball,home_red_cards,PIT_UNKNOWN,48,48,1.0
+DFBP,2025/26,openfootball,home_shots,PIT_UNKNOWN,48,48,1.0
+DFBP,2025/26,openfootball,home_shots_on_target,PIT_UNKNOWN,48,48,1.0
+DFBP,2025/26,openfootball,home_yellow_cards,PIT_UNKNOWN,48,48,1.0
+DFBP,2025/26,openfootball,result,PIT_UNSAFE,48,48,1.0
+EPL,2010/11,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2010/11,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2010/11,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+EPL,2010/11,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2010/11,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2010/11,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2010/11,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2010/11,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2010/11,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2010/11,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+EPL,2010/11,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2010/11,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2010/11,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2010/11,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2010/11,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+EPL,2011/12,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2011/12,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2011/12,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+EPL,2011/12,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2011/12,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2011/12,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2011/12,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2011/12,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2011/12,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2011/12,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+EPL,2011/12,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2011/12,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2011/12,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2011/12,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2011/12,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+EPL,2012/13,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2012/13,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2012/13,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+EPL,2012/13,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2012/13,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2012/13,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2012/13,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2012/13,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2012/13,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2012/13,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+EPL,2012/13,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2012/13,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2012/13,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2012/13,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2012/13,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+EPL,2013/14,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2013/14,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2013/14,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+EPL,2013/14,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2013/14,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2013/14,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2013/14,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2013/14,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2013/14,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2013/14,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+EPL,2013/14,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2013/14,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2013/14,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2013/14,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2013/14,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+EPL,2014/15,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2014/15,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2014/15,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+EPL,2014/15,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2014/15,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2014/15,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2014/15,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2014/15,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2014/15,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2014/15,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+EPL,2014/15,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2014/15,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2014/15,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2014/15,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2014/15,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+EPL,2015/16,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2015/16,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2015/16,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+EPL,2015/16,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2015/16,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2015/16,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2015/16,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2015/16,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2015/16,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2015/16,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+EPL,2015/16,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2015/16,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2015/16,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2015/16,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2015/16,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+EPL,2016/17,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2016/17,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2016/17,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+EPL,2016/17,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2016/17,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2016/17,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2016/17,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2016/17,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2016/17,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2016/17,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+EPL,2016/17,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2016/17,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2016/17,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2016/17,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2016/17,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+EPL,2017/18,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2017/18,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2017/18,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+EPL,2017/18,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2017/18,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2017/18,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2017/18,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2017/18,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2017/18,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2017/18,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+EPL,2017/18,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2017/18,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2017/18,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2017/18,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2017/18,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+EPL,2018/19,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2018/19,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2018/19,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+EPL,2018/19,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2018/19,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2018/19,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2018/19,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2018/19,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2018/19,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2018/19,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+EPL,2018/19,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2018/19,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2018/19,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2018/19,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2018/19,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+EPL,2019/20,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2019/20,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2019/20,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+EPL,2019/20,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2019/20,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2019/20,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2019/20,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2019/20,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2019/20,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2019/20,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+EPL,2019/20,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2019/20,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2019/20,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2019/20,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2019/20,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+EPL,2020/21,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2020/21,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2020/21,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+EPL,2020/21,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2020/21,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2020/21,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2020/21,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2020/21,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2020/21,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2020/21,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+EPL,2020/21,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2020/21,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2020/21,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2020/21,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2020/21,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+EPL,2021/22,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2021/22,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2021/22,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+EPL,2021/22,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2021/22,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2021/22,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2021/22,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2021/22,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2021/22,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2021/22,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+EPL,2021/22,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2021/22,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2021/22,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2021/22,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2021/22,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+EPL,2022/23,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2022/23,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2022/23,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+EPL,2022/23,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2022/23,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2022/23,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2022/23,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2022/23,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2022/23,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2022/23,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+EPL,2022/23,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2022/23,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2022/23,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2022/23,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2022/23,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+EPL,2023/24,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2023/24,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2023/24,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+EPL,2023/24,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2023/24,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2023/24,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2023/24,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2023/24,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2023/24,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2023/24,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+EPL,2023/24,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2023/24,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2023/24,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2023/24,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2023/24,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+EPL,2024/25,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2024/25,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2024/25,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+EPL,2024/25,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2024/25,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2024/25,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2024/25,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2024/25,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2024/25,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2024/25,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+EPL,2024/25,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2024/25,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2024/25,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2024/25,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2024/25,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+EPL,2025/26,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2025/26,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2025/26,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+EPL,2025/26,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2025/26,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2025/26,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2025/26,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2025/26,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+EPL,2025/26,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+EPL,2025/26,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+EPL,2025/26,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2025/26,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+EPL,2025/26,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+EPL,2025/26,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+EPL,2025/26,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+FL1,2010/11,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2010/11,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2010/11,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+FL1,2010/11,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2010/11,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2010/11,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2010/11,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2010/11,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2010/11,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2010/11,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+FL1,2010/11,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2010/11,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2010/11,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2010/11,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2010/11,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+FL1,2011/12,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2011/12,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2011/12,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+FL1,2011/12,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2011/12,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2011/12,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2011/12,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2011/12,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2011/12,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2011/12,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+FL1,2011/12,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2011/12,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2011/12,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2011/12,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2011/12,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+FL1,2012/13,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2012/13,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2012/13,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+FL1,2012/13,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2012/13,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2012/13,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2012/13,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2012/13,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2012/13,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2012/13,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+FL1,2012/13,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2012/13,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2012/13,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2012/13,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2012/13,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+FL1,2013/14,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2013/14,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2013/14,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+FL1,2013/14,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2013/14,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2013/14,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2013/14,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2013/14,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2013/14,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2013/14,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+FL1,2013/14,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2013/14,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2013/14,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2013/14,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2013/14,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+FL1,2014/15,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2014/15,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2014/15,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+FL1,2014/15,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2014/15,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2014/15,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2014/15,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2014/15,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2014/15,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2014/15,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+FL1,2014/15,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2014/15,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2014/15,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2014/15,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2014/15,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+FL1,2015/16,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2015/16,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2015/16,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+FL1,2015/16,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2015/16,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2015/16,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2015/16,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2015/16,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2015/16,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2015/16,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+FL1,2015/16,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2015/16,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2015/16,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2015/16,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2015/16,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+FL1,2016/17,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2016/17,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2016/17,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+FL1,2016/17,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2016/17,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2016/17,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2016/17,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2016/17,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2016/17,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2016/17,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+FL1,2016/17,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2016/17,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2016/17,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2016/17,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2016/17,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+FL1,2017/18,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2017/18,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2017/18,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+FL1,2017/18,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2017/18,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2017/18,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2017/18,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2017/18,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2017/18,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2017/18,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+FL1,2017/18,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2017/18,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2017/18,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2017/18,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2017/18,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+FL1,2018/19,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2018/19,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2018/19,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+FL1,2018/19,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2018/19,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2018/19,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2018/19,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2018/19,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2018/19,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2018/19,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+FL1,2018/19,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2018/19,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2018/19,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2018/19,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2018/19,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+FL1,2019/20,Football-Data.co.uk,away_corners,PIT_UNKNOWN,279,279,1.0
+FL1,2019/20,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,279,279,1.0
+FL1,2019/20,Football-Data.co.uk,away_goals,PIT_UNSAFE,279,279,1.0
+FL1,2019/20,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,279,279,1.0
+FL1,2019/20,Football-Data.co.uk,away_shots,PIT_UNKNOWN,279,279,1.0
+FL1,2019/20,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,279,279,1.0
+FL1,2019/20,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,279,279,1.0
+FL1,2019/20,Football-Data.co.uk,home_corners,PIT_UNKNOWN,279,279,1.0
+FL1,2019/20,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,279,279,1.0
+FL1,2019/20,Football-Data.co.uk,home_goals,PIT_UNSAFE,279,279,1.0
+FL1,2019/20,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,279,279,1.0
+FL1,2019/20,Football-Data.co.uk,home_shots,PIT_UNKNOWN,279,279,1.0
+FL1,2019/20,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,279,279,1.0
+FL1,2019/20,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,279,279,1.0
+FL1,2019/20,Football-Data.co.uk,result,PIT_UNSAFE,279,279,1.0
+FL1,2020/21,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2020/21,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2020/21,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+FL1,2020/21,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2020/21,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2020/21,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2020/21,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2020/21,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2020/21,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2020/21,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+FL1,2020/21,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2020/21,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2020/21,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2020/21,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2020/21,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+FL1,2021/22,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2021/22,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2021/22,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+FL1,2021/22,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2021/22,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2021/22,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2021/22,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2021/22,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2021/22,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2021/22,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+FL1,2021/22,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2021/22,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2021/22,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2021/22,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2021/22,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+FL1,2022/23,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2022/23,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2022/23,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+FL1,2022/23,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2022/23,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2022/23,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2022/23,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2022/23,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+FL1,2022/23,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+FL1,2022/23,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+FL1,2022/23,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2022/23,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+FL1,2022/23,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+FL1,2022/23,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+FL1,2022/23,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+FL1,2023/24,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+FL1,2023/24,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+FL1,2023/24,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+FL1,2023/24,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+FL1,2023/24,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+FL1,2023/24,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+FL1,2023/24,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+FL1,2023/24,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+FL1,2023/24,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+FL1,2023/24,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+FL1,2023/24,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+FL1,2023/24,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+FL1,2023/24,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+FL1,2023/24,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+FL1,2023/24,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+FL1,2024/25,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+FL1,2024/25,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+FL1,2024/25,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+FL1,2024/25,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+FL1,2024/25,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+FL1,2024/25,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+FL1,2024/25,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+FL1,2024/25,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+FL1,2024/25,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+FL1,2024/25,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+FL1,2024/25,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+FL1,2024/25,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+FL1,2024/25,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+FL1,2024/25,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+FL1,2024/25,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+FL1,2025/26,Football-Data.co.uk,away_corners,PIT_UNKNOWN,306,306,1.0
+FL1,2025/26,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,306,306,1.0
+FL1,2025/26,Football-Data.co.uk,away_goals,PIT_UNSAFE,306,306,1.0
+FL1,2025/26,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,306,306,1.0
+FL1,2025/26,Football-Data.co.uk,away_shots,PIT_UNKNOWN,306,306,1.0
+FL1,2025/26,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+FL1,2025/26,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+FL1,2025/26,Football-Data.co.uk,home_corners,PIT_UNKNOWN,306,306,1.0
+FL1,2025/26,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,306,306,1.0
+FL1,2025/26,Football-Data.co.uk,home_goals,PIT_UNSAFE,306,306,1.0
+FL1,2025/26,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,306,306,1.0
+FL1,2025/26,Football-Data.co.uk,home_shots,PIT_UNKNOWN,306,306,1.0
+FL1,2025/26,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+FL1,2025/26,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+FL1,2025/26,Football-Data.co.uk,result,PIT_UNSAFE,306,306,1.0
+FRI,2010/11,ESPN:club.friendly,away_corners,PIT_UNKNOWN,2,2,1.0
+FRI,2010/11,ESPN:club.friendly,away_fouls,PIT_UNKNOWN,2,2,1.0
+FRI,2010/11,ESPN:club.friendly,away_goals,PIT_UNSAFE,2,2,1.0
+FRI,2010/11,ESPN:club.friendly,away_red_cards,PIT_UNKNOWN,2,2,1.0
+FRI,2010/11,ESPN:club.friendly,away_shots,PIT_UNKNOWN,2,2,1.0
+FRI,2010/11,ESPN:club.friendly,away_shots_on_target,PIT_UNKNOWN,2,2,1.0
+FRI,2010/11,ESPN:club.friendly,away_yellow_cards,PIT_UNKNOWN,2,2,1.0
+FRI,2010/11,ESPN:club.friendly,home_corners,PIT_UNKNOWN,2,2,1.0
+FRI,2010/11,ESPN:club.friendly,home_fouls,PIT_UNKNOWN,2,2,1.0
+FRI,2010/11,ESPN:club.friendly,home_goals,PIT_UNSAFE,2,2,1.0
+FRI,2010/11,ESPN:club.friendly,home_red_cards,PIT_UNKNOWN,2,2,1.0
+FRI,2010/11,ESPN:club.friendly,home_shots,PIT_UNKNOWN,2,2,1.0
+FRI,2010/11,ESPN:club.friendly,home_shots_on_target,PIT_UNKNOWN,2,2,1.0
+FRI,2010/11,ESPN:club.friendly,home_yellow_cards,PIT_UNKNOWN,2,2,1.0
+FRI,2010/11,ESPN:club.friendly,result,PIT_UNSAFE,2,2,1.0
+FRI,2014/15,ESPN:club.friendly,away_corners,PIT_UNKNOWN,99,99,1.0
+FRI,2014/15,ESPN:club.friendly,away_fouls,PIT_UNKNOWN,99,99,1.0
+FRI,2014/15,ESPN:club.friendly,away_goals,PIT_UNSAFE,99,99,1.0
+FRI,2014/15,ESPN:club.friendly,away_red_cards,PIT_UNKNOWN,99,99,1.0
+FRI,2014/15,ESPN:club.friendly,away_shots,PIT_UNKNOWN,99,99,1.0
+FRI,2014/15,ESPN:club.friendly,away_shots_on_target,PIT_UNKNOWN,99,99,1.0
+FRI,2014/15,ESPN:club.friendly,away_yellow_cards,PIT_UNKNOWN,99,99,1.0
+FRI,2014/15,ESPN:club.friendly,home_corners,PIT_UNKNOWN,99,99,1.0
+FRI,2014/15,ESPN:club.friendly,home_fouls,PIT_UNKNOWN,99,99,1.0
+FRI,2014/15,ESPN:club.friendly,home_goals,PIT_UNSAFE,99,99,1.0
+FRI,2014/15,ESPN:club.friendly,home_red_cards,PIT_UNKNOWN,99,99,1.0
+FRI,2014/15,ESPN:club.friendly,home_shots,PIT_UNKNOWN,99,99,1.0
+FRI,2014/15,ESPN:club.friendly,home_shots_on_target,PIT_UNKNOWN,99,99,1.0
+FRI,2014/15,ESPN:club.friendly,home_yellow_cards,PIT_UNKNOWN,99,99,1.0
+FRI,2014/15,ESPN:club.friendly,result,PIT_UNSAFE,99,99,1.0
+FRI,2015/16,ESPN:club.friendly,away_corners,PIT_UNKNOWN,175,175,1.0
+FRI,2015/16,ESPN:club.friendly,away_fouls,PIT_UNKNOWN,175,175,1.0
+FRI,2015/16,ESPN:club.friendly,away_goals,PIT_UNSAFE,175,175,1.0
+FRI,2015/16,ESPN:club.friendly,away_red_cards,PIT_UNKNOWN,175,175,1.0
+FRI,2015/16,ESPN:club.friendly,away_shots,PIT_UNKNOWN,175,175,1.0
+FRI,2015/16,ESPN:club.friendly,away_shots_on_target,PIT_UNKNOWN,175,175,1.0
+FRI,2015/16,ESPN:club.friendly,away_yellow_cards,PIT_UNKNOWN,175,175,1.0
+FRI,2015/16,ESPN:club.friendly,home_corners,PIT_UNKNOWN,175,175,1.0
+FRI,2015/16,ESPN:club.friendly,home_fouls,PIT_UNKNOWN,175,175,1.0
+FRI,2015/16,ESPN:club.friendly,home_goals,PIT_UNSAFE,175,175,1.0
+FRI,2015/16,ESPN:club.friendly,home_red_cards,PIT_UNKNOWN,175,175,1.0
+FRI,2015/16,ESPN:club.friendly,home_shots,PIT_UNKNOWN,175,175,1.0
+FRI,2015/16,ESPN:club.friendly,home_shots_on_target,PIT_UNKNOWN,175,175,1.0
+FRI,2015/16,ESPN:club.friendly,home_yellow_cards,PIT_UNKNOWN,175,175,1.0
+FRI,2015/16,ESPN:club.friendly,result,PIT_UNSAFE,175,175,1.0
+FRI,2016/17,ESPN:club.friendly,away_corners,PIT_UNKNOWN,312,312,1.0
+FRI,2016/17,ESPN:club.friendly,away_fouls,PIT_UNKNOWN,312,312,1.0
+FRI,2016/17,ESPN:club.friendly,away_goals,PIT_UNSAFE,312,312,1.0
+FRI,2016/17,ESPN:club.friendly,away_red_cards,PIT_UNKNOWN,312,312,1.0
+FRI,2016/17,ESPN:club.friendly,away_shots,PIT_UNKNOWN,312,312,1.0
+FRI,2016/17,ESPN:club.friendly,away_shots_on_target,PIT_UNKNOWN,312,312,1.0
+FRI,2016/17,ESPN:club.friendly,away_yellow_cards,PIT_UNKNOWN,312,312,1.0
+FRI,2016/17,ESPN:club.friendly,home_corners,PIT_UNKNOWN,312,312,1.0
+FRI,2016/17,ESPN:club.friendly,home_fouls,PIT_UNKNOWN,312,312,1.0
+FRI,2016/17,ESPN:club.friendly,home_goals,PIT_UNSAFE,312,312,1.0
+FRI,2016/17,ESPN:club.friendly,home_red_cards,PIT_UNKNOWN,312,312,1.0
+FRI,2016/17,ESPN:club.friendly,home_shots,PIT_UNKNOWN,312,312,1.0
+FRI,2016/17,ESPN:club.friendly,home_shots_on_target,PIT_UNKNOWN,312,312,1.0
+FRI,2016/17,ESPN:club.friendly,home_yellow_cards,PIT_UNKNOWN,312,312,1.0
+FRI,2016/17,ESPN:club.friendly,result,PIT_UNSAFE,312,312,1.0
+FRI,2017/18,ESPN:club.friendly,away_corners,PIT_UNKNOWN,108,108,1.0
+FRI,2017/18,ESPN:club.friendly,away_fouls,PIT_UNKNOWN,108,108,1.0
+FRI,2017/18,ESPN:club.friendly,away_goals,PIT_UNSAFE,108,108,1.0
+FRI,2017/18,ESPN:club.friendly,away_red_cards,PIT_UNKNOWN,108,108,1.0
+FRI,2017/18,ESPN:club.friendly,away_shots,PIT_UNKNOWN,108,108,1.0
+FRI,2017/18,ESPN:club.friendly,away_shots_on_target,PIT_UNKNOWN,108,108,1.0
+FRI,2017/18,ESPN:club.friendly,away_yellow_cards,PIT_UNKNOWN,108,108,1.0
+FRI,2017/18,ESPN:club.friendly,home_corners,PIT_UNKNOWN,108,108,1.0
+FRI,2017/18,ESPN:club.friendly,home_fouls,PIT_UNKNOWN,108,108,1.0
+FRI,2017/18,ESPN:club.friendly,home_goals,PIT_UNSAFE,108,108,1.0
+FRI,2017/18,ESPN:club.friendly,home_red_cards,PIT_UNKNOWN,108,108,1.0
+FRI,2017/18,ESPN:club.friendly,home_shots,PIT_UNKNOWN,108,108,1.0
+FRI,2017/18,ESPN:club.friendly,home_shots_on_target,PIT_UNKNOWN,108,108,1.0
+FRI,2017/18,ESPN:club.friendly,home_yellow_cards,PIT_UNKNOWN,108,108,1.0
+FRI,2017/18,ESPN:club.friendly,result,PIT_UNSAFE,108,108,1.0
+FRI,2018/19,ESPN:club.friendly,away_corners,PIT_UNKNOWN,305,305,1.0
+FRI,2018/19,ESPN:club.friendly,away_fouls,PIT_UNKNOWN,305,305,1.0
+FRI,2018/19,ESPN:club.friendly,away_goals,PIT_UNSAFE,305,305,1.0
+FRI,2018/19,ESPN:club.friendly,away_red_cards,PIT_UNKNOWN,305,305,1.0
+FRI,2018/19,ESPN:club.friendly,away_shots,PIT_UNKNOWN,305,305,1.0
+FRI,2018/19,ESPN:club.friendly,away_shots_on_target,PIT_UNKNOWN,305,305,1.0
+FRI,2018/19,ESPN:club.friendly,away_yellow_cards,PIT_UNKNOWN,305,305,1.0
+FRI,2018/19,ESPN:club.friendly,home_corners,PIT_UNKNOWN,305,305,1.0
+FRI,2018/19,ESPN:club.friendly,home_fouls,PIT_UNKNOWN,305,305,1.0
+FRI,2018/19,ESPN:club.friendly,home_goals,PIT_UNSAFE,305,305,1.0
+FRI,2018/19,ESPN:club.friendly,home_red_cards,PIT_UNKNOWN,305,305,1.0
+FRI,2018/19,ESPN:club.friendly,home_shots,PIT_UNKNOWN,305,305,1.0
+FRI,2018/19,ESPN:club.friendly,home_shots_on_target,PIT_UNKNOWN,305,305,1.0
+FRI,2018/19,ESPN:club.friendly,home_yellow_cards,PIT_UNKNOWN,305,305,1.0
+FRI,2018/19,ESPN:club.friendly,result,PIT_UNSAFE,305,305,1.0
+FRI,2019/20,ESPN:club.friendly,away_corners,PIT_UNKNOWN,150,150,1.0
+FRI,2019/20,ESPN:club.friendly,away_fouls,PIT_UNKNOWN,150,150,1.0
+FRI,2019/20,ESPN:club.friendly,away_goals,PIT_UNSAFE,150,150,1.0
+FRI,2019/20,ESPN:club.friendly,away_red_cards,PIT_UNKNOWN,150,150,1.0
+FRI,2019/20,ESPN:club.friendly,away_shots,PIT_UNKNOWN,150,150,1.0
+FRI,2019/20,ESPN:club.friendly,away_shots_on_target,PIT_UNKNOWN,150,150,1.0
+FRI,2019/20,ESPN:club.friendly,away_yellow_cards,PIT_UNKNOWN,150,150,1.0
+FRI,2019/20,ESPN:club.friendly,home_corners,PIT_UNKNOWN,150,150,1.0
+FRI,2019/20,ESPN:club.friendly,home_fouls,PIT_UNKNOWN,150,150,1.0
+FRI,2019/20,ESPN:club.friendly,home_goals,PIT_UNSAFE,150,150,1.0
+FRI,2019/20,ESPN:club.friendly,home_red_cards,PIT_UNKNOWN,150,150,1.0
+FRI,2019/20,ESPN:club.friendly,home_shots,PIT_UNKNOWN,150,150,1.0
+FRI,2019/20,ESPN:club.friendly,home_shots_on_target,PIT_UNKNOWN,150,150,1.0
+FRI,2019/20,ESPN:club.friendly,home_yellow_cards,PIT_UNKNOWN,150,150,1.0
+FRI,2019/20,ESPN:club.friendly,result,PIT_UNSAFE,150,150,1.0
+FRI,2020/21,ESPN:club.friendly,away_corners,PIT_UNKNOWN,112,112,1.0
+FRI,2020/21,ESPN:club.friendly,away_fouls,PIT_UNKNOWN,112,112,1.0
+FRI,2020/21,ESPN:club.friendly,away_goals,PIT_UNSAFE,112,112,1.0
+FRI,2020/21,ESPN:club.friendly,away_red_cards,PIT_UNKNOWN,112,112,1.0
+FRI,2020/21,ESPN:club.friendly,away_shots,PIT_UNKNOWN,112,112,1.0
+FRI,2020/21,ESPN:club.friendly,away_shots_on_target,PIT_UNKNOWN,112,112,1.0
+FRI,2020/21,ESPN:club.friendly,away_yellow_cards,PIT_UNKNOWN,112,112,1.0
+FRI,2020/21,ESPN:club.friendly,home_corners,PIT_UNKNOWN,112,112,1.0
+FRI,2020/21,ESPN:club.friendly,home_fouls,PIT_UNKNOWN,112,112,1.0
+FRI,2020/21,ESPN:club.friendly,home_goals,PIT_UNSAFE,112,112,1.0
+FRI,2020/21,ESPN:club.friendly,home_red_cards,PIT_UNKNOWN,112,112,1.0
+FRI,2020/21,ESPN:club.friendly,home_shots,PIT_UNKNOWN,112,112,1.0
+FRI,2020/21,ESPN:club.friendly,home_shots_on_target,PIT_UNKNOWN,112,112,1.0
+FRI,2020/21,ESPN:club.friendly,home_yellow_cards,PIT_UNKNOWN,112,112,1.0
+FRI,2020/21,ESPN:club.friendly,result,PIT_UNSAFE,112,112,1.0
+FRI,2021/22,ESPN:club.friendly,away_corners,PIT_UNKNOWN,175,175,1.0
+FRI,2021/22,ESPN:club.friendly,away_fouls,PIT_UNKNOWN,175,175,1.0
+FRI,2021/22,ESPN:club.friendly,away_goals,PIT_UNSAFE,175,175,1.0
+FRI,2021/22,ESPN:club.friendly,away_red_cards,PIT_UNKNOWN,175,175,1.0
+FRI,2021/22,ESPN:club.friendly,away_shots,PIT_UNKNOWN,175,175,1.0
+FRI,2021/22,ESPN:club.friendly,away_shots_on_target,PIT_UNKNOWN,175,175,1.0
+FRI,2021/22,ESPN:club.friendly,away_yellow_cards,PIT_UNKNOWN,175,175,1.0
+FRI,2021/22,ESPN:club.friendly,home_corners,PIT_UNKNOWN,175,175,1.0
+FRI,2021/22,ESPN:club.friendly,home_fouls,PIT_UNKNOWN,175,175,1.0
+FRI,2021/22,ESPN:club.friendly,home_goals,PIT_UNSAFE,175,175,1.0
+FRI,2021/22,ESPN:club.friendly,home_red_cards,PIT_UNKNOWN,175,175,1.0
+FRI,2021/22,ESPN:club.friendly,home_shots,PIT_UNKNOWN,175,175,1.0
+FRI,2021/22,ESPN:club.friendly,home_shots_on_target,PIT_UNKNOWN,175,175,1.0
+FRI,2021/22,ESPN:club.friendly,home_yellow_cards,PIT_UNKNOWN,175,175,1.0
+FRI,2021/22,ESPN:club.friendly,result,PIT_UNSAFE,175,175,1.0
+FRI,2022/23,ESPN:club.friendly,away_corners,PIT_UNKNOWN,323,323,1.0
+FRI,2022/23,ESPN:club.friendly,away_fouls,PIT_UNKNOWN,323,323,1.0
+FRI,2022/23,ESPN:club.friendly,away_goals,PIT_UNSAFE,323,323,1.0
+FRI,2022/23,ESPN:club.friendly,away_red_cards,PIT_UNKNOWN,323,323,1.0
+FRI,2022/23,ESPN:club.friendly,away_shots,PIT_UNKNOWN,323,323,1.0
+FRI,2022/23,ESPN:club.friendly,away_shots_on_target,PIT_UNKNOWN,323,323,1.0
+FRI,2022/23,ESPN:club.friendly,away_yellow_cards,PIT_UNKNOWN,323,323,1.0
+FRI,2022/23,ESPN:club.friendly,home_corners,PIT_UNKNOWN,323,323,1.0
+FRI,2022/23,ESPN:club.friendly,home_fouls,PIT_UNKNOWN,323,323,1.0
+FRI,2022/23,ESPN:club.friendly,home_goals,PIT_UNSAFE,323,323,1.0
+FRI,2022/23,ESPN:club.friendly,home_red_cards,PIT_UNKNOWN,323,323,1.0
+FRI,2022/23,ESPN:club.friendly,home_shots,PIT_UNKNOWN,323,323,1.0
+FRI,2022/23,ESPN:club.friendly,home_shots_on_target,PIT_UNKNOWN,323,323,1.0
+FRI,2022/23,ESPN:club.friendly,home_yellow_cards,PIT_UNKNOWN,323,323,1.0
+FRI,2022/23,ESPN:club.friendly,result,PIT_UNSAFE,323,323,1.0
+FRI,2023/24,ESPN:club.friendly,away_corners,PIT_UNKNOWN,226,226,1.0
+FRI,2023/24,ESPN:club.friendly,away_fouls,PIT_UNKNOWN,226,226,1.0
+FRI,2023/24,ESPN:club.friendly,away_goals,PIT_UNSAFE,226,226,1.0
+FRI,2023/24,ESPN:club.friendly,away_red_cards,PIT_UNKNOWN,226,226,1.0
+FRI,2023/24,ESPN:club.friendly,away_shots,PIT_UNKNOWN,226,226,1.0
+FRI,2023/24,ESPN:club.friendly,away_shots_on_target,PIT_UNKNOWN,226,226,1.0
+FRI,2023/24,ESPN:club.friendly,away_yellow_cards,PIT_UNKNOWN,226,226,1.0
+FRI,2023/24,ESPN:club.friendly,home_corners,PIT_UNKNOWN,226,226,1.0
+FRI,2023/24,ESPN:club.friendly,home_fouls,PIT_UNKNOWN,226,226,1.0
+FRI,2023/24,ESPN:club.friendly,home_goals,PIT_UNSAFE,226,226,1.0
+FRI,2023/24,ESPN:club.friendly,home_red_cards,PIT_UNKNOWN,226,226,1.0
+FRI,2023/24,ESPN:club.friendly,home_shots,PIT_UNKNOWN,226,226,1.0
+FRI,2023/24,ESPN:club.friendly,home_shots_on_target,PIT_UNKNOWN,226,226,1.0
+FRI,2023/24,ESPN:club.friendly,home_yellow_cards,PIT_UNKNOWN,226,226,1.0
+FRI,2023/24,ESPN:club.friendly,result,PIT_UNSAFE,226,226,1.0
+FRI,2024/25,ESPN:club.friendly,away_corners,PIT_UNKNOWN,170,170,1.0
+FRI,2024/25,ESPN:club.friendly,away_fouls,PIT_UNKNOWN,170,170,1.0
+FRI,2024/25,ESPN:club.friendly,away_goals,PIT_UNSAFE,170,170,1.0
+FRI,2024/25,ESPN:club.friendly,away_red_cards,PIT_UNKNOWN,170,170,1.0
+FRI,2024/25,ESPN:club.friendly,away_shots,PIT_UNKNOWN,170,170,1.0
+FRI,2024/25,ESPN:club.friendly,away_shots_on_target,PIT_UNKNOWN,170,170,1.0
+FRI,2024/25,ESPN:club.friendly,away_yellow_cards,PIT_UNKNOWN,170,170,1.0
+FRI,2024/25,ESPN:club.friendly,home_corners,PIT_UNKNOWN,170,170,1.0
+FRI,2024/25,ESPN:club.friendly,home_fouls,PIT_UNKNOWN,170,170,1.0
+FRI,2024/25,ESPN:club.friendly,home_goals,PIT_UNSAFE,170,170,1.0
+FRI,2024/25,ESPN:club.friendly,home_red_cards,PIT_UNKNOWN,170,170,1.0
+FRI,2024/25,ESPN:club.friendly,home_shots,PIT_UNKNOWN,170,170,1.0
+FRI,2024/25,ESPN:club.friendly,home_shots_on_target,PIT_UNKNOWN,170,170,1.0
+FRI,2024/25,ESPN:club.friendly,home_yellow_cards,PIT_UNKNOWN,170,170,1.0
+FRI,2024/25,ESPN:club.friendly,result,PIT_UNSAFE,170,170,1.0
+FRI,2025/26,ESPN:club.friendly,away_corners,PIT_UNKNOWN,141,141,1.0
+FRI,2025/26,ESPN:club.friendly,away_fouls,PIT_UNKNOWN,141,141,1.0
+FRI,2025/26,ESPN:club.friendly,away_goals,PIT_UNSAFE,141,141,1.0
+FRI,2025/26,ESPN:club.friendly,away_red_cards,PIT_UNKNOWN,141,141,1.0
+FRI,2025/26,ESPN:club.friendly,away_shots,PIT_UNKNOWN,141,141,1.0
+FRI,2025/26,ESPN:club.friendly,away_shots_on_target,PIT_UNKNOWN,141,141,1.0
+FRI,2025/26,ESPN:club.friendly,away_yellow_cards,PIT_UNKNOWN,141,141,1.0
+FRI,2025/26,ESPN:club.friendly,home_corners,PIT_UNKNOWN,141,141,1.0
+FRI,2025/26,ESPN:club.friendly,home_fouls,PIT_UNKNOWN,141,141,1.0
+FRI,2025/26,ESPN:club.friendly,home_goals,PIT_UNSAFE,141,141,1.0
+FRI,2025/26,ESPN:club.friendly,home_red_cards,PIT_UNKNOWN,141,141,1.0
+FRI,2025/26,ESPN:club.friendly,home_shots,PIT_UNKNOWN,141,141,1.0
+FRI,2025/26,ESPN:club.friendly,home_shots_on_target,PIT_UNKNOWN,141,141,1.0
+FRI,2025/26,ESPN:club.friendly,home_yellow_cards,PIT_UNKNOWN,141,141,1.0
+FRI,2025/26,ESPN:club.friendly,result,PIT_UNSAFE,141,141,1.0
+J1,2010,J.League Data Site,away_corners,PIT_UNKNOWN,306,306,1.0
+J1,2010,J.League Data Site,away_fouls,PIT_UNKNOWN,306,306,1.0
+J1,2010,J.League Data Site,away_goals,PIT_UNSAFE,306,306,1.0
+J1,2010,J.League Data Site,away_red_cards,PIT_UNKNOWN,306,306,1.0
+J1,2010,J.League Data Site,away_shots,PIT_UNKNOWN,306,306,1.0
+J1,2010,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J1,2010,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J1,2010,J.League Data Site,home_corners,PIT_UNKNOWN,306,306,1.0
+J1,2010,J.League Data Site,home_fouls,PIT_UNKNOWN,306,306,1.0
+J1,2010,J.League Data Site,home_goals,PIT_UNSAFE,306,306,1.0
+J1,2010,J.League Data Site,home_red_cards,PIT_UNKNOWN,306,306,1.0
+J1,2010,J.League Data Site,home_shots,PIT_UNKNOWN,306,306,1.0
+J1,2010,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J1,2010,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J1,2010,J.League Data Site,result,PIT_UNSAFE,306,306,1.0
+J1,2011,J.League Data Site,away_corners,PIT_UNKNOWN,306,306,1.0
+J1,2011,J.League Data Site,away_fouls,PIT_UNKNOWN,306,306,1.0
+J1,2011,J.League Data Site,away_goals,PIT_UNSAFE,306,306,1.0
+J1,2011,J.League Data Site,away_red_cards,PIT_UNKNOWN,306,306,1.0
+J1,2011,J.League Data Site,away_shots,PIT_UNKNOWN,306,306,1.0
+J1,2011,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J1,2011,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J1,2011,J.League Data Site,home_corners,PIT_UNKNOWN,306,306,1.0
+J1,2011,J.League Data Site,home_fouls,PIT_UNKNOWN,306,306,1.0
+J1,2011,J.League Data Site,home_goals,PIT_UNSAFE,306,306,1.0
+J1,2011,J.League Data Site,home_red_cards,PIT_UNKNOWN,306,306,1.0
+J1,2011,J.League Data Site,home_shots,PIT_UNKNOWN,306,306,1.0
+J1,2011,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J1,2011,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J1,2011,J.League Data Site,result,PIT_UNSAFE,306,306,1.0
+J1,2012,Football-Data.co.uk:JPN.csv,away_corners,PIT_UNKNOWN,306,306,1.0
+J1,2012,Football-Data.co.uk:JPN.csv,away_fouls,PIT_UNKNOWN,306,306,1.0
+J1,2012,Football-Data.co.uk:JPN.csv,away_goals,PIT_UNSAFE,306,306,1.0
+J1,2012,Football-Data.co.uk:JPN.csv,away_red_cards,PIT_UNKNOWN,306,306,1.0
+J1,2012,Football-Data.co.uk:JPN.csv,away_shots,PIT_UNKNOWN,306,306,1.0
+J1,2012,Football-Data.co.uk:JPN.csv,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J1,2012,Football-Data.co.uk:JPN.csv,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J1,2012,Football-Data.co.uk:JPN.csv,home_corners,PIT_UNKNOWN,306,306,1.0
+J1,2012,Football-Data.co.uk:JPN.csv,home_fouls,PIT_UNKNOWN,306,306,1.0
+J1,2012,Football-Data.co.uk:JPN.csv,home_goals,PIT_UNSAFE,306,306,1.0
+J1,2012,Football-Data.co.uk:JPN.csv,home_red_cards,PIT_UNKNOWN,306,306,1.0
+J1,2012,Football-Data.co.uk:JPN.csv,home_shots,PIT_UNKNOWN,306,306,1.0
+J1,2012,Football-Data.co.uk:JPN.csv,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J1,2012,Football-Data.co.uk:JPN.csv,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J1,2012,Football-Data.co.uk:JPN.csv,result,PIT_UNSAFE,306,306,1.0
+J1,2013,Football-Data.co.uk:JPN.csv,away_corners,PIT_UNKNOWN,306,306,1.0
+J1,2013,Football-Data.co.uk:JPN.csv,away_fouls,PIT_UNKNOWN,306,306,1.0
+J1,2013,Football-Data.co.uk:JPN.csv,away_goals,PIT_UNSAFE,306,306,1.0
+J1,2013,Football-Data.co.uk:JPN.csv,away_red_cards,PIT_UNKNOWN,306,306,1.0
+J1,2013,Football-Data.co.uk:JPN.csv,away_shots,PIT_UNKNOWN,306,306,1.0
+J1,2013,Football-Data.co.uk:JPN.csv,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J1,2013,Football-Data.co.uk:JPN.csv,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J1,2013,Football-Data.co.uk:JPN.csv,home_corners,PIT_UNKNOWN,306,306,1.0
+J1,2013,Football-Data.co.uk:JPN.csv,home_fouls,PIT_UNKNOWN,306,306,1.0
+J1,2013,Football-Data.co.uk:JPN.csv,home_goals,PIT_UNSAFE,306,306,1.0
+J1,2013,Football-Data.co.uk:JPN.csv,home_red_cards,PIT_UNKNOWN,306,306,1.0
+J1,2013,Football-Data.co.uk:JPN.csv,home_shots,PIT_UNKNOWN,306,306,1.0
+J1,2013,Football-Data.co.uk:JPN.csv,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J1,2013,Football-Data.co.uk:JPN.csv,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J1,2013,Football-Data.co.uk:JPN.csv,result,PIT_UNSAFE,306,306,1.0
+J1,2014,Football-Data.co.uk:JPN.csv,away_corners,PIT_UNKNOWN,306,306,1.0
+J1,2014,Football-Data.co.uk:JPN.csv,away_fouls,PIT_UNKNOWN,306,306,1.0
+J1,2014,Football-Data.co.uk:JPN.csv,away_goals,PIT_UNSAFE,306,306,1.0
+J1,2014,Football-Data.co.uk:JPN.csv,away_red_cards,PIT_UNKNOWN,306,306,1.0
+J1,2014,Football-Data.co.uk:JPN.csv,away_shots,PIT_UNKNOWN,306,306,1.0
+J1,2014,Football-Data.co.uk:JPN.csv,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J1,2014,Football-Data.co.uk:JPN.csv,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J1,2014,Football-Data.co.uk:JPN.csv,home_corners,PIT_UNKNOWN,306,306,1.0
+J1,2014,Football-Data.co.uk:JPN.csv,home_fouls,PIT_UNKNOWN,306,306,1.0
+J1,2014,Football-Data.co.uk:JPN.csv,home_goals,PIT_UNSAFE,306,306,1.0
+J1,2014,Football-Data.co.uk:JPN.csv,home_red_cards,PIT_UNKNOWN,306,306,1.0
+J1,2014,Football-Data.co.uk:JPN.csv,home_shots,PIT_UNKNOWN,306,306,1.0
+J1,2014,Football-Data.co.uk:JPN.csv,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J1,2014,Football-Data.co.uk:JPN.csv,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J1,2014,Football-Data.co.uk:JPN.csv,result,PIT_UNSAFE,306,306,1.0
+J1,2015,Football-Data.co.uk:JPN.csv,away_corners,PIT_UNKNOWN,309,309,1.0
+J1,2015,Football-Data.co.uk:JPN.csv,away_fouls,PIT_UNKNOWN,309,309,1.0
+J1,2015,Football-Data.co.uk:JPN.csv,away_goals,PIT_UNSAFE,309,309,1.0
+J1,2015,Football-Data.co.uk:JPN.csv,away_red_cards,PIT_UNKNOWN,309,309,1.0
+J1,2015,Football-Data.co.uk:JPN.csv,away_shots,PIT_UNKNOWN,309,309,1.0
+J1,2015,Football-Data.co.uk:JPN.csv,away_shots_on_target,PIT_UNKNOWN,309,309,1.0
+J1,2015,Football-Data.co.uk:JPN.csv,away_yellow_cards,PIT_UNKNOWN,309,309,1.0
+J1,2015,Football-Data.co.uk:JPN.csv,home_corners,PIT_UNKNOWN,309,309,1.0
+J1,2015,Football-Data.co.uk:JPN.csv,home_fouls,PIT_UNKNOWN,309,309,1.0
+J1,2015,Football-Data.co.uk:JPN.csv,home_goals,PIT_UNSAFE,309,309,1.0
+J1,2015,Football-Data.co.uk:JPN.csv,home_red_cards,PIT_UNKNOWN,309,309,1.0
+J1,2015,Football-Data.co.uk:JPN.csv,home_shots,PIT_UNKNOWN,309,309,1.0
+J1,2015,Football-Data.co.uk:JPN.csv,home_shots_on_target,PIT_UNKNOWN,309,309,1.0
+J1,2015,Football-Data.co.uk:JPN.csv,home_yellow_cards,PIT_UNKNOWN,309,309,1.0
+J1,2015,Football-Data.co.uk:JPN.csv,result,PIT_UNSAFE,309,309,1.0
+J1,2016,Football-Data.co.uk:JPN.csv,away_corners,PIT_UNKNOWN,309,309,1.0
+J1,2016,Football-Data.co.uk:JPN.csv,away_fouls,PIT_UNKNOWN,309,309,1.0
+J1,2016,Football-Data.co.uk:JPN.csv,away_goals,PIT_UNSAFE,309,309,1.0
+J1,2016,Football-Data.co.uk:JPN.csv,away_red_cards,PIT_UNKNOWN,309,309,1.0
+J1,2016,Football-Data.co.uk:JPN.csv,away_shots,PIT_UNKNOWN,309,309,1.0
+J1,2016,Football-Data.co.uk:JPN.csv,away_shots_on_target,PIT_UNKNOWN,309,309,1.0
+J1,2016,Football-Data.co.uk:JPN.csv,away_yellow_cards,PIT_UNKNOWN,309,309,1.0
+J1,2016,Football-Data.co.uk:JPN.csv,home_corners,PIT_UNKNOWN,309,309,1.0
+J1,2016,Football-Data.co.uk:JPN.csv,home_fouls,PIT_UNKNOWN,309,309,1.0
+J1,2016,Football-Data.co.uk:JPN.csv,home_goals,PIT_UNSAFE,309,309,1.0
+J1,2016,Football-Data.co.uk:JPN.csv,home_red_cards,PIT_UNKNOWN,309,309,1.0
+J1,2016,Football-Data.co.uk:JPN.csv,home_shots,PIT_UNKNOWN,309,309,1.0
+J1,2016,Football-Data.co.uk:JPN.csv,home_shots_on_target,PIT_UNKNOWN,309,309,1.0
+J1,2016,Football-Data.co.uk:JPN.csv,home_yellow_cards,PIT_UNKNOWN,309,309,1.0
+J1,2016,Football-Data.co.uk:JPN.csv,result,PIT_UNSAFE,309,309,1.0
+J1,2017,Football-Data.co.uk:JPN.csv,away_corners,PIT_UNKNOWN,306,306,1.0
+J1,2017,Football-Data.co.uk:JPN.csv,away_fouls,PIT_UNKNOWN,306,306,1.0
+J1,2017,Football-Data.co.uk:JPN.csv,away_goals,PIT_UNSAFE,306,306,1.0
+J1,2017,Football-Data.co.uk:JPN.csv,away_red_cards,PIT_UNKNOWN,306,306,1.0
+J1,2017,Football-Data.co.uk:JPN.csv,away_shots,PIT_UNKNOWN,306,306,1.0
+J1,2017,Football-Data.co.uk:JPN.csv,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J1,2017,Football-Data.co.uk:JPN.csv,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J1,2017,Football-Data.co.uk:JPN.csv,home_corners,PIT_UNKNOWN,306,306,1.0
+J1,2017,Football-Data.co.uk:JPN.csv,home_fouls,PIT_UNKNOWN,306,306,1.0
+J1,2017,Football-Data.co.uk:JPN.csv,home_goals,PIT_UNSAFE,306,306,1.0
+J1,2017,Football-Data.co.uk:JPN.csv,home_red_cards,PIT_UNKNOWN,306,306,1.0
+J1,2017,Football-Data.co.uk:JPN.csv,home_shots,PIT_UNKNOWN,306,306,1.0
+J1,2017,Football-Data.co.uk:JPN.csv,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J1,2017,Football-Data.co.uk:JPN.csv,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J1,2017,Football-Data.co.uk:JPN.csv,result,PIT_UNSAFE,306,306,1.0
+J1,2018,Football-Data.co.uk:JPN.csv,away_corners,PIT_UNKNOWN,309,309,1.0
+J1,2018,Football-Data.co.uk:JPN.csv,away_fouls,PIT_UNKNOWN,309,309,1.0
+J1,2018,Football-Data.co.uk:JPN.csv,away_goals,PIT_UNSAFE,309,309,1.0
+J1,2018,Football-Data.co.uk:JPN.csv,away_red_cards,PIT_UNKNOWN,309,309,1.0
+J1,2018,Football-Data.co.uk:JPN.csv,away_shots,PIT_UNKNOWN,309,309,1.0
+J1,2018,Football-Data.co.uk:JPN.csv,away_shots_on_target,PIT_UNKNOWN,309,309,1.0
+J1,2018,Football-Data.co.uk:JPN.csv,away_yellow_cards,PIT_UNKNOWN,309,309,1.0
+J1,2018,Football-Data.co.uk:JPN.csv,home_corners,PIT_UNKNOWN,309,309,1.0
+J1,2018,Football-Data.co.uk:JPN.csv,home_fouls,PIT_UNKNOWN,309,309,1.0
+J1,2018,Football-Data.co.uk:JPN.csv,home_goals,PIT_UNSAFE,309,309,1.0
+J1,2018,Football-Data.co.uk:JPN.csv,home_red_cards,PIT_UNKNOWN,309,309,1.0
+J1,2018,Football-Data.co.uk:JPN.csv,home_shots,PIT_UNKNOWN,309,309,1.0
+J1,2018,Football-Data.co.uk:JPN.csv,home_shots_on_target,PIT_UNKNOWN,309,309,1.0
+J1,2018,Football-Data.co.uk:JPN.csv,home_yellow_cards,PIT_UNKNOWN,309,309,1.0
+J1,2018,Football-Data.co.uk:JPN.csv,result,PIT_UNSAFE,309,309,1.0
+J1,2019,Football-Data.co.uk:JPN.csv,away_corners,PIT_UNKNOWN,310,310,1.0
+J1,2019,Football-Data.co.uk:JPN.csv,away_fouls,PIT_UNKNOWN,310,310,1.0
+J1,2019,Football-Data.co.uk:JPN.csv,away_goals,PIT_UNSAFE,310,310,1.0
+J1,2019,Football-Data.co.uk:JPN.csv,away_red_cards,PIT_UNKNOWN,310,310,1.0
+J1,2019,Football-Data.co.uk:JPN.csv,away_shots,PIT_UNKNOWN,310,310,1.0
+J1,2019,Football-Data.co.uk:JPN.csv,away_shots_on_target,PIT_UNKNOWN,310,310,1.0
+J1,2019,Football-Data.co.uk:JPN.csv,away_yellow_cards,PIT_UNKNOWN,310,310,1.0
+J1,2019,Football-Data.co.uk:JPN.csv,home_corners,PIT_UNKNOWN,310,310,1.0
+J1,2019,Football-Data.co.uk:JPN.csv,home_fouls,PIT_UNKNOWN,310,310,1.0
+J1,2019,Football-Data.co.uk:JPN.csv,home_goals,PIT_UNSAFE,310,310,1.0
+J1,2019,Football-Data.co.uk:JPN.csv,home_red_cards,PIT_UNKNOWN,310,310,1.0
+J1,2019,Football-Data.co.uk:JPN.csv,home_shots,PIT_UNKNOWN,310,310,1.0
+J1,2019,Football-Data.co.uk:JPN.csv,home_shots_on_target,PIT_UNKNOWN,310,310,1.0
+J1,2019,Football-Data.co.uk:JPN.csv,home_yellow_cards,PIT_UNKNOWN,310,310,1.0
+J1,2019,Football-Data.co.uk:JPN.csv,result,PIT_UNSAFE,310,310,1.0
+J1,2020,Football-Data.co.uk:JPN.csv,away_corners,PIT_UNKNOWN,306,306,1.0
+J1,2020,Football-Data.co.uk:JPN.csv,away_fouls,PIT_UNKNOWN,306,306,1.0
+J1,2020,Football-Data.co.uk:JPN.csv,away_goals,PIT_UNSAFE,306,306,1.0
+J1,2020,Football-Data.co.uk:JPN.csv,away_red_cards,PIT_UNKNOWN,306,306,1.0
+J1,2020,Football-Data.co.uk:JPN.csv,away_shots,PIT_UNKNOWN,306,306,1.0
+J1,2020,Football-Data.co.uk:JPN.csv,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J1,2020,Football-Data.co.uk:JPN.csv,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J1,2020,Football-Data.co.uk:JPN.csv,home_corners,PIT_UNKNOWN,306,306,1.0
+J1,2020,Football-Data.co.uk:JPN.csv,home_fouls,PIT_UNKNOWN,306,306,1.0
+J1,2020,Football-Data.co.uk:JPN.csv,home_goals,PIT_UNSAFE,306,306,1.0
+J1,2020,Football-Data.co.uk:JPN.csv,home_red_cards,PIT_UNKNOWN,306,306,1.0
+J1,2020,Football-Data.co.uk:JPN.csv,home_shots,PIT_UNKNOWN,306,306,1.0
+J1,2020,Football-Data.co.uk:JPN.csv,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J1,2020,Football-Data.co.uk:JPN.csv,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J1,2020,Football-Data.co.uk:JPN.csv,result,PIT_UNSAFE,306,306,1.0
+J1,2021,Football-Data.co.uk:JPN.csv,away_corners,PIT_UNKNOWN,380,380,1.0
+J1,2021,Football-Data.co.uk:JPN.csv,away_fouls,PIT_UNKNOWN,380,380,1.0
+J1,2021,Football-Data.co.uk:JPN.csv,away_goals,PIT_UNSAFE,380,380,1.0
+J1,2021,Football-Data.co.uk:JPN.csv,away_red_cards,PIT_UNKNOWN,380,380,1.0
+J1,2021,Football-Data.co.uk:JPN.csv,away_shots,PIT_UNKNOWN,380,380,1.0
+J1,2021,Football-Data.co.uk:JPN.csv,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+J1,2021,Football-Data.co.uk:JPN.csv,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+J1,2021,Football-Data.co.uk:JPN.csv,home_corners,PIT_UNKNOWN,380,380,1.0
+J1,2021,Football-Data.co.uk:JPN.csv,home_fouls,PIT_UNKNOWN,380,380,1.0
+J1,2021,Football-Data.co.uk:JPN.csv,home_goals,PIT_UNSAFE,380,380,1.0
+J1,2021,Football-Data.co.uk:JPN.csv,home_red_cards,PIT_UNKNOWN,380,380,1.0
+J1,2021,Football-Data.co.uk:JPN.csv,home_shots,PIT_UNKNOWN,380,380,1.0
+J1,2021,Football-Data.co.uk:JPN.csv,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+J1,2021,Football-Data.co.uk:JPN.csv,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+J1,2021,Football-Data.co.uk:JPN.csv,result,PIT_UNSAFE,380,380,1.0
+J1,2022,Football-Data.co.uk:JPN.csv,away_corners,PIT_UNKNOWN,310,310,1.0
+J1,2022,Football-Data.co.uk:JPN.csv,away_fouls,PIT_UNKNOWN,310,310,1.0
+J1,2022,Football-Data.co.uk:JPN.csv,away_goals,PIT_UNSAFE,310,310,1.0
+J1,2022,Football-Data.co.uk:JPN.csv,away_red_cards,PIT_UNKNOWN,310,310,1.0
+J1,2022,Football-Data.co.uk:JPN.csv,away_shots,PIT_UNKNOWN,310,310,1.0
+J1,2022,Football-Data.co.uk:JPN.csv,away_shots_on_target,PIT_UNKNOWN,310,310,1.0
+J1,2022,Football-Data.co.uk:JPN.csv,away_yellow_cards,PIT_UNKNOWN,310,310,1.0
+J1,2022,Football-Data.co.uk:JPN.csv,home_corners,PIT_UNKNOWN,310,310,1.0
+J1,2022,Football-Data.co.uk:JPN.csv,home_fouls,PIT_UNKNOWN,310,310,1.0
+J1,2022,Football-Data.co.uk:JPN.csv,home_goals,PIT_UNSAFE,310,310,1.0
+J1,2022,Football-Data.co.uk:JPN.csv,home_red_cards,PIT_UNKNOWN,310,310,1.0
+J1,2022,Football-Data.co.uk:JPN.csv,home_shots,PIT_UNKNOWN,310,310,1.0
+J1,2022,Football-Data.co.uk:JPN.csv,home_shots_on_target,PIT_UNKNOWN,310,310,1.0
+J1,2022,Football-Data.co.uk:JPN.csv,home_yellow_cards,PIT_UNKNOWN,310,310,1.0
+J1,2022,Football-Data.co.uk:JPN.csv,result,PIT_UNSAFE,310,310,1.0
+J1,2023,Football-Data.co.uk:JPN.csv,away_corners,PIT_UNKNOWN,306,306,1.0
+J1,2023,Football-Data.co.uk:JPN.csv,away_fouls,PIT_UNKNOWN,306,306,1.0
+J1,2023,Football-Data.co.uk:JPN.csv,away_goals,PIT_UNSAFE,306,306,1.0
+J1,2023,Football-Data.co.uk:JPN.csv,away_red_cards,PIT_UNKNOWN,306,306,1.0
+J1,2023,Football-Data.co.uk:JPN.csv,away_shots,PIT_UNKNOWN,306,306,1.0
+J1,2023,Football-Data.co.uk:JPN.csv,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J1,2023,Football-Data.co.uk:JPN.csv,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J1,2023,Football-Data.co.uk:JPN.csv,home_corners,PIT_UNKNOWN,306,306,1.0
+J1,2023,Football-Data.co.uk:JPN.csv,home_fouls,PIT_UNKNOWN,306,306,1.0
+J1,2023,Football-Data.co.uk:JPN.csv,home_goals,PIT_UNSAFE,306,306,1.0
+J1,2023,Football-Data.co.uk:JPN.csv,home_red_cards,PIT_UNKNOWN,306,306,1.0
+J1,2023,Football-Data.co.uk:JPN.csv,home_shots,PIT_UNKNOWN,306,306,1.0
+J1,2023,Football-Data.co.uk:JPN.csv,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J1,2023,Football-Data.co.uk:JPN.csv,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J1,2023,Football-Data.co.uk:JPN.csv,result,PIT_UNSAFE,306,306,1.0
+J1,2024,Football-Data.co.uk:JPN.csv,away_corners,PIT_UNKNOWN,380,380,1.0
+J1,2024,Football-Data.co.uk:JPN.csv,away_fouls,PIT_UNKNOWN,380,380,1.0
+J1,2024,Football-Data.co.uk:JPN.csv,away_goals,PIT_UNSAFE,380,380,1.0
+J1,2024,Football-Data.co.uk:JPN.csv,away_red_cards,PIT_UNKNOWN,380,380,1.0
+J1,2024,Football-Data.co.uk:JPN.csv,away_shots,PIT_UNKNOWN,380,380,1.0
+J1,2024,Football-Data.co.uk:JPN.csv,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+J1,2024,Football-Data.co.uk:JPN.csv,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+J1,2024,Football-Data.co.uk:JPN.csv,home_corners,PIT_UNKNOWN,380,380,1.0
+J1,2024,Football-Data.co.uk:JPN.csv,home_fouls,PIT_UNKNOWN,380,380,1.0
+J1,2024,Football-Data.co.uk:JPN.csv,home_goals,PIT_UNSAFE,380,380,1.0
+J1,2024,Football-Data.co.uk:JPN.csv,home_red_cards,PIT_UNKNOWN,380,380,1.0
+J1,2024,Football-Data.co.uk:JPN.csv,home_shots,PIT_UNKNOWN,380,380,1.0
+J1,2024,Football-Data.co.uk:JPN.csv,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+J1,2024,Football-Data.co.uk:JPN.csv,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+J1,2024,Football-Data.co.uk:JPN.csv,result,PIT_UNSAFE,380,380,1.0
+J1,2025,Football-Data.co.uk:JPN.csv,away_corners,PIT_UNKNOWN,380,380,1.0
+J1,2025,Football-Data.co.uk:JPN.csv,away_fouls,PIT_UNKNOWN,380,380,1.0
+J1,2025,Football-Data.co.uk:JPN.csv,away_goals,PIT_UNSAFE,380,380,1.0
+J1,2025,Football-Data.co.uk:JPN.csv,away_red_cards,PIT_UNKNOWN,380,380,1.0
+J1,2025,Football-Data.co.uk:JPN.csv,away_shots,PIT_UNKNOWN,380,380,1.0
+J1,2025,Football-Data.co.uk:JPN.csv,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+J1,2025,Football-Data.co.uk:JPN.csv,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+J1,2025,Football-Data.co.uk:JPN.csv,home_corners,PIT_UNKNOWN,380,380,1.0
+J1,2025,Football-Data.co.uk:JPN.csv,home_fouls,PIT_UNKNOWN,380,380,1.0
+J1,2025,Football-Data.co.uk:JPN.csv,home_goals,PIT_UNSAFE,380,380,1.0
+J1,2025,Football-Data.co.uk:JPN.csv,home_red_cards,PIT_UNKNOWN,380,380,1.0
+J1,2025,Football-Data.co.uk:JPN.csv,home_shots,PIT_UNKNOWN,380,380,1.0
+J1,2025,Football-Data.co.uk:JPN.csv,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+J1,2025,Football-Data.co.uk:JPN.csv,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+J1,2025,Football-Data.co.uk:JPN.csv,result,PIT_UNSAFE,380,380,1.0
+J2,2010,J.League Data Site,away_corners,PIT_UNKNOWN,342,342,1.0
+J2,2010,J.League Data Site,away_fouls,PIT_UNKNOWN,342,342,1.0
+J2,2010,J.League Data Site,away_goals,PIT_UNSAFE,342,342,1.0
+J2,2010,J.League Data Site,away_red_cards,PIT_UNKNOWN,342,342,1.0
+J2,2010,J.League Data Site,away_shots,PIT_UNKNOWN,342,342,1.0
+J2,2010,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,342,342,1.0
+J2,2010,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,342,342,1.0
+J2,2010,J.League Data Site,home_corners,PIT_UNKNOWN,342,342,1.0
+J2,2010,J.League Data Site,home_fouls,PIT_UNKNOWN,342,342,1.0
+J2,2010,J.League Data Site,home_goals,PIT_UNSAFE,342,342,1.0
+J2,2010,J.League Data Site,home_red_cards,PIT_UNKNOWN,342,342,1.0
+J2,2010,J.League Data Site,home_shots,PIT_UNKNOWN,342,342,1.0
+J2,2010,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,342,342,1.0
+J2,2010,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,342,342,1.0
+J2,2010,J.League Data Site,result,PIT_UNSAFE,342,342,1.0
+J2,2011,J.League Data Site,away_corners,PIT_UNKNOWN,380,380,1.0
+J2,2011,J.League Data Site,away_fouls,PIT_UNKNOWN,380,380,1.0
+J2,2011,J.League Data Site,away_goals,PIT_UNSAFE,380,380,1.0
+J2,2011,J.League Data Site,away_red_cards,PIT_UNKNOWN,380,380,1.0
+J2,2011,J.League Data Site,away_shots,PIT_UNKNOWN,380,380,1.0
+J2,2011,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+J2,2011,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+J2,2011,J.League Data Site,home_corners,PIT_UNKNOWN,380,380,1.0
+J2,2011,J.League Data Site,home_fouls,PIT_UNKNOWN,380,380,1.0
+J2,2011,J.League Data Site,home_goals,PIT_UNSAFE,380,380,1.0
+J2,2011,J.League Data Site,home_red_cards,PIT_UNKNOWN,380,380,1.0
+J2,2011,J.League Data Site,home_shots,PIT_UNKNOWN,380,380,1.0
+J2,2011,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+J2,2011,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+J2,2011,J.League Data Site,result,PIT_UNSAFE,380,380,1.0
+J2,2012,J.League Data Site,away_corners,PIT_UNKNOWN,462,462,1.0
+J2,2012,J.League Data Site,away_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2012,J.League Data Site,away_goals,PIT_UNSAFE,462,462,1.0
+J2,2012,J.League Data Site,away_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2012,J.League Data Site,away_shots,PIT_UNKNOWN,462,462,1.0
+J2,2012,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2012,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2012,J.League Data Site,home_corners,PIT_UNKNOWN,462,462,1.0
+J2,2012,J.League Data Site,home_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2012,J.League Data Site,home_goals,PIT_UNSAFE,462,462,1.0
+J2,2012,J.League Data Site,home_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2012,J.League Data Site,home_shots,PIT_UNKNOWN,462,462,1.0
+J2,2012,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2012,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2012,J.League Data Site,result,PIT_UNSAFE,462,462,1.0
+J2,2013,J.League Data Site,away_corners,PIT_UNKNOWN,464,464,1.0
+J2,2013,J.League Data Site,away_fouls,PIT_UNKNOWN,464,464,1.0
+J2,2013,J.League Data Site,away_goals,PIT_UNSAFE,464,464,1.0
+J2,2013,J.League Data Site,away_red_cards,PIT_UNKNOWN,464,464,1.0
+J2,2013,J.League Data Site,away_shots,PIT_UNKNOWN,464,464,1.0
+J2,2013,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,464,464,1.0
+J2,2013,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,464,464,1.0
+J2,2013,J.League Data Site,home_corners,PIT_UNKNOWN,464,464,1.0
+J2,2013,J.League Data Site,home_fouls,PIT_UNKNOWN,464,464,1.0
+J2,2013,J.League Data Site,home_goals,PIT_UNSAFE,464,464,1.0
+J2,2013,J.League Data Site,home_red_cards,PIT_UNKNOWN,464,464,1.0
+J2,2013,J.League Data Site,home_shots,PIT_UNKNOWN,464,464,1.0
+J2,2013,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,464,464,1.0
+J2,2013,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,464,464,1.0
+J2,2013,J.League Data Site,result,PIT_UNSAFE,464,464,1.0
+J2,2014,J.League Data Site,away_corners,PIT_UNKNOWN,462,462,1.0
+J2,2014,J.League Data Site,away_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2014,J.League Data Site,away_goals,PIT_UNSAFE,462,462,1.0
+J2,2014,J.League Data Site,away_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2014,J.League Data Site,away_shots,PIT_UNKNOWN,462,462,1.0
+J2,2014,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2014,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2014,J.League Data Site,home_corners,PIT_UNKNOWN,462,462,1.0
+J2,2014,J.League Data Site,home_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2014,J.League Data Site,home_goals,PIT_UNSAFE,462,462,1.0
+J2,2014,J.League Data Site,home_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2014,J.League Data Site,home_shots,PIT_UNKNOWN,462,462,1.0
+J2,2014,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2014,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2014,J.League Data Site,result,PIT_UNSAFE,462,462,1.0
+J2,2015,J.League Data Site,away_corners,PIT_UNKNOWN,462,462,1.0
+J2,2015,J.League Data Site,away_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2015,J.League Data Site,away_goals,PIT_UNSAFE,462,462,1.0
+J2,2015,J.League Data Site,away_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2015,J.League Data Site,away_shots,PIT_UNKNOWN,462,462,1.0
+J2,2015,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2015,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2015,J.League Data Site,home_corners,PIT_UNKNOWN,462,462,1.0
+J2,2015,J.League Data Site,home_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2015,J.League Data Site,home_goals,PIT_UNSAFE,462,462,1.0
+J2,2015,J.League Data Site,home_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2015,J.League Data Site,home_shots,PIT_UNKNOWN,462,462,1.0
+J2,2015,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2015,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2015,J.League Data Site,result,PIT_UNSAFE,462,462,1.0
+J2,2016,J.League Data Site,away_corners,PIT_UNKNOWN,462,462,1.0
+J2,2016,J.League Data Site,away_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2016,J.League Data Site,away_goals,PIT_UNSAFE,462,462,1.0
+J2,2016,J.League Data Site,away_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2016,J.League Data Site,away_shots,PIT_UNKNOWN,462,462,1.0
+J2,2016,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2016,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2016,J.League Data Site,home_corners,PIT_UNKNOWN,462,462,1.0
+J2,2016,J.League Data Site,home_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2016,J.League Data Site,home_goals,PIT_UNSAFE,462,462,1.0
+J2,2016,J.League Data Site,home_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2016,J.League Data Site,home_shots,PIT_UNKNOWN,462,462,1.0
+J2,2016,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2016,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2016,J.League Data Site,result,PIT_UNSAFE,462,462,1.0
+J2,2017,J.League Data Site,away_corners,PIT_UNKNOWN,462,462,1.0
+J2,2017,J.League Data Site,away_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2017,J.League Data Site,away_goals,PIT_UNSAFE,462,462,1.0
+J2,2017,J.League Data Site,away_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2017,J.League Data Site,away_shots,PIT_UNKNOWN,462,462,1.0
+J2,2017,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2017,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2017,J.League Data Site,home_corners,PIT_UNKNOWN,462,462,1.0
+J2,2017,J.League Data Site,home_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2017,J.League Data Site,home_goals,PIT_UNSAFE,462,462,1.0
+J2,2017,J.League Data Site,home_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2017,J.League Data Site,home_shots,PIT_UNKNOWN,462,462,1.0
+J2,2017,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2017,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2017,J.League Data Site,result,PIT_UNSAFE,462,462,1.0
+J2,2018,J.League Data Site,away_corners,PIT_UNKNOWN,462,462,1.0
+J2,2018,J.League Data Site,away_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2018,J.League Data Site,away_goals,PIT_UNSAFE,462,462,1.0
+J2,2018,J.League Data Site,away_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2018,J.League Data Site,away_shots,PIT_UNKNOWN,462,462,1.0
+J2,2018,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2018,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2018,J.League Data Site,home_corners,PIT_UNKNOWN,462,462,1.0
+J2,2018,J.League Data Site,home_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2018,J.League Data Site,home_goals,PIT_UNSAFE,462,462,1.0
+J2,2018,J.League Data Site,home_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2018,J.League Data Site,home_shots,PIT_UNKNOWN,462,462,1.0
+J2,2018,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2018,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2018,J.League Data Site,result,PIT_UNSAFE,462,462,1.0
+J2,2019,J.League Data Site,away_corners,PIT_UNKNOWN,462,462,1.0
+J2,2019,J.League Data Site,away_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2019,J.League Data Site,away_goals,PIT_UNSAFE,462,462,1.0
+J2,2019,J.League Data Site,away_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2019,J.League Data Site,away_shots,PIT_UNKNOWN,462,462,1.0
+J2,2019,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2019,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2019,J.League Data Site,home_corners,PIT_UNKNOWN,462,462,1.0
+J2,2019,J.League Data Site,home_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2019,J.League Data Site,home_goals,PIT_UNSAFE,462,462,1.0
+J2,2019,J.League Data Site,home_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2019,J.League Data Site,home_shots,PIT_UNKNOWN,462,462,1.0
+J2,2019,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2019,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2019,J.League Data Site,result,PIT_UNSAFE,462,462,1.0
+J2,2020,J.League Data Site,away_corners,PIT_UNKNOWN,462,462,1.0
+J2,2020,J.League Data Site,away_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2020,J.League Data Site,away_goals,PIT_UNSAFE,462,462,1.0
+J2,2020,J.League Data Site,away_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2020,J.League Data Site,away_shots,PIT_UNKNOWN,462,462,1.0
+J2,2020,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2020,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2020,J.League Data Site,home_corners,PIT_UNKNOWN,462,462,1.0
+J2,2020,J.League Data Site,home_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2020,J.League Data Site,home_goals,PIT_UNSAFE,462,462,1.0
+J2,2020,J.League Data Site,home_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2020,J.League Data Site,home_shots,PIT_UNKNOWN,462,462,1.0
+J2,2020,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2020,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2020,J.League Data Site,result,PIT_UNSAFE,462,462,1.0
+J2,2021,J.League Data Site,away_corners,PIT_UNKNOWN,462,462,1.0
+J2,2021,J.League Data Site,away_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2021,J.League Data Site,away_goals,PIT_UNSAFE,462,462,1.0
+J2,2021,J.League Data Site,away_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2021,J.League Data Site,away_shots,PIT_UNKNOWN,462,462,1.0
+J2,2021,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2021,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2021,J.League Data Site,home_corners,PIT_UNKNOWN,462,462,1.0
+J2,2021,J.League Data Site,home_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2021,J.League Data Site,home_goals,PIT_UNSAFE,462,462,1.0
+J2,2021,J.League Data Site,home_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2021,J.League Data Site,home_shots,PIT_UNKNOWN,462,462,1.0
+J2,2021,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2021,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2021,J.League Data Site,result,PIT_UNSAFE,462,462,1.0
+J2,2022,J.League Data Site,away_corners,PIT_UNKNOWN,462,462,1.0
+J2,2022,J.League Data Site,away_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2022,J.League Data Site,away_goals,PIT_UNSAFE,462,462,1.0
+J2,2022,J.League Data Site,away_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2022,J.League Data Site,away_shots,PIT_UNKNOWN,462,462,1.0
+J2,2022,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2022,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2022,J.League Data Site,home_corners,PIT_UNKNOWN,462,462,1.0
+J2,2022,J.League Data Site,home_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2022,J.League Data Site,home_goals,PIT_UNSAFE,462,462,1.0
+J2,2022,J.League Data Site,home_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2022,J.League Data Site,home_shots,PIT_UNKNOWN,462,462,1.0
+J2,2022,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2022,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2022,J.League Data Site,result,PIT_UNSAFE,462,462,1.0
+J2,2023,J.League Data Site,away_corners,PIT_UNKNOWN,462,462,1.0
+J2,2023,J.League Data Site,away_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2023,J.League Data Site,away_goals,PIT_UNSAFE,462,462,1.0
+J2,2023,J.League Data Site,away_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2023,J.League Data Site,away_shots,PIT_UNKNOWN,462,462,1.0
+J2,2023,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2023,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2023,J.League Data Site,home_corners,PIT_UNKNOWN,462,462,1.0
+J2,2023,J.League Data Site,home_fouls,PIT_UNKNOWN,462,462,1.0
+J2,2023,J.League Data Site,home_goals,PIT_UNSAFE,462,462,1.0
+J2,2023,J.League Data Site,home_red_cards,PIT_UNKNOWN,462,462,1.0
+J2,2023,J.League Data Site,home_shots,PIT_UNKNOWN,462,462,1.0
+J2,2023,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,462,462,1.0
+J2,2023,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,462,462,1.0
+J2,2023,J.League Data Site,result,PIT_UNSAFE,462,462,1.0
+J2,2024,J.League Data Site,away_corners,PIT_UNKNOWN,383,383,1.0
+J2,2024,J.League Data Site,away_fouls,PIT_UNKNOWN,383,383,1.0
+J2,2024,J.League Data Site,away_goals,PIT_UNSAFE,383,383,1.0
+J2,2024,J.League Data Site,away_red_cards,PIT_UNKNOWN,383,383,1.0
+J2,2024,J.League Data Site,away_shots,PIT_UNKNOWN,383,383,1.0
+J2,2024,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,383,383,1.0
+J2,2024,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,383,383,1.0
+J2,2024,J.League Data Site,home_corners,PIT_UNKNOWN,383,383,1.0
+J2,2024,J.League Data Site,home_fouls,PIT_UNKNOWN,383,383,1.0
+J2,2024,J.League Data Site,home_goals,PIT_UNSAFE,383,383,1.0
+J2,2024,J.League Data Site,home_red_cards,PIT_UNKNOWN,383,383,1.0
+J2,2024,J.League Data Site,home_shots,PIT_UNKNOWN,383,383,1.0
+J2,2024,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,383,383,1.0
+J2,2024,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,383,383,1.0
+J2,2024,J.League Data Site,result,PIT_UNSAFE,383,383,1.0
+J2,2025,J.League Data Site,away_corners,PIT_UNKNOWN,383,383,1.0
+J2,2025,J.League Data Site,away_fouls,PIT_UNKNOWN,383,383,1.0
+J2,2025,J.League Data Site,away_goals,PIT_UNSAFE,383,383,1.0
+J2,2025,J.League Data Site,away_red_cards,PIT_UNKNOWN,383,383,1.0
+J2,2025,J.League Data Site,away_shots,PIT_UNKNOWN,383,383,1.0
+J2,2025,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,383,383,1.0
+J2,2025,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,383,383,1.0
+J2,2025,J.League Data Site,home_corners,PIT_UNKNOWN,383,383,1.0
+J2,2025,J.League Data Site,home_fouls,PIT_UNKNOWN,383,383,1.0
+J2,2025,J.League Data Site,home_goals,PIT_UNSAFE,383,383,1.0
+J2,2025,J.League Data Site,home_red_cards,PIT_UNKNOWN,383,383,1.0
+J2,2025,J.League Data Site,home_shots,PIT_UNKNOWN,383,383,1.0
+J2,2025,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,383,383,1.0
+J2,2025,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,383,383,1.0
+J2,2025,J.League Data Site,result,PIT_UNSAFE,383,383,1.0
+J3,2014,J.League Data Site,away_corners,PIT_UNKNOWN,200,200,1.0
+J3,2014,J.League Data Site,away_fouls,PIT_UNKNOWN,200,200,1.0
+J3,2014,J.League Data Site,away_goals,PIT_UNSAFE,200,200,1.0
+J3,2014,J.League Data Site,away_red_cards,PIT_UNKNOWN,200,200,1.0
+J3,2014,J.League Data Site,away_shots,PIT_UNKNOWN,200,200,1.0
+J3,2014,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,200,200,1.0
+J3,2014,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,200,200,1.0
+J3,2014,J.League Data Site,home_corners,PIT_UNKNOWN,200,200,1.0
+J3,2014,J.League Data Site,home_fouls,PIT_UNKNOWN,200,200,1.0
+J3,2014,J.League Data Site,home_goals,PIT_UNSAFE,200,200,1.0
+J3,2014,J.League Data Site,home_red_cards,PIT_UNKNOWN,200,200,1.0
+J3,2014,J.League Data Site,home_shots,PIT_UNKNOWN,200,200,1.0
+J3,2014,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,200,200,1.0
+J3,2014,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,200,200,1.0
+J3,2014,J.League Data Site,result,PIT_UNSAFE,200,200,1.0
+J3,2015,J.League Data Site,away_corners,PIT_UNKNOWN,236,236,1.0
+J3,2015,J.League Data Site,away_fouls,PIT_UNKNOWN,236,236,1.0
+J3,2015,J.League Data Site,away_goals,PIT_UNSAFE,236,236,1.0
+J3,2015,J.League Data Site,away_red_cards,PIT_UNKNOWN,236,236,1.0
+J3,2015,J.League Data Site,away_shots,PIT_UNKNOWN,236,236,1.0
+J3,2015,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,236,236,1.0
+J3,2015,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,236,236,1.0
+J3,2015,J.League Data Site,home_corners,PIT_UNKNOWN,236,236,1.0
+J3,2015,J.League Data Site,home_fouls,PIT_UNKNOWN,236,236,1.0
+J3,2015,J.League Data Site,home_goals,PIT_UNSAFE,236,236,1.0
+J3,2015,J.League Data Site,home_red_cards,PIT_UNKNOWN,236,236,1.0
+J3,2015,J.League Data Site,home_shots,PIT_UNKNOWN,236,236,1.0
+J3,2015,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,236,236,1.0
+J3,2015,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,236,236,1.0
+J3,2015,J.League Data Site,result,PIT_UNSAFE,236,236,1.0
+J3,2016,J.League Data Site,away_corners,PIT_UNKNOWN,242,242,1.0
+J3,2016,J.League Data Site,away_fouls,PIT_UNKNOWN,242,242,1.0
+J3,2016,J.League Data Site,away_goals,PIT_UNSAFE,242,242,1.0
+J3,2016,J.League Data Site,away_red_cards,PIT_UNKNOWN,242,242,1.0
+J3,2016,J.League Data Site,away_shots,PIT_UNKNOWN,242,242,1.0
+J3,2016,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,242,242,1.0
+J3,2016,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,242,242,1.0
+J3,2016,J.League Data Site,home_corners,PIT_UNKNOWN,242,242,1.0
+J3,2016,J.League Data Site,home_fouls,PIT_UNKNOWN,242,242,1.0
+J3,2016,J.League Data Site,home_goals,PIT_UNSAFE,242,242,1.0
+J3,2016,J.League Data Site,home_red_cards,PIT_UNKNOWN,242,242,1.0
+J3,2016,J.League Data Site,home_shots,PIT_UNKNOWN,242,242,1.0
+J3,2016,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,242,242,1.0
+J3,2016,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,242,242,1.0
+J3,2016,J.League Data Site,result,PIT_UNSAFE,242,242,1.0
+J3,2017,J.League Data Site,away_corners,PIT_UNKNOWN,272,272,1.0
+J3,2017,J.League Data Site,away_fouls,PIT_UNKNOWN,272,272,1.0
+J3,2017,J.League Data Site,away_goals,PIT_UNSAFE,272,272,1.0
+J3,2017,J.League Data Site,away_red_cards,PIT_UNKNOWN,272,272,1.0
+J3,2017,J.League Data Site,away_shots,PIT_UNKNOWN,272,272,1.0
+J3,2017,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,272,272,1.0
+J3,2017,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,272,272,1.0
+J3,2017,J.League Data Site,home_corners,PIT_UNKNOWN,272,272,1.0
+J3,2017,J.League Data Site,home_fouls,PIT_UNKNOWN,272,272,1.0
+J3,2017,J.League Data Site,home_goals,PIT_UNSAFE,272,272,1.0
+J3,2017,J.League Data Site,home_red_cards,PIT_UNKNOWN,272,272,1.0
+J3,2017,J.League Data Site,home_shots,PIT_UNKNOWN,272,272,1.0
+J3,2017,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,272,272,1.0
+J3,2017,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,272,272,1.0
+J3,2017,J.League Data Site,result,PIT_UNSAFE,272,272,1.0
+J3,2018,J.League Data Site,away_corners,PIT_UNKNOWN,272,272,1.0
+J3,2018,J.League Data Site,away_fouls,PIT_UNKNOWN,272,272,1.0
+J3,2018,J.League Data Site,away_goals,PIT_UNSAFE,272,272,1.0
+J3,2018,J.League Data Site,away_red_cards,PIT_UNKNOWN,272,272,1.0
+J3,2018,J.League Data Site,away_shots,PIT_UNKNOWN,272,272,1.0
+J3,2018,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,272,272,1.0
+J3,2018,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,272,272,1.0
+J3,2018,J.League Data Site,home_corners,PIT_UNKNOWN,272,272,1.0
+J3,2018,J.League Data Site,home_fouls,PIT_UNKNOWN,272,272,1.0
+J3,2018,J.League Data Site,home_goals,PIT_UNSAFE,272,272,1.0
+J3,2018,J.League Data Site,home_red_cards,PIT_UNKNOWN,272,272,1.0
+J3,2018,J.League Data Site,home_shots,PIT_UNKNOWN,272,272,1.0
+J3,2018,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,272,272,1.0
+J3,2018,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,272,272,1.0
+J3,2018,J.League Data Site,result,PIT_UNSAFE,272,272,1.0
+J3,2019,J.League Data Site,away_corners,PIT_UNKNOWN,306,306,1.0
+J3,2019,J.League Data Site,away_fouls,PIT_UNKNOWN,306,306,1.0
+J3,2019,J.League Data Site,away_goals,PIT_UNSAFE,306,306,1.0
+J3,2019,J.League Data Site,away_red_cards,PIT_UNKNOWN,306,306,1.0
+J3,2019,J.League Data Site,away_shots,PIT_UNKNOWN,306,306,1.0
+J3,2019,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J3,2019,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J3,2019,J.League Data Site,home_corners,PIT_UNKNOWN,306,306,1.0
+J3,2019,J.League Data Site,home_fouls,PIT_UNKNOWN,306,306,1.0
+J3,2019,J.League Data Site,home_goals,PIT_UNSAFE,306,306,1.0
+J3,2019,J.League Data Site,home_red_cards,PIT_UNKNOWN,306,306,1.0
+J3,2019,J.League Data Site,home_shots,PIT_UNKNOWN,306,306,1.0
+J3,2019,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J3,2019,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J3,2019,J.League Data Site,result,PIT_UNSAFE,306,306,1.0
+J3,2020,J.League Data Site,away_corners,PIT_UNKNOWN,306,306,1.0
+J3,2020,J.League Data Site,away_fouls,PIT_UNKNOWN,306,306,1.0
+J3,2020,J.League Data Site,away_goals,PIT_UNSAFE,306,306,1.0
+J3,2020,J.League Data Site,away_red_cards,PIT_UNKNOWN,306,306,1.0
+J3,2020,J.League Data Site,away_shots,PIT_UNKNOWN,306,306,1.0
+J3,2020,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J3,2020,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J3,2020,J.League Data Site,home_corners,PIT_UNKNOWN,306,306,1.0
+J3,2020,J.League Data Site,home_fouls,PIT_UNKNOWN,306,306,1.0
+J3,2020,J.League Data Site,home_goals,PIT_UNSAFE,306,306,1.0
+J3,2020,J.League Data Site,home_red_cards,PIT_UNKNOWN,306,306,1.0
+J3,2020,J.League Data Site,home_shots,PIT_UNKNOWN,306,306,1.0
+J3,2020,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J3,2020,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J3,2020,J.League Data Site,result,PIT_UNSAFE,306,306,1.0
+J3,2021,J.League Data Site,away_corners,PIT_UNKNOWN,210,210,1.0
+J3,2021,J.League Data Site,away_fouls,PIT_UNKNOWN,210,210,1.0
+J3,2021,J.League Data Site,away_goals,PIT_UNSAFE,210,210,1.0
+J3,2021,J.League Data Site,away_red_cards,PIT_UNKNOWN,210,210,1.0
+J3,2021,J.League Data Site,away_shots,PIT_UNKNOWN,210,210,1.0
+J3,2021,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,210,210,1.0
+J3,2021,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,210,210,1.0
+J3,2021,J.League Data Site,home_corners,PIT_UNKNOWN,210,210,1.0
+J3,2021,J.League Data Site,home_fouls,PIT_UNKNOWN,210,210,1.0
+J3,2021,J.League Data Site,home_goals,PIT_UNSAFE,210,210,1.0
+J3,2021,J.League Data Site,home_red_cards,PIT_UNKNOWN,210,210,1.0
+J3,2021,J.League Data Site,home_shots,PIT_UNKNOWN,210,210,1.0
+J3,2021,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,210,210,1.0
+J3,2021,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,210,210,1.0
+J3,2021,J.League Data Site,result,PIT_UNSAFE,210,210,1.0
+J3,2022,J.League Data Site,away_corners,PIT_UNKNOWN,306,306,1.0
+J3,2022,J.League Data Site,away_fouls,PIT_UNKNOWN,306,306,1.0
+J3,2022,J.League Data Site,away_goals,PIT_UNSAFE,306,306,1.0
+J3,2022,J.League Data Site,away_red_cards,PIT_UNKNOWN,306,306,1.0
+J3,2022,J.League Data Site,away_shots,PIT_UNKNOWN,306,306,1.0
+J3,2022,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J3,2022,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J3,2022,J.League Data Site,home_corners,PIT_UNKNOWN,306,306,1.0
+J3,2022,J.League Data Site,home_fouls,PIT_UNKNOWN,306,306,1.0
+J3,2022,J.League Data Site,home_goals,PIT_UNSAFE,306,306,1.0
+J3,2022,J.League Data Site,home_red_cards,PIT_UNKNOWN,306,306,1.0
+J3,2022,J.League Data Site,home_shots,PIT_UNKNOWN,306,306,1.0
+J3,2022,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,306,306,1.0
+J3,2022,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,306,306,1.0
+J3,2022,J.League Data Site,result,PIT_UNSAFE,306,306,1.0
+J3,2023,J.League Data Site,away_corners,PIT_UNKNOWN,380,380,1.0
+J3,2023,J.League Data Site,away_fouls,PIT_UNKNOWN,380,380,1.0
+J3,2023,J.League Data Site,away_goals,PIT_UNSAFE,380,380,1.0
+J3,2023,J.League Data Site,away_red_cards,PIT_UNKNOWN,380,380,1.0
+J3,2023,J.League Data Site,away_shots,PIT_UNKNOWN,380,380,1.0
+J3,2023,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+J3,2023,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+J3,2023,J.League Data Site,home_corners,PIT_UNKNOWN,380,380,1.0
+J3,2023,J.League Data Site,home_fouls,PIT_UNKNOWN,380,380,1.0
+J3,2023,J.League Data Site,home_goals,PIT_UNSAFE,380,380,1.0
+J3,2023,J.League Data Site,home_red_cards,PIT_UNKNOWN,380,380,1.0
+J3,2023,J.League Data Site,home_shots,PIT_UNKNOWN,380,380,1.0
+J3,2023,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+J3,2023,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+J3,2023,J.League Data Site,result,PIT_UNSAFE,380,380,1.0
+J3,2024,J.League Data Site,away_corners,PIT_UNKNOWN,382,382,1.0
+J3,2024,J.League Data Site,away_fouls,PIT_UNKNOWN,382,382,1.0
+J3,2024,J.League Data Site,away_goals,PIT_UNSAFE,382,382,1.0
+J3,2024,J.League Data Site,away_red_cards,PIT_UNKNOWN,382,382,1.0
+J3,2024,J.League Data Site,away_shots,PIT_UNKNOWN,382,382,1.0
+J3,2024,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,382,382,1.0
+J3,2024,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,382,382,1.0
+J3,2024,J.League Data Site,home_corners,PIT_UNKNOWN,382,382,1.0
+J3,2024,J.League Data Site,home_fouls,PIT_UNKNOWN,382,382,1.0
+J3,2024,J.League Data Site,home_goals,PIT_UNSAFE,382,382,1.0
+J3,2024,J.League Data Site,home_red_cards,PIT_UNKNOWN,382,382,1.0
+J3,2024,J.League Data Site,home_shots,PIT_UNKNOWN,382,382,1.0
+J3,2024,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,382,382,1.0
+J3,2024,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,382,382,1.0
+J3,2024,J.League Data Site,result,PIT_UNSAFE,382,382,1.0
+J3,2025,J.League Data Site,away_corners,PIT_UNKNOWN,382,382,1.0
+J3,2025,J.League Data Site,away_fouls,PIT_UNKNOWN,382,382,1.0
+J3,2025,J.League Data Site,away_goals,PIT_UNSAFE,382,382,1.0
+J3,2025,J.League Data Site,away_red_cards,PIT_UNKNOWN,382,382,1.0
+J3,2025,J.League Data Site,away_shots,PIT_UNKNOWN,382,382,1.0
+J3,2025,J.League Data Site,away_shots_on_target,PIT_UNKNOWN,382,382,1.0
+J3,2025,J.League Data Site,away_yellow_cards,PIT_UNKNOWN,382,382,1.0
+J3,2025,J.League Data Site,home_corners,PIT_UNKNOWN,382,382,1.0
+J3,2025,J.League Data Site,home_fouls,PIT_UNKNOWN,382,382,1.0
+J3,2025,J.League Data Site,home_goals,PIT_UNSAFE,382,382,1.0
+J3,2025,J.League Data Site,home_red_cards,PIT_UNKNOWN,382,382,1.0
+J3,2025,J.League Data Site,home_shots,PIT_UNKNOWN,382,382,1.0
+J3,2025,J.League Data Site,home_shots_on_target,PIT_UNKNOWN,382,382,1.0
+J3,2025,J.League Data Site,home_yellow_cards,PIT_UNKNOWN,382,382,1.0
+J3,2025,J.League Data Site,result,PIT_UNSAFE,382,382,1.0
+LL,2010/11,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+LL,2010/11,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2010/11,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+LL,2010/11,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2010/11,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+LL,2010/11,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2010/11,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2010/11,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+LL,2010/11,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2010/11,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+LL,2010/11,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2010/11,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+LL,2010/11,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2010/11,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2010/11,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+LL,2011/12,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+LL,2011/12,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2011/12,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+LL,2011/12,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2011/12,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+LL,2011/12,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2011/12,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2011/12,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+LL,2011/12,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2011/12,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+LL,2011/12,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2011/12,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+LL,2011/12,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2011/12,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2011/12,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+LL,2012/13,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+LL,2012/13,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2012/13,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+LL,2012/13,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2012/13,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+LL,2012/13,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2012/13,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2012/13,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+LL,2012/13,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2012/13,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+LL,2012/13,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2012/13,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+LL,2012/13,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2012/13,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2012/13,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+LL,2013/14,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+LL,2013/14,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2013/14,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+LL,2013/14,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2013/14,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+LL,2013/14,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2013/14,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2013/14,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+LL,2013/14,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2013/14,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+LL,2013/14,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2013/14,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+LL,2013/14,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2013/14,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2013/14,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+LL,2014/15,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+LL,2014/15,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2014/15,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+LL,2014/15,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2014/15,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+LL,2014/15,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2014/15,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2014/15,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+LL,2014/15,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2014/15,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+LL,2014/15,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2014/15,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+LL,2014/15,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2014/15,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2014/15,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+LL,2015/16,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+LL,2015/16,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2015/16,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+LL,2015/16,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2015/16,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+LL,2015/16,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2015/16,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2015/16,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+LL,2015/16,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2015/16,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+LL,2015/16,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2015/16,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+LL,2015/16,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2015/16,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2015/16,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+LL,2016/17,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+LL,2016/17,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2016/17,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+LL,2016/17,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2016/17,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+LL,2016/17,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2016/17,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2016/17,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+LL,2016/17,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2016/17,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+LL,2016/17,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2016/17,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+LL,2016/17,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2016/17,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2016/17,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+LL,2017/18,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+LL,2017/18,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2017/18,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+LL,2017/18,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2017/18,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+LL,2017/18,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2017/18,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2017/18,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+LL,2017/18,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2017/18,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+LL,2017/18,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2017/18,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+LL,2017/18,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2017/18,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2017/18,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+LL,2018/19,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+LL,2018/19,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2018/19,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+LL,2018/19,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2018/19,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+LL,2018/19,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2018/19,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2018/19,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+LL,2018/19,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2018/19,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+LL,2018/19,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2018/19,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+LL,2018/19,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2018/19,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2018/19,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+LL,2019/20,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+LL,2019/20,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2019/20,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+LL,2019/20,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2019/20,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+LL,2019/20,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2019/20,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2019/20,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+LL,2019/20,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2019/20,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+LL,2019/20,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2019/20,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+LL,2019/20,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2019/20,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2019/20,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+LL,2020/21,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+LL,2020/21,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2020/21,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+LL,2020/21,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2020/21,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+LL,2020/21,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2020/21,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2020/21,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+LL,2020/21,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2020/21,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+LL,2020/21,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2020/21,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+LL,2020/21,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2020/21,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2020/21,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+LL,2021/22,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+LL,2021/22,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2021/22,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+LL,2021/22,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2021/22,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+LL,2021/22,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2021/22,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2021/22,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+LL,2021/22,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2021/22,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+LL,2021/22,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2021/22,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+LL,2021/22,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2021/22,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2021/22,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+LL,2022/23,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+LL,2022/23,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2022/23,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+LL,2022/23,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2022/23,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+LL,2022/23,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2022/23,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2022/23,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+LL,2022/23,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2022/23,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+LL,2022/23,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2022/23,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+LL,2022/23,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2022/23,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2022/23,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+LL,2023/24,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+LL,2023/24,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2023/24,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+LL,2023/24,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2023/24,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+LL,2023/24,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2023/24,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2023/24,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+LL,2023/24,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2023/24,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+LL,2023/24,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2023/24,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+LL,2023/24,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2023/24,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2023/24,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+LL,2024/25,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+LL,2024/25,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2024/25,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+LL,2024/25,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2024/25,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+LL,2024/25,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2024/25,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2024/25,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+LL,2024/25,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2024/25,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+LL,2024/25,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2024/25,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+LL,2024/25,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2024/25,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2024/25,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+LL,2025/26,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+LL,2025/26,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2025/26,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+LL,2025/26,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2025/26,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+LL,2025/26,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2025/26,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2025/26,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+LL,2025/26,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+LL,2025/26,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+LL,2025/26,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+LL,2025/26,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+LL,2025/26,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+LL,2025/26,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+LL,2025/26,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+SA,2010/11,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+SA,2010/11,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2010/11,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+SA,2010/11,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2010/11,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+SA,2010/11,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2010/11,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2010/11,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+SA,2010/11,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2010/11,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+SA,2010/11,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2010/11,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+SA,2010/11,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2010/11,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2010/11,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+SA,2011/12,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+SA,2011/12,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2011/12,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+SA,2011/12,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2011/12,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+SA,2011/12,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2011/12,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2011/12,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+SA,2011/12,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2011/12,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+SA,2011/12,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2011/12,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+SA,2011/12,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2011/12,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2011/12,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+SA,2012/13,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+SA,2012/13,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2012/13,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+SA,2012/13,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2012/13,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+SA,2012/13,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2012/13,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2012/13,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+SA,2012/13,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2012/13,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+SA,2012/13,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2012/13,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+SA,2012/13,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2012/13,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2012/13,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+SA,2013/14,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+SA,2013/14,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2013/14,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+SA,2013/14,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2013/14,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+SA,2013/14,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2013/14,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2013/14,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+SA,2013/14,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2013/14,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+SA,2013/14,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2013/14,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+SA,2013/14,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2013/14,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2013/14,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+SA,2014/15,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+SA,2014/15,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2014/15,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+SA,2014/15,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2014/15,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+SA,2014/15,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2014/15,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2014/15,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+SA,2014/15,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2014/15,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+SA,2014/15,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2014/15,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+SA,2014/15,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2014/15,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2014/15,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+SA,2015/16,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+SA,2015/16,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2015/16,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+SA,2015/16,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2015/16,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+SA,2015/16,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2015/16,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2015/16,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+SA,2015/16,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2015/16,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+SA,2015/16,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2015/16,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+SA,2015/16,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2015/16,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2015/16,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+SA,2016/17,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+SA,2016/17,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2016/17,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+SA,2016/17,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2016/17,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+SA,2016/17,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2016/17,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2016/17,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+SA,2016/17,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2016/17,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+SA,2016/17,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2016/17,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+SA,2016/17,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2016/17,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2016/17,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+SA,2017/18,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+SA,2017/18,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2017/18,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+SA,2017/18,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2017/18,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+SA,2017/18,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2017/18,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2017/18,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+SA,2017/18,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2017/18,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+SA,2017/18,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2017/18,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+SA,2017/18,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2017/18,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2017/18,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+SA,2018/19,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+SA,2018/19,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2018/19,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+SA,2018/19,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2018/19,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+SA,2018/19,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2018/19,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2018/19,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+SA,2018/19,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2018/19,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+SA,2018/19,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2018/19,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+SA,2018/19,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2018/19,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2018/19,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+SA,2019/20,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+SA,2019/20,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2019/20,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+SA,2019/20,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2019/20,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+SA,2019/20,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2019/20,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2019/20,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+SA,2019/20,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2019/20,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+SA,2019/20,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2019/20,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+SA,2019/20,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2019/20,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2019/20,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+SA,2020/21,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+SA,2020/21,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2020/21,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+SA,2020/21,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2020/21,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+SA,2020/21,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2020/21,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2020/21,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+SA,2020/21,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2020/21,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+SA,2020/21,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2020/21,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+SA,2020/21,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2020/21,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2020/21,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+SA,2021/22,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+SA,2021/22,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2021/22,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+SA,2021/22,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2021/22,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+SA,2021/22,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2021/22,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2021/22,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+SA,2021/22,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2021/22,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+SA,2021/22,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2021/22,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+SA,2021/22,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2021/22,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2021/22,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+SA,2022/23,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+SA,2022/23,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2022/23,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+SA,2022/23,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2022/23,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+SA,2022/23,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2022/23,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2022/23,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+SA,2022/23,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2022/23,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+SA,2022/23,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2022/23,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+SA,2022/23,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2022/23,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2022/23,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+SA,2023/24,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+SA,2023/24,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2023/24,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+SA,2023/24,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2023/24,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+SA,2023/24,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2023/24,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2023/24,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+SA,2023/24,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2023/24,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+SA,2023/24,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2023/24,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+SA,2023/24,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2023/24,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2023/24,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+SA,2024/25,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+SA,2024/25,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2024/25,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+SA,2024/25,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2024/25,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+SA,2024/25,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2024/25,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2024/25,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+SA,2024/25,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2024/25,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+SA,2024/25,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2024/25,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+SA,2024/25,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2024/25,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2024/25,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+SA,2025/26,Football-Data.co.uk,away_corners,PIT_UNKNOWN,380,380,1.0
+SA,2025/26,Football-Data.co.uk,away_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2025/26,Football-Data.co.uk,away_goals,PIT_UNSAFE,380,380,1.0
+SA,2025/26,Football-Data.co.uk,away_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2025/26,Football-Data.co.uk,away_shots,PIT_UNKNOWN,380,380,1.0
+SA,2025/26,Football-Data.co.uk,away_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2025/26,Football-Data.co.uk,away_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2025/26,Football-Data.co.uk,home_corners,PIT_UNKNOWN,380,380,1.0
+SA,2025/26,Football-Data.co.uk,home_fouls,PIT_UNKNOWN,380,380,1.0
+SA,2025/26,Football-Data.co.uk,home_goals,PIT_UNSAFE,380,380,1.0
+SA,2025/26,Football-Data.co.uk,home_red_cards,PIT_UNKNOWN,380,380,1.0
+SA,2025/26,Football-Data.co.uk,home_shots,PIT_UNKNOWN,380,380,1.0
+SA,2025/26,Football-Data.co.uk,home_shots_on_target,PIT_UNKNOWN,380,380,1.0
+SA,2025/26,Football-Data.co.uk,home_yellow_cards,PIT_UNKNOWN,380,380,1.0
+SA,2025/26,Football-Data.co.uk,result,PIT_UNSAFE,380,380,1.0
+UCL,2011/12,openfootball,away_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2011/12,openfootball,away_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2011/12,openfootball,away_goals,PIT_UNSAFE,125,125,1.0
+UCL,2011/12,openfootball,away_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2011/12,openfootball,away_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2011/12,openfootball,away_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2011/12,openfootball,away_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2011/12,openfootball,home_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2011/12,openfootball,home_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2011/12,openfootball,home_goals,PIT_UNSAFE,125,125,1.0
+UCL,2011/12,openfootball,home_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2011/12,openfootball,home_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2011/12,openfootball,home_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2011/12,openfootball,home_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2011/12,openfootball,result,PIT_UNSAFE,125,125,1.0
+UCL,2012/13,openfootball,away_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2012/13,openfootball,away_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2012/13,openfootball,away_goals,PIT_UNSAFE,125,125,1.0
+UCL,2012/13,openfootball,away_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2012/13,openfootball,away_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2012/13,openfootball,away_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2012/13,openfootball,away_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2012/13,openfootball,home_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2012/13,openfootball,home_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2012/13,openfootball,home_goals,PIT_UNSAFE,125,125,1.0
+UCL,2012/13,openfootball,home_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2012/13,openfootball,home_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2012/13,openfootball,home_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2012/13,openfootball,home_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2012/13,openfootball,result,PIT_UNSAFE,125,125,1.0
+UCL,2013/14,openfootball,away_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2013/14,openfootball,away_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2013/14,openfootball,away_goals,PIT_UNSAFE,125,125,1.0
+UCL,2013/14,openfootball,away_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2013/14,openfootball,away_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2013/14,openfootball,away_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2013/14,openfootball,away_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2013/14,openfootball,home_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2013/14,openfootball,home_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2013/14,openfootball,home_goals,PIT_UNSAFE,125,125,1.0
+UCL,2013/14,openfootball,home_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2013/14,openfootball,home_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2013/14,openfootball,home_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2013/14,openfootball,home_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2013/14,openfootball,result,PIT_UNSAFE,125,125,1.0
+UCL,2014/15,openfootball,away_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2014/15,openfootball,away_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2014/15,openfootball,away_goals,PIT_UNSAFE,125,125,1.0
+UCL,2014/15,openfootball,away_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2014/15,openfootball,away_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2014/15,openfootball,away_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2014/15,openfootball,away_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2014/15,openfootball,home_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2014/15,openfootball,home_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2014/15,openfootball,home_goals,PIT_UNSAFE,125,125,1.0
+UCL,2014/15,openfootball,home_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2014/15,openfootball,home_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2014/15,openfootball,home_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2014/15,openfootball,home_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2014/15,openfootball,result,PIT_UNSAFE,125,125,1.0
+UCL,2015/16,openfootball,away_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2015/16,openfootball,away_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2015/16,openfootball,away_goals,PIT_UNSAFE,125,125,1.0
+UCL,2015/16,openfootball,away_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2015/16,openfootball,away_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2015/16,openfootball,away_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2015/16,openfootball,away_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2015/16,openfootball,home_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2015/16,openfootball,home_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2015/16,openfootball,home_goals,PIT_UNSAFE,125,125,1.0
+UCL,2015/16,openfootball,home_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2015/16,openfootball,home_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2015/16,openfootball,home_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2015/16,openfootball,home_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2015/16,openfootball,result,PIT_UNSAFE,125,125,1.0
+UCL,2016/17,openfootball,away_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2016/17,openfootball,away_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2016/17,openfootball,away_goals,PIT_UNSAFE,125,125,1.0
+UCL,2016/17,openfootball,away_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2016/17,openfootball,away_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2016/17,openfootball,away_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2016/17,openfootball,away_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2016/17,openfootball,home_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2016/17,openfootball,home_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2016/17,openfootball,home_goals,PIT_UNSAFE,125,125,1.0
+UCL,2016/17,openfootball,home_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2016/17,openfootball,home_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2016/17,openfootball,home_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2016/17,openfootball,home_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2016/17,openfootball,result,PIT_UNSAFE,125,125,1.0
+UCL,2017/18,openfootball,away_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2017/18,openfootball,away_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2017/18,openfootball,away_goals,PIT_UNSAFE,125,125,1.0
+UCL,2017/18,openfootball,away_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2017/18,openfootball,away_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2017/18,openfootball,away_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2017/18,openfootball,away_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2017/18,openfootball,home_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2017/18,openfootball,home_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2017/18,openfootball,home_goals,PIT_UNSAFE,125,125,1.0
+UCL,2017/18,openfootball,home_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2017/18,openfootball,home_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2017/18,openfootball,home_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2017/18,openfootball,home_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2017/18,openfootball,result,PIT_UNSAFE,125,125,1.0
+UCL,2018/19,openfootball,away_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2018/19,openfootball,away_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2018/19,openfootball,away_goals,PIT_UNSAFE,125,125,1.0
+UCL,2018/19,openfootball,away_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2018/19,openfootball,away_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2018/19,openfootball,away_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2018/19,openfootball,away_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2018/19,openfootball,home_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2018/19,openfootball,home_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2018/19,openfootball,home_goals,PIT_UNSAFE,125,125,1.0
+UCL,2018/19,openfootball,home_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2018/19,openfootball,home_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2018/19,openfootball,home_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2018/19,openfootball,home_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2018/19,openfootball,result,PIT_UNSAFE,125,125,1.0
+UCL,2019/20,openfootball,away_corners,PIT_UNKNOWN,119,119,1.0
+UCL,2019/20,openfootball,away_fouls,PIT_UNKNOWN,119,119,1.0
+UCL,2019/20,openfootball,away_goals,PIT_UNSAFE,119,119,1.0
+UCL,2019/20,openfootball,away_red_cards,PIT_UNKNOWN,119,119,1.0
+UCL,2019/20,openfootball,away_shots,PIT_UNKNOWN,119,119,1.0
+UCL,2019/20,openfootball,away_shots_on_target,PIT_UNKNOWN,119,119,1.0
+UCL,2019/20,openfootball,away_yellow_cards,PIT_UNKNOWN,119,119,1.0
+UCL,2019/20,openfootball,home_corners,PIT_UNKNOWN,119,119,1.0
+UCL,2019/20,openfootball,home_fouls,PIT_UNKNOWN,119,119,1.0
+UCL,2019/20,openfootball,home_goals,PIT_UNSAFE,119,119,1.0
+UCL,2019/20,openfootball,home_red_cards,PIT_UNKNOWN,119,119,1.0
+UCL,2019/20,openfootball,home_shots,PIT_UNKNOWN,119,119,1.0
+UCL,2019/20,openfootball,home_shots_on_target,PIT_UNKNOWN,119,119,1.0
+UCL,2019/20,openfootball,home_yellow_cards,PIT_UNKNOWN,119,119,1.0
+UCL,2019/20,openfootball,result,PIT_UNSAFE,119,119,1.0
+UCL,2020/21,openfootball,away_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2020/21,openfootball,away_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2020/21,openfootball,away_goals,PIT_UNSAFE,125,125,1.0
+UCL,2020/21,openfootball,away_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2020/21,openfootball,away_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2020/21,openfootball,away_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2020/21,openfootball,away_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2020/21,openfootball,home_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2020/21,openfootball,home_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2020/21,openfootball,home_goals,PIT_UNSAFE,125,125,1.0
+UCL,2020/21,openfootball,home_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2020/21,openfootball,home_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2020/21,openfootball,home_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2020/21,openfootball,home_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2020/21,openfootball,result,PIT_UNSAFE,125,125,1.0
+UCL,2021/22,openfootball,away_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2021/22,openfootball,away_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2021/22,openfootball,away_goals,PIT_UNSAFE,125,125,1.0
+UCL,2021/22,openfootball,away_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2021/22,openfootball,away_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2021/22,openfootball,away_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2021/22,openfootball,away_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2021/22,openfootball,home_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2021/22,openfootball,home_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2021/22,openfootball,home_goals,PIT_UNSAFE,125,125,1.0
+UCL,2021/22,openfootball,home_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2021/22,openfootball,home_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2021/22,openfootball,home_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2021/22,openfootball,home_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2021/22,openfootball,result,PIT_UNSAFE,125,125,1.0
+UCL,2022/23,openfootball,away_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2022/23,openfootball,away_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2022/23,openfootball,away_goals,PIT_UNSAFE,125,125,1.0
+UCL,2022/23,openfootball,away_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2022/23,openfootball,away_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2022/23,openfootball,away_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2022/23,openfootball,away_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2022/23,openfootball,home_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2022/23,openfootball,home_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2022/23,openfootball,home_goals,PIT_UNSAFE,125,125,1.0
+UCL,2022/23,openfootball,home_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2022/23,openfootball,home_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2022/23,openfootball,home_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2022/23,openfootball,home_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2022/23,openfootball,result,PIT_UNSAFE,125,125,1.0
+UCL,2023/24,openfootball,away_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2023/24,openfootball,away_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2023/24,openfootball,away_goals,PIT_UNSAFE,125,125,1.0
+UCL,2023/24,openfootball,away_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2023/24,openfootball,away_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2023/24,openfootball,away_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2023/24,openfootball,away_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2023/24,openfootball,home_corners,PIT_UNKNOWN,125,125,1.0
+UCL,2023/24,openfootball,home_fouls,PIT_UNKNOWN,125,125,1.0
+UCL,2023/24,openfootball,home_goals,PIT_UNSAFE,125,125,1.0
+UCL,2023/24,openfootball,home_red_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2023/24,openfootball,home_shots,PIT_UNKNOWN,125,125,1.0
+UCL,2023/24,openfootball,home_shots_on_target,PIT_UNKNOWN,125,125,1.0
+UCL,2023/24,openfootball,home_yellow_cards,PIT_UNKNOWN,125,125,1.0
+UCL,2023/24,openfootball,result,PIT_UNSAFE,125,125,1.0
+UCL,2024/25,openfootball,away_corners,PIT_UNKNOWN,189,189,1.0
+UCL,2024/25,openfootball,away_fouls,PIT_UNKNOWN,189,189,1.0
+UCL,2024/25,openfootball,away_goals,PIT_UNSAFE,189,189,1.0
+UCL,2024/25,openfootball,away_red_cards,PIT_UNKNOWN,189,189,1.0
+UCL,2024/25,openfootball,away_shots,PIT_UNKNOWN,189,189,1.0
+UCL,2024/25,openfootball,away_shots_on_target,PIT_UNKNOWN,189,189,1.0
+UCL,2024/25,openfootball,away_yellow_cards,PIT_UNKNOWN,189,189,1.0
+UCL,2024/25,openfootball,home_corners,PIT_UNKNOWN,189,189,1.0
+UCL,2024/25,openfootball,home_fouls,PIT_UNKNOWN,189,189,1.0
+UCL,2024/25,openfootball,home_goals,PIT_UNSAFE,189,189,1.0
+UCL,2024/25,openfootball,home_red_cards,PIT_UNKNOWN,189,189,1.0
+UCL,2024/25,openfootball,home_shots,PIT_UNKNOWN,189,189,1.0
+UCL,2024/25,openfootball,home_shots_on_target,PIT_UNKNOWN,189,189,1.0
+UCL,2024/25,openfootball,home_yellow_cards,PIT_UNKNOWN,189,189,1.0
+UCL,2024/25,openfootball,result,PIT_UNSAFE,189,189,1.0
+UCL,2025/26,openfootball,away_corners,PIT_UNKNOWN,189,189,1.0
+UCL,2025/26,openfootball,away_fouls,PIT_UNKNOWN,189,189,1.0
+UCL,2025/26,openfootball,away_goals,PIT_UNSAFE,189,189,1.0
+UCL,2025/26,openfootball,away_red_cards,PIT_UNKNOWN,189,189,1.0
+UCL,2025/26,openfootball,away_shots,PIT_UNKNOWN,189,189,1.0
+UCL,2025/26,openfootball,away_shots_on_target,PIT_UNKNOWN,189,189,1.0
+UCL,2025/26,openfootball,away_yellow_cards,PIT_UNKNOWN,189,189,1.0
+UCL,2025/26,openfootball,home_corners,PIT_UNKNOWN,189,189,1.0
+UCL,2025/26,openfootball,home_fouls,PIT_UNKNOWN,189,189,1.0
+UCL,2025/26,openfootball,home_goals,PIT_UNSAFE,189,189,1.0
+UCL,2025/26,openfootball,home_red_cards,PIT_UNKNOWN,189,189,1.0
+UCL,2025/26,openfootball,home_shots,PIT_UNKNOWN,189,189,1.0
+UCL,2025/26,openfootball,home_shots_on_target,PIT_UNKNOWN,189,189,1.0
+UCL,2025/26,openfootball,home_yellow_cards,PIT_UNKNOWN,189,189,1.0
+UCL,2025/26,openfootball,result,PIT_UNSAFE,189,189,1.0
+UEL,2020/21,openfootball,away_corners,PIT_UNKNOWN,205,205,1.0
+UEL,2020/21,openfootball,away_fouls,PIT_UNKNOWN,205,205,1.0
+UEL,2020/21,openfootball,away_goals,PIT_UNSAFE,205,205,1.0
+UEL,2020/21,openfootball,away_red_cards,PIT_UNKNOWN,205,205,1.0
+UEL,2020/21,openfootball,away_shots,PIT_UNKNOWN,205,205,1.0
+UEL,2020/21,openfootball,away_shots_on_target,PIT_UNKNOWN,205,205,1.0
+UEL,2020/21,openfootball,away_yellow_cards,PIT_UNKNOWN,205,205,1.0
+UEL,2020/21,openfootball,home_corners,PIT_UNKNOWN,205,205,1.0
+UEL,2020/21,openfootball,home_fouls,PIT_UNKNOWN,205,205,1.0
+UEL,2020/21,openfootball,home_goals,PIT_UNSAFE,205,205,1.0
+UEL,2020/21,openfootball,home_red_cards,PIT_UNKNOWN,205,205,1.0
+UEL,2020/21,openfootball,home_shots,PIT_UNKNOWN,205,205,1.0
+UEL,2020/21,openfootball,home_shots_on_target,PIT_UNKNOWN,205,205,1.0
+UEL,2020/21,openfootball,home_yellow_cards,PIT_UNKNOWN,205,205,1.0
+UEL,2020/21,openfootball,result,PIT_UNSAFE,205,205,1.0
+UEL,2021/22,openfootball,away_corners,PIT_UNKNOWN,139,139,1.0
+UEL,2021/22,openfootball,away_fouls,PIT_UNKNOWN,139,139,1.0
+UEL,2021/22,openfootball,away_goals,PIT_UNSAFE,139,139,1.0
+UEL,2021/22,openfootball,away_red_cards,PIT_UNKNOWN,139,139,1.0
+UEL,2021/22,openfootball,away_shots,PIT_UNKNOWN,139,139,1.0
+UEL,2021/22,openfootball,away_shots_on_target,PIT_UNKNOWN,139,139,1.0
+UEL,2021/22,openfootball,away_yellow_cards,PIT_UNKNOWN,139,139,1.0
+UEL,2021/22,openfootball,home_corners,PIT_UNKNOWN,139,139,1.0
+UEL,2021/22,openfootball,home_fouls,PIT_UNKNOWN,139,139,1.0
+UEL,2021/22,openfootball,home_goals,PIT_UNSAFE,139,139,1.0
+UEL,2021/22,openfootball,home_red_cards,PIT_UNKNOWN,139,139,1.0
+UEL,2021/22,openfootball,home_shots,PIT_UNKNOWN,139,139,1.0
+UEL,2021/22,openfootball,home_shots_on_target,PIT_UNKNOWN,139,139,1.0
+UEL,2021/22,openfootball,home_yellow_cards,PIT_UNKNOWN,139,139,1.0
+UEL,2021/22,openfootball,result,PIT_UNSAFE,139,139,1.0
+UEL,2022/23,openfootball,away_corners,PIT_UNKNOWN,141,141,1.0
+UEL,2022/23,openfootball,away_fouls,PIT_UNKNOWN,141,141,1.0
+UEL,2022/23,openfootball,away_goals,PIT_UNSAFE,141,141,1.0
+UEL,2022/23,openfootball,away_red_cards,PIT_UNKNOWN,141,141,1.0
+UEL,2022/23,openfootball,away_shots,PIT_UNKNOWN,141,141,1.0
+UEL,2022/23,openfootball,away_shots_on_target,PIT_UNKNOWN,141,141,1.0
+UEL,2022/23,openfootball,away_yellow_cards,PIT_UNKNOWN,141,141,1.0
+UEL,2022/23,openfootball,home_corners,PIT_UNKNOWN,141,141,1.0
+UEL,2022/23,openfootball,home_fouls,PIT_UNKNOWN,141,141,1.0
+UEL,2022/23,openfootball,home_goals,PIT_UNSAFE,141,141,1.0
+UEL,2022/23,openfootball,home_red_cards,PIT_UNKNOWN,141,141,1.0
+UEL,2022/23,openfootball,home_shots,PIT_UNKNOWN,141,141,1.0
+UEL,2022/23,openfootball,home_shots_on_target,PIT_UNKNOWN,141,141,1.0
+UEL,2022/23,openfootball,home_yellow_cards,PIT_UNKNOWN,141,141,1.0
+UEL,2022/23,openfootball,result,PIT_UNSAFE,141,141,1.0
+UEL,2023/24,openfootball,away_corners,PIT_UNKNOWN,141,141,1.0
+UEL,2023/24,openfootball,away_fouls,PIT_UNKNOWN,141,141,1.0
+UEL,2023/24,openfootball,away_goals,PIT_UNSAFE,141,141,1.0
+UEL,2023/24,openfootball,away_red_cards,PIT_UNKNOWN,141,141,1.0
+UEL,2023/24,openfootball,away_shots,PIT_UNKNOWN,141,141,1.0
+UEL,2023/24,openfootball,away_shots_on_target,PIT_UNKNOWN,141,141,1.0
+UEL,2023/24,openfootball,away_yellow_cards,PIT_UNKNOWN,141,141,1.0
+UEL,2023/24,openfootball,home_corners,PIT_UNKNOWN,141,141,1.0
+UEL,2023/24,openfootball,home_fouls,PIT_UNKNOWN,141,141,1.0
+UEL,2023/24,openfootball,home_goals,PIT_UNSAFE,141,141,1.0
+UEL,2023/24,openfootball,home_red_cards,PIT_UNKNOWN,141,141,1.0
+UEL,2023/24,openfootball,home_shots,PIT_UNKNOWN,141,141,1.0
+UEL,2023/24,openfootball,home_shots_on_target,PIT_UNKNOWN,141,141,1.0
+UEL,2023/24,openfootball,home_yellow_cards,PIT_UNKNOWN,141,141,1.0
+UEL,2023/24,openfootball,result,PIT_UNSAFE,141,141,1.0
+UEL,2024/25,openfootball,away_corners,PIT_UNKNOWN,189,189,1.0
+UEL,2024/25,openfootball,away_fouls,PIT_UNKNOWN,189,189,1.0
+UEL,2024/25,openfootball,away_goals,PIT_UNSAFE,189,189,1.0
+UEL,2024/25,openfootball,away_red_cards,PIT_UNKNOWN,189,189,1.0
+UEL,2024/25,openfootball,away_shots,PIT_UNKNOWN,189,189,1.0
+UEL,2024/25,openfootball,away_shots_on_target,PIT_UNKNOWN,189,189,1.0
+UEL,2024/25,openfootball,away_yellow_cards,PIT_UNKNOWN,189,189,1.0
+UEL,2024/25,openfootball,home_corners,PIT_UNKNOWN,189,189,1.0
+UEL,2024/25,openfootball,home_fouls,PIT_UNKNOWN,189,189,1.0
+UEL,2024/25,openfootball,home_goals,PIT_UNSAFE,189,189,1.0
+UEL,2024/25,openfootball,home_red_cards,PIT_UNKNOWN,189,189,1.0
+UEL,2024/25,openfootball,home_shots,PIT_UNKNOWN,189,189,1.0
+UEL,2024/25,openfootball,home_shots_on_target,PIT_UNKNOWN,189,189,1.0
+UEL,2024/25,openfootball,home_yellow_cards,PIT_UNKNOWN,189,189,1.0
+UEL,2024/25,openfootball,result,PIT_UNSAFE,189,189,1.0

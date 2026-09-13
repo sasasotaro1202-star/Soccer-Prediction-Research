@@ -1,113 +1,225 @@
-competition,season,status,rows
-EPL,2010,AVAILABLE,380
-EPL,2011,AVAILABLE,380
-EPL,2012,AVAILABLE,380
-EPL,2013,AVAILABLE,380
-EPL,2014,AVAILABLE,380
-EPL,2015,AVAILABLE,380
-EPL,2016,AVAILABLE,380
-EPL,2017,AVAILABLE,380
-EPL,2018,AVAILABLE,380
-EPL,2019,AVAILABLE,380
-EPL,2020,AVAILABLE,380
-EPL,2021,AVAILABLE,380
-EPL,2022,AVAILABLE,380
-EPL,2023,AVAILABLE,380
-EPL,2024,AVAILABLE,380
-EPL,2025,AVAILABLE,380
-CHA,2010,AVAILABLE,552
-CHA,2011,AVAILABLE,552
-CHA,2012,AVAILABLE,552
-CHA,2013,AVAILABLE,552
-CHA,2014,AVAILABLE,552
-CHA,2015,AVAILABLE,552
-CHA,2016,AVAILABLE,552
-CHA,2017,AVAILABLE,552
-CHA,2018,AVAILABLE,552
-CHA,2019,AVAILABLE,552
-CHA,2020,AVAILABLE,552
-CHA,2021,AVAILABLE,552
-CHA,2022,AVAILABLE,552
-CHA,2023,AVAILABLE,552
-CHA,2024,AVAILABLE,552
-CHA,2025,AVAILABLE,552
-BL1,2010,AVAILABLE,306
-BL1,2011,AVAILABLE,306
-BL1,2012,AVAILABLE,306
-BL1,2013,AVAILABLE,306
-BL1,2014,AVAILABLE,306
-BL1,2015,AVAILABLE,306
-BL1,2016,AVAILABLE,306
-BL1,2017,AVAILABLE,306
-BL1,2018,AVAILABLE,306
-BL1,2019,AVAILABLE,306
-BL1,2020,AVAILABLE,306
-BL1,2021,AVAILABLE,306
-BL1,2022,AVAILABLE,306
-BL1,2023,AVAILABLE,306
-BL1,2024,AVAILABLE,306
-BL1,2025,AVAILABLE,306
-SA,2010,AVAILABLE,380
-SA,2011,AVAILABLE,380
-SA,2012,AVAILABLE,380
-SA,2013,AVAILABLE,380
-SA,2014,AVAILABLE,380
-SA,2015,AVAILABLE,380
-SA,2016,AVAILABLE,380
-SA,2017,AVAILABLE,380
-SA,2018,AVAILABLE,380
-SA,2019,AVAILABLE,380
-SA,2020,AVAILABLE,380
-SA,2021,AVAILABLE,380
-SA,2022,AVAILABLE,380
-SA,2023,AVAILABLE,380
-SA,2024,AVAILABLE,380
-SA,2025,AVAILABLE,380
-LL,2010,AVAILABLE,380
-LL,2011,AVAILABLE,380
-LL,2012,AVAILABLE,380
-LL,2013,AVAILABLE,380
-LL,2014,AVAILABLE,380
-LL,2015,AVAILABLE,380
-LL,2016,AVAILABLE,380
-LL,2017,AVAILABLE,380
-LL,2018,AVAILABLE,380
-LL,2019,AVAILABLE,380
-LL,2020,AVAILABLE,380
-LL,2021,AVAILABLE,380
-LL,2022,AVAILABLE,380
-LL,2023,AVAILABLE,380
-LL,2024,AVAILABLE,380
-LL,2025,AVAILABLE,380
-FL1,2010,AVAILABLE,380
-FL1,2011,AVAILABLE,380
-FL1,2012,AVAILABLE,380
-FL1,2013,AVAILABLE,380
-FL1,2014,AVAILABLE,380
-FL1,2015,AVAILABLE,380
-FL1,2016,AVAILABLE,380
-FL1,2017,AVAILABLE,380
-FL1,2018,AVAILABLE,380
-FL1,2019,AVAILABLE,279
-FL1,2020,AVAILABLE,380
-FL1,2021,AVAILABLE,380
-FL1,2022,AVAILABLE,380
-FL1,2023,AVAILABLE,306
-FL1,2024,AVAILABLE,306
-FL1,2025,AVAILABLE,306
-ERE,2010,AVAILABLE,306
-ERE,2011,AVAILABLE,306
-ERE,2012,AVAILABLE,306
-ERE,2013,AVAILABLE,306
-ERE,2014,AVAILABLE,306
-ERE,2015,AVAILABLE,306
-ERE,2016,AVAILABLE,306
-ERE,2017,AVAILABLE,306
-ERE,2018,AVAILABLE,306
-ERE,2019,AVAILABLE,232
-ERE,2020,AVAILABLE,306
-ERE,2021,AVAILABLE,306
-ERE,2022,AVAILABLE,306
-ERE,2023,AVAILABLE,306
-ERE,2024,AVAILABLE,306
-ERE,2025,AVAILABLE,306
+competition,season,status,rows,source,reason,error
+EPL,2010,AVAILABLE,380,Football-Data.co.uk,,
+EPL,2011,AVAILABLE,380,Football-Data.co.uk,,
+EPL,2012,AVAILABLE,380,Football-Data.co.uk,,
+EPL,2013,AVAILABLE,380,Football-Data.co.uk,,
+EPL,2014,AVAILABLE,380,Football-Data.co.uk,,
+EPL,2015,AVAILABLE,380,Football-Data.co.uk,,
+EPL,2016,AVAILABLE,380,Football-Data.co.uk,,
+EPL,2017,AVAILABLE,380,Football-Data.co.uk,,
+EPL,2018,AVAILABLE,380,Football-Data.co.uk,,
+EPL,2019,AVAILABLE,380,Football-Data.co.uk,,
+EPL,2020,AVAILABLE,380,Football-Data.co.uk,,
+EPL,2021,AVAILABLE,380,Football-Data.co.uk,,
+EPL,2022,AVAILABLE,380,Football-Data.co.uk,,
+EPL,2023,AVAILABLE,380,Football-Data.co.uk,,
+EPL,2024,AVAILABLE,380,Football-Data.co.uk,,
+EPL,2025,AVAILABLE,380,Football-Data.co.uk,,
+CHA,2010,AVAILABLE,552,Football-Data.co.uk,,
+CHA,2011,AVAILABLE,552,Football-Data.co.uk,,
+CHA,2012,AVAILABLE,552,Football-Data.co.uk,,
+CHA,2013,AVAILABLE,552,Football-Data.co.uk,,
+CHA,2014,AVAILABLE,552,Football-Data.co.uk,,
+CHA,2015,AVAILABLE,552,Football-Data.co.uk,,
+CHA,2016,AVAILABLE,552,Football-Data.co.uk,,
+CHA,2017,AVAILABLE,552,Football-Data.co.uk,,
+CHA,2018,AVAILABLE,552,Football-Data.co.uk,,
+CHA,2019,AVAILABLE,552,Football-Data.co.uk,,
+CHA,2020,AVAILABLE,552,Football-Data.co.uk,,
+CHA,2021,AVAILABLE,552,Football-Data.co.uk,,
+CHA,2022,AVAILABLE,552,Football-Data.co.uk,,
+CHA,2023,AVAILABLE,552,Football-Data.co.uk,,
+CHA,2024,AVAILABLE,552,Football-Data.co.uk,,
+CHA,2025,AVAILABLE,552,Football-Data.co.uk,,
+BL1,2010,AVAILABLE,306,Football-Data.co.uk,,
+BL1,2011,AVAILABLE,306,Football-Data.co.uk,,
+BL1,2012,AVAILABLE,306,Football-Data.co.uk,,
+BL1,2013,AVAILABLE,306,Football-Data.co.uk,,
+BL1,2014,AVAILABLE,306,Football-Data.co.uk,,
+BL1,2015,AVAILABLE,306,Football-Data.co.uk,,
+BL1,2016,AVAILABLE,306,Football-Data.co.uk,,
+BL1,2017,AVAILABLE,306,Football-Data.co.uk,,
+BL1,2018,AVAILABLE,306,Football-Data.co.uk,,
+BL1,2019,AVAILABLE,306,Football-Data.co.uk,,
+BL1,2020,AVAILABLE,306,Football-Data.co.uk,,
+BL1,2021,AVAILABLE,306,Football-Data.co.uk,,
+BL1,2022,AVAILABLE,306,Football-Data.co.uk,,
+BL1,2023,AVAILABLE,306,Football-Data.co.uk,,
+BL1,2024,AVAILABLE,306,Football-Data.co.uk,,
+BL1,2025,AVAILABLE,306,Football-Data.co.uk,,
+SA,2010,AVAILABLE,380,Football-Data.co.uk,,
+SA,2011,AVAILABLE,380,Football-Data.co.uk,,
+SA,2012,AVAILABLE,380,Football-Data.co.uk,,
+SA,2013,AVAILABLE,380,Football-Data.co.uk,,
+SA,2014,AVAILABLE,380,Football-Data.co.uk,,
+SA,2015,AVAILABLE,380,Football-Data.co.uk,,
+SA,2016,AVAILABLE,380,Football-Data.co.uk,,
+SA,2017,AVAILABLE,380,Football-Data.co.uk,,
+SA,2018,AVAILABLE,380,Football-Data.co.uk,,
+SA,2019,AVAILABLE,380,Football-Data.co.uk,,
+SA,2020,AVAILABLE,380,Football-Data.co.uk,,
+SA,2021,AVAILABLE,380,Football-Data.co.uk,,
+SA,2022,AVAILABLE,380,Football-Data.co.uk,,
+SA,2023,AVAILABLE,380,Football-Data.co.uk,,
+SA,2024,AVAILABLE,380,Football-Data.co.uk,,
+SA,2025,AVAILABLE,380,Football-Data.co.uk,,
+LL,2010,AVAILABLE,380,Football-Data.co.uk,,
+LL,2011,AVAILABLE,380,Football-Data.co.uk,,
+LL,2012,AVAILABLE,380,Football-Data.co.uk,,
+LL,2013,AVAILABLE,380,Football-Data.co.uk,,
+LL,2014,AVAILABLE,380,Football-Data.co.uk,,
+LL,2015,AVAILABLE,380,Football-Data.co.uk,,
+LL,2016,AVAILABLE,380,Football-Data.co.uk,,
+LL,2017,AVAILABLE,380,Football-Data.co.uk,,
+LL,2018,AVAILABLE,380,Football-Data.co.uk,,
+LL,2019,AVAILABLE,380,Football-Data.co.uk,,
+LL,2020,AVAILABLE,380,Football-Data.co.uk,,
+LL,2021,AVAILABLE,380,Football-Data.co.uk,,
+LL,2022,AVAILABLE,380,Football-Data.co.uk,,
+LL,2023,AVAILABLE,380,Football-Data.co.uk,,
+LL,2024,AVAILABLE,380,Football-Data.co.uk,,
+LL,2025,AVAILABLE,380,Football-Data.co.uk,,
+FL1,2010,AVAILABLE,380,Football-Data.co.uk,,
+FL1,2011,AVAILABLE,380,Football-Data.co.uk,,
+FL1,2012,AVAILABLE,380,Football-Data.co.uk,,
+FL1,2013,AVAILABLE,380,Football-Data.co.uk,,
+FL1,2014,AVAILABLE,380,Football-Data.co.uk,,
+FL1,2015,AVAILABLE,380,Football-Data.co.uk,,
+FL1,2016,AVAILABLE,380,Football-Data.co.uk,,
+FL1,2017,AVAILABLE,380,Football-Data.co.uk,,
+FL1,2018,AVAILABLE,380,Football-Data.co.uk,,
+FL1,2019,AVAILABLE,279,Football-Data.co.uk,,
+FL1,2020,AVAILABLE,380,Football-Data.co.uk,,
+FL1,2021,AVAILABLE,380,Football-Data.co.uk,,
+FL1,2022,AVAILABLE,380,Football-Data.co.uk,,
+FL1,2023,AVAILABLE,306,Football-Data.co.uk,,
+FL1,2024,AVAILABLE,306,Football-Data.co.uk,,
+FL1,2025,AVAILABLE,306,Football-Data.co.uk,,
+J1,2010,AVAILABLE,306,J.League Data Site,Observed rows from official J.League schedule/results page,
+J1,2011,AVAILABLE,306,J.League Data Site,Observed rows from official J.League schedule/results page,
+J1,2012,AVAILABLE,306,Football-Data.co.uk:JPN.csv,Observed rows from primary source,
+J1,2013,AVAILABLE,306,Football-Data.co.uk:JPN.csv,Observed rows from primary source,
+J1,2014,AVAILABLE,306,Football-Data.co.uk:JPN.csv,Observed rows from primary source,
+J1,2015,AVAILABLE,309,Football-Data.co.uk:JPN.csv,Observed rows from primary source,
+J1,2016,AVAILABLE,309,Football-Data.co.uk:JPN.csv,Observed rows from primary source,
+J1,2017,AVAILABLE,306,Football-Data.co.uk:JPN.csv,Observed rows from primary source,
+J1,2018,AVAILABLE,309,Football-Data.co.uk:JPN.csv,Observed rows from primary source,
+J1,2019,AVAILABLE,310,Football-Data.co.uk:JPN.csv,Observed rows from primary source,
+J1,2020,AVAILABLE,306,Football-Data.co.uk:JPN.csv,Observed rows from primary source,
+J1,2021,AVAILABLE,380,Football-Data.co.uk:JPN.csv,Observed rows from primary source,
+J1,2022,AVAILABLE,310,Football-Data.co.uk:JPN.csv,Observed rows from primary source,
+J1,2023,AVAILABLE,306,Football-Data.co.uk:JPN.csv,Observed rows from primary source,
+J1,2024,AVAILABLE,380,Football-Data.co.uk:JPN.csv,Observed rows from primary source,
+J1,2025,AVAILABLE,380,Football-Data.co.uk:JPN.csv,Observed rows from primary source,
+J2,2010,AVAILABLE,342,J.League Data Site,Observed rows from official J.League schedule/results page,
+J2,2011,AVAILABLE,380,J.League Data Site,Observed rows from official J.League schedule/results page,
+J2,2012,AVAILABLE,462,J.League Data Site,Observed rows from official J.League schedule/results page,
+J2,2013,AVAILABLE,464,J.League Data Site,Observed rows from official J.League schedule/results page,
+J2,2014,AVAILABLE,462,J.League Data Site,Observed rows from official J.League schedule/results page,
+J2,2015,AVAILABLE,462,J.League Data Site,Observed rows from official J.League schedule/results page,
+J2,2016,AVAILABLE,462,J.League Data Site,Observed rows from official J.League schedule/results page,
+J2,2017,AVAILABLE,462,J.League Data Site,Observed rows from official J.League schedule/results page,
+J2,2018,AVAILABLE,462,J.League Data Site,Observed rows from official J.League schedule/results page,
+J2,2019,AVAILABLE,462,J.League Data Site,Observed rows from official J.League schedule/results page,
+J2,2020,AVAILABLE,462,J.League Data Site,Observed rows from official J.League schedule/results page,
+J2,2021,AVAILABLE,462,J.League Data Site,Observed rows from official J.League schedule/results page,
+J2,2022,AVAILABLE,462,J.League Data Site,Observed rows from official J.League schedule/results page,
+J2,2023,AVAILABLE,462,J.League Data Site,Observed rows from official J.League schedule/results page,
+J2,2024,AVAILABLE,383,J.League Data Site,Observed rows from official J.League schedule/results page,
+J2,2025,AVAILABLE,383,J.League Data Site,Observed rows from official J.League schedule/results page,
+J3,2010,NOT_APPLICABLE,0,J.League Data Site,J3 did not exist in requested historical season,
+J3,2011,NOT_APPLICABLE,0,J.League Data Site,J3 did not exist in requested historical season,
+J3,2012,NOT_APPLICABLE,0,J.League Data Site,J3 did not exist in requested historical season,
+J3,2013,NOT_APPLICABLE,0,J.League Data Site,J3 did not exist in requested historical season,
+J3,2014,AVAILABLE,200,J.League Data Site,Observed rows from official J.League schedule/results page,
+J3,2015,AVAILABLE,236,J.League Data Site,Observed rows from official J.League schedule/results page,
+J3,2016,AVAILABLE,242,J.League Data Site,Observed rows from official J.League schedule/results page,
+J3,2017,AVAILABLE,272,J.League Data Site,Observed rows from official J.League schedule/results page,
+J3,2018,AVAILABLE,272,J.League Data Site,Observed rows from official J.League schedule/results page,
+J3,2019,AVAILABLE,306,J.League Data Site,Observed rows from official J.League schedule/results page,
+J3,2020,AVAILABLE,306,J.League Data Site,Observed rows from official J.League schedule/results page,
+J3,2021,AVAILABLE,210,J.League Data Site,Observed rows from official J.League schedule/results page,
+J3,2022,AVAILABLE,306,J.League Data Site,Observed rows from official J.League schedule/results page,
+J3,2023,AVAILABLE,380,J.League Data Site,Observed rows from official J.League schedule/results page,
+J3,2024,AVAILABLE,382,J.League Data Site,Observed rows from official J.League schedule/results page,
+J3,2025,AVAILABLE,382,J.League Data Site,Observed rows from official J.League schedule/results page,
+CAR,2010/11,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/england/master/2010-11/eflcup.txt
+CAR,2011/12,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/england/master/2011-12/eflcup.txt
+CAR,2012/13,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/england/master/2012-13/eflcup.txt
+CAR,2013/14,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/england/master/2013-14/eflcup.txt
+CAR,2014/15,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/england/master/2014-15/eflcup.txt
+CAR,2015/16,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/england/master/2015-16/eflcup.txt
+CAR,2016/17,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/england/master/2016-17/eflcup.txt
+CAR,2017/18,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/england/master/2017-18/eflcup.txt
+CAR,2018/19,AVAILABLE,93,openfootball,,
+CAR,2019/20,AVAILABLE,92,openfootball,,
+CAR,2020/21,AVAILABLE,90,openfootball,,
+CAR,2021/22,AVAILABLE,92,openfootball,,
+CAR,2022/23,AVAILABLE,93,openfootball,,
+CAR,2023/24,AVAILABLE,93,openfootball,,
+CAR,2024/25,AVAILABLE,93,openfootball,,
+CAR,2025/26,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/england/master/2025-26/eflcup.txt
+DFBP,2010/11,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/deutschland/master/2010-11/cup.txt
+DFBP,2011/12,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/deutschland/master/2011-12/cup.txt
+DFBP,2012/13,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/deutschland/master/2012-13/cup.txt
+DFBP,2013/14,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/deutschland/master/2013-14/cup.txt
+DFBP,2014/15,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/deutschland/master/2014-15/cup.txt
+DFBP,2015/16,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/deutschland/master/2015-16/cup.txt
+DFBP,2016/17,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/deutschland/master/2016-17/cup.txt
+DFBP,2017/18,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/deutschland/master/2017-18/cup.txt
+DFBP,2018/19,AVAILABLE,63,openfootball,,
+DFBP,2019/20,AVAILABLE,63,openfootball,,
+DFBP,2020/21,UNAVAILABLE,0,openfootball,,
+DFBP,2021/22,UNAVAILABLE,0,openfootball,,
+DFBP,2022/23,UNAVAILABLE,0,openfootball,,
+DFBP,2023/24,UNAVAILABLE,0,openfootball,,
+DFBP,2024/25,AVAILABLE,63,openfootball,,
+DFBP,2025/26,AVAILABLE,48,openfootball,,
+UCL,2010/11,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/champions-league/master/2010-11/cl.txt
+UCL,2011/12,AVAILABLE,125,openfootball,,
+UCL,2012/13,AVAILABLE,125,openfootball,,
+UCL,2013/14,AVAILABLE,125,openfootball,,
+UCL,2014/15,AVAILABLE,125,openfootball,,
+UCL,2015/16,AVAILABLE,125,openfootball,,
+UCL,2016/17,AVAILABLE,125,openfootball,,
+UCL,2017/18,AVAILABLE,125,openfootball,,
+UCL,2018/19,AVAILABLE,125,openfootball,,
+UCL,2019/20,AVAILABLE,119,openfootball,,
+UCL,2020/21,AVAILABLE,125,openfootball,,
+UCL,2021/22,AVAILABLE,125,openfootball,,
+UCL,2022/23,AVAILABLE,125,openfootball,,
+UCL,2023/24,AVAILABLE,125,openfootball,,
+UCL,2024/25,AVAILABLE,189,openfootball,,
+UCL,2025/26,AVAILABLE,189,openfootball,,
+UEL,2010/11,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/champions-league/master/2010-11/el.txt
+UEL,2011/12,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/champions-league/master/2011-12/el.txt
+UEL,2012/13,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/champions-league/master/2012-13/el.txt
+UEL,2013/14,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/champions-league/master/2013-14/el.txt
+UEL,2014/15,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/champions-league/master/2014-15/el.txt
+UEL,2015/16,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/champions-league/master/2015-16/el.txt
+UEL,2016/17,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/champions-league/master/2016-17/el.txt
+UEL,2017/18,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/champions-league/master/2017-18/el.txt
+UEL,2018/19,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/champions-league/master/2018-19/el.txt
+UEL,2019/20,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/champions-league/master/2019-20/el.txt
+UEL,2020/21,AVAILABLE,205,openfootball,,
+UEL,2021/22,AVAILABLE,139,openfootball,,
+UEL,2022/23,AVAILABLE,141,openfootball,,
+UEL,2023/24,AVAILABLE,141,openfootball,,
+UEL,2024/25,AVAILABLE,189,openfootball,,
+UEL,2025/26,UNAVAILABLE,0,openfootball,,404 Client Error: Not Found for url: https://raw.githubusercontent.com/openfootball/champions-league/master/2025-26/el.txt
+FRI,2010/11,AVAILABLE,2,ESPN:club.friendly,Observed ESPN event rows,
+FRI,2011/12,UNAVAILABLE,0,ESPN:club.friendly,No observed parseable ESPN event rows,
+FRI,2012/13,UNAVAILABLE,0,ESPN:club.friendly,No observed parseable ESPN event rows,
+FRI,2013/14,UNAVAILABLE,0,ESPN:club.friendly,No observed parseable ESPN event rows,
+FRI,2014/15,AVAILABLE,99,ESPN:club.friendly,Observed ESPN event rows,
+FRI,2015/16,AVAILABLE,175,ESPN:club.friendly,Observed ESPN event rows,
+FRI,2016/17,AVAILABLE,312,ESPN:club.friendly,Observed ESPN event rows,
+FRI,2017/18,AVAILABLE,108,ESPN:club.friendly,Observed ESPN event rows,
+FRI,2018/19,AVAILABLE,305,ESPN:club.friendly,Observed ESPN event rows,
+FRI,2019/20,AVAILABLE,150,ESPN:club.friendly,Observed ESPN event rows,
+FRI,2020/21,AVAILABLE,112,ESPN:club.friendly,Observed ESPN event rows,
+FRI,2021/22,AVAILABLE,175,ESPN:club.friendly,Observed ESPN event rows,
+FRI,2022/23,AVAILABLE,323,ESPN:club.friendly,Observed ESPN event rows,
+FRI,2023/24,AVAILABLE,226,ESPN:club.friendly,Observed ESPN event rows,
+FRI,2024/25,AVAILABLE,170,ESPN:club.friendly,Observed ESPN event rows,
+FRI,2025/26,AVAILABLE,141,ESPN:club.friendly,Observed ESPN event rows,
