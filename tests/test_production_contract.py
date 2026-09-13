@@ -7,15 +7,11 @@ def _write(path, value):
     path.write_text(json.dumps(value), encoding="utf-8")
 
 
-def test_contract_fails_closed_when_evidence_is_missing(tmp_path):
-    result = evaluate_production_contract(str(tmp_path))
-    assert result.passed is False
-    assert "completion_gate" in result.failures
-    assert "oos_claim" in result.failures
-
-
-def test_contract_passes_only_with_explicit_success(tmp_path):
+def _minimal_passing_artifacts(tmp_path):
     _write(tmp_path / "completion_gate.json", {"full_gate_passed": True})
+    _write(tmp_path / "test_status.json", {"passed": True, "exit_code": 0})
+    _write(tmp_path / "audit_status.json", {"passed": True, "exit_code": 0})
+    _write(tmp_path / "audit_gate.json", {"full_gate_passed": True})
     _write(tmp_path / "run_status.json", {
         "status": "READY",
         "oos_claimed": True,
@@ -24,6 +20,22 @@ def test_contract_passes_only_with_explicit_success(tmp_path):
             "backtest", "oos", "prediction", "sanity", "artifact"
         )},
     })
+    for name in ("oos_metrics.csv", "model_selection.csv"):
+        (tmp_path / name).write_text("ok\n", encoding="utf-8")
+    _write(tmp_path / "adoption_decision.json", {"status": "HOLD"})
+
+
+def test_contract_fails_closed_when_evidence_is_missing(tmp_path):
+    result = evaluate_production_contract(str(tmp_path))
+    assert result.passed is False
+    assert "completion_gate" in result.failures
+    assert "oos_claim" in result.failures
+    assert "tests" in result.failures
+    assert "audit_gate" in result.failures
+
+
+def test_contract_passes_only_with_explicit_success(tmp_path):
+    _minimal_passing_artifacts(tmp_path)
     result = write_contract_result(str(tmp_path))
     assert result.passed is True
     payload = json.loads((tmp_path / "production_contract.json").read_text())
@@ -32,7 +44,7 @@ def test_contract_passes_only_with_explicit_success(tmp_path):
 
 
 def test_blocked_status_cannot_pass(tmp_path):
-    _write(tmp_path / "completion_gate.json", {"full_gate_passed": True})
+    _minimal_passing_artifacts(tmp_path)
     _write(tmp_path / "run_status.json", {"status": "BLOCKED", "oos_claimed": True})
     result = evaluate_production_contract(str(tmp_path))
     assert result.passed is False
