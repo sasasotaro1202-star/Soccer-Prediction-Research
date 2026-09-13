@@ -97,7 +97,12 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
     available_cells = int(matrix.status.str.contains("AVAILABLE", na=False).sum())
     unavailable_cells = int(matrix.status.str.contains("UNAVAILABLE", na=False).sum())
     not_applicable_cells = int(matrix.status.str.contains("NOT_APPLICABLE", na=False).sum())
-    accounted_cells = available_cells + unavailable_cells + not_applicable_cells
+    # A cell may legitimately have multiple explicit statuses when more than one
+    # adapter reports the same competition/season (for example AVAILABLE from a
+    # primary adapter and UNAVAILABLE from a secondary adapter). Count each
+    # competition/season cell once for accounting; never sum status categories as
+    # though they were mutually exclusive.
+    accounted_cells = int(matrix.status.str.contains(r"AVAILABLE|UNAVAILABLE|NOT_APPLICABLE", regex=True, na=False).sum())
     scope_complete = missing_audit_cells == 0
 
     duplicate_source_rows = int(reconciliation.duplicate_source_identity.sum()) if "duplicate_source_identity" in reconciliation.columns and not reconciliation.empty else 0
