@@ -17,9 +17,12 @@ def test_unobserved_competitions_are_not_promoted_to_available():
     ])
     matrix = coverage_matrix(history, pd.DataFrame())
     ucl = matrix[(matrix["competition"] == "UCL") & (matrix["source"] == "current_observed_adapter")]
-    assert len(ucl) == 1
-    assert ucl.iloc[0]["status"] == "UNAVAILABLE"
-    assert "not a claim" in ucl.iloc[0]["reason"]
+    # The audit intentionally emits one explicit fixture-cell row per requested
+    # season. Unobserved competitions therefore remain unavailable in every
+    # requested season cell rather than being promoted to AVAILABLE.
+    assert len(ucl) == 16
+    assert set(ucl["status"]) == {"UNAVAILABLE"}
+    assert all("not a claim" in str(reason) for reason in ucl["reason"])
 
 
 def test_missing_is_not_real_zero():
