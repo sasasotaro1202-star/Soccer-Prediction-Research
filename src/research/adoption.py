@@ -4,7 +4,26 @@ import pandas as pd
 
 
 def _mean_metrics(df: pd.DataFrame) -> pd.Series:
-    return df.mean(numeric_only=True)
+    """Aggregate block metrics by match count, not by block count.
+
+    Walk-forward blocks can have different sample sizes. Equal-weighting blocks
+    can therefore let a small tail block dominate a large historical block.
+    Match-count weighting is the correct aggregation for the locked OOS gate.
+    """
+    numeric = df.select_dtypes(include="number")
+    if "n" in numeric.columns and numeric["n"].sum() > 0:
+        weights = numeric["n"].astype(float)
+        total = float(weights.sum())
+        out = {}
+        for col in numeric.columns:
+            if col == "n":
+                out[col] = total
+                continue
+            values = pd.to_numeric(numeric[col], errors="coerce")
+            mask = values.notna() & weights.notna()
+            out[col] = float((values[mask] * weights[mask]).sum() / weights[mask].sum()) if mask.any() else float("nan")
+        return pd.Series(out)
+    return numeric.mean()
 
 
 def adoption_decision(
@@ -16,11 +35,11 @@ def adoption_decision(
     max_ece_regression: float = 0.02,
     max_regression_blocks: int = 0,
 ) -> dict:
-    """Strict adoption gate for a candidate evaluated on an untouched locked OOS.
+    """Strict adoption gate for a candidate evaluated on untouched locked OOS.
 
-    The locked block is never used for feature/model selection. Development OOS is
-    used only as a stability diagnostic; it cannot replace the locked comparison.
-    Accuracy >= 80% is a target/reporting criterion, not a reason to tune on OOS.
+    Locked OOS is never used for feature/model selection. Development OOS is
+    only a stability diagnostic. Accuracy >= 80% is a target/reporting metric,
+    not a tuning knob, so a candidate cannot be forced to pass by overfitting.
     """
     required = {"logloss", "accuracy", "brier", "ece"}
     if baseline.empty or candidate.empty:
@@ -47,8 +66,6 @@ def adoption_decision(
         "required_max_regression_blocks": max_regression_blocks,
     }
     if development_oos is not None and not development_oos.empty:
-        # Each development block was itself generated strictly after its training
-        # window. We use it only to detect broad regressions, never to tune weights.
         required_dev = {
             "logloss", "accuracy", "brier", "ece",
             "baseline_logistic_logloss", "baseline_logistic_accuracy",
@@ -88,6 +105,7 @@ def adoption_decision(
         ),
         "oos_claimed": True,
         "sample_size": n,
+        "aggregation": "match_count_weighted_across_oos_blocks",
         "baseline": b.to_dict(),
         "candidate": c.to_dict(),
         "delta": {
