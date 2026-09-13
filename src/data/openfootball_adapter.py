@@ -16,9 +16,9 @@ BASE_URLS = {
     "DFBP": "https://raw.githubusercontent.com/openfootball/deutschland/master/{season}/cup.txt",
     "CAR": "https://raw.githubusercontent.com/openfootball/england/master/{season}/eflcup.txt",
 }
-SEASON_START = {"UCL": 2011, "UEL": 2011, "DFBP": 2010, "CAR": 2010}
-DATE_RE = re.compile(r"^\s{2}(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Z][a-z]{2})\s+(\d{1,2})(?:\s+(\d{4}))?\s*$")
-MATCH_RE = re.compile(r"^\s{4}(?:(\d{1,2}:\d{2})\s+)?(.+?)\s+v\s+(.+?)\s+(\d+)\s*-\s*(\d+)(.*)$")
+SEASON_START = {"UCL": 2010, "UEL": 2010, "DFBP": 2010, "CAR": 2010}
+DATE_RE = re.compile(r"^\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Z][a-z]{2})\s+(\d{1,2})(?:\s+(\d{4}))?.*$")
+MATCH_RE = re.compile(r"^\s*(?:(\d{1,2}:\d{2})\s+)?(.+?)\s+v\s+(.+?)\s+(\d+)\s*-\s*(\d+)(.*)$")
 MONTHS = {m: i for i, m in enumerate(["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], 1)}
 
 
@@ -48,8 +48,6 @@ def _parse_date(line: str, season_start: int, current_year: int | None, previous
 
 def _outcome(final_h: int, final_a: int, suffix: str) -> tuple[int, int, str]:
     text = suffix.strip()
-    # Football.TXT can encode shootouts as: "1-4 pen. 0-1 a.e.t.".
-    # The competition target remains a draw because regulation was level.
     if re.search(r"\bpen\.\b", text):
         reg = re.search(r"(\d+)\s*-\s*(\d+)\s+a\.e\.t\.", text)
         if reg:
@@ -63,6 +61,7 @@ def parse_football_txt(text: str, competition: str, season_start: int, source_ur
     current_date = pd.NaT
     current_year: int | None = None
     previous_month: int | None = None
+    retrieved = datetime.now(timezone.utc)
     for line_no, line in enumerate(text.splitlines(), 1):
         if DATE_RE.match(line):
             current_date, current_year, previous_month = _parse_date(line, season_start, current_year, previous_month)
@@ -82,34 +81,20 @@ def parse_football_txt(text: str, competition: str, season_start: int, source_ur
             continue
         sid = hashlib.sha1(f"{competition}|{season_start}|{line_no}|{home}|{away}|{kickoff.isoformat()}".encode()).hexdigest()[:16]
         rows.append({
-            "match_id": f"of:{competition}:{season_start}:{sid}",
-            "competition": competition,
-            "season": f"{season_start}/{str(season_start + 1)[-2:]}",
-            "season_start": season_start,
-            "kickoff_utc": kickoff,
-            "kickoff_time_available": bool(time_text),
+            "match_id": f"of:{competition}:{season_start}:{sid}", "competition": competition,
+            "season": f"{season_start}/{str(season_start + 1)[-2:]}", "season_start": season_start,
+            "kickoff_utc": kickoff, "kickoff_time_available": bool(time_text),
             "event_time_precision": "MINUTE" if time_text else "DATE_ONLY",
-            "home_team": home,
-            "away_team": away,
-            "home_goals": hg,
-            "away_goals": ag,
-            "result": result,
-            "source_name": "openfootball",
-            "source_record_id": sid,
-            "source_url": source_url,
-            "source_available_at_utc": pd.NaT,
-            "retrieved_at_utc": datetime.now(timezone.utc),
-            "raw_snapshot_id": hashlib.sha256(raw).hexdigest(),
+            "home_team": home, "away_team": away, "home_goals": hg, "away_goals": ag,
+            "result": result, "source_name": "openfootball", "source_record_id": sid,
+            "source_url": source_url, "source_available_at_utc": pd.NaT,
+            "retrieved_at_utc": retrieved, "raw_snapshot_id": hashlib.sha256(raw).hexdigest(),
         })
-    if not rows:
-        return pd.DataFrame()
-    return pd.DataFrame(rows).drop_duplicates(subset=["competition", "season_start", "kickoff_utc", "home_team", "away_team"])
+    return pd.DataFrame(rows).drop_duplicates(subset=["competition", "season_start", "kickoff_utc", "home_team", "away_team"]) if rows else pd.DataFrame()
 
 
 def load_openfootball_season(competition: str, start_year: int, cache_dir: str = "data/raw/openfootball") -> pd.DataFrame:
-    if competition not in BASE_URLS:
-        raise ValueError(f"No openfootball mapping for {competition}")
-    if start_year < SEASON_START[competition]:
+    if competition not in BASE_URLS or start_year < SEASON_START[competition]:
         return pd.DataFrame()
     season = _season_folder(start_year)
     url = BASE_URLS[competition].format(season=season)
@@ -118,10 +103,8 @@ def load_openfootball_season(competition: str, start_year: int, cache_dir: str =
     if cache.exists():
         raw = cache.read_bytes()
     else:
-        r = requests.get(url, timeout=30, headers={"User-Agent": "SoccerPredictionResearch/1.0"})
-        r.raise_for_status()
-        raw = r.content
-        cache.write_bytes(raw)
+        r = requests.get(url, timeout=45, headers={"User-Agent": "SoccerPredictionResearch/1.0"})
+        r.raise_for_status(); raw = r.content; cache.write_bytes(raw)
     return parse_football_txt(raw.decode("utf-8", errors="replace"), competition, start_year, url, raw)
 
 
@@ -131,14 +114,13 @@ def load_openfootball_history(start_year: int = 2010, end_year: int = 2025, max_
     def one(c: str, y: int):
         try:
             d = load_openfootball_season(c, y)
-            return c, y, d, {"competition": c, "season": y, "status": "AVAILABLE" if not d.empty else "UNAVAILABLE", "rows": len(d), "source": "openfootball"}
+            return c, y, d, {"competition": c, "season": f"{y}/{str(y + 1)[-2:]}", "status": "AVAILABLE" if not d.empty else "UNAVAILABLE", "rows": len(d), "source": "openfootball"}
         except Exception as exc:
-            return c, y, pd.DataFrame(), {"competition": c, "season": y, "status": "UNAVAILABLE", "rows": 0, "source": "openfootball", "error": str(exc)}
+            return c, y, pd.DataFrame(), {"competition": c, "season": f"{y}/{str(y + 1)[-2:]}", "status": "UNAVAILABLE", "rows": 0, "source": "openfootball", "error": str(exc)}
     results = []
     with ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(tasks)))) as pool:
         futures = [pool.submit(one, c, y) for c, y in tasks]
-        for f in as_completed(futures):
-            results.append(f.result())
+        for f in as_completed(futures): results.append(f.result())
     results.sort(key=lambda x: (x[0], x[1]))
     frames = [x[2] for x in results if not x[2].empty]
     history = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
