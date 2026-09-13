@@ -1,0 +1,39 @@
+import json
+
+from src.research.production_contract import evaluate_production_contract, write_contract_result
+
+
+def _write(path, value):
+    path.write_text(json.dumps(value), encoding="utf-8")
+
+
+def test_contract_fails_closed_when_evidence_is_missing(tmp_path):
+    result = evaluate_production_contract(str(tmp_path))
+    assert result.passed is False
+    assert "completion_gate" in result.failures
+    assert "oos_claim" in result.failures
+
+
+def test_contract_passes_only_with_explicit_success(tmp_path):
+    _write(tmp_path / "completion_gate.json", {"full_gate_passed": True})
+    _write(tmp_path / "run_status.json", {
+        "status": "READY",
+        "oos_claimed": True,
+        "gates": {name: True for name in (
+            "data", "schema", "leakage", "features", "training",
+            "backtest", "oos", "prediction", "sanity", "artifact"
+        )},
+    })
+    result = write_contract_result(str(tmp_path))
+    assert result.passed is True
+    payload = json.loads((tmp_path / "production_contract.json").read_text())
+    assert payload["production_contract_passed"] is True
+    assert payload["fail_closed"] is True
+
+
+def test_blocked_status_cannot_pass(tmp_path):
+    _write(tmp_path / "completion_gate.json", {"full_gate_passed": True})
+    _write(tmp_path / "run_status.json", {"status": "BLOCKED", "oos_claimed": True})
+    result = evaluate_production_contract(str(tmp_path))
+    assert result.passed is False
+    assert any(x.startswith("run_status:") for x in result.failures)
