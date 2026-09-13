@@ -7,7 +7,10 @@ on:
       - "artifacts/**"
   workflow_dispatch:
   schedule:
-    - cron: "17 3 * * 1"
+    # Run daily, offset from the top of the hour to reduce GitHub Actions
+    # scheduler contention. The workflow itself is idempotent and concurrency
+    # protected, so a delayed scheduled run cannot overlap a previous run.
+    - cron: "17 3 * * *"
 
 permissions:
   contents: write
