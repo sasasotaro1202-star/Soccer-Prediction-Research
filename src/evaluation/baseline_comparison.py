@@ -1,7 +1,7 @@
 """Same-OOS comparison of legacy V9/V12 baselines and candidates."""
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -41,6 +41,8 @@ def compare_same_oos(
     """
     if oos.empty:
         raise ValueError("OOS frame is empty")
+    if oos[id_col].duplicated().any():
+        raise ValueError(f"OOS contains duplicate {id_col}")
     for name, frame in (("baseline", baseline), ("candidate", candidate)):
         if frame.empty:
             raise ValueError(f"{name} prediction frame is empty")
@@ -49,18 +51,42 @@ def compare_same_oos(
         if not set(oos[id_col]).issubset(set(frame[id_col])):
             raise ValueError(f"{name} is missing locked OOS rows")
 
-    base = oos[[id_col, target_col]].merge(baseline[[id_col, "H", "D", "A"]], on=id_col, how="inner", validate="one_to_one")
-    cand = oos[[id_col, target_col]].merge(candidate[[id_col, "H", "D", "A"]], on=id_col, how="inner", validate="one_to_one")
+    base = oos[[id_col, target_col]].merge(
+        baseline[[id_col, "H", "D", "A"]],
+        on=id_col,
+        how="inner",
+        validate="one_to_one",
+    )
+    cand = oos[[id_col, target_col]].merge(
+        candidate[[id_col, "H", "D", "A"]],
+        on=id_col,
+        how="inner",
+        validate="one_to_one",
+    )
     if len(base) != len(oos) or len(cand) != len(oos):
         raise ValueError("Baseline/candidate do not cover the identical OOS set")
     if not np.array_equal(base[id_col].to_numpy(), cand[id_col].to_numpy()):
         raise ValueError("Baseline and candidate OOS row ordering differs")
+
     y = base[target_col].astype(int).to_numpy()
     bp = _proba(base)
     cp = _proba(cand)
     bm = classification_metrics(y, bp)
     cm = classification_metrics(y, cp)
-    delta = {f"delta_{k}": float(cm[k] - bm[k]) for k in bm}
+
+    # classification_metrics intentionally contains structured diagnostics
+    # such as confusion_matrix. Only scalar numeric metrics are meaningful
+    # deltas; attempting to subtract list-valued diagnostics caused the bridge
+    # workflow to fail even though the OOS comparison itself was valid.
+    delta: dict[str, float] = {}
+    for key, base_value in bm.items():
+        cand_value = cm.get(key)
+        if isinstance(base_value, (int, float, np.integer, np.floating)) and isinstance(
+            cand_value, (int, float, np.integer, np.floating)
+        ):
+            if np.isfinite(float(base_value)) and np.isfinite(float(cand_value)):
+                delta[f"delta_{key}"] = float(cand_value) - float(base_value)
+
     return {
         "n": int(len(oos)),
         "baseline": bm,
