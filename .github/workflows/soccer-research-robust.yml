@@ -22,15 +22,15 @@ jobs:
     timeout-minutes: 240
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
       - name: Cache raw soccer data
         continue-on-error: true
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: data/raw
           key: soccer-raw-${{ runner.os }}-${{ hashFiles('src/data/football_data.py', 'src/data/openfootball_adapter.py', 'src/data/jleague_adapter.py', 'src/data/espn_friendlies_adapter.py') }}
@@ -147,22 +147,29 @@ jobs:
       - name: Upload research artifacts
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: soccer-research-robust-${{ github.run_id }}
           path: artifacts/
           retention-days: 30
           if-no-files-found: warn
-      - name: Commit research artifacts
+      - name: Commit small research summaries only
         if: always()
         continue-on-error: true
         run: |
           set +e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add artifacts/ || true
+          # Full audit CSVs remain in the Actions artifact only. Never push a
+          # generated file large enough to hit GitHub's 100 MB repository limit.
+          while IFS= read -r -d '' file; do
+            size=$(stat -c%s "$file" 2>/dev/null || echo 999999999)
+            if [ "$size" -lt 50000000 ]; then
+              git add "$file"
+            fi
+          done < <(find artifacts -type f -print0)
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m "Update soccer research artifacts [skip ci]" || exit 0
+          git commit -m "Update soccer research summaries [skip ci]" || exit 0
           for attempt in 1 2 3; do
             git fetch origin main
             git rebase origin/main
