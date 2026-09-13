@@ -10,6 +10,8 @@ publication timestamps.
 """
 
 import hashlib
+import re
+import unicodedata
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from io import BytesIO
@@ -65,13 +67,22 @@ def _pick(df: pd.DataFrame, *names: str) -> str | None:
 
 
 def _norm_comp(value: object) -> str | None:
-    text = str(value).strip().upper()
-    aliases = {
-        "J1": "J1", "J1 LEAGUE": "J1", "J.LEAGUE DIVISION 1": "J1",
-        "J2": "J2", "J2 LEAGUE": "J2", "J.LEAGUE DIVISION 2": "J2",
-        "J3": "J3", "J3 LEAGUE": "J3", "J.LEAGUE DIVISION 3": "J3",
-    }
-    return aliases.get(text)
+    """Normalize ASCII and Japanese/full-width J.League labels conservatively."""
+    text = unicodedata.normalize("NFKC", str(value)).strip().upper()
+    compact = re.sub(r"[\s._\-]+", "", text)
+    if compact in {"J1", "J1LEAGUE", "JLEAGUEDIVISION1", "JLEAGUE1"}:
+        return "J1"
+    if compact in {"J2", "J2LEAGUE", "JLEAGUEDIVISION2", "JLEAGUE2"}:
+        return "J2"
+    if compact in {"J3", "J3LEAGUE", "JLEAGUEDIVISION3", "JLEAGUE3"}:
+        return "J3"
+    if "J3" in compact or "JLEAGUE3" in compact:
+        return "J3"
+    if "J2" in compact or "JLEAGUE2" in compact:
+        return "J2"
+    if "J1" in compact or "JLEAGUE1" in compact:
+        return "J1"
+    return None
 
 
 def _load_primary(cache_dir: str, start_year: int, end_year: int) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -127,7 +138,6 @@ def _load_primary(cache_dir: str, start_year: int, end_year: int) -> tuple[pd.Da
 
 
 def _parse_score(text: str) -> tuple[int | None, int | None]:
-    import re
     m = re.search(r"(\d+)\s*-\s*(\d+)", text)
     return (int(m.group(1)), int(m.group(2))) if m else (None, None)
 
@@ -155,7 +165,7 @@ def _official_season(comp: str, year: int, cache_dir: str = "data/raw/jleague") 
     retrieved = datetime.now(timezone.utc)
     rows = []
     for cells in parser.rows:
-        if len(cells) < 8 or cells[0] != str(year):
+        if len(cells) < 8 or unicodedata.normalize("NFKC", cells[0]).strip() != str(year):
             continue
         league = _norm_comp(cells[1])
         if league != comp:
@@ -165,14 +175,13 @@ def _official_season(comp: str, year: int, cache_dir: str = "data/raw/jleague") 
         hg, ag = _parse_score(score)
         if not home or not away or hg is None or ag is None:
             continue
-        # Official pages use JST local time. Preserve DATE_ONLY when kickoff is absent.
-        date_match = __import__("re").search(r"(\d{2})/(\d{2})/(\d{2})", date_text)
+        date_match = re.search(r"(\d{2})/(\d{2})/(\d{2})", date_text)
         if not date_match:
             continue
         yy, mm, dd = map(int, date_match.groups())
         local = pd.Timestamp(year=2000 + yy, month=mm, day=dd)
         precision = "DATE_ONLY"
-        if __import__("re").fullmatch(r"\d{1,2}:\d{2}", time_text):
+        if re.fullmatch(r"\d{1,2}:\d{2}", time_text):
             hh, minute = map(int, time_text.split(":"))
             local = local.replace(hour=hh, minute=minute)
             precision = "MINUTE"
