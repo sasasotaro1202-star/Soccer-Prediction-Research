@@ -10,6 +10,8 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from src.data.espn_friendlies_adapter import load_friendlies_history
 from src.data.jleague_adapter import load_jleague_history
@@ -19,6 +21,23 @@ LEAGUES={"EPL":"E0","CHA":"E1","BL1":"D1","SA":"I1","LL":"SP1","FL1":"F1"}
 BASE="https://www.football-data.co.uk/mmz4281/{season_folder}/{league}.csv"
 COMPETITION_TZ={"EPL":"Europe/London","CHA":"Europe/London","BL1":"Europe/Berlin","SA":"Europe/Rome","LL":"Europe/Madrid","FL1":"Europe/Paris"}
 RAW_STAT_MAP={"home_shots":"HS","away_shots":"AS","home_shots_on_target":"HST","away_shots_on_target":"AST","home_corners":"HC","away_corners":"AC","home_fouls":"HF","away_fouls":"AF","home_yellow_cards":"HY","away_yellow_cards":"AY","home_red_cards":"HR","away_red_cards":"AR"}
+HEADERS={"User-Agent":"SoccerPredictionResearch/1.0"}
+
+def _http_get(url: str, *, timeout: int = 45, params: dict | None = None) -> requests.Response:
+    """Bounded retrying GET for transient public-data failures.
+
+    Retries are limited to connection errors, timeouts, throttling and 5xx
+    responses. A genuine 4xx/404 remains a real data-availability signal and is
+    surfaced to the adapter/audit instead of being hidden.
+    """
+    retry = Retry(total=4, connect=4, read=4, status=4, backoff_factor=1.0,
+                  status_forcelist=(429, 500, 502, 503, 504),
+                  allowed_methods=frozenset({"GET"}), raise_on_status=False)
+    session = requests.Session()
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    response = session.get(url, params=params, timeout=timeout, headers=HEADERS)
+    response.raise_for_status()
+    return response
 
 def season_folder(start_year:int)->str:return f"{str(start_year)[-2:]}{str(start_year+1)[-2:]}"
 def _parse_football_data_dates(series:pd.Series)->pd.Series:return pd.to_datetime(series.astype("string").str.strip(),format="mixed",dayfirst=True,errors="coerce")
@@ -32,7 +51,7 @@ def load_season(competition:str,start_year:int,cache_dir:str="data/raw")->pd.Dat
     league=LEAGUES[competition]; url=BASE.format(season_folder=season_folder(start_year),league=league); path=Path(cache_dir)/f"{competition}_{start_year}.csv"; path.parent.mkdir(parents=True,exist_ok=True)
     if path.exists(): raw=path.read_bytes()
     else:
-        r=requests.get(url,timeout=30,headers={"User-Agent":"SoccerPredictionResearch/1.0"}); r.raise_for_status(); raw=r.content; path.write_bytes(raw)
+        r=_http_get(url,timeout=45); raw=r.content; path.write_bytes(raw)
     df=pd.read_csv(BytesIO(raw)); required={"Date","HomeTeam","AwayTeam","FTHG","FTAG","FTR"}; missing=required-set(df.columns)
     if missing: raise ValueError(f"{url}: missing columns {sorted(missing)}")
     kickoff,precision=_parse_kickoff(df,competition)
