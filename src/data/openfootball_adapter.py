@@ -19,6 +19,7 @@ BASE_URLS = {
 SEASON_START = {"UCL": 2010, "UEL": 2010, "DFBP": 2010, "CAR": 2010}
 DATE_RE = re.compile(r"^\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Z][a-z]{2})\s+(\d{1,2})(?:\s+(\d{4}))?.*$")
 MATCH_RE = re.compile(r"^\s*(?:(\d{1,2}:\d{2})\s+)?(.+?)\s+v\s+(.+?)\s+(\d+)\s*-\s*(\d+)(.*)$")
+SCORE_PAIR_RE = re.compile(r"(\d+)\s*-\s*(\d+)")
 MONTHS = {m: i for i, m in enumerate(["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], 1)}
 
 
@@ -47,11 +48,32 @@ def _parse_date(line: str, season_start: int, current_year: int | None, previous
 
 
 def _outcome(final_h: int, final_a: int, suffix: str) -> tuple[int, int, str]:
+    """Return regulation/a.e.t. goals for a 1X2 target.
+
+    OpenFootball may encode knockout matches as e.g. ``4-3 pen. (1-1, 0-1)``.
+    The leading score is the shootout score, while the first score in the
+    parenthesized sequence is the regulation score. For 1X2 training the
+    shootout must therefore be discarded. If an explicit a.e.t. score exists,
+    use it as the final football score before treating a penalty shootout as a
+    draw.
+    """
     text = suffix.strip()
-    if re.search(r"\bpen\.\b", text):
-        reg = re.search(r"(\d+)\s*-\s*(\d+)\s+a\.e\.t\.", text)
-        if reg:
-            return int(reg.group(1)), int(reg.group(2)), "D"
+    if re.search(r"\bpen\.?\b", text, flags=re.IGNORECASE):
+        # Prefer an explicit a.e.t. score when present.
+        aet = re.search(r"(\d+)\s*-\s*(\d+)\s+a\.e\.t\.?", text, flags=re.IGNORECASE)
+        if aet:
+            hg, ag = int(aet.group(1)), int(aet.group(2))
+            return hg, ag, "H" if hg > ag else "A" if ag > hg else "D"
+
+        # Otherwise the parenthesized sequence normally contains regulation
+        # and, when present, extra-time intermediate scores. The first pair is
+        # the regulation score and is the correct 1X2 target.
+        paren = re.search(r"\(([^)]*)\)", text)
+        if paren:
+            pair = SCORE_PAIR_RE.search(paren.group(1))
+            if pair:
+                hg, ag = int(pair.group(1)), int(pair.group(2))
+                return hg, ag, "H" if hg > ag else "A" if ag > hg else "D"
         return final_h, final_a, "D"
     return final_h, final_a, "H" if final_h > final_a else "A" if final_a > final_h else "D"
 
