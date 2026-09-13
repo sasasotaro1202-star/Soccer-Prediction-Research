@@ -7,13 +7,10 @@ on:
       - "artifacts/**"
   workflow_dispatch:
   schedule:
-    # Run daily, offset from the top of the hour to reduce GitHub Actions
-    # scheduler contention. The workflow itself is idempotent and concurrency
-    # protected, so a delayed scheduled run cannot overlap a previous run.
     - cron: "17 3 * * *"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: soccer-research-robust
@@ -39,6 +36,7 @@ jobs:
           key: soccer-raw-${{ runner.os }}-${{ hashFiles('src/data/football_data.py', 'src/data/openfootball_adapter.py', 'src/data/jleague_adapter.py', 'src/data/espn_friendlies_adapter.py', 'src/data/international_adapter.py') }}
           restore-keys: soccer-raw-${{ runner.os }}-
       - name: Install dependencies with retry
+        id: dependencies
         continue-on-error: true
         run: |
           set +e
@@ -56,10 +54,14 @@ jobs:
         continue-on-error: true
         env:
           PYTHONPATH: .
+          PYTHONHASHSEED: "0"
         run: python -m compileall -q src tests
       - name: Run tests
         id: tests
         continue-on-error: true
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
         run: |
           mkdir -p artifacts
           set +e
@@ -72,6 +74,7 @@ jobs:
         continue-on-error: true
         env:
           PYTHONPATH: .
+          PYTHONHASHSEED: "0"
         run: |
           mkdir -p artifacts
           set +e
@@ -84,6 +87,7 @@ jobs:
         continue-on-error: true
         env:
           PYTHONPATH: .
+          PYTHONHASHSEED: "0"
         run: |
           mkdir -p artifacts
           set +e
@@ -97,6 +101,7 @@ jobs:
         continue-on-error: true
         env:
           PYTHONPATH: .
+          PYTHONHASHSEED: "0"
         run: |
           mkdir -p artifacts
           set +e
@@ -129,7 +134,8 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_RESEARCH_MODEL: gpt-5.6-luna
           PYTHONPATH: .
-          RESEARCH_ATTEMPTS: "3"
+          PYTHONHASHSEED: "0"
+          RESEARCH_ATTEMPTS: "2"
           RESEARCH_RETRY_BACKOFF: "10"
           PIT_ENABLE_ARCHIVE_AUDIT: "0"
         continue-on-error: true
@@ -141,6 +147,7 @@ jobs:
           mkdir -p artifacts
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
           p = Path('artifacts/run_status.json')
           if p.exists():
@@ -148,12 +155,21 @@ jobs:
           else:
               data = {'status':'DEGRADED','oos_claimed':False,'reason':'No run_status.json produced'}
           data['workflow_health'] = {
+              'run_id': os.environ.get('GITHUB_RUN_ID'),
+              'head_sha': os.environ.get('GITHUB_SHA'),
               'compile_step': '${{ steps.compile.outcome }}',
+              'dependencies_step': '${{ steps.dependencies.outcome }}',
               'tests_step': '${{ steps.tests.outcome }}',
               'audit_step': '${{ steps.audit.outcome }}',
               'auxiliary_audit_step': '${{ steps.auxiliary_audit.outcome }}',
               'completion_gate_step': '${{ steps.gate.outcome }}',
               'research_step': '${{ steps.research_engine.outcome }}',
+          }
+          data['automation_policy'] = {
+              'job_success_does_not_imply_research_success': True,
+              'production_requires_audit_and_completion_gates': True,
+              'failed_gates_fail_closed': True,
+              'historical_artifacts_are_actions_only': True,
           }
           if data.get('audit', {}).get('audit_complete') is False:
               data['research_scope_warning'] = '14-competition audit is incomplete; results must not be represented as full 14-competition coverage.'
@@ -170,35 +186,3 @@ jobs:
           path: artifacts/
           retention-days: 30
           if-no-files-found: warn
-      - name: Commit only compact research summaries
-        if: always()
-        continue-on-error: true
-        run: |
-          set +e
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Keep detailed CSV/PIT artifacts in Actions storage. Only tiny JSON
-          # status summaries are candidates for the repository, preventing repo
-          # bloat and avoiding large-file push failures.
-          for file in \
-            artifacts/run_status.json \
-            artifacts/completion_gate.json \
-            artifacts/audit_gate.json \
-            artifacts/audit_status.json \
-            artifacts/auxiliary_audit_status.json \
-            artifacts/test_status.json; do
-            if [ -f "$file" ]; then git add "$file"; fi
-          done
-          if git diff --cached --quiet; then exit 0; fi
-          git commit -m "Update soccer research summaries [skip ci]" || exit 0
-          for attempt in 1 2 3; do
-            git fetch origin main
-            if ! git rebase origin/main; then
-              git rebase --abort || true
-              sleep $((attempt * 5))
-              continue
-            fi
-            if git push origin HEAD:main; then exit 0; fi
-            sleep $((attempt * 5))
-          done
-          exit 0
