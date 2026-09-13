@@ -36,7 +36,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: data/raw
-          key: soccer-raw-${{ runner.os }}-${{ hashFiles('src/data/football_data.py', 'src/data/openfootball_adapter.py', 'src/data/jleague_adapter.py', 'src/data/espn_friendlies_adapter.py') }}
+          key: soccer-raw-${{ runner.os }}-${{ hashFiles('src/data/football_data.py', 'src/data/openfootball_adapter.py', 'src/data/jleague_adapter.py', 'src/data/espn_friendlies_adapter.py', 'src/data/international_adapter.py') }}
           restore-keys: soccer-raw-${{ runner.os }}-
       - name: Install dependencies with retry
         continue-on-error: true
@@ -78,6 +78,18 @@ jobs:
           python -m src.data.fixture_field_audit > artifacts/audit_stdout.json
           rc=$?
           printf '{"exit_code":%s,"passed":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/audit_status.json
+          exit "$rc"
+      - name: Run supplemental international / non-league audit
+        id: auxiliary_audit
+        continue-on-error: true
+        env:
+          PYTHONPATH: .
+        run: |
+          mkdir -p artifacts
+          set +e
+          python -m src.data.auxiliary_audit > artifacts/auxiliary_audit_stdout.json
+          rc=$?
+          printf '{"exit_code":%s,"passed":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/auxiliary_audit_status.json
           exit "$rc"
       - name: Run strict completion and PIT replay gate
         id: gate
@@ -139,11 +151,13 @@ jobs:
               'compile_step': '${{ steps.compile.outcome }}',
               'tests_step': '${{ steps.tests.outcome }}',
               'audit_step': '${{ steps.audit.outcome }}',
+              'auxiliary_audit_step': '${{ steps.auxiliary_audit.outcome }}',
               'completion_gate_step': '${{ steps.gate.outcome }}',
               'research_step': '${{ steps.research_engine.outcome }}',
           }
           if data.get('audit', {}).get('audit_complete') is False:
               data['research_scope_warning'] = '14-competition audit is incomplete; results must not be represented as full 14-competition coverage.'
+          data['auxiliary_scope_policy'] = 'World Cup, Asian Cup, EURO, Nations League, senior internationals, Emperor\'s Cup, Interhigh and JFA youth registries are auxiliary only until PIT-safe publication timing is proven.'
           p.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str), encoding='utf-8')
           print(json.dumps(data, indent=2, ensure_ascii=False, default=str))
           PY
@@ -171,6 +185,7 @@ jobs:
             artifacts/completion_gate.json \
             artifacts/audit_gate.json \
             artifacts/audit_status.json \
+            artifacts/auxiliary_audit_status.json \
             artifacts/test_status.json; do
             if [ -f "$file" ]; then git add "$file"; fi
           done
