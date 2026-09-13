@@ -56,8 +56,11 @@ def _norm_comp(value: object) -> str | None:
     compact = re.sub(r"[\s._\-]+", "", text)
     aliases = {
         "J1": "J1", "J1LEAGUE": "J1", "JLEAGUEDIVISION1": "J1", "JLEAGUE1": "J1",
+        "Jリーグディビジョン1": "J1", "Jリーグ1": "J1",
         "J2": "J2", "J2LEAGUE": "J2", "JLEAGUEDIVISION2": "J2", "JLEAGUE2": "J2",
+        "Jリーグディビジョン2": "J2", "Jリーグ2": "J2",
         "J3": "J3", "J3LEAGUE": "J3", "JLEAGUEDIVISION3": "J3", "JLEAGUE3": "J3",
+        "Jリーグディビジョン3": "J3", "Jリーグ3": "J3",
     }
     if compact in aliases:
         return aliases[compact]
