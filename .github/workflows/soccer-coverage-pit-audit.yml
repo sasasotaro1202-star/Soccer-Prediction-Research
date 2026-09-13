@@ -41,12 +41,22 @@ jobs:
           PIT_ENABLE_ARCHIVE_AUDIT: "0"
         run: |
           mkdir -p artifacts/coverage-pit-audit
-          python -m src.data.fixture_field_audit > artifacts/coverage-pit-audit/audit_stdout.json
+          python - <<'PY'
+          from src.data.fixture_field_audit import run_audit
+          import json
+          report = run_audit('artifacts/coverage-pit-audit')
+          print(json.dumps(report, indent=2, ensure_ascii=False, default=str))
+          PY
       - name: Run explicit completion gate
         env:
           PYTHONPATH: .
         run: |
-          python -m src.data.completion_gate > artifacts/coverage-pit-audit/completion_gate_stdout.json
+          python - <<'PY'
+          from src.data.completion_gate import run_completion_gate
+          import json
+          report = run_completion_gate('artifacts/coverage-pit-audit')
+          print(json.dumps(report, indent=2, ensure_ascii=False, default=str))
+          PY
       - name: Validate audit invariants
         run: |
           python - <<'PY'
@@ -62,8 +72,11 @@ jobs:
               raise SystemExit('Missing-to-zero invariant failed')
           if summary.get('search_engines_are_not_dataset_sources') is not True:
               raise SystemExit('Search-source invariant failed')
-          if gate.get('requested_competition_season_cells') != 224:
-              raise SystemExit('Expected 224 competition-season cells')
+          expected = gate.get('requested_competition_season_cells')
+          if expected != 220:
+              raise SystemExit(f'Expected 220 applicable competition-season cells, got {expected}')
+          if gate.get('historically_not_applicable_cells') != 4:
+              raise SystemExit('Expected four historically non-applicable J3 cells')
           if not gate.get('technical_audit_ok', False):
               raise SystemExit('Technical audit matrix is incomplete')
           if not gate.get('coverage_scope_complete', False):
