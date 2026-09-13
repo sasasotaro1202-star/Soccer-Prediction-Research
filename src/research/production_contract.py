@@ -2,9 +2,8 @@ from __future__ import annotations
 
 """Fail-closed production research contract.
 
-This module contains policy, not model logic. It prevents a green CI process from
-being interpreted as a valid research/production result when a required gate is
-missing or failed.
+This module contains policy, not model logic. A successful Python process or
+GitHub job is never sufficient evidence of a valid research/production run.
 """
 
 from dataclasses import dataclass
@@ -43,11 +42,13 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult:
-    """Evaluate explicit research gates without treating process exit as success.
+def _bool_artifact(root: Path, name: str, key: str = "passed") -> bool:
+    payload = _read_json(root / name)
+    return payload.get(key) is True
 
-    Missing evidence is failure. Unknown is never coerced to pass.
-    """
+
+def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult:
+    """Evaluate explicit research gates; missing/unknown evidence fails closed."""
     root = Path(artifacts_dir)
     failures: list[str] = []
 
@@ -55,19 +56,33 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
     if completion.get("full_gate_passed") is not True:
         failures.append("completion_gate")
 
+    # Preflight evidence must exist independently of run_status.json.
+    if not _bool_artifact(root, "test_status.json"):
+        failures.append("tests")
+    if not _bool_artifact(root, "audit_status.json"):
+        failures.append("audit_execution")
+
+    audit_gate = _read_json(root / "audit_gate.json")
+    if audit_gate.get("full_gate_passed") is not True:
+        failures.append("audit_gate")
+
     status = _read_json(root / "run_status.json")
     if status.get("oos_claimed") is not True:
         failures.append("oos_claim")
 
-    # Optional detailed gate maps may be produced by newer runners. If absent,
-    # completion_gate remains the authoritative fail-closed evidence.
+    # Detailed gate maps are authoritative when present.
     gate_map = status.get("gates")
     if isinstance(gate_map, dict):
         for name in REQUIRED_GATES:
             if gate_map.get(name) is not True:
                 failures.append(name)
 
-    # Never allow an explicitly blocked/degraded research state to pass.
+    # Research artifacts required for a real OOS claim.
+    for filename in ("oos_metrics.csv", "model_selection.csv", "adoption_decision.json"):
+        if not (root / filename).exists():
+            failures.append(f"artifact:{filename}")
+
+    # A blocked/degraded research state can never be promoted by CI success.
     if str(status.get("status", "")).upper() in {"BLOCKED", "FAIL", "FAILED", "DEGRADED"}:
         failures.append(f"run_status:{status.get('status')}")
 
