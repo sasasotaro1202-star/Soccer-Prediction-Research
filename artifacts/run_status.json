@@ -3,6 +3,7 @@
   "reason": "Research execution was intentionally skipped because one or more mandatory preflight gates failed.",
   "blockers": [
     "completion gate was not executed because an earlier preflight step failed",
+    "data audit failed",
     "preflight tests failed"
   ],
   "runner": {
@@ -10,9 +11,9 @@
   },
   "oos_claimed": false,
   "workflow_health": {
-    "compile_step": "success",
+    "compile_step": "failure",
     "tests_step": "failure",
-    "audit_step": "success",
+    "audit_step": "failure",
     "completion_gate_step": "skipped",
     "research_step": "success"
   }
