@@ -13,24 +13,51 @@ def _write_status(out: Path, payload: dict) -> None:
     )
 
 
-def run_with_retries() -> int:
-    """Run research safely and keep Actions green without fabricating success.
+def _load_gate(out: Path) -> dict | None:
+    path = out / "completion_gate.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return {"full_gate_passed": False, "blocking_reasons": [f"invalid completion_gate.json: {exc}"]}
 
-    Expected operational failures are represented explicitly as BLOCKED/DEGRADED
-    artifacts. A failing preflight test gate prevents research from running against
-    known-broken code. No OOS result is ever claimed unless the research engine
-    actually produces one.
+
+def run_with_retries() -> int:
+    """Run research safely without fabricating success or bypassing audit gates.
+
+    Tests, the data audit, and the strict completion gate are all mandatory
+    preconditions for research execution. Operational failures are represented
+    explicitly as BLOCKED/DEGRADED artifacts so GitHub Actions can remain green
+    without ever claiming an out-of-sample result that was not produced.
     """
     attempts = max(1, int(os.getenv("RESEARCH_ATTEMPTS", "2")))
     backoff = max(0.0, float(os.getenv("RESEARCH_RETRY_BACKOFF", "15")))
     out = Path(os.getenv("RESEARCH_OUTPUT_DIR", "artifacts"))
     out.mkdir(parents=True, exist_ok=True)
 
-    if os.getenv("TESTS_PASSED", "true").lower() != "true":
+    tests_passed = os.getenv("TESTS_PASSED", "true").lower() == "true"
+    audit_passed = os.getenv("AUDIT_PASSED", "true").lower() == "true"
+    gate = _load_gate(out)
+
+    blockers: list[str] = []
+    if not tests_passed:
+        blockers.append("preflight tests failed")
+    if not audit_passed:
+        blockers.append("data audit failed")
+    if gate is None:
+        blockers.append("completion gate artifact is missing")
+    elif not bool(gate.get("full_gate_passed", False)):
+        blockers.extend(str(x) for x in gate.get("blocking_reasons", []) if str(x))
+        if not gate.get("blocking_reasons"):
+            blockers.append("completion gate did not pass")
+
+    if blockers:
         _write_status(out, {
             "status": "BLOCKED",
-            "reason": "Preflight tests failed; research execution was intentionally skipped.",
-            "runner": {"status": "SKIPPED_AFTER_TEST_FAILURE"},
+            "reason": "Research execution was intentionally skipped because one or more mandatory preflight gates failed.",
+            "blockers": sorted(set(blockers)),
+            "runner": {"status": "SKIPPED_AFTER_PREFLIGHT_FAILURE"},
             "oos_claimed": False,
         })
         return 0
