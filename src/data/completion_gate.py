@@ -35,9 +35,14 @@ def _normalize_acquisition(acq: pd.DataFrame) -> pd.DataFrame:
 
 
 def _season_display(comp: str, value: object) -> str:
-    text = str(value)
-    if comp in {"J1", "J2", "J3", "FRI"} and re.fullmatch(r"\d{4}", text):
+    """Normalize every adapter's season representation to the audit's YYYY/YY key."""
+    text = str(value).strip()
+    if re.fullmatch(r"\d{4}", text):
         y = int(text)
+        return f"{y}/{str(y + 1)[-2:]}"
+    m = re.fullmatch(r"(\d{4})/(\d{2}|\d{4})", text)
+    if m:
+        y = int(m.group(1))
         return f"{y}/{str(y + 1)[-2:]}"
     return text
 
@@ -64,10 +69,10 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
     acquisition_path = root / "acquisition_coverage.csv"
     if not acquisition_path.exists():
         raise FileNotFoundError(acquisition_path)
-    acquisition = _normalize_acquisition(pd.read_csv(acquisition_path))
-    fields = pd.read_csv(root / "field_audit.csv") if (root / "field_audit.csv").exists() else pd.DataFrame()
-    fixtures = pd.read_csv(root / "fixture_audit.csv") if (root / "fixture_audit.csv").exists() else pd.DataFrame()
-    reconciliation = pd.read_csv(root / "source_reconciliation.csv") if (root / "source_reconciliation.csv").exists() else pd.DataFrame()
+    acquisition = _normalize_acquisition(pd.read_csv(acquisition_path, low_memory=False))
+    fields = pd.read_csv(root / "field_audit.csv", low_memory=False) if (root / "field_audit.csv").exists() else pd.DataFrame()
+    fixtures = pd.read_csv(root / "fixture_audit.csv", low_memory=False) if (root / "fixture_audit.csv").exists() else pd.DataFrame()
+    reconciliation = pd.read_csv(root / "source_reconciliation.csv", low_memory=False) if (root / "source_reconciliation.csv").exists() else pd.DataFrame()
 
     expected = {(c, s) for c in TARGET_COMPETITIONS for s in SEASONS if (c, s) not in NON_APPLICABLE_CELLS}
     rows = []
