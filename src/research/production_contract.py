@@ -2,8 +2,9 @@ from __future__ import annotations
 
 """Fail-closed production research contract.
 
-This module contains policy, not model logic. A successful Python process or
-GitHub job is never sufficient evidence of a valid research/production run.
+A successful Python process or GitHub job is never sufficient evidence of a
+valid research/production run. Missing, stale, or ambiguous evidence fails
+closed.
 """
 
 from dataclasses import dataclass
@@ -11,19 +12,11 @@ from pathlib import Path
 import json
 from typing import Any
 
-
 REQUIRED_GATES = (
-    "data",
-    "schema",
-    "leakage",
-    "features",
-    "training",
-    "backtest",
-    "oos",
-    "prediction",
-    "sanity",
-    "artifact",
+    "data", "schema", "leakage", "features", "training", "backtest",
+    "oos", "prediction", "sanity", "artifact",
 )
+REQUIRED_ARTIFACTS = ("oos_metrics.csv", "model_selection.csv", "adoption_decision.json")
 
 
 @dataclass(frozen=True)
@@ -43,12 +36,20 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def _bool_artifact(root: Path, name: str, key: str = "passed") -> bool:
-    payload = _read_json(root / name)
-    return payload.get(key) is True
+    return _read_json(root / name).get(key) is True
+
+
+def _csv_nonempty(root: Path, name: str) -> bool:
+    path = root / name
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    try:
+        return len(path.read_text(encoding="utf-8").splitlines()) >= 2
+    except Exception:
+        return False
 
 
 def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult:
-    """Evaluate explicit research gates; missing/unknown evidence fails closed."""
     root = Path(artifacts_dir)
     failures: list[str] = []
 
@@ -56,7 +57,6 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
     if completion.get("full_gate_passed") is not True:
         failures.append("completion_gate")
 
-    # Preflight evidence must exist independently of run_status.json.
     if not _bool_artifact(root, "test_status.json"):
         failures.append("tests")
     if not _bool_artifact(root, "audit_status.json"):
@@ -70,21 +70,34 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
     if status.get("oos_claimed") is not True:
         failures.append("oos_claim")
 
-    # Detailed gate maps are authoritative when present.
     gate_map = status.get("gates")
-    if isinstance(gate_map, dict):
+    if not isinstance(gate_map, dict):
+        failures.append("gate_map_missing")
+    else:
         for name in REQUIRED_GATES:
             if gate_map.get(name) is not True:
                 failures.append(name)
 
-    # Research artifacts required for a real OOS claim.
-    for filename in ("oos_metrics.csv", "model_selection.csv", "adoption_decision.json"):
-        if not (root / filename).exists():
+    for filename in REQUIRED_ARTIFACTS:
+        if filename.endswith(".csv"):
+            if not _csv_nonempty(root, filename):
+                failures.append(f"artifact:{filename}")
+        elif not (root / filename).exists():
             failures.append(f"artifact:{filename}")
 
-    # A blocked/degraded research state can never be promoted by CI success.
     if str(status.get("status", "")).upper() in {"BLOCKED", "FAIL", "FAILED", "DEGRADED"}:
         failures.append(f"run_status:{status.get('status')}")
+
+    # Never accept a production claim while the publication-time PIT gate is false.
+    if completion.get("pit_publication_time_gate") is not True:
+        failures.append("pit_publication_time_gate")
+
+    # Adoption must be explicit; absence/unknown is not promotion evidence.
+    adoption = _read_json(root / "adoption_decision.json")
+    if str(adoption.get("status", "")).upper() in {"REJECT", "BLOCKED", "FAIL", "DEGRADED", "NO_CHAMPION"}:
+        failures.append(f"adoption:{adoption.get('status')}")
+    if not adoption:
+        failures.append("adoption_missing")
 
     return GateResult(passed=not failures, failures=tuple(dict.fromkeys(failures)))
 
@@ -97,6 +110,7 @@ def write_contract_result(artifacts_dir: str = "artifacts") -> GateResult:
         "production_contract_passed": result.passed,
         "failures": list(result.failures),
         "required_gates": list(REQUIRED_GATES),
+        "required_artifacts": list(REQUIRED_ARTIFACTS),
         "fail_closed": True,
     }
     (root / "production_contract.json").write_text(
