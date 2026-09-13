@@ -156,29 +156,34 @@ jobs:
           path: artifacts/
           retention-days: 30
           if-no-files-found: warn
-      - name: Commit small research summaries only
+      - name: Commit only compact research summaries
         if: always()
         continue-on-error: true
         run: |
           set +e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Full audit CSVs remain in the Actions artifact only. Never push a
-          # generated file large enough to hit GitHub's 100 MB repository limit.
-          while IFS= read -r -d '' file; do
-            size=$(stat -c%s "$file" 2>/dev/null || echo 999999999)
-            if [ "$size" -lt 50000000 ]; then
-              git add "$file"
-            fi
-          done < <(find artifacts -type f -print0)
+          # Keep detailed CSV/PIT artifacts in Actions storage. Only tiny JSON
+          # status summaries are candidates for the repository, preventing repo
+          # bloat and avoiding large-file push failures.
+          for file in \
+            artifacts/run_status.json \
+            artifacts/completion_gate.json \
+            artifacts/audit_gate.json \
+            artifacts/audit_status.json \
+            artifacts/test_status.json; do
+            if [ -f "$file" ]; then git add "$file"; fi
+          done
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "Update soccer research summaries [skip ci]" || exit 0
           for attempt in 1 2 3; do
             git fetch origin main
-            git rebase origin/main
-            if [ $? -ne 0 ]; then git rebase --abort || true; sleep $((attempt * 5)); continue; fi
-            git push origin HEAD:main
-            if [ $? -eq 0 ]; then exit 0; fi
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              sleep $((attempt * 5))
+              continue
+            fi
+            if git push origin HEAD:main; then exit 0; fi
             sleep $((attempt * 5))
           done
           exit 0
