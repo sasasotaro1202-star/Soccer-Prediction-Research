@@ -4,13 +4,10 @@ from src.research.production_contract import evaluate_production_contract, write
 
 
 def _write(path, value):
-    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value), encoding="utf-8")
 
 
 def _minimal_passing_artifacts(tmp_path):
-    # Production contract expects artifacts to live under the supplied root.
-    # Use a real two-line CSV so the test exercises the same non-empty check as production.
     _write(tmp_path / "completion_gate.json", {"full_gate_passed": True, "pit_publication_time_gate": True})
     _write(tmp_path / "test_status.json", {"passed": True, "exit_code": 0})
     _write(tmp_path / "audit_status.json", {"passed": True, "exit_code": 0})
@@ -27,7 +24,7 @@ def _minimal_passing_artifacts(tmp_path):
         "oos_metrics.csv", "model_selection.csv",
         "development_oos_metrics.csv", "locked_oos_metrics.csv",
     ):
-        (tmp_path / name).write_text("metric,value\naccuracy,0.8\n", encoding="utf-8")
+        (tmp_path / name).write_text("metric,value\nplaceholder,1\n", encoding="utf-8")
     _write(tmp_path / "candidate_lock.json", {"locked_oos_untouched": True, "locked_oos_blocks": 2})
     _write(tmp_path / "adoption_decision.json", {
         "status": "ADOPT",
