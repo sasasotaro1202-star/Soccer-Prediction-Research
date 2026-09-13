@@ -8,7 +8,7 @@ def _write(path, value):
 
 
 def _minimal_passing_artifacts(tmp_path):
-    _write(tmp_path / "completion_gate.json", {"full_gate_passed": True})
+    _write(tmp_path / "completion_gate.json", {"full_gate_passed": True, "pit_publication_time_gate": True})
     _write(tmp_path / "test_status.json", {"passed": True, "exit_code": 0})
     _write(tmp_path / "audit_status.json", {"passed": True, "exit_code": 0})
     _write(tmp_path / "audit_gate.json", {"full_gate_passed": True})
@@ -20,9 +20,17 @@ def _minimal_passing_artifacts(tmp_path):
             "backtest", "oos", "prediction", "sanity", "artifact"
         )},
     })
-    for name in ("oos_metrics.csv", "model_selection.csv"):
+    for name in (
+        "oos_metrics.csv", "model_selection.csv",
+        "development_oos_metrics.csv", "locked_oos_metrics.csv",
+    ):
         (tmp_path / name).write_text("ok\n", encoding="utf-8")
-    _write(tmp_path / "adoption_decision.json", {"status": "HOLD"})
+    _write(tmp_path / "candidate_lock.json", {"locked_oos_untouched": True, "locked_oos_blocks": 2})
+    _write(tmp_path / "adoption_decision.json", {
+        "status": "ADOPT",
+        "oos_claimed": True,
+        "stability": {"status": "PASS"},
+    })
 
 
 def test_contract_fails_closed_when_evidence_is_missing(tmp_path):
@@ -41,6 +49,22 @@ def test_contract_passes_only_with_explicit_success(tmp_path):
     payload = json.loads((tmp_path / "production_contract.json").read_text())
     assert payload["production_contract_passed"] is True
     assert payload["fail_closed"] is True
+
+
+def test_hold_adoption_cannot_pass(tmp_path):
+    _minimal_passing_artifacts(tmp_path)
+    _write(tmp_path / "adoption_decision.json", {"status": "HOLD", "oos_claimed": True, "stability": {"status": "PASS"}})
+    result = evaluate_production_contract(str(tmp_path))
+    assert result.passed is False
+    assert "adoption:HOLD" in result.failures
+
+
+def test_missing_stability_evidence_cannot_pass(tmp_path):
+    _minimal_passing_artifacts(tmp_path)
+    _write(tmp_path / "adoption_decision.json", {"status": "ADOPT", "oos_claimed": True})
+    result = evaluate_production_contract(str(tmp_path))
+    assert result.passed is False
+    assert "adoption_stability" in result.failures
 
 
 def test_blocked_status_cannot_pass(tmp_path):
