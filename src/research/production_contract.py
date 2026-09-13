@@ -8,7 +8,14 @@ import json
 from typing import Any
 
 REQUIRED_GATES = ("data", "schema", "leakage", "features", "training", "backtest", "oos", "prediction", "sanity", "artifact")
-REQUIRED_ARTIFACTS = ("oos_metrics.csv", "model_selection.csv", "adoption_decision.json")
+REQUIRED_ARTIFACTS = (
+    "oos_metrics.csv",
+    "model_selection.csv",
+    "development_oos_metrics.csv",
+    "locked_oos_metrics.csv",
+    "candidate_lock.json",
+    "adoption_decision.json",
+)
 
 @dataclass(frozen=True)
 class GateResult:
@@ -54,8 +61,23 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
     if str(status.get("status", "")).upper() in {"BLOCKED", "FAIL", "FAILED", "DEGRADED"}: failures.append(f"run_status:{status.get('status')}")
     if completion.get("pit_publication_time_gate") is not True: failures.append("pit_publication_time_gate")
     adoption = _read_json(root / "adoption_decision.json")
-    if not adoption: failures.append("adoption_missing")
-    elif str(adoption.get("status", "")).upper() in {"REJECT", "BLOCKED", "FAIL", "DEGRADED", "NO_CHAMPION"}: failures.append(f"adoption:{adoption.get('status')}")
+    if not adoption:
+        failures.append("adoption_missing")
+    else:
+        adoption_status = str(adoption.get("status", "")).upper()
+        if adoption_status not in {"ADOPT", "CHAMPION", "ADOPTED"}:
+            failures.append(f"adoption:{adoption.get('status')}")
+        if adoption.get("oos_claimed") is not True:
+            failures.append("adoption_oos_claim")
+        stability = adoption.get("stability")
+        if not isinstance(stability, dict) or stability.get("status") not in {"PASS"}:
+            failures.append("adoption_stability")
+    candidate_lock = _read_json(root / "candidate_lock.json")
+    if candidate_lock:
+        if candidate_lock.get("locked_oos_untouched") is not True: failures.append("candidate_lock_integrity")
+        if int(candidate_lock.get("locked_oos_blocks", 0)) < 2: failures.append("locked_oos_blocks")
+    else:
+        failures.append("candidate_lock_missing")
     return GateResult(not failures, tuple(dict.fromkeys(failures)))
 
 def write_contract_result(artifacts_dir: str = "artifacts") -> GateResult:
