@@ -10,6 +10,7 @@ import pandas as pd
 
 from src.data.fixture_field_audit import TARGET_COMPETITIONS
 from src.data.football_data import load_available_history
+from src.data.pit_source_adapter_v2 import FootballDataWaybackAdapter
 from src.features.soccer_features import build_match_features
 
 SEASONS = [f"{y}/{str(y + 1)[-2:]}" for y in range(2010, 2026)]
@@ -35,7 +36,6 @@ def _normalize_acquisition(acq: pd.DataFrame) -> pd.DataFrame:
 
 
 def _season_display(comp: str, value: object) -> str:
-    """Normalize every adapter's season representation to the audit's YYYY/YY key."""
     text = str(value).strip()
     if re.fullmatch(r"\d{4}", text):
         y = int(text)
@@ -48,9 +48,26 @@ def _season_display(comp: str, value: object) -> str:
 
 
 def _pit_preflight(root: Path) -> dict:
+    """Build the PIT replay from explicit archive evidence, never inferred timing.
+
+    Football-Data rows are enriched with Wayback captures that first contain the
+    completed result after a conservative result-availability lower bound. Sources
+    without verifiable publication evidence remain unknown and cannot pass the gate.
+    """
     history, _ = load_available_history(start_year=2010, end_year=2025)
     if history.empty:
-        return {"rows": 0, "pit_verified_rows": 0, "pit_verified_rate": 0.0, "verified_competitions": 0}
+        return {"rows": 0, "pit_verified_rows": 0, "pit_verified_rate": 0.0, "verified_competitions": 0, "archive_enriched_rows": 0}
+
+    history = history.copy()
+    archive = FootballDataWaybackAdapter(cache_dir=str(root / "pit_evidence"), max_workers=8)
+    supported = {"EPL", "CHA", "BL1", "SA", "LL", "FL1"}
+    mask = history["competition"].astype(str).isin(supported)
+    if mask.any():
+        enriched = archive.apply_bulk(history.loc[mask].copy())
+        for col in ("source_available_at_utc", "pit_evidence_status", "pit_evidence_reason", "pit_evidence_url", "capture_digest"):
+            if col in enriched.columns:
+                history.loc[enriched.index, col] = enriched[col]
+
     features = build_match_features(history, history, windows=(3, 5, 10, 20))
     features.to_csv(root / "pit_replay_features.csv", index=False)
     verified = features["pit_verified"].fillna(False).astype(bool) if "pit_verified" in features.columns else pd.Series(False, index=features.index)
@@ -61,6 +78,7 @@ def _pit_preflight(root: Path) -> dict:
         "pit_verified_rows": int(verified.sum()),
         "pit_verified_rate": float(verified.mean()) if len(features) else 0.0,
         "verified_competitions": verified_competitions,
+        "archive_enriched_rows": int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum()),
     }
 
 
@@ -97,11 +115,6 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
     available_cells = int(matrix.status.str.contains("AVAILABLE", na=False).sum())
     unavailable_cells = int(matrix.status.str.contains("UNAVAILABLE", na=False).sum())
     not_applicable_cells = int(matrix.status.str.contains("NOT_APPLICABLE", na=False).sum())
-    # A cell may legitimately have multiple explicit statuses when more than one
-    # adapter reports the same competition/season (for example AVAILABLE from a
-    # primary adapter and UNAVAILABLE from a secondary adapter). Count each
-    # competition/season cell once for accounting; never sum status categories as
-    # though they were mutually exclusive.
     accounted_cells = int(matrix.status.str.contains(r"AVAILABLE|UNAVAILABLE|NOT_APPLICABLE", regex=True, na=False).sum())
     scope_complete = missing_audit_cells == 0
 
@@ -118,7 +131,7 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
         pit = _pit_preflight(root)
         pit_preflight_error = None
     except Exception as exc:
-        pit = {"rows": 0, "pit_verified_rows": 0, "pit_verified_rate": 0.0, "verified_competitions": 0}
+        pit = {"rows": 0, "pit_verified_rows": 0, "pit_verified_rate": 0.0, "verified_competitions": 0, "archive_enriched_rows": 0}
         pit_preflight_error = f"{type(exc).__name__}: {exc}"
     pit_gate = (
         pit_preflight_error is None
@@ -160,6 +173,7 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
         "pit_replay_verified_rows": pit["pit_verified_rows"],
         "pit_replay_verified_rate": pit["pit_verified_rate"],
         "pit_replay_verified_competitions": pit["verified_competitions"],
+        "pit_archive_enriched_rows": pit.get("archive_enriched_rows", 0),
         "pit_publication_time_gate": pit_gate,
         "no_missing_to_zero": True,
         "full_gate_passed": full_gate_passed,
@@ -186,7 +200,7 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
     if pit_preflight_error:
         result["blocking_reasons"].append(f"PIT replay preflight failed: {pit_preflight_error}")
     elif not pit_gate:
-        result["blocking_reasons"].append("insufficient PIT-verified replay rows for the configured walk-forward evaluation")
+        result["blocking_reasons"].append("insufficient PIT-verified replay rows using explicit archived publication evidence")
     (root / "completion_gate.json").write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     return result
 
