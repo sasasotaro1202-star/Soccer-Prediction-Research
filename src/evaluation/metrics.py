@@ -12,6 +12,25 @@ def multiclass_brier(y_true, proba):
     return float(np.mean(np.sum((p - onehot) ** 2, axis=1)))
 
 
+def ranked_probability_score(y_true, proba):
+    """Multiclass RPS for ordered H/D/A outcomes (lower is better).
+
+    For football 1X2 the natural order is Home -> Draw -> Away. This is useful
+    as a secondary proper score because it penalizes probability mass placed on
+    the wrong side of the outcome more smoothly than top-1 accuracy.
+    """
+    y = np.asarray(y_true, dtype=int)
+    p = np.asarray(proba, dtype=float)
+    p = np.clip(p, 1e-9, 1.0)
+    p /= p.sum(axis=1, keepdims=True)
+    cumulative = np.cumsum(p, axis=1)[:, :-1]
+    truth = np.zeros_like(p, dtype=float)
+    truth[np.arange(len(y)), y] = 1.0
+    cumulative_truth = np.cumsum(truth, axis=1)[:, :-1]
+    k = max(1, p.shape[1] - 1)
+    return float(np.mean(np.sum((cumulative - cumulative_truth) ** 2, axis=1) / k))
+
+
 def ece(y_true, proba, bins=10):
     y = np.asarray(y_true, dtype=int)
     p = np.asarray(proba, dtype=float)
@@ -38,6 +57,7 @@ def classification_metrics(y_true, proba):
         "logloss": float(log_loss(y, p, labels=[0, 1, 2])),
         "accuracy": float(accuracy_score(y, pred)),
         "brier": multiclass_brier(y, p),
+        "rps": ranked_probability_score(y, p),
         "ece": ece(y, p),
     }
     for cls, name in enumerate(("home", "draw", "away")):
