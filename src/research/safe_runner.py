@@ -13,23 +13,34 @@ def _write_status(out: Path, payload: dict) -> None:
     )
 
 
-def _load_gate(out: Path) -> dict | None:
-    path = out / "completion_gate.json"
+def _load_json(path: Path, *, default: dict | None = None) -> dict | None:
     if not path.exists():
-        return None
+        return default
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return payload if isinstance(payload, dict) else default
     except Exception as exc:
-        return {"full_gate_passed": False, "blocking_reasons": [f"invalid completion_gate.json: {exc}"]}
+        return {
+            "full_gate_passed": False,
+            "blocking_reasons": [f"invalid {path.name}: {type(exc).__name__}: {exc}"],
+        }
+
+
+def _load_gate(out: Path) -> dict | None:
+    return _load_json(out / "completion_gate.json")
+
+
+def _load_audit_gate(out: Path) -> dict | None:
+    return _load_json(out / "audit_gate.json")
 
 
 def run_with_retries() -> int:
-    """Run research safely without fabricating success or bypassing audit gates.
+    """Run research only when every mandatory safety gate agrees.
 
-    Tests, the data audit, and the strict completion gate are all mandatory
-    preconditions for research execution. Operational failures are represented
-    explicitly as BLOCKED/DEGRADED artifacts so GitHub Actions can remain green
-    without ever claiming an out-of-sample result that was not produced.
+    A green GitHub job is not equivalent to a valid research run. In particular,
+    a completion-gate artifact cannot override a failed publication-time audit.
+    Operational failures are recorded explicitly while the workflow itself can
+    remain green for reliable scheduled automation.
     """
     attempts = max(1, int(os.getenv("RESEARCH_ATTEMPTS", "2")))
     backoff = max(0.0, float(os.getenv("RESEARCH_RETRY_BACKOFF", "15")))
@@ -39,12 +50,13 @@ def run_with_retries() -> int:
     tests_passed = os.getenv("TESTS_PASSED", "true").lower() == "true"
     audit_passed = os.getenv("AUDIT_PASSED", "true").lower() == "true"
     gate = _load_gate(out)
+    audit_gate = _load_audit_gate(out)
 
     blockers: list[str] = []
     if not tests_passed:
         blockers.append("preflight tests failed")
     if not audit_passed:
-        blockers.append("data audit failed")
+        blockers.append("data audit execution failed")
     if gate is None:
         blockers.append("completion gate artifact is missing")
     elif not bool(gate.get("full_gate_passed", False)):
@@ -52,11 +64,26 @@ def run_with_retries() -> int:
         if not gate.get("blocking_reasons"):
             blockers.append("completion gate did not pass")
 
+    if audit_gate is None:
+        blockers.append("audit gate artifact is missing")
+    else:
+        audit_full_gate = audit_gate.get("full_gate_passed")
+        if audit_full_gate is not True:
+            reasons = audit_gate.get("blocking_reasons") or []
+            if reasons:
+                blockers.extend(str(x) for x in reasons if str(x))
+            else:
+                blockers.append("publication-time data audit gate did not pass")
+
     if blockers:
         _write_status(out, {
             "status": "BLOCKED",
-            "reason": "Research execution was intentionally skipped because one or more mandatory preflight gates failed.",
+            "reason": "Research execution was intentionally skipped because one or more mandatory preflight gates failed or disagreed.",
             "blockers": sorted(set(blockers)),
+            "gate_consistency": {
+                "completion_gate_passed": bool(gate and gate.get("full_gate_passed", False)),
+                "audit_gate_passed": bool(audit_gate and audit_gate.get("full_gate_passed", False)),
+            },
             "runner": {"status": "SKIPPED_AFTER_PREFLIGHT_FAILURE"},
             "oos_claimed": False,
         })
