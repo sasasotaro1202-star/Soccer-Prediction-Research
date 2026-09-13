@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import numpy as np
 from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier, RandomForestClassifier
-from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.feature_selection import SelectPercentile, f_classif
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
@@ -11,11 +11,12 @@ from sklearn.preprocessing import StandardScaler
 
 
 def candidates(random_state: int = 42):
-    """Return a compact, diverse candidate set using PIT-safe sklearn APIs.
+    """Return a compact, diverse and leakage-safe candidate set.
 
-    The selector variants are deliberately regularized: they reduce redundant/noisy
-    feature exposure without changing the chronological evaluation protocol.
-    Candidate selection remains validation-only in the walk-forward evaluator.
+    Percentile selection keeps the pipeline valid for both tiny synthetic
+    matrices and the full research feature matrix. Conservative regularization
+    is intentional: robustness on unseen seasons is more important than fitting
+    historical noise. Selection remains validation-only in the walk-forward loop.
     """
     return {
         "logistic": Pipeline([
@@ -25,7 +26,7 @@ def candidates(random_state: int = 42):
         ]),
         "logistic_select": Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
-            ("select", SelectKBest(score_func=f_classif, k=100)),
+            ("select", SelectPercentile(score_func=f_classif, percentile=30)),
             ("scale", StandardScaler()),
             ("model", LogisticRegression(max_iter=2000, C=0.5, random_state=random_state)),
         ]),
