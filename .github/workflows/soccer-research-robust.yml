@@ -19,7 +19,7 @@ concurrency:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 240
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,14 +34,31 @@ jobs:
           path: data/raw
           key: soccer-raw-${{ runner.os }}-${{ hashFiles('src/data/football_data.py', 'src/data/openfootball_adapter.py', 'src/data/jleague_adapter.py', 'src/data/espn_friendlies_adapter.py') }}
           restore-keys: soccer-raw-${{ runner.os }}-
-      - name: Install dependencies
-        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Install dependencies with retry
+        run: |
+          set -e
+          python -m pip install --disable-pip-version-check --upgrade pip setuptools wheel
+          for attempt in 1 2 3; do
+            python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt && exit 0
+            sleep $((attempt * 5))
+          done
+          exit 1
       - name: Compile source and tests
         id: compile
         continue-on-error: true
         env:
           PYTHONPATH: .
         run: python -m compileall -q src tests
+      - name: Run tests
+        id: tests
+        continue-on-error: true
+        run: |
+          mkdir -p artifacts
+          set +e
+          python -m pytest -q
+          rc=$?
+          printf '{"exit_code":%s,"passed":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/test_status.json
+          exit "$rc"
       - name: Run 14-competition fixture field PIT audit
         id: audit
         continue-on-error: true
@@ -54,8 +71,9 @@ jobs:
           rc=$?
           printf '{"exit_code":%s,"passed":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/audit_status.json
           exit "$rc"
-      - name: Run strict completion gate
+      - name: Run strict completion and PIT replay gate
         id: gate
+        if: steps.tests.outcome == 'success' && steps.audit.outcome == 'success'
         continue-on-error: true
         env:
           PYTHONPATH: .
@@ -68,16 +86,20 @@ jobs:
             printf '{"full_gate_passed":false,"blocking_reasons":["completion gate did not produce an artifact"]}\n' > artifacts/completion_gate.json
           fi
           exit "$rc"
-      - name: Run tests
-        id: tests
+      - name: Create blocked gate artifact when preflight cannot continue
+        if: steps.gate.outcome != 'success'
         continue-on-error: true
         run: |
-          mkdir -p artifacts
-          set +e
-          python -m pytest -q
-          rc=$?
-          printf '{"exit_code":%s,"passed":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/test_status.json
-          exit "$rc"
+          if [ ! -f artifacts/completion_gate.json ]; then
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          Path('artifacts/completion_gate.json').write_text(json.dumps({
+              'full_gate_passed': False,
+              'blocking_reasons': ['completion gate was not executed because an earlier preflight step failed']
+          }, indent=2), encoding='utf-8')
+          PY
+          fi
       - name: Run research engine with bounded retries
         id: research_engine
         if: always()
@@ -87,7 +109,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_RESEARCH_MODEL: gpt-5.6-luna
           PYTHONPATH: .
-          RESEARCH_ATTEMPTS: "2"
+          RESEARCH_ATTEMPTS: "3"
           RESEARCH_RETRY_BACKOFF: "10"
           PIT_ENABLE_ARCHIVE_AUDIT: "0"
         continue-on-error: true
@@ -107,9 +129,9 @@ jobs:
               data = {'status':'DEGRADED','oos_claimed':False,'reason':'No run_status.json produced'}
           data['workflow_health'] = {
               'compile_step': '${{ steps.compile.outcome }}',
+              'tests_step': '${{ steps.tests.outcome }}',
               'audit_step': '${{ steps.audit.outcome }}',
               'completion_gate_step': '${{ steps.gate.outcome }}',
-              'tests_step': '${{ steps.tests.outcome }}',
               'research_step': '${{ steps.research_engine.outcome }}',
           }
           if data.get('audit', {}).get('audit_complete') is False:
@@ -134,22 +156,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add artifacts/ || true
-          if git diff --cached --quiet; then
-            exit 0
-          fi
+          if git diff --cached --quiet; then exit 0; fi
           git commit -m "Update soccer research artifacts [skip ci]" || exit 0
           for attempt in 1 2 3; do
             git fetch origin main
             git rebase origin/main
-            if [ $? -ne 0 ]; then
-              git rebase --abort || true
-              sleep $((attempt * 5))
-              continue
-            fi
+            if [ $? -ne 0 ]; then git rebase --abort || true; sleep $((attempt * 5)); continue; fi
             git push origin HEAD:main
-            if [ $? -eq 0 ]; then
-              exit 0
-            fi
+            if [ $? -eq 0 ]; then exit 0; fi
             sleep $((attempt * 5))
           done
           exit 0
