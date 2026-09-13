@@ -94,10 +94,7 @@ jobs:
           out = Path('artifacts')
           summary_path = out / 'audit_summary.json'
           if not summary_path.exists():
-              payload = {
-                  'full_gate_passed': False,
-                  'blocking_reasons': ['audit summary artifact is missing'],
-              }
+              payload = {'full_gate_passed': False, 'blocking_reasons': ['audit summary artifact is missing']}
           else:
               summary = json.loads(summary_path.read_text(encoding='utf-8'))
               reasons = []
@@ -176,6 +173,13 @@ jobs:
           PIT_ENABLE_ARCHIVE_AUDIT: "0"
         continue-on-error: true
         run: python -m src.research.safe_runner
+      - name: Evaluate production contract
+        id: production_contract
+        if: always()
+        continue-on-error: true
+        env:
+          PYTHONPATH: .
+        run: python -m src.research.production_contract
       - name: Build final health record
         if: always()
         continue-on-error: true
@@ -216,13 +220,6 @@ jobs:
           p.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str), encoding='utf-8')
           print(json.dumps(data, indent=2, ensure_ascii=False, default=str))
           PY
-      - name: Evaluate production contract
-        id: production_contract
-        if: always()
-        continue-on-error: true
-        env:
-          PYTHONPATH: .
-        run: python -m src.research.production_contract
       - name: Upload research artifacts
         if: always()
         continue-on-error: true
