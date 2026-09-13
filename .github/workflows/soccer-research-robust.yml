@@ -177,6 +177,13 @@ jobs:
           p.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str), encoding='utf-8')
           print(json.dumps(data, indent=2, ensure_ascii=False, default=str))
           PY
+      - name: Evaluate production contract
+        id: production_contract
+        if: always()
+        continue-on-error: true
+        env:
+          PYTHONPATH: .
+        run: python -m src.research.production_contract
       - name: Upload research artifacts
         if: always()
         continue-on-error: true
@@ -186,3 +193,13 @@ jobs:
           path: artifacts/
           retention-days: 30
           if-no-files-found: warn
+      - name: Enforce research success status
+        if: always()
+        env:
+          CONTRACT_OUTCOME: ${{ steps.production_contract.outcome }}
+        run: |
+          if [ "$CONTRACT_OUTCOME" != "success" ]; then
+            echo "RESEARCH GATE FAILED: artifacts were uploaded for diagnosis; workflow is intentionally red."
+            exit 1
+          fi
+          echo "RESEARCH GATE PASSED"
