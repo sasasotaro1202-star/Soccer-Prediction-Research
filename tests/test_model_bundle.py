@@ -1,0 +1,44 @@
+import numpy as np
+import pandas as pd
+import pytest
+
+from src.prediction.model_bundle import load_bundle, predict_bundle, train_and_save_bundle
+
+
+def _fixture():
+    rng = np.random.default_rng(42)
+    n = 120
+    x1 = rng.normal(size=n)
+    x2 = rng.normal(size=n)
+    target = (x1 + 0.3 * x2 > 0).astype(int)
+    # Keep all three classes represented for multiclass classifiers.
+    target[:3] = [0, 1, 2]
+    return pd.DataFrame({"kickoff_utc": pd.date_range("2020-01-01", periods=n, freq="h"), "pit_verified": True, "target": target, "f1": x1, "f2": x2})
+
+
+def test_bundle_roundtrip_and_probability_sums(tmp_path):
+    df = _fixture()
+    path = tmp_path / "production_model.pkl"
+    meta = train_and_save_bundle(
+        df,
+        ["f1", "f2"],
+        {"weights": {"logistic": 1.0}, "temperature": 1.0},
+        str(path),
+        "test-version",
+        "snapshot-1",
+    )
+    assert meta["fit_rows"] == len(df)
+    bundle = load_bundle(str(path))
+    probs = predict_bundle(bundle, df[["f1", "f2"]].iloc[:10])
+    assert probs.shape == (10, 3)
+    assert np.all(np.isfinite(probs))
+    assert np.allclose(probs.sum(axis=1), 1.0)
+
+
+def test_bundle_rejects_missing_features(tmp_path):
+    df = _fixture()
+    path = tmp_path / "production_model.pkl"
+    train_and_save_bundle(df, ["f1", "f2"], {"weights": {"logistic": 1.0}, "temperature": 1.0}, str(path), "test-version", "snapshot-1")
+    bundle = load_bundle(str(path))
+    with pytest.raises(RuntimeError, match="missing model features"):
+        predict_bundle(bundle, df[["f1"]].iloc[:1])
