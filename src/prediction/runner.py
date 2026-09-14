@@ -47,7 +47,9 @@ def _write_status(path: Path, status: str, **extra: object) -> dict:
 def _strict_bool(series: pd.Series, name: str) -> pd.Series:
     """Parse booleans without allowing strings/NaN to silently become True."""
     if pd.api.types.is_bool_dtype(series):
-        return series.fillna(False)
+        if series.isna().any():
+            raise RuntimeError(f"Future fixture column {name!r} contains missing boolean values")
+        return series
     normalized = series.astype("string").str.strip().str.lower()
     valid = normalized.isin({"true", "false", "1", "0", "yes", "no"})
     if not valid.all():
@@ -83,11 +85,17 @@ def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) ->
             raise RuntimeError(f"Future fixture input contains missing/empty {team_col} values")
     d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
     d["source_available_at_utc"] = pd.to_datetime(d["source_available_at_utc"], utc=True, errors="coerce")
+    if d["kickoff_utc"].isna().any():
+        raise RuntimeError("Future fixture input contains invalid/missing kickoff_utc values")
+    if d["source_available_at_utc"].isna().any():
+        raise RuntimeError("Future fixture input contains invalid/missing source_available_at_utc values")
     d["pit_verified"] = _strict_bool(d["pit_verified"], "pit_verified")
     d["starter_status"] = d["starter_status"].astype("string").str.upper().str.strip()
-    d = d.dropna(subset=["kickoff_utc", "source_available_at_utc", "starter_status"])
+    if d["starter_status"].isna().any() or d["starter_status"].eq("").any():
+        raise RuntimeError("Future fixture input contains missing/empty starter_status values")
     # Production is strictly forward-looking: never use a fixture or information that
-    # was not available by the exact prediction timestamp.
+    # was not available by the exact prediction timestamp. Invalid input is a hard error,
+    # not a silently dropped row, so upstream data regressions cannot hide behind a green run.
     d = d[
         (d["kickoff_utc"] > prediction_time)
         & (d["source_available_at_utc"] <= prediction_time)
@@ -146,7 +154,11 @@ def run(
     result["abstain"] = (result["confidence"] < 0.45) | (result["margin"] < 0.08)
     result["prediction_time_utc"] = now.isoformat()
     result["model_version"] = str(bundle["model_version"])
-    result.to_csv(output_path, index=False)
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    temp_output = output_file.with_suffix(output_file.suffix + ".tmp")
+    result.to_csv(temp_output, index=False)
+    temp_output.replace(output_file)
     return _write_status(
         status_file,
         "PREDICTED",
@@ -155,7 +167,7 @@ def run(
         eligible_rows=int(len(eligible)),
         prediction_rows=int(len(result)),
         abstained_rows=int(result["abstain"].sum()),
-        output_path=str(output_path),
+        output_path=str(output_file),
         model_version=str(bundle["model_version"]),
         oos_claimed=bool(registry.get("oos_verified", False)),
     )
