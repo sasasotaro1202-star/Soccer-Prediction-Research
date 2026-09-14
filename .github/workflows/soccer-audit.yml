@@ -3,7 +3,9 @@ name: Soccer Coverage Fixture PIT Audit
 on:
   workflow_dispatch:
   schedule:
-    - cron: "31 3 * * 1"
+    # Run daily so PIT coverage can improve continuously rather than waiting
+    # for the weekly cadence. Production adoption remains fail-closed.
+    - cron: "31 3 * * *"
 
 permissions:
   contents: read
@@ -25,7 +27,18 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install -r requirements.txt; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 5))
+            fi
+          done
+          exit 1
       - name: Run audit
         env:
           PYTHONPATH: .
@@ -51,9 +64,10 @@ jobs:
           if data.get('search_engines_are_not_dataset_sources') is not True:
               raise SystemExit('Search engines were not explicitly excluded as datasets')
       - name: Upload audit artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: soccer-coverage-pit-audit-${{ github.run_id }}
           path: artifacts/
           retention-days: 30
-          if-no-files-found: error
+          if-no-files-found: warn
