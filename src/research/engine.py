@@ -18,6 +18,7 @@ from src.features.soccer_features import add_target, build_match_features
 from src.prediction.model_bundle import train_and_save_bundle
 from src.research.adoption import adoption_decision
 from src.research.llm import weakness_advice
+from src.research.registry import save_registry
 
 EXCLUDED_MODEL_COLUMNS = {"match_id", "competition", "season", "season_start", "kickoff_utc", "home_team", "away_team", "prediction_cutoff_at_utc", "home_goals", "away_goals", "target", "pit_verified", "feature_source_max_available_at_utc"}
 PIT_POLICY = "explicit_source_publication_time_only; unknown_publication_time_excluded"
@@ -107,7 +108,20 @@ def run(out_dir: str = "artifacts") -> dict:
         model_version = hashlib.sha256(json.dumps({"snapshot_id": snapshot_id(history), "selection": selection}, sort_keys=True, default=str).encode()).hexdigest()[:16]
         try:
             model_bundle = train_and_save_bundle(feats, _model_features(feats), selection, str(out / "production_model.pkl"), model_version, snapshot_id(history))
-            (out / "production_model.json").write_text(json.dumps({**model_bundle, "adoption_status": "ADOPT"}, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+            registry = save_registry(
+                str(out / "model_registry.json"),
+                model_version=model_version,
+                feature_version="pit_safe_v1",
+                research_cycle=str(pd.Timestamp.utcnow().isoformat()),
+                git_commit_sha=os.getenv("GITHUB_SHA", "unknown"),
+                data_snapshot_id=snapshot_id(history),
+                metrics={"locked_oos": locked.to_dict(orient="records"), "development_oos": development_oos.to_dict(orient="records")},
+                adoption_status="ADOPT",
+                parameters={"weights": model_bundle.get("weights", {}), "feature_count": model_bundle.get("feature_count"), "fit_rows": model_bundle.get("fit_rows")},
+                training_end=model_bundle.get("fit_end"),
+                calibration={"temperature": model_bundle.get("temperature")},
+            )
+            (out / "production_model.json").write_text(json.dumps({**model_bundle, "adoption_status": "ADOPT", "registry": registry}, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
         except Exception as exc:
             model_bundle = {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
             (out / "production_model.json").write_text(json.dumps(model_bundle, indent=2, ensure_ascii=False), encoding="utf-8")
