@@ -28,8 +28,11 @@ def test_unavailable_recent_result_invalidates_window():
         "home_team": "A", "away_team": "B",
     }])
     features = build_match_features(history, match, windows=(3,))
+    # The available feature state may still contain usable prior matches, but
+    # the PIT verification claim must fail because B's required event-time
+    # history contains m6, whose publication time is after the cutoff.
     assert not bool(features.iloc[0]["pit_verified"])
-    assert pd.isna(features.iloc[0]["home_gf_3"])
+    assert pd.notna(features.iloc[0]["home_gf_3"])
 
 
 def test_delayed_result_is_available_at_later_cutoff():
