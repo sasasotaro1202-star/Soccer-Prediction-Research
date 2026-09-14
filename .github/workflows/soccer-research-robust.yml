@@ -161,6 +161,42 @@ jobs:
           PIT_ENABLE_ARCHIVE_AUDIT: "1"
         continue-on-error: true
         run: python -m src.research.safe_runner
+      - name: Prepare future fixtures when supplied
+        id: prepare_future
+        if: always()
+        continue-on-error: true
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: |
+          mkdir -p artifacts
+          if [ ! -f data/future_fixtures.csv ]; then
+            printf '{"status":"NO_FUTURE_FIXTURE_INPUT","prediction_enabled":false,"reason":"data/future_fixtures.csv is not present; no fixture is guessed or synthesized"}\n' > artifacts/future_fixture_status.json
+            exit 0
+          fi
+          set +e
+          python -m src.prediction.prepare_fixtures --fixtures data/future_fixtures.csv --output artifacts/future_fixtures.csv > artifacts/future_fixture_prepare_stdout.json
+          rc=$?
+          printf '{"exit_code":%s,"prepared":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/future_fixture_prepare_status.json
+          exit "$rc"
+      - name: Run production prediction when eligible fixtures exist
+        id: prediction
+        if: always()
+        continue-on-error: true
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: |
+          mkdir -p artifacts
+          if [ ! -f artifacts/future_fixtures.csv ]; then
+            printf '{"status":"NO_ELIGIBLE_FIXTURES","oos_claimed":false,"reason":"No prepared future fixtures exist"}\n' > artifacts/prediction_status.json
+            exit 0
+          fi
+          set +e
+          python -m src.prediction.runner --fixtures artifacts/future_fixtures.csv --bundle artifacts/production_model.pkl --output artifacts/predictions.csv --status artifacts/prediction_status.json
+          rc=$?
+          printf '{"exit_code":%s,"runner_completed":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/prediction_step_status.json
+          exit "$rc"
       - name: Evaluate production contract
         id: production_contract
         if: always()
@@ -185,6 +221,7 @@ jobs:
               'tests_step': '${{ steps.tests.outcome }}', 'audit_step': '${{ steps.audit.outcome }}',
               'audit_gate_step': '${{ steps.audit_gate.outcome }}', 'auxiliary_audit_step': '${{ steps.auxiliary_audit.outcome }}',
               'completion_gate_step': '${{ steps.gate.outcome }}', 'research_step': '${{ steps.research_engine.outcome }}',
+              'future_fixture_prepare_step': '${{ steps.prepare_future.outcome }}', 'prediction_step': '${{ steps.prediction.outcome }}',
               'production_contract_step': '${{ steps.production_contract.outcome }}',
           }
           data['automation_policy'] = {
@@ -193,6 +230,7 @@ jobs:
               'failed_gates_fail_closed': True,
               'historical_artifacts_are_actions_only': True,
               'openai_api_is_optional': True,
+              'future_fixture_unknowns_are_never_guessed': True,
               'workflow_never_fails_for_research_gate_outcomes': True,
           }
           if data.get('audit', {}).get('audit_complete') is False:
