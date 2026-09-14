@@ -14,6 +14,7 @@ from src.data.football_data import load_available_history
 # retry/redirect handling and precise early-capture scan implemented by the fast
 # adapter, which can unnecessarily leave valid archived evidence UNVERIFIABLE.
 from src.data.pit_source_adapter_fast import FootballDataWaybackAdapter
+from src.data.pit_archive_fallback import apply_arquivo_fallback
 from src.features.soccer_features import build_match_features
 
 SEASONS = [f"{y}/{str(y + 1)[-2:]}" for y in range(2010, 2026)]
@@ -50,16 +51,40 @@ def _season_display(comp: str, value: object) -> str:
     return text
 
 
+def _merge_pit_evidence(history: pd.DataFrame, enriched: pd.DataFrame) -> pd.DataFrame:
+    """Merge PIT evidence with stable dtypes; never coerce verified timestamps to object."""
+    out = history.copy()
+    if "source_available_at_utc" not in out.columns:
+        out["source_available_at_utc"] = pd.Series(pd.NaT, index=out.index, dtype="datetime64[ns, UTC]")
+    else:
+        out["source_available_at_utc"] = pd.to_datetime(out["source_available_at_utc"], utc=True, errors="coerce")
+    for col in ("pit_evidence_status", "pit_evidence_reason", "pit_evidence_url", "capture_digest"):
+        if col not in out.columns:
+            out[col] = pd.Series(index=out.index, dtype="object")
+    if enriched is None or enriched.empty:
+        return out
+    for col in ("source_available_at_utc", "pit_evidence_status", "pit_evidence_reason", "pit_evidence_url", "capture_digest"):
+        if col not in enriched.columns:
+            continue
+        values = enriched[col]
+        if col == "source_available_at_utc":
+            values = pd.to_datetime(values, utc=True, errors="coerce")
+        out.loc[enriched.index, col] = values
+    return out
+
+
 def _pit_preflight(root: Path) -> dict:
     """Build the PIT replay from explicit archive evidence, never inferred timing.
 
     Football-Data rows are enriched with Wayback captures that first contain the
     completed result after a conservative result-availability lower bound. Sources
     without verifiable publication evidence remain unknown and cannot pass the gate.
+    A bounded Arquivo.pt fallback is also allowed, using the same lower-bound rule;
+    it is evidence recovery only and never infers a publication timestamp.
     """
     history, _ = load_available_history(start_year=2010, end_year=2025)
     if history.empty:
-        return {"rows": 0, "pit_verified_rows": 0, "pit_verified_rate": 0.0, "verified_competitions": 0, "archive_enriched_rows": 0}
+        return {"rows": 0, "pit_verified_rows": 0, "pit_verified_rate": 0.0, "verified_competitions": 0, "archive_enriched_rows": 0, "arquivo_fallback_enriched_rows": 0}
 
     history = history.copy()
     # The fast adapter is still fail-closed: it only marks a row VERIFIED when an
@@ -71,9 +96,15 @@ def _pit_preflight(root: Path) -> dict:
     mask = history["competition"].astype(str).isin(supported)
     if mask.any():
         enriched = archive.apply_bulk(history.loc[mask].copy())
-        for col in ("source_available_at_utc", "pit_evidence_status", "pit_evidence_reason", "pit_evidence_url", "capture_digest"):
-            if col in enriched.columns:
-                history.loc[enriched.index, col] = enriched[col]
+        history = _merge_pit_evidence(history, enriched)
+        before_fallback = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+        # Arquivo.pt is a secondary, bounded archive provider. Its capture time is
+        # accepted only when it is at/after the same explicit result lower bound and
+        # the archived file contains the exact completed-result identity.
+        history = _merge_pit_evidence(history, apply_arquivo_fallback(history))
+        after_fallback = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+    else:
+        before_fallback = after_fallback = 0
 
     features = build_match_features(history, history, windows=(3, 5, 10, 20))
     features.to_csv(root / "pit_replay_features.csv", index=False)
@@ -85,7 +116,8 @@ def _pit_preflight(root: Path) -> dict:
         "pit_verified_rows": int(verified.sum()),
         "pit_verified_rate": float(verified.mean()) if len(features) else 0.0,
         "verified_competitions": verified_competitions,
-        "archive_enriched_rows": int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum()),
+        "archive_enriched_rows": before_fallback,
+        "arquivo_fallback_enriched_rows": max(0, after_fallback - before_fallback),
     }
 
 
@@ -138,7 +170,7 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
         pit = _pit_preflight(root)
         pit_preflight_error = None
     except Exception as exc:
-        pit = {"rows": 0, "pit_verified_rows": 0, "pit_verified_rate": 0.0, "verified_competitions": 0, "archive_enriched_rows": 0}
+        pit = {"rows": 0, "pit_verified_rows": 0, "pit_verified_rate": 0.0, "verified_competitions": 0, "archive_enriched_rows": 0, "arquivo_fallback_enriched_rows": 0}
         pit_preflight_error = f"{type(exc).__name__}: {exc}"
     pit_gate = (
         pit_preflight_error is None
@@ -181,6 +213,7 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
         "pit_replay_verified_rate": pit["pit_verified_rate"],
         "pit_replay_verified_competitions": pit["verified_competitions"],
         "pit_archive_enriched_rows": pit.get("archive_enriched_rows", 0),
+        "pit_arquivo_fallback_enriched_rows": pit.get("arquivo_fallback_enriched_rows", 0),
         "pit_publication_time_gate": pit_gate,
         "no_missing_to_zero": True,
         "full_gate_passed": full_gate_passed,
