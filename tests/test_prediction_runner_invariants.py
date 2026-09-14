@@ -45,6 +45,25 @@ def test_future_fixture_requires_source_availability_by_prediction_time():
     assert eligible.empty
 
 
+def test_invalid_required_timestamps_fail_closed():
+    rows = _fixture_rows()
+    rows.loc[0, "kickoff_utc"] = "not-a-timestamp"
+    with pytest.raises(RuntimeError, match="kickoff_utc"):
+        _eligible_fixtures(rows, _normalize_prediction_time("2026-09-15T09:00:00Z"))
+
+    rows = _fixture_rows()
+    rows.loc[0, "source_available_at_utc"] = "not-a-timestamp"
+    with pytest.raises(RuntimeError, match="source_available_at_utc"):
+        _eligible_fixtures(rows, _normalize_prediction_time("2026-09-15T09:00:00Z"))
+
+
+def test_missing_starter_status_fails_closed():
+    rows = _fixture_rows()
+    rows.loc[0, "starter_status"] = ""
+    with pytest.raises(RuntimeError, match="starter_status"):
+        _eligible_fixtures(rows, _normalize_prediction_time("2026-09-15T09:00:00Z"))
+
+
 def test_unverified_or_unannounced_fixture_is_excluded():
     rows = _fixture_rows()
     rows.loc[0, "pit_verified"] = False
