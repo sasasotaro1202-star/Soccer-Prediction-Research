@@ -36,7 +36,7 @@ COMPETITION_ADAPTERS = {
     "J1": {"source": "UNVERIFIED", "source_code": None, "adapter": None}, "J2": {"source": "UNVERIFIED", "source_code": None, "adapter": None}, "J3": {"source": "UNVERIFIED", "source_code": None, "adapter": None},
     "DFBP": {"source": "UNVERIFIED", "source_code": None, "adapter": None}, "FRIENDLY": {"source": "UNVERIFIED", "source_code": None, "adapter": None}, "EFL": {"source": "UNVERIFIED", "source_code": None, "adapter": None},
 }
-INPUT_TO_FIXED = {"EPL": "E0", "CHA": "CH", "BL1": "D1", "SA": "I1", "LL": "SP1", "FL1": "F1", "ERE": "N1"}
+INPUT_TO_FIXED = {"EPL": "E0", "CHA": "CH", "BL1": "D1", "SA": "I1", "SP1": "SP1", "LL": "SP1", "FL1": "F1", "ERE": "N1"}
 
 @dataclass(frozen=True)
 class SourceEvidence:
@@ -92,7 +92,6 @@ def _date_key(value: Any) -> str | None:
     except (TypeError, ValueError): pass
     text = str(value).strip()
     if not text: return None
-    # ISO datetime/date: parse explicitly before any locale-sensitive fallback.
     if len(text) >= 10 and text[4] == "-" and text[7] == "-":
         iso_text = text.replace("Z", "+00:00")
         try:
@@ -195,7 +194,8 @@ class FootballDataWaybackAdapter:
             diag = self._capture_diag.get(url, CaptureDiagnostic("CDX_REQUEST_FAILURE")); reason = "no_archive_captures" if diag.status == "CDX_NO_CAPTURE" else f"{diag.status.lower()}: {diag.error or ''}".strip(); return [SourceEvidence(None, "UNVERIFIABLE", reason=reason) for _ in rows]
         row_keys = [_row_key(row) for row in rows]; bounds = [_result_lower_bound(row) for row in rows]
         candidates = [c for c in captures if (_utc(c.get("timestamp")) is not None and any(lb is not None and _utc(c.get("timestamp")) >= lb for lb, _ in bounds))]; candidates.sort(key=lambda c:c.get("timestamp", ""))
-        if not candidates: return [SourceEvidence(None, "UNVERIFIABLE", reason=f"captures_exist_but_no_capture_after_result_lower_bound:{reason}") for _, reason in bounds]
+        if not candidates:
+            return [SourceEvidence(None, "UNVERIFIABLE", reason=f"captures_exist_but_no_capture_after_result_lower_bound:{bound_reason}") for _, bound_reason in bounds]
         def fetch(c): return c, self._load_snapshot_keys(c, url)
         keysets=[]
         with ThreadPoolExecutor(max_workers=workers or self.max_workers) as pool:
@@ -227,16 +227,3 @@ class FootballDataWaybackAdapter:
             for (idx,_),ev in zip(items,evidences):
                 out.at[idx,"source_available_at_utc"]=ev.source_available_at_utc; out.at[idx,"pit_evidence_status"]=ev.evidence_status; out.at[idx,"pit_evidence_reason"]=ev.reason; out.at[idx,"pit_evidence_url"]=ev.evidence_url; out.at[idx,"capture_digest"]=ev.capture_digest
         return out
-    def evidence_for_row(self,row:pd.Series)->SourceEvidence:
-        try: return self._prefetch_url(source_url(str(row["competition"]),int(row["season_start"])),[row],workers=1)[0]
-        except Exception as exc: return SourceEvidence(None,"UNVERIFIABLE",reason=f"adapter_failure:{type(exc).__name__}:{exc}")
-    def diagnostic_bulk(self, history: pd.DataFrame) -> pd.DataFrame:
-        rows=[]
-        for (competition,start_year),group in history.groupby(["competition","season_start"],dropna=False):
-            try: url=source_url(str(competition),int(start_year)); diag=self.capture_diagnostic(url); rows.append({"competition":competition,"season_start":start_year,"url":url,"status":diag.status,"capture_count":diag.capture_count,"error_type":diag.error_type,"error":diag.error})
-            except Exception as exc: rows.append({"competition":competition,"season_start":start_year,"url":None,"status":"ADAPTER_MAPPING_FAILURE","capture_count":0,"error_type":type(exc).__name__,"error":str(exc)})
-        return pd.DataFrame(rows)
-
-def apply_pit_evidence(history: pd.DataFrame, **kwargs) -> pd.DataFrame: return FootballDataWaybackAdapter(**kwargs).apply_bulk(history)
-def build_pit_diagnostic(history: pd.DataFrame, **kwargs) -> pd.DataFrame: return FootballDataWaybackAdapter(**kwargs).diagnostic_bulk(history)
-def competition_adapter_matrix() -> pd.DataFrame: return pd.DataFrame([{"competition":k,**v} for k,v in COMPETITION_ADAPTERS.items()])
