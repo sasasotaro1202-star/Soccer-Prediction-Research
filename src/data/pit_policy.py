@@ -7,7 +7,7 @@ import pandas as pd
 # Historical result availability must not be inferred from event time in the
 # production OOS gate. A result+24h assumption can be useful for diagnostics,
 # but it is not source-publication evidence and therefore defaults OFF.
-RESULT_AVAILABILITY_LAG = pd.Timedelta("24h")
+RESULT_AVAILABILITY_LAG = pd.to_timedelta(24, unit="h")
 
 
 def inferred_result_available_at(event_time):
