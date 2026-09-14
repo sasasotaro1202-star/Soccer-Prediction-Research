@@ -29,13 +29,15 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
-            if python -m pip install -r requirements.txt; then exit 0; fi
-            sleep $((attempt * 5))
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt; then exit 0; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 10))
           done
-          exit 1
       - name: Compile
         run: python -m compileall -q src tests
       - name: Deterministic tests
+        env:
+          PYTHONHASHSEED: "0"
         run: python -m pytest -q
       - name: Verify critical production contracts
         shell: bash
@@ -47,10 +49,33 @@ jobs:
               Path('src/prediction/runner.py'),
               Path('src/models/score_selector.py'),
               Path('src/models/mom_selector.py'),
+              Path('src/data/competition_catalog.py'),
               Path('docs/competition-production-gate.md'),
           ]
           missing = [str(p) for p in required if not p.exists()]
           if missing:
               raise SystemExit(f'missing critical production files: {missing}')
           print('critical production contract files present')
+          PY
+      - name: Validate competition catalog invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from src.data.competition_catalog import COMPETITION_CATALOG
+
+          valid_types = {'league', 'cup', 'europe', 'friendly'}
+          codes = [spec.code for spec in COMPETITION_CATALOG]
+          duplicates = sorted({code for code in codes if codes.count(code) > 1})
+          if duplicates:
+              raise SystemExit(f'duplicate competition codes: {duplicates}')
+          if not COMPETITION_CATALOG:
+              raise SystemExit('competition catalog is empty')
+          invalid_types = [spec.code for spec in COMPETITION_CATALOG if spec.competition_type not in valid_types]
+          if invalid_types:
+              raise SystemExit(f'invalid competition types: {invalid_types}')
+          unsafe_defaults = [spec.code for spec in COMPETITION_CATALOG if spec.production_eligible]
+          if unsafe_defaults:
+              raise SystemExit(f'catalog contains unconditional production eligibility: {unsafe_defaults}')
+          print(f'competition catalog invariants OK: {len(COMPETITION_CATALOG)} research targets')
           PY
