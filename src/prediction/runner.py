@@ -30,6 +30,8 @@ def load_adopted_model(registry_path: str = "artifacts/model_registry.json") -> 
         record = json.loads(p.read_text(encoding="utf-8"))
     except Exception as exc:
         raise RuntimeError(f"Adopted model registry is unreadable: {type(exc).__name__}: {exc}") from exc
+    if not isinstance(record, dict):
+        raise RuntimeError("Adopted model registry must contain a JSON object")
     if record.get("adoption_status") != "ADOPT":
         raise RuntimeError("Registry contains no ADOPT model")
     return record
@@ -75,6 +77,10 @@ def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) ->
     if duplicate_ids:
         sample = sorted(map(str, duplicate_ids))[:10]
         raise RuntimeError(f"Future fixture input contains duplicate match_id values; refusing ambiguous prediction: {sample}")
+    for team_col in ("home_team", "away_team"):
+        d[team_col] = d[team_col].astype("string").str.strip()
+        if d[team_col].isna().any() or d[team_col].eq("").any():
+            raise RuntimeError(f"Future fixture input contains missing/empty {team_col} values")
     d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
     d["source_available_at_utc"] = pd.to_datetime(d["source_available_at_utc"], utc=True, errors="coerce")
     d["pit_verified"] = _strict_bool(d["pit_verified"], "pit_verified")
@@ -101,8 +107,14 @@ def run(
 ) -> dict:
     status_file = Path(status_path)
     now = _normalize_prediction_time(prediction_time)
-    load_adopted_model(registry_path)
+    registry = load_adopted_model(registry_path)
     bundle = load_bundle(bundle_path)
+    registry_version = registry.get("model_version")
+    bundle_version = bundle.get("model_version")
+    if registry_version is not None and str(registry_version) != str(bundle_version):
+        raise RuntimeError(
+            f"Adopted registry/model bundle version mismatch: registry={registry_version!r}, bundle={bundle_version!r}"
+        )
     p = Path(fixtures_path)
     if not p.exists():
         return _write_status(status_file, "NO_FIXTURE_INPUT", prediction_time_utc=now.isoformat(), oos_claimed=False)
@@ -145,7 +157,7 @@ def run(
         abstained_rows=int(result["abstain"].sum()),
         output_path=str(output_path),
         model_version=str(bundle["model_version"]),
-        oos_claimed=True,
+        oos_claimed=bool(registry.get("oos_verified", False)),
     )
 
 
