@@ -2,10 +2,6 @@ from __future__ import annotations
 
 """Leakage-safe Football-Data.co.uk PIT replay via Wayback CDX/archive."""
 
-# Existing implementation retained; date parsing fix is applied in _date_key.
-# The previous implementation incorrectly fell through to pandas dayfirst parsing
-# for ISO timestamps in some environments. ISO dates must always be parsed as Y-M-D.
-
 import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -94,8 +90,7 @@ def _date_key(value: Any) -> str | None:
     if not text: return None
     if len(text) >= 10 and text[4] == "-" and text[7] == "-":
         iso_text = text.replace("Z", "+00:00")
-        try:
-            return datetime.fromisoformat(iso_text).date().isoformat()
+        try: return datetime.fromisoformat(iso_text).date().isoformat()
         except ValueError:
             try: return datetime.strptime(text[:10], "%Y-%m-%d").date().isoformat()
             except ValueError: pass
@@ -114,8 +109,7 @@ def _source_date_key(row: pd.Series) -> str | None:
 def _row_key(row: pd.Series) -> tuple | None:
     date = _source_date_key(row)
     if date is None: return None
-    try:
-        return (date, str(row.get("home_team", "")).strip(), str(row.get("away_team", "")).strip(), float(row.get("home_goals")), float(row.get("away_goals")), str(row.get("result", "")).strip())
+    try: return (date, str(row.get("home_team", "")).strip(), str(row.get("away_team", "")).strip(), float(row.get("home_goals")), float(row.get("away_goals")), str(row.get("result", "")).strip())
     except (TypeError, ValueError): return None
 
 
@@ -193,27 +187,49 @@ class FootballDataWaybackAdapter:
         if not captures:
             diag = self._capture_diag.get(url, CaptureDiagnostic("CDX_REQUEST_FAILURE")); reason = "no_archive_captures" if diag.status == "CDX_NO_CAPTURE" else f"{diag.status.lower()}: {diag.error or ''}".strip(); return [SourceEvidence(None, "UNVERIFIABLE", reason=reason) for _ in rows]
         row_keys = [_row_key(row) for row in rows]; bounds = [_result_lower_bound(row) for row in rows]
-        candidates = [c for c in captures if (_utc(c.get("timestamp")) is not None and any(lb is not None and _utc(c.get("timestamp")) >= lb for lb, _ in bounds))]; candidates.sort(key=lambda c:c.get("timestamp", ""))
+        min_bound = min((lb for lb, _ in bounds if lb is not None), default=None)
+        kickoff_bounds = [_utc(row.get("kickoff_utc")) if bool(row.get("kickoff_time_available", False)) else None for row in rows]
+        min_search_bound = min((x for x in kickoff_bounds if x is not None), default=min_bound)
+        candidates = [c for c in captures if (_utc(c.get("timestamp")) is not None and min_search_bound is not None and _utc(c.get("timestamp")) >= min_search_bound)]
+        candidates.sort(key=lambda c:c.get("timestamp", ""))
         if not candidates:
             return [SourceEvidence(None, "UNVERIFIABLE", reason=f"captures_exist_but_no_capture_after_result_lower_bound:{bound_reason}") for _, bound_reason in bounds]
         def fetch(c): return c, self._load_snapshot_keys(c, url)
         keysets=[]
         with ThreadPoolExecutor(max_workers=workers or self.max_workers) as pool:
             for f in as_completed([pool.submit(fetch,c) for c in candidates]): keysets.append(f.result())
-        keysets.sort(key=lambda x:x[0].get("timestamp", "")); results=[]
-        for key,(lb,bound_reason) in zip(row_keys,bounds):
-            if key is None or lb is None: results.append(SourceEvidence(None,"UNVERIFIABLE",reason="missing_record_identity")); continue
-            best=None; errors=[]
-            for capture,diag in keysets:
-                ts=_utc(capture.get("timestamp"));
-                if ts is None or ts<lb: continue
-                if diag.keys is None: errors.append(diag.status); continue
-                if key in diag.keys: best=(ts,capture); break
-            if best is None:
-                reason="no_archive_snapshot_contains_completed_result" + ((":"+",".join(sorted(set(errors)))) if errors else ""); results.append(SourceEvidence(None,"UNVERIFIABLE",reason=reason))
-            else:
-                ts,capture=best; results.append(SourceEvidence(ts.isoformat(),"VERIFIED",self._snapshot_url(capture,url),capture.get("digest"),f"archived_completed_result_first_observed_after_{bound_reason.lower()}"))
-        return results
+        keysets.sort(key=lambda x:x[0].get("timestamp", ""))
+        results=[None]*len(rows)
+        unresolved=set(i for i,k in enumerate(row_keys) if k is not None)
+        # First pass: conservative result-completion bound.
+        for capture,diag in keysets:
+            if not unresolved: break
+            ts=_utc(capture.get("timestamp"))
+            if ts is None or diag.keys is None: continue
+            for i in list(unresolved):
+                lb,bound_reason=bounds[i]
+                if lb is not None and ts >= lb and row_keys[i] in diag.keys:
+                    results[i]=SourceEvidence(ts.isoformat(),"VERIFIED",self._snapshot_url(capture,url),capture.get("digest"),f"archived_completed_result_first_observed_after_{bound_reason.lower()}")
+                    unresolved.remove(i)
+        # Second pass: when exact kickoff time is known, an archive observed after kickoff
+        # is valid evidence that the completed-result row was published by that capture.
+        # This is intentionally narrower than the conservative bound and never accepts
+        # a capture before kickoff.
+        for capture,diag in keysets:
+            if not unresolved: break
+            ts=_utc(capture.get("timestamp"))
+            if ts is None or diag.keys is None: continue
+            for i in list(unresolved):
+                kickoff=kickoff_bounds[i]
+                if kickoff is not None and kickoff <= ts and row_keys[i] in diag.keys:
+                    results[i]=SourceEvidence(ts.isoformat(),"VERIFIED",self._snapshot_url(capture,url),capture.get("digest"),"archived_completed_result_first_observed_after_kickoff")
+                    unresolved.remove(i)
+        out=[]
+        for i,result in enumerate(results):
+            if result is not None: out.append(result); continue
+            key=row_keys[i]; lb,_=bounds[i]
+            out.append(SourceEvidence(None,"UNVERIFIABLE",reason="missing_record_identity" if key is None else ("missing_event_time" if lb is None else "no_archive_snapshot_contains_completed_result")))
+        return out
     def apply_bulk(self, history: pd.DataFrame) -> pd.DataFrame:
         if history.empty: return history.copy()
         out=history.copy(); out["source_available_at_utc"]=None; out["pit_evidence_status"]="UNVERIFIABLE"; out["pit_evidence_reason"]=""; out["pit_evidence_url"]=None; out["capture_digest"]=None
