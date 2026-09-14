@@ -3,8 +3,6 @@ name: Soccer Coverage Fixture PIT Audit
 on:
   workflow_dispatch:
   schedule:
-    # Run daily so PIT coverage can improve continuously rather than waiting
-    # for the weekly cadence. Production adoption remains fail-closed.
     - cron: "31 3 * * *"
 
 permissions:
@@ -26,26 +24,26 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install dependencies
+      - name: Install dependencies (retry)
         shell: bash
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
-            if python -m pip install -r requirements.txt; then
-              exit 0
-            fi
-            if [ "$attempt" -lt 3 ]; then
-              sleep $((attempt * 5))
-            fi
+            python -m pip install -r requirements.txt && exit 0
+            echo "dependency install attempt ${attempt} failed; retrying..."
+            sleep $((attempt * 5))
           done
           exit 1
-      - name: Run audit
+      - name: Run audit with diagnostic preservation
         env:
           PYTHONPATH: .
+        shell: bash
         run: |
+          set -o pipefail
           mkdir -p artifacts
-          python -m src.data.fixture_field_audit > artifacts/audit_stdout.json
+          python -m src.data.fixture_field_audit 2>&1 | tee artifacts/audit_stdout.log
       - name: Validate audit completeness
+        if: always()
         env:
           PYTHONPATH: .
         run: |
