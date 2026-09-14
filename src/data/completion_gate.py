@@ -10,7 +10,10 @@ import pandas as pd
 
 from src.data.fixture_field_audit import TARGET_COMPETITIONS
 from src.data.football_data import load_available_history
-from src.data.pit_source_adapter_v2 import FootballDataWaybackAdapter
+# Use the optimized, fail-closed adapter.  Importing v2 directly bypasses the
+# retry/redirect handling and precise early-capture scan implemented by the fast
+# adapter, which can unnecessarily leave valid archived evidence UNVERIFIABLE.
+from src.data.pit_source_adapter_fast import FootballDataWaybackAdapter
 from src.features.soccer_features import build_match_features
 
 SEASONS = [f"{y}/{str(y + 1)[-2:]}" for y in range(2010, 2026)]
@@ -59,7 +62,11 @@ def _pit_preflight(root: Path) -> dict:
         return {"rows": 0, "pit_verified_rows": 0, "pit_verified_rate": 0.0, "verified_competitions": 0, "archive_enriched_rows": 0}
 
     history = history.copy()
-    archive = FootballDataWaybackAdapter(cache_dir=str(root / "pit_evidence"), max_workers=8)
+    # The fast adapter is still fail-closed: it only marks a row VERIFIED when an
+    # exact completed-result identity is present in an archive capture at/after a
+    # valid result-availability bound. Retries and precise-capture scanning only
+    # recover evidence that the slower adapter could miss; they do not relax PIT.
+    archive = FootballDataWaybackAdapter(cache_dir=str(root / "pit_evidence"), max_workers=2)
     supported = {"EPL", "CHA", "BL1", "SA", "LL", "FL1"}
     mask = history["competition"].astype(str).isin(supported)
     if mask.any():
