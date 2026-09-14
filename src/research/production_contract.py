@@ -39,6 +39,10 @@ def _csv_nonempty(root: Path, name: str) -> bool:
     try: return len(path.read_text(encoding="utf-8").splitlines()) >= 2
     except Exception: return False
 
+def _file_nonempty(root: Path, name: str) -> bool:
+    path = root / name
+    return path.exists() and path.is_file() and path.stat().st_size > 0
+
 def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult:
     root = Path(artifacts_dir); failures: list[str] = []
     completion = _read_json(root / "completion_gate.json")
@@ -72,6 +76,17 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
         stability = adoption.get("stability")
         if not isinstance(stability, dict) or stability.get("status") not in {"PASS"}:
             failures.append("adoption_stability")
+        if adoption_status == "ADOPT":
+            # Once a model is adopted, a green research record is insufficient unless
+            # the exact deployable bundle and registry produced by that run exist.
+            if not _file_nonempty(root, "production_model.pkl"):
+                failures.append("artifact:production_model.pkl")
+            registry = _read_json(root / "model_registry.json")
+            if registry.get("adoption_status") != "ADOPT":
+                failures.append("artifact:model_registry.json")
+            model_json = _read_json(root / "production_model.json")
+            if model_json.get("adoption_status") != "ADOPT":
+                failures.append("artifact:production_model.json")
     candidate_lock = _read_json(root / "candidate_lock.json")
     if candidate_lock:
         if candidate_lock.get("locked_oos_untouched") is not True: failures.append("candidate_lock_integrity")
