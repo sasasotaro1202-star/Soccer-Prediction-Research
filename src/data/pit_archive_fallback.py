@@ -3,10 +3,14 @@ from __future__ import annotations
 """Bounded secondary PIT evidence provider using Arquivo.pt.
 
 This module is an audit provider only. It must never block the main research
-engine when an archive service is unavailable.
+engine when an archive service is unavailable. Team matching is deliberately
+conservative: Unicode/diacritic normalization and punctuation folding only;
+no semantic aliases are introduced.
 """
 
+import re
 import time
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from io import BytesIO
@@ -38,6 +42,53 @@ def _utc(value):
         return dt.astimezone(timezone.utc)
     except (TypeError, ValueError):
         return None
+
+
+def _normalise_team(value) -> str:
+    """Conservative identity normalization; intentionally no semantic aliases."""
+    text = "" if value is None else str(value)
+    text = unicodedata.normalize("NFKD", text)
+    text = text.encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", "", text.casefold())
+
+
+def _normalised_row_key(row) -> tuple | None:
+    """Build the same conservative archive key used by the primary PIT adapter."""
+    date = _date_key(row.get("Date") if hasattr(row, "get") else getattr(row, "Date", None))
+    if date is None:
+        kickoff = row.get("kickoff_utc") if hasattr(row, "get") else None
+        date = _date_key(kickoff)
+    if date is None:
+        return None
+    try:
+        home = row.get("HomeTeam") if hasattr(row, "get") else getattr(row, "HomeTeam", None)
+        away = row.get("AwayTeam") if hasattr(row, "get") else getattr(row, "AwayTeam", None)
+        hg = row.get("FTHG") if hasattr(row, "get") else getattr(row, "FTHG", None)
+        ag = row.get("FTAG") if hasattr(row, "get") else getattr(row, "FTAG", None)
+        result = row.get("FTR") if hasattr(row, "get") else getattr(row, "FTR", None)
+        if pd.isna(hg) or pd.isna(ag) or home is None or away is None or result is None:
+            return None
+        return (date, _normalise_team(home), _normalise_team(away), float(hg), float(ag), str(result).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _history_row_key(row):
+    date = _date_key(row.get("kickoff_utc"))
+    if date is None:
+        return None
+    try:
+        return (
+            date,
+            _normalise_team(row.get("home_team")),
+            _normalise_team(row.get("away_team")),
+            float(row.get("home_goals")),
+            float(row.get("away_goals")),
+            str(row.get("result")).strip(),
+        )
+    except (TypeError, ValueError):
+        # Fall back to the canonical primary-adapter key if available.
+        return _row_key(row)
 
 
 def _normalise_cdx_payload(payload):
@@ -81,14 +132,10 @@ def _keyset(raw: bytes):
     if not required.issubset(frame.columns):
         return None
     keys = set()
-    for r in frame.itertuples(index=False):
-        date = _date_key(getattr(r, "Date", None))
-        if date is None:
-            continue
-        try:
-            keys.add((date, str(getattr(r, "HomeTeam")).strip(), str(getattr(r, "AwayTeam")).strip(), float(getattr(r, "FTHG")), float(getattr(r, "FTAG")), str(getattr(r, "FTR")).strip()))
-        except (TypeError, ValueError):
-            continue
+    for r in frame.to_dict("records"):
+        key = _normalised_row_key(r)
+        if key is not None:
+            keys.add(key)
     return keys
 
 
@@ -125,7 +172,7 @@ def apply_arquivo_fallback(history: pd.DataFrame) -> pd.DataFrame:
         for idx, row in out.iterrows():
             if str(row.get("pit_evidence_status", "")) == "VERIFIED":
                 continue
-            key = _row_key(row)
+            key = _history_row_key(row)
             lower_bound, bound_reason = _result_lower_bound(row)
             if key is None or lower_bound is None:
                 continue
