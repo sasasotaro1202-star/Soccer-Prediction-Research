@@ -1,0 +1,56 @@
+name: Overnight Integrity
+
+on:
+  schedule:
+    - cron: "47 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soccer-overnight-integrity
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies with bounded retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install -r requirements.txt; then exit 0; fi
+            sleep $((attempt * 5))
+          done
+          exit 1
+      - name: Compile
+        run: python -m compileall -q src tests
+      - name: Deterministic tests
+        run: python -m pytest -q
+      - name: Verify critical production contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          required = [
+              Path('src/prediction/runner.py'),
+              Path('src/models/score_selector.py'),
+              Path('src/models/mom_selector.py'),
+              Path('docs/competition-production-gate.md'),
+          ]
+          missing = [str(p) for p in required if not p.exists()]
+          if missing:
+              raise SystemExit(f'missing critical production files: {missing}')
+          print('critical production contract files present')
+          PY
