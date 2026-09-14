@@ -51,7 +51,7 @@ def test_source_evidence_never_invents_timestamp():
 
 def test_cdx_no_capture_is_distinct_from_request_failure(tmp_path, monkeypatch):
     adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
-    monkeypatch.setattr("src.data.pit_source_adapter_v2.requests.get", lambda *a, **k: (_ for _ in ()).throw(__import__("requests").RequestException("network down")))
+    monkeypatch.setattr("src.data.pit_source_adapter_fast.requests.get", lambda *a, **k: (_ for _ in ()).throw(__import__("requests").RequestException("network down")))
     assert adapter.captures("https://example.invalid/test.csv") == []
     assert adapter.capture_diagnostic("https://example.invalid/test.csv").status == "CDX_REQUEST_FAILURE"
 
@@ -61,7 +61,7 @@ def test_cdx_empty_response_is_not_request_failure(tmp_path, monkeypatch):
         def raise_for_status(self): return None
         def json(self): return [["timestamp", "digest", "original", "statuscode", "mimetype"]]
     adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
-    monkeypatch.setattr("src.data.pit_source_adapter_v2.requests.get", lambda *a, **k: Response())
+    monkeypatch.setattr("src.data.pit_source_adapter_fast.requests.get", lambda *a, **k: Response())
     assert adapter.captures("https://example.invalid/test.csv") == []
     assert adapter.capture_diagnostic("https://example.invalid/test.csv").status == "CDX_NO_CAPTURE"
 
@@ -72,7 +72,7 @@ def test_snapshot_parse_and_key_matching_are_observable(tmp_path, monkeypatch):
         content = csv
         def raise_for_status(self): return None
     adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
-    monkeypatch.setattr("src.data.pit_source_adapter_v2.requests.get", lambda *a, **k: Response())
+    monkeypatch.setattr("src.data.pit_source_adapter_fast.requests.get", lambda *a, **k: Response())
     capture = {"timestamp":"20250902000000","digest":"digest-a"}
     diag = adapter._load_snapshot_keys(capture, "https://example.invalid/test.csv")
     assert diag.status == "SNAPSHOT_PARSED"
@@ -81,7 +81,7 @@ def test_snapshot_parse_and_key_matching_are_observable(tmp_path, monkeypatch):
 
 def test_diagnostic_bulk_exposes_cdx_failure_stage(tmp_path, monkeypatch):
     adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
-    monkeypatch.setattr("src.data.pit_source_adapter_v2.requests.get", lambda *a, **k: (_ for _ in ()).throw(__import__("requests").RequestException("network down")))
+    monkeypatch.setattr("src.data.pit_source_adapter_fast.requests.get", lambda *a, **k: (_ for _ in ()).throw(__import__("requests").RequestException("network down")))
     history = pd.DataFrame([{"competition":"EPL","season":"2025/26","kickoff_utc":"2025-09-01T18:00:00Z","kickoff_time_available":True,"home_team":"Team A","away_team":"Team B","home_goals":2,"away_goals":1,"result":"H"}])
     diagnostic = adapter.diagnostic_bulk(history)
     assert diagnostic.loc[0, "cdx_status"] == "CDX_REQUEST_FAILURE"
@@ -109,7 +109,10 @@ def test_precise_replay_accepts_completed_result_observed_before_180m_but_after_
         content = csv
         def raise_for_status(self): return None
     adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
-    monkeypatch.setattr("src.data.pit_source_adapter_v2.requests.get", lambda *a, **k: Response())
+    # Patch the module that the concrete adapter actually uses.  Patching the
+    # base implementation alone is insufficient because the optimized adapter
+    # owns its own requests module reference.
+    monkeypatch.setattr("src.data.pit_source_adapter_fast.requests.get", lambda *a, **k: Response())
     monkeypatch.setattr(adapter, "captures", lambda url: [{"timestamp":"20250901193000","digest":"digest-early","original":url}])
     row = pd.Series({"competition":"EPL","season_start":2025,"home_team":"Team A","away_team":"Team B","source_event_date":"2025-09-01","kickoff_utc":"2025-09-01T18:00:00Z","kickoff_time_available":True,"home_goals":2,"away_goals":1,"result":"H"})
     evidence = adapter._prefetch_url("https://example.invalid/test.csv", [row], workers=1)[0]
