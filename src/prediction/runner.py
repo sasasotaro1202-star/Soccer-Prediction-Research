@@ -39,16 +39,31 @@ def _write_status(path: Path, status: str, **extra: object) -> dict:
     return payload
 
 
+def _strict_bool(series: pd.Series, name: str) -> pd.Series:
+    """Parse booleans without allowing strings/NaN to silently become True."""
+    if pd.api.types.is_bool_dtype(series):
+        return series.fillna(False)
+    normalized = series.astype("string").str.strip().str.lower()
+    valid = normalized.isin({"true", "false", "1", "0", "yes", "no"})
+    if not valid.all():
+        bad = sorted(normalized[~valid].dropna().unique().tolist())[:10]
+        raise RuntimeError(f"Future fixture column {name!r} contains non-boolean values: {bad}")
+    return normalized.isin({"true", "1", "yes"})
+
+
 def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) -> pd.DataFrame:
     missing = sorted(REQUIRED_FIXTURE_COLUMNS - set(fixtures.columns))
     if missing:
         raise RuntimeError(f"Future fixture input missing required columns: {missing}")
     d = fixtures.copy()
+    d["match_id"] = d["match_id"].astype("string").str.strip()
+    if d["match_id"].isna().any() or d["match_id"].eq("").any():
+        raise RuntimeError("Future fixture input contains missing/empty match_id values")
     d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
     d["source_available_at_utc"] = pd.to_datetime(d["source_available_at_utc"], utc=True, errors="coerce")
-    d["pit_verified"] = d["pit_verified"].astype(bool)
-    d["starter_status"] = d["starter_status"].astype(str).str.upper().str.strip()
-    d = d.dropna(subset=["kickoff_utc", "source_available_at_utc"])
+    d["pit_verified"] = _strict_bool(d["pit_verified"], "pit_verified")
+    d["starter_status"] = d["starter_status"].astype("string").str.upper().str.strip()
+    d = d.dropna(subset=["kickoff_utc", "source_available_at_utc", "starter_status"])
     # Production is strictly forward-looking: never use a fixture or information that
     # was not available by the exact prediction timestamp.
     d = d[
@@ -57,6 +72,8 @@ def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) ->
         & d["pit_verified"]
         & d["starter_status"].isin({"ANNOUNCED", "CONFIRMED"})
     ].copy()
+    # Duplicate fixture identities are never silently allowed to produce multiple
+    # predictions. Keep the last record only after the eligibility filters above.
     return d.drop_duplicates(subset=["match_id"], keep="last").sort_values("kickoff_utc", kind="mergesort")
 
 
