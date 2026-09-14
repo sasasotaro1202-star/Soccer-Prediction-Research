@@ -26,7 +26,10 @@ def load_adopted_model(registry_path: str = "artifacts/model_registry.json") -> 
     p = Path(registry_path)
     if not p.exists():
         raise RuntimeError("No adopted model registry exists; production prediction is fail-closed")
-    record = json.loads(p.read_text(encoding="utf-8"))
+    try:
+        record = json.loads(p.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"Adopted model registry is unreadable: {type(exc).__name__}: {exc}") from exc
     if record.get("adoption_status") != "ADOPT":
         raise RuntimeError("Registry contains no ADOPT model")
     return record
@@ -51,6 +54,15 @@ def _strict_bool(series: pd.Series, name: str) -> pd.Series:
     return normalized.isin({"true", "1", "yes"})
 
 
+def _normalize_prediction_time(value: str | None) -> pd.Timestamp:
+    if value is None:
+        return pd.Timestamp(datetime.now(timezone.utc))
+    ts = pd.Timestamp(value)
+    if ts.tzinfo is None:
+        return ts.tz_localize("UTC")
+    return ts.tz_convert("UTC")
+
+
 def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) -> pd.DataFrame:
     missing = sorted(REQUIRED_FIXTURE_COLUMNS - set(fixtures.columns))
     if missing:
@@ -59,6 +71,10 @@ def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) ->
     d["match_id"] = d["match_id"].astype("string").str.strip()
     if d["match_id"].isna().any() or d["match_id"].eq("").any():
         raise RuntimeError("Future fixture input contains missing/empty match_id values")
+    duplicate_ids = d.loc[d["match_id"].duplicated(keep=False), "match_id"].dropna().unique().tolist()
+    if duplicate_ids:
+        sample = sorted(map(str, duplicate_ids))[:10]
+        raise RuntimeError(f"Future fixture input contains duplicate match_id values; refusing ambiguous prediction: {sample}")
     d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
     d["source_available_at_utc"] = pd.to_datetime(d["source_available_at_utc"], utc=True, errors="coerce")
     d["pit_verified"] = _strict_bool(d["pit_verified"], "pit_verified")
@@ -72,9 +88,7 @@ def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) ->
         & d["pit_verified"]
         & d["starter_status"].isin({"ANNOUNCED", "CONFIRMED"})
     ].copy()
-    # Duplicate fixture identities are never silently allowed to produce multiple
-    # predictions. Keep the last record only after the eligibility filters above.
-    return d.drop_duplicates(subset=["match_id"], keep="last").sort_values("kickoff_utc", kind="mergesort")
+    return d.sort_values("kickoff_utc", kind="mergesort")
 
 
 def run(
@@ -83,10 +97,11 @@ def run(
     output_path: str = "artifacts/predictions.csv",
     status_path: str = "artifacts/prediction_status.json",
     prediction_time: str | None = None,
+    registry_path: str = "artifacts/model_registry.json",
 ) -> dict:
     status_file = Path(status_path)
-    now = pd.Timestamp(prediction_time, tz="UTC") if prediction_time else pd.Timestamp(datetime.now(timezone.utc))
-    load_adopted_model()
+    now = _normalize_prediction_time(prediction_time)
+    load_adopted_model(registry_path)
     bundle = load_bundle(bundle_path)
     p = Path(fixtures_path)
     if not p.exists():
@@ -141,8 +156,9 @@ def main() -> int:
     parser.add_argument("--output", default="artifacts/predictions.csv")
     parser.add_argument("--status", default="artifacts/prediction_status.json")
     parser.add_argument("--prediction-time", default=None)
+    parser.add_argument("--registry", default="artifacts/model_registry.json")
     args = parser.parse_args()
-    result = run(args.fixtures, args.bundle, args.output, args.status, args.prediction_time)
+    result = run(args.fixtures, args.bundle, args.output, args.status, args.prediction_time, args.registry)
     print(json.dumps(result, ensure_ascii=False, default=str))
     return 0
 
