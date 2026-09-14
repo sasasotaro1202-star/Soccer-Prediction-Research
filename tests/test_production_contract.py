@@ -31,6 +31,11 @@ def _minimal_passing_artifacts(tmp_path):
         "oos_claimed": True,
         "stability": {"status": "PASS"},
     })
+    # The contract only needs a non-empty bundle in the unit fixture; runtime
+    # integration tests validate that the real pickle is loadable elsewhere.
+    (tmp_path / "production_model.pkl").write_bytes(b"test-bundle")
+    _write(tmp_path / "model_registry.json", {"adoption_status": "ADOPT"})
+    _write(tmp_path / "production_model.json", {"adoption_status": "ADOPT"})
 
 
 def test_contract_fails_closed_when_evidence_is_missing(tmp_path):
