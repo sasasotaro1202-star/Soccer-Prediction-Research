@@ -37,10 +37,16 @@ def load_adopted_model(registry_path: str = "artifacts/model_registry.json") -> 
     return record
 
 
+def _atomic_write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(path.suffix + ".tmp")
+    temp.write_text(text, encoding="utf-8")
+    temp.replace(path)
+
+
 def _write_status(path: Path, status: str, **extra: object) -> dict:
     payload = {"status": status, **extra}
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    _atomic_write_text(path, json.dumps(payload, indent=2, ensure_ascii=False, default=str))
     return payload
 
 
@@ -140,6 +146,8 @@ def run(
         )
 
     probs = predict_bundle(bundle, eligible)
+    if probs.shape != (len(eligible), 3):
+        raise RuntimeError(f"Production prediction returned unexpected probability shape: {probs.shape}")
     if not np.isfinite(probs).all() or not np.allclose(probs.sum(axis=1), 1.0, atol=1e-6):
         raise RuntimeError("Production prediction produced invalid probabilities")
     result = eligible[["match_id", "kickoff_utc", "home_team", "away_team"]].copy()
@@ -154,6 +162,8 @@ def run(
     result["abstain"] = (result["confidence"] < 0.45) | (result["margin"] < 0.08)
     result["prediction_time_utc"] = now.isoformat()
     result["model_version"] = str(bundle["model_version"])
+    if len(result) != len(eligible) or result["match_id"].duplicated().any():
+        raise RuntimeError("Production prediction output failed fixture identity invariants")
     output_file = Path(output_path)
     output_file.parent.mkdir(parents=True, exist_ok=True)
     temp_output = output_file.with_suffix(output_file.suffix + ".tmp")
