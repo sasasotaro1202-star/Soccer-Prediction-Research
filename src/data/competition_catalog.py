@@ -27,14 +27,17 @@ class CompetitionSpec:
 
 # Broad research scope. Keep production_eligible=False until the existing
 # adoption gate proves PIT-safe, sufficiently covered, reproducible data.
+# Source support is intentionally not encoded as research_enabled: unsupported
+# competitions remain visible research targets and are blocked by acquisition,
+# PIT, QC, and adoption gates until evidence exists.
 COMPETITION_CATALOG: tuple[CompetitionSpec, ...] = (
     # England
     CompetitionSpec("EPL", "Premier League", "England", "1", "league"),
     CompetitionSpec("CHA", "Championship", "England", "2", "league"),
     CompetitionSpec("ENG1", "League One", "England", "3", "league"),
     CompetitionSpec("ENG2", "League Two", "England", "4", "league"),
-    CompetitionSpec("FAC", "FA Cup", "England", "cup", research_enabled=False),
-    CompetitionSpec("EFL", "EFL Cup / Carabao Cup", "England", "cup", research_enabled=False),
+    CompetitionSpec("FAC", "FA Cup", "England", "cup"),
+    CompetitionSpec("EFL", "EFL Cup / Carabao Cup", "England", "cup"),
     # Germany
     CompetitionSpec("BL1", "Bundesliga", "Germany", "1", "league"),
     CompetitionSpec("BL2", "2. Bundesliga", "Germany", "2", "league"),
@@ -42,28 +45,28 @@ COMPETITION_CATALOG: tuple[CompetitionSpec, ...] = (
     # Spain
     CompetitionSpec("LL", "La Liga", "Spain", "1", "league"),
     CompetitionSpec("LL2", "Segunda División", "Spain", "2", "league"),
-    CompetitionSpec("CDR", "Copa del Rey", "Spain", "cup", research_enabled=False),
+    CompetitionSpec("CDR", "Copa del Rey", "Spain", "cup"),
     # Italy
     CompetitionSpec("SA", "Serie A", "Italy", "1", "league"),
     CompetitionSpec("SB", "Serie B", "Italy", "2", "league"),
-    CompetitionSpec("COPPA", "Coppa Italia", "Italy", "cup", research_enabled=False),
+    CompetitionSpec("COPPA", "Coppa Italia", "Italy", "cup"),
     # France
     CompetitionSpec("FL1", "Ligue 1", "France", "1", "league"),
     CompetitionSpec("FL2", "Ligue 2", "France", "2", "league"),
-    CompetitionSpec("CDF", "Coupe de France", "France", "cup", research_enabled=False),
+    CompetitionSpec("CDF", "Coupe de France", "France", "cup"),
     # Netherlands / Portugal / Belgium / Scotland / Turkey / Greece
     CompetitionSpec("ERE", "Eredivisie", "Netherlands", "1", "league"),
-    CompetitionSpec("TACA", "KNVB Cup", "Netherlands", "cup", research_enabled=False),
+    CompetitionSpec("TACA", "KNVB Cup", "Netherlands", "cup"),
     CompetitionSpec("PPL", "Primeira Liga", "Portugal", "1", "league"),
-    CompetitionSpec("TACA_POR", "Taça de Portugal", "Portugal", "cup", research_enabled=False),
+    CompetitionSpec("TACA_POR", "Taça de Portugal", "Portugal", "cup"),
     CompetitionSpec("BEL", "Belgian Pro League", "Belgium", "1", "league"),
-    CompetitionSpec("BELCUP", "Belgian Cup", "Belgium", "cup", research_enabled=False),
+    CompetitionSpec("BELCUP", "Belgian Cup", "Belgium", "cup"),
     CompetitionSpec("SPL", "Scottish Premiership", "Scotland", "1", "league"),
-    CompetitionSpec("SCOTCUP", "Scottish Cup", "Scotland", "cup", research_enabled=False),
+    CompetitionSpec("SCOTCUP", "Scottish Cup", "Scotland", "cup"),
     CompetitionSpec("TUR", "Süper Lig", "Turkey", "1", "league"),
-    CompetitionSpec("TURCUP", "Turkish Cup", "Turkey", "cup", research_enabled=False),
+    CompetitionSpec("TURCUP", "Turkish Cup", "Turkey", "cup"),
     CompetitionSpec("GRE", "Super League Greece", "Greece", "1", "league"),
-    CompetitionSpec("GRECUP", "Greek Cup", "Greece", "cup", research_enabled=False),
+    CompetitionSpec("GRECUP", "Greek Cup", "Greece", "cup"),
     # Central Europe
     CompetitionSpec("AUT", "Austrian Bundesliga", "Austria", "1", "league"),
     CompetitionSpec("SUI", "Swiss Super League", "Switzerland", "1", "league"),
@@ -71,19 +74,19 @@ COMPETITION_CATALOG: tuple[CompetitionSpec, ...] = (
     CompetitionSpec("J1", "J1 League", "Japan", "1", "league"),
     CompetitionSpec("J2", "J2 League", "Japan", "2", "league"),
     CompetitionSpec("J3", "J3 League", "Japan", "3", "league"),
-    CompetitionSpec("JLC", "J.League Cup", "Japan", "cup", research_enabled=False),
-    CompetitionSpec("EMP_CUP", "Emperor's Cup", "Japan", "cup", research_enabled=False),
+    CompetitionSpec("JLC", "J.League Cup", "Japan", "cup"),
+    CompetitionSpec("EMP_CUP", "Emperor's Cup", "Japan", "cup"),
     CompetitionSpec("KOR", "K League 1", "South Korea", "1", "league"),
-    CompetitionSpec("KORCUP", "Korean FA Cup", "South Korea", "cup", research_enabled=False),
+    CompetitionSpec("KORCUP", "Korean FA Cup", "South Korea", "cup"),
     # Americas
     CompetitionSpec("MLS", "Major League Soccer", "United States", "1", "league"),
-    CompetitionSpec("USOC", "U.S. Open Cup", "United States", "cup", research_enabled=False),
+    CompetitionSpec("USOC", "U.S. Open Cup", "United States", "cup"),
     CompetitionSpec("LIGA_MX", "Liga MX", "Mexico", "1", "league"),
-    CompetitionSpec("MEXCUP", "Copa MX", "Mexico", "cup", research_enabled=False),
+    CompetitionSpec("MEXCUP", "Copa MX", "Mexico", "cup"),
     CompetitionSpec("BRA", "Brazilian Série A", "Brazil", "1", "league"),
-    CompetitionSpec("BRA_CUP", "Copa do Brasil", "Brazil", "cup", research_enabled=False),
+    CompetitionSpec("BRA_CUP", "Copa do Brasil", "Brazil", "cup"),
     CompetitionSpec("ARG", "Argentine Primera División", "Argentina", "1", "league"),
-    CompetitionSpec("ARG_CUP", "Copa Argentina", "Argentina", "cup", research_enabled=False),
+    CompetitionSpec("ARG_CUP", "Copa Argentina", "Argentina", "cup"),
     # Saudi Arabia / other high-interest competitions
     CompetitionSpec("SPL_SA", "Saudi Pro League", "Saudi Arabia", "1", "league"),
     # UEFA
