@@ -31,6 +31,13 @@ def test_duplicate_match_ids_fail_closed():
         _eligible_fixtures(rows, _normalize_prediction_time("2026-09-15T09:00:00Z"))
 
 
+def test_empty_team_identity_fails_closed():
+    rows = _fixture_rows()
+    rows.loc[0, "home_team"] = "   "
+    with pytest.raises(RuntimeError, match="home_team"):
+        _eligible_fixtures(rows, _normalize_prediction_time("2026-09-15T09:00:00Z"))
+
+
 def test_future_fixture_requires_source_availability_by_prediction_time():
     rows = _fixture_rows()
     rows.loc[0, "source_available_at_utc"] = "2026-09-15T11:00:00Z"
