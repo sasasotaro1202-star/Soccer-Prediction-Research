@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 import time
+import unicodedata
 from io import BytesIO
 import pandas as pd
 import requests
@@ -14,6 +16,37 @@ from src.data.pit_source_adapter_v2 import (
 
 # Explicitly bind private helpers locally; wildcard imports intentionally omit names beginning with '_'.
 _DATE_KEY = _date_key
+
+
+def normalize_team_identity(value: object) -> str:
+    """Normalize only presentation-level differences in archived team names.
+
+    This intentionally does not maintain semantic aliases (e.g. "Man United" ->
+    "Manchester United"). It removes Unicode accents, case/whitespace and
+    punctuation differences only. Goals, result and event date remain part of the
+    complete PIT identity key, so this normalization cannot manufacture a match
+    from team-name similarity alone.
+    """
+    text = unicodedata.normalize("NFKD", str(value)).encode("ascii", "ignore").decode("ascii")
+    text = re.sub(r"[^A-Za-z0-9]+", "", text).casefold()
+    return text
+
+
+def _normalized_row_key(row: pd.Series) -> tuple | None:
+    date = _date_key(row.get("source_event_date"))
+    if date is None:
+        date = _date_key(row.get("kickoff_utc"))
+    try:
+        return (
+            date,
+            normalize_team_identity(row.get("home_team", "")),
+            normalize_team_identity(row.get("away_team", "")),
+            float(row.get("home_goals")),
+            float(row.get("away_goals")),
+            str(row.get("result", "")).strip(),
+        )
+    except (TypeError, ValueError):
+        return None
 
 
 class FootballDataWaybackAdapter(_BaseAdapter):
@@ -90,7 +123,7 @@ class FootballDataWaybackAdapter(_BaseAdapter):
             date = self._date_key(getattr(r, "Date", None))
             if date is None: continue
             try:
-                keys.add((date, str(getattr(r, "HomeTeam")).strip(), str(getattr(r, "AwayTeam")).strip(), float(getattr(r, "FTHG")), float(getattr(r, "FTAG")), str(getattr(r, "FTR")).strip()))
+                keys.add((date, normalize_team_identity(getattr(r, "HomeTeam")), normalize_team_identity(getattr(r, "AwayTeam")), float(getattr(r, "FTHG")), float(getattr(r, "FTAG")), str(getattr(r, "FTR")).strip()))
             except (TypeError, ValueError): continue
         diag = SnapshotDiagnostic("SNAPSHOT_PARSED", keys=keys)
         self._snapshot_diag[identity] = diag
@@ -103,7 +136,7 @@ class FootballDataWaybackAdapter(_BaseAdapter):
             diag = self._capture_diag.get(url, CaptureDiagnostic("CDX_REQUEST_FAILURE"))
             reason = "no_archive_captures" if diag.status == "CDX_NO_CAPTURE" else f"{diag.status.lower()}: {diag.error or ''}".strip()
             return [SourceEvidence(None, "UNVERIFIABLE", reason=reason) for _ in rows]
-        row_keys = [_row_key(r) for r in rows]
+        row_keys = [_normalized_row_key(r) for r in rows]
         bounds = [_result_lower_bound(r) for r in rows]
         results = [None] * len(rows)
         unresolved = {k: i for i, k in enumerate(row_keys) if k is not None}
