@@ -17,7 +17,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,11 +28,23 @@ jobs:
           python-version: '3.12'
           cache: pip
 
-      - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+      - name: Install dependencies with bounded retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt; then
+              exit 0
+            fi
+            echo "dependency installation attempt ${attempt} failed; retrying..."
+            sleep $((attempt * 5))
+          done
+          exit 1
 
       - name: Compile Python sources
         run: python -m compileall -q src tests
 
-      - name: Run tests
+      - name: Run deterministic test suite
+        env:
+          PYTHONHASHSEED: '0'
         run: python -m pytest -q
