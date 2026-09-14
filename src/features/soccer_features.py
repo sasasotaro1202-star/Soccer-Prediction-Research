@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
+from bisect import bisect_left
 
 import numpy as np
 import pandas as pd
@@ -92,15 +93,7 @@ def _update_elo(elo: dict, home: str, away: str, result: int, competition: str) 
 
 
 def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(3, 5, 10, 20)) -> pd.DataFrame:
-    """Build chronological PIT-safe features without inventing publication times.
-
-    Availability is taken only from explicit source_available_at_utc. Unknown
-    availability is never converted to event+24h. History is ordered by event
-    time for sequential features, while a separate availability index detects
-    newly published rows. If a newly available row is earlier than already
-    processed history, the complete state is deterministically replayed from
-    eligible rows so Elo/form/H2H remain event-time consistent.
-    """
+    """Build chronological PIT-safe features without inventing publication times."""
     h = history.copy()
     h["kickoff_utc"] = pd.to_datetime(h["kickoff_utc"], utc=True, errors="coerce")
     if "source_available_at_utc" in h.columns:
@@ -129,12 +122,24 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     eligible_indices: set[int] = set()
     availability_order = sorted(
         [i for i, r in enumerate(h_records) if pd.notna(r["source_available_at_utc"])],
-        key=lambda i: (r_available := h_records[i]["source_available_at_utc"], h_records[i]["kickoff_utc"], str(h_records[i]["match_id"]))
+        key=lambda i: (h_records[i]["source_available_at_utc"], h_records[i]["kickoff_utc"], str(h_records[i]["match_id"]))
     )
     avail_ptr = 0
     processed_event_max = pd.NaT
     rows = []
     required_window = min(windows) if windows else 0
+
+    # Event-time index used solely for strict PIT verification. This is separate
+    # from the availability-ordered feature state: an unavailable row must be
+    # able to invalidate the PIT claim even when it is omitted from features.
+    team_event_indices: dict[str, list[int]] = defaultdict(list)
+    for idx, r in enumerate(h_records):
+        team_event_indices[str(r["home_team"])].append(idx)
+        team_event_indices[str(r["away_team"])].append(idx)
+    team_event_times = {
+        team: [h_records[i]["kickoff_utc"] for i in indices]
+        for team, indices in team_event_indices.items()
+    }
 
     def reset_state() -> None:
         nonlocal team_games, team_last, team_last_available, h2h, elo, processed_event_max
@@ -174,6 +179,21 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
             if r["kickoff_utc"] < cutoff and pd.notna(r["source_available_at_utc"]) and r["source_available_at_utc"] <= cutoff:
                 apply_row(r)
 
+    def prior_window_pit_ok(team: str, cutoff: pd.Timestamp) -> bool:
+        indices = team_event_indices.get(team, [])
+        if not required_window:
+            return True
+        times = team_event_times.get(team, [])
+        end = bisect_left(times, cutoff)
+        prior = indices[max(0, end - required_window):end]
+        if len(prior) < required_window:
+            return False
+        return all(
+            pd.notna(h_records[i]["source_available_at_utc"])
+            and h_records[i]["source_available_at_utc"] <= cutoff
+            for i in prior
+        )
+
     for r in m_records:
         kickoff = r["kickoff_utc"]
         cutoff = kickoff - pd.Timedelta(minutes=60)
@@ -194,16 +214,13 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
                 rr = h_records[idx]
                 if rr["kickoff_utc"] < cutoff:
                     apply_row(rr)
-        # If no new late rows arrived, incremental state is valid. Unknown rows
-        # are intentionally absent from eligible_indices and therefore cannot
-        # affect features or PIT verification.
+
         home, away, comp = str(r["home_team"]), str(r["away_team"]), str(r["competition"])
         he = float(elo["global"].get(home, 1500.0)); ae = float(elo["global"].get(away, 1500.0))
         ce = elo["competition"].get(comp, {}); hce = float(ce.get(home, 1500.0)); cae = float(ce.get(away, 1500.0))
         row = {"match_id": r["match_id"], "competition": comp, "season": r.get("season"), "season_start": r.get("season_start", np.nan), "kickoff_utc": kickoff, "home_team": home, "away_team": away, "prediction_cutoff_at_utc": cutoff, "home_advantage": 1.0, "home_elo": he, "away_elo": ae, "elo_diff": he - ae, "home_comp_elo": hce, "away_comp_elo": cae, "comp_elo_diff": hce - cae, "home_elo_expected": 1.0 / (1.0 + 10.0 ** (-((he + ELO_HOME_ADV) - ae) / 400.0)), "home_rest_hours": (cutoff - team_last[home]).total_seconds() / 3600.0 if home in team_last else np.nan, "away_rest_hours": (cutoff - team_last[away]).total_seconds() / 3600.0 if away in team_last else np.nan}
         row["rest_diff_hours"] = row["home_rest_hours"] - row["away_rest_hours"] if pd.notna(row["home_rest_hours"]) and pd.notna(row["away_rest_hours"]) else np.nan
         row["elo_gap_abs"] = abs(row["elo_diff"])
-        prior = [h_records[i]["source_available_at_utc"] for i in eligible_indices if h_records[i]["kickoff_utc"] < cutoff and pd.notna(h_records[i]["source_available_at_utc"])]
         pit_blocked = False
         for w in windows:
             hs = _summarize(team_games[home], w); aws = _summarize(team_games[away], w)
@@ -227,7 +244,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         away_history = list(team_games[away])[-required_window:] if required_window else []
         history_complete = (required_window == 0) or (len(home_history) >= required_window and len(away_history) >= required_window)
         history_available = history_complete and all(x["available"] <= cutoff for x in home_history + away_history)
-        row["pit_verified"] = bool(history_available)
+        row["pit_verified"] = bool(history_available and prior_window_pit_ok(home, cutoff) and prior_window_pit_ok(away, cutoff))
         rows.append(row)
     return pd.DataFrame(rows)
 
