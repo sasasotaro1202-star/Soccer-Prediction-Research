@@ -15,6 +15,7 @@ from src.data.pit_source_adapter import competition_adapter_matrix
 from src.data.source_registry import SOCCER_SOURCES
 from src.evaluation.walk_forward import TARGET_ACCURACY, run_walk_forward
 from src.features.soccer_features import add_target, build_match_features
+from src.prediction.model_bundle import train_and_save_bundle
 from src.research.adoption import adoption_decision
 from src.research.llm import weakness_advice
 
@@ -100,9 +101,19 @@ def run(out_dir: str = "artifacts") -> dict:
     candidate = locked[candidate_cols].copy()
     adoption = adoption_decision(baseline, candidate, development_oos=development_oos, min_accuracy=TARGET_ACCURACY)
     (out / "adoption_decision.json").write_text(json.dumps(adoption, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    model_bundle = None
+    if adoption.get("status") == "ADOPT" and not selections.empty:
+        selection = selections.iloc[-1].to_dict()
+        model_version = hashlib.sha256(json.dumps({"snapshot_id": snapshot_id(history), "selection": selection}, sort_keys=True, default=str).encode()).hexdigest()[:16]
+        try:
+            model_bundle = train_and_save_bundle(feats, _model_features(feats), selection, str(out / "production_model.pkl"), model_version, snapshot_id(history))
+            (out / "production_model.json").write_text(json.dumps({**model_bundle, "adoption_status": "ADOPT"}, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+        except Exception as exc:
+            model_bundle = {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
+            (out / "production_model.json").write_text(json.dumps(model_bundle, indent=2, ensure_ascii=False), encoding="utf-8")
     oos_n = int(wf["n"].sum()) if "n" in wf.columns else 0; oos_acc = float(np.average(wf["accuracy"], weights=wf["n"])) if oos_n else float("nan")
     locked_n = int(locked["n"].sum()); locked_acc = float(np.average(locked["accuracy"], weights=locked["n"])) if locked_n else float("nan")
-    report = {"status": "OK", "snapshot_id": snapshot_id(history), "oos": wf.mean(numeric_only=True).to_dict(), "coverage": coverage.to_dict(orient="records"), "archive_audit": archive_audit, "pit_policy": PIT_POLICY, "pit_verified_rows": pit_verified, "pit_total_rows": pit_total, "pit_verified_rate": float(pit_verified / pit_total) if pit_total else 0.0, "oos_protocol": {"development_blocks": int(len(development_oos)), "locked_blocks": 2, "locked_oos_untouched": True, "selection_source": "historical_validation_only"}, "accuracy_target": {"target_accuracy": TARGET_ACCURACY, "locked_oos_accuracy": locked_acc, "weighted_oos_accuracy": oos_acc, "target_met": bool(locked_acc >= TARGET_ACCURACY) if locked_n else False, "target_gap": float(locked_acc - TARGET_ACCURACY) if locked_n else float("nan"), "oos_sample_size": oos_n, "locked_oos_sample_size": locked_n}, "adoption": adoption, "production_model": "calibrated_ensemble" if adoption.get("status") == "ADOPT" else "baseline_logistic", "audit": audit_report, "ai_research": weakness_advice(wf.mean(numeric_only=True).to_dict())}
+    report = {"status": "OK", "snapshot_id": snapshot_id(history), "oos": wf.mean(numeric_only=True).to_dict(), "coverage": coverage.to_dict(orient="records"), "archive_audit": archive_audit, "pit_policy": PIT_POLICY, "pit_verified_rows": pit_verified, "pit_total_rows": pit_total, "pit_verified_rate": float(pit_verified / pit_total) if pit_total else 0.0, "oos_protocol": {"development_blocks": int(len(development_oos)), "locked_blocks": 2, "locked_oos_untouched": True, "selection_source": "historical_validation_only"}, "accuracy_target": {"target_accuracy": TARGET_ACCURACY, "locked_oos_accuracy": locked_acc, "weighted_oos_accuracy": oos_acc, "target_met": bool(locked_acc >= TARGET_ACCURACY) if locked_n else False, "target_gap": float(locked_acc - TARGET_ACCURACY) if locked_n else float("nan"), "oos_sample_size": oos_n, "locked_oos_sample_size": locked_n}, "adoption": adoption, "production_model": "calibrated_ensemble" if adoption.get("status") == "ADOPT" else "baseline_logistic", "production_model_bundle": model_bundle, "audit": audit_report, "ai_research": weakness_advice(wf.mean(numeric_only=True).to_dict())}
     _write_status(out, report); return report
 
 
