@@ -21,6 +21,11 @@ REQUIRED_FIXTURE_COLUMNS = {
     "starter_status",
 }
 
+# These are intentionally presentation/abstention defaults, not claims about model quality.
+# They should eventually be calibrated from chronological OOS data and stored with the adopted model.
+ABSTAIN_CONFIDENCE_THRESHOLD = 0.45
+ABSTAIN_MARGIN_THRESHOLD = 0.08
+
 
 def load_adopted_model(registry_path: str = "artifacts/model_registry.json") -> dict:
     p = Path(registry_path)
@@ -160,7 +165,13 @@ def run(
     result["confidence"] = probs.max(axis=1)
     sorted_probs = np.sort(probs, axis=1)
     result["margin"] = sorted_probs[:, -1] - sorted_probs[:, -2]
-    result["abstain"] = (result["confidence"] < 0.45) | (result["margin"] < 0.08)
+    result["low_confidence"] = (result["confidence"] < ABSTAIN_CONFIDENCE_THRESHOLD) | (
+        result["margin"] < ABSTAIN_MARGIN_THRESHOLD
+    )
+    # Keep every eligible fixture in the prediction output. low_confidence is a separate
+    # classification, so backtests can score all fixtures without silently selecting away hard games.
+    result["abstain"] = result["low_confidence"]
+    result["prediction_set"] = np.where(result["low_confidence"], "LOW_CONFIDENCE", "STANDARD")
     result["prediction_time_utc"] = now.isoformat()
     result["model_version"] = str(bundle["model_version"])
     if len(result) != len(eligible) or result["match_id"].duplicated().any():
@@ -177,6 +188,8 @@ def run(
         source_rows=int(len(fixtures)),
         eligible_rows=int(len(eligible)),
         prediction_rows=int(len(result)),
+        standard_rows=int((~result["low_confidence"]).sum()),
+        low_confidence_rows=int(result["low_confidence"].sum()),
         abstained_rows=int(result["abstain"].sum()),
         output_path=str(output_file),
         model_version=str(bundle["model_version"]),
