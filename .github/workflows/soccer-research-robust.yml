@@ -33,7 +33,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: data/raw
-          key: soccer-raw-${{ runner.os }}-${{ hashFiles('src/data/football_data.py', 'src/data/openfootball_adapter.py', 'src/data/jleague_adapter.py', 'src/data/espn_friendlies_adapter.py', 'src/data/international_adapter.py') }}
+          key: soccer-raw-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/data/**/*.py', 'src/data/*.py') }}
           restore-keys: soccer-raw-${{ runner.os }}-
       - name: Install dependencies with retry
         id: dependencies
