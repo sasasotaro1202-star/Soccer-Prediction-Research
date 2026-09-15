@@ -13,18 +13,17 @@ class ScoreCandidate:
     away_goals: int
     probability: float
     rank: int
-    display_probability: float
 
 
 def select_score_candidates(
     candidates: Iterable[tuple[int, int, float]], top_k: int = 3
 ) -> list[ScoreCandidate]:
-    """Return exactly ``top_k`` scorelines, preserving raw and display probabilities.
+    """Return exactly three scorelines, preserving full-distribution probabilities.
 
-    ``probability`` is the unconditional probability from the full score
-    distribution. ``display_probability`` is conditional on the selected
-    top-k set and therefore sums to one. This distinction prevents the UI
-    probability from being mistaken for the model's full-distribution mass.
+    Score probabilities are unconditional probabilities from the full score
+    distribution. They are deliberately *not* renormalized over the displayed
+    top-3 candidates, so the displayed values remain calibrated probabilities
+    rather than conditional shares that misleadingly sum to 100%.
     """
     if top_k != 3:
         raise ValueError("production Score output must contain exactly 3 candidates")
@@ -45,17 +44,12 @@ def select_score_candidates(
         validated.append((home_goals, away_goals, probability, index))
 
     ranked = sorted(validated, key=lambda row: (-row[2], row[3]))[:top_k]
-    selected_mass = sum(row[2] for row in ranked)
-    if not isfinite(selected_mass) or selected_mass <= 0.0:
-        raise ValueError("selected score candidates must contain positive probability mass")
-
     return [
         ScoreCandidate(
             home_goals=home_goals,
             away_goals=away_goals,
             probability=probability,
             rank=rank,
-            display_probability=probability / selected_mass,
         )
         for rank, (home_goals, away_goals, probability, _index) in enumerate(ranked, start=1)
     ]
