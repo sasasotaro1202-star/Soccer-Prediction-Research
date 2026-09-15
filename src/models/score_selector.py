@@ -1,14 +1,10 @@
-"""Scoreline candidate selection for production output.
+"""Select the top production Score candidates without inventing probability mass."""
 
-The score model may produce a full goal-grid probability distribution. Production
-output is intentionally limited to the three highest-probability scorelines.
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 from typing import Iterable
-
-import numpy as np
 
 
 @dataclass(frozen=True)
@@ -17,32 +13,49 @@ class ScoreCandidate:
     away_goals: int
     probability: float
     rank: int
+    display_probability: float
 
 
 def select_score_candidates(
-    home_goals: Iterable[int],
-    away_goals: Iterable[int],
-    probabilities: Iterable[float],
-    top_k: int = 3,
+    candidates: Iterable[tuple[int, int, float]], top_k: int = 3
 ) -> list[ScoreCandidate]:
+    """Return exactly ``top_k`` scorelines, preserving raw and display probabilities.
+
+    ``probability`` is the unconditional probability from the full score
+    distribution. ``display_probability`` is conditional on the selected
+    top-k set and therefore sums to one. This distinction prevents the UI
+    probability from being mistaken for the model's full-distribution mass.
+    """
     if top_k != 3:
-        raise ValueError("Score production output is fixed to exactly 3 candidates")
-    hs = list(home_goals)
-    aws = list(away_goals)
-    probs = np.asarray(list(probabilities), dtype=float)
-    if not (len(hs) == len(aws) == len(probs)):
-        raise ValueError("score arrays must have equal length")
-    if len(probs) < top_k:
+        raise ValueError("production Score output must contain exactly 3 candidates")
+
+    rows = list(candidates)
+    if len(rows) < top_k:
         raise ValueError("at least 3 score candidates are required")
-    if not np.all(np.isfinite(probs)) or np.any(probs < 0):
-        raise ValueError("probabilities must be finite and non-negative")
-    order = np.argsort(-probs, kind="stable")[:top_k]
-    selected = probs[order]
-    total = float(selected.sum())
-    if total <= 0:
-        raise ValueError("top-3 probabilities must have positive mass")
-    selected = selected / total
+
+    validated: list[tuple[int, int, float, int]] = []
+    for index, (home_goals, away_goals, probability) in enumerate(rows):
+        if not isinstance(home_goals, int) or home_goals < 0:
+            raise ValueError("home_goals must be a non-negative integer")
+        if not isinstance(away_goals, int) or away_goals < 0:
+            raise ValueError("away_goals must be a non-negative integer")
+        probability = float(probability)
+        if not isfinite(probability) or probability < 0.0:
+            raise ValueError("probability must be finite and non-negative")
+        validated.append((home_goals, away_goals, probability, index))
+
+    ranked = sorted(validated, key=lambda row: (-row[2], row[3]))[:top_k]
+    selected_mass = sum(row[2] for row in ranked)
+    if not isfinite(selected_mass) or selected_mass <= 0.0:
+        raise ValueError("selected score candidates must contain positive probability mass")
+
     return [
-        ScoreCandidate(int(hs[int(i)]), int(aws[int(i)]), float(p), rank)
-        for rank, (i, p) in enumerate(zip(order, selected), start=1)
+        ScoreCandidate(
+            home_goals=home_goals,
+            away_goals=away_goals,
+            probability=probability,
+            rank=rank,
+            display_probability=probability / selected_mass,
+        )
+        for rank, (home_goals, away_goals, probability, _index) in enumerate(ranked, start=1)
     ]
