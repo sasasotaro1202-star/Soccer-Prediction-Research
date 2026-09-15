@@ -65,7 +65,7 @@ def test_offset_boundaries_are_compared_in_utc():
     result = independent_adoption_gate(
         {},
         _valid_holdout(
-            development_end_utc="2024-12-31T23:00:00-02:00",
+            development_end_utc="2024-12-31T21:00:00-02:00",
             holdout_start_utc="2025-01-01T00:00:00Z",
         ),
     )
