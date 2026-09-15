@@ -1,7 +1,7 @@
 """Independent-OOS adoption gate for legacy-vs-candidate promotion."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Mapping
 
 
@@ -21,16 +21,11 @@ def _parse_utc(value: Any) -> datetime | None:
         return None
     if parsed.tzinfo is None:
         return None
-    return parsed.astimezone()
+    return parsed.astimezone(timezone.utc)
 
 
 def _holdout_integrity(holdout: Mapping[str, Any]) -> tuple[bool, str]:
-    """Fail closed unless the holdout is explicitly locked and selection-independent.
-
-    The additional metadata is deliberately mandatory for promotion but optional for
-    legacy callers at the type level. Missing metadata therefore blocks adoption
-    rather than silently treating an unverified split as an independent holdout.
-    """
+    """Fail closed unless the holdout is explicitly locked and selection-independent."""
     if holdout.get("locked") is not True:
         return False, "holdout_not_explicitly_locked"
     if holdout.get("selection_frozen") is not True:
