@@ -95,7 +95,7 @@ def test_prediction_runner_rejects_wrong_probability_shape(tmp_path, monkeypatch
             bundle_path=str(tmp_path / "model.pkl"),
             output_path=str(tmp_path / "predictions.csv"),
             status_path=str(tmp_path / "status.json"),
-            prediction_time="2026-09-15T09:00:00Z",
+            prediction_time="2026-09-15T11:00:00Z",
             registry_path=str(tmp_path / "registry.json"),
         )
 
@@ -115,6 +115,6 @@ def test_prediction_runner_rejects_nonfinite_probabilities(tmp_path, monkeypatch
             bundle_path=str(tmp_path / "model.pkl"),
             output_path=str(tmp_path / "predictions.csv"),
             status_path=str(tmp_path / "status.json"),
-            prediction_time="2026-09-15T09:00:00Z",
+            prediction_time="2026-09-15T11:00:00Z",
             registry_path=str(tmp_path / "registry.json"),
         )
