@@ -78,3 +78,43 @@ def test_fixture_at_prediction_time_is_not_future():
     rows = _fixture_rows()
     rows.loc[0, "kickoff_utc"] = "2026-09-15T10:00:00Z"
     assert _eligible_fixtures(rows, _normalize_prediction_time("2026-09-15T10:00:00Z")).empty
+
+
+def test_prediction_runner_rejects_wrong_probability_shape(tmp_path, monkeypatch):
+    from src.prediction import runner
+
+    monkeypatch.setattr(runner, "load_adopted_model", lambda path: {"adoption_status": "ADOPT", "model_version": "v1"})
+    monkeypatch.setattr(runner, "load_bundle", lambda path: {"model_version": "v1"})
+    monkeypatch.setattr(runner, "predict_bundle", lambda bundle, X: [[0.6, 0.4]])
+
+    fixtures_path = tmp_path / "future.csv"
+    _fixture_rows().to_csv(fixtures_path, index=False)
+    with pytest.raises(RuntimeError, match="unexpected probability shape"):
+        runner.run(
+            fixtures_path=str(fixtures_path),
+            bundle_path=str(tmp_path / "model.pkl"),
+            output_path=str(tmp_path / "predictions.csv"),
+            status_path=str(tmp_path / "status.json"),
+            prediction_time="2026-09-15T09:00:00Z",
+            registry_path=str(tmp_path / "registry.json"),
+        )
+
+
+def test_prediction_runner_rejects_nonfinite_probabilities(tmp_path, monkeypatch):
+    from src.prediction import runner
+
+    monkeypatch.setattr(runner, "load_adopted_model", lambda path: {"adoption_status": "ADOPT", "model_version": "v1"})
+    monkeypatch.setattr(runner, "load_bundle", lambda path: {"model_version": "v1"})
+    monkeypatch.setattr(runner, "predict_bundle", lambda bundle, X: [[float("nan"), 0.3, 0.7]])
+
+    fixtures_path = tmp_path / "future.csv"
+    _fixture_rows().to_csv(fixtures_path, index=False)
+    with pytest.raises(RuntimeError, match="invalid probabilities"):
+        runner.run(
+            fixtures_path=str(fixtures_path),
+            bundle_path=str(tmp_path / "model.pkl"),
+            output_path=str(tmp_path / "predictions.csv"),
+            status_path=str(tmp_path / "status.json"),
+            prediction_time="2026-09-15T09:00:00Z",
+            registry_path=str(tmp_path / "registry.json"),
+        )
