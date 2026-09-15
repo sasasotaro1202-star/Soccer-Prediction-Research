@@ -32,12 +32,23 @@ def train_and_save_bundle(
     record. The locked OOS outcomes are therefore never used to choose hyperparameters;
     after the evaluation is finalized they may be included in the final production fit.
     """
+    if not feature_cols or any(not isinstance(c, str) or not c for c in feature_cols):
+        raise ValueError("Production bundle requires a non-empty feature column list")
+    if not model_version or not str(model_version).strip():
+        raise ValueError("Production bundle requires a non-empty model_version")
+    if not data_snapshot_id or not str(data_snapshot_id).strip():
+        raise ValueError("Production bundle requires a non-empty data_snapshot_id")
+    missing_features = [c for c in feature_cols if c not in feats.columns]
+    if missing_features:
+        raise ValueError(f"Training data missing model features: {missing_features[:10]}")
+    if "pit_verified" not in feats.columns or "target" not in feats.columns:
+        raise ValueError("Training data must contain pit_verified and target")
     d = feats[feats["pit_verified"] == True].dropna(subset=["target"]).copy()
     if d.empty:
         raise ValueError("Cannot build production bundle from empty PIT-verified data")
     weights = {str(k): float(v) for k, v in (selection.get("weights") or {}).items()}
-    if not weights:
-        raise ValueError("Locked selection contains no ensemble weights")
+    if not weights or any(not np.isfinite(v) or v < 0 for v in weights.values()):
+        raise ValueError("Locked selection contains invalid ensemble weights")
     total = sum(weights.values())
     if not np.isfinite(total) or total <= 0:
         raise ValueError("Invalid ensemble weights")
@@ -94,14 +105,37 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
             bundle = pickle.load(fh)
     except Exception as exc:
         raise RuntimeError(f"Production model bundle is unreadable: {type(exc).__name__}: {exc}") from exc
+    if not isinstance(bundle, dict):
+        raise RuntimeError("Production model bundle root must be a dictionary")
     required = {"schema_version", "model_version", "data_snapshot_id", "feature_cols", "weights", "temperature", "models"}
     missing = sorted(required - set(bundle))
     if missing:
         raise RuntimeError(f"Production model bundle missing fields: {missing}")
     if bundle["schema_version"] != 1:
         raise RuntimeError(f"Unsupported production model bundle schema: {bundle['schema_version']}")
-    if set(bundle["weights"]) != set(bundle["models"]):
+    if not isinstance(bundle["model_version"], str) or not bundle["model_version"].strip():
+        raise RuntimeError("Production model bundle model_version is empty")
+    if not isinstance(bundle["data_snapshot_id"], str) or not bundle["data_snapshot_id"].strip():
+        raise RuntimeError("Production model bundle data_snapshot_id is empty")
+    feature_cols = bundle["feature_cols"]
+    if not isinstance(feature_cols, list) or not feature_cols or any(not isinstance(c, str) or not c for c in feature_cols):
+        raise RuntimeError("Production model bundle feature_cols is invalid")
+    weights = bundle["weights"]
+    models = bundle["models"]
+    if not isinstance(weights, dict) or not isinstance(models, dict) or not weights:
+        raise RuntimeError("Production model bundle weights/models are invalid")
+    if set(weights) != set(models):
         raise RuntimeError("Production model bundle weights/models mismatch")
+    numeric_weights = np.asarray(list(weights.values()), dtype=float)
+    if not np.all(np.isfinite(numeric_weights)) or np.any(numeric_weights < 0):
+        raise RuntimeError("Production model bundle contains invalid ensemble weights")
+    if not np.isclose(float(numeric_weights.sum()), 1.0, atol=1e-8):
+        raise RuntimeError("Production model bundle ensemble weights are not normalized")
+    temperature = float(bundle["temperature"])
+    if not np.isfinite(temperature) or temperature <= 0:
+        raise RuntimeError("Production model bundle temperature is invalid")
+    if not isinstance(bundle.get("fit_rows"), (int, np.integer)) or int(bundle["fit_rows"]) <= 0:
+        raise RuntimeError("Production model bundle fit_rows is invalid")
     return bundle
 
 
