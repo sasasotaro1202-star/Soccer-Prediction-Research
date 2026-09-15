@@ -99,9 +99,6 @@ def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) ->
     d["starter_status"] = d["starter_status"].astype("string").str.upper().str.strip()
     if d["starter_status"].isna().any() or d["starter_status"].eq("").any():
         raise RuntimeError("Future fixture input contains missing/empty starter_status values")
-    # Production is strictly forward-looking: never use a fixture or information that
-    # was not available by the exact prediction timestamp. Invalid input is a hard error,
-    # not a silently dropped row, so upstream data regressions cannot hide behind a green run.
     d = d[
         (d["kickoff_utc"] > prediction_time)
         & (d["source_available_at_utc"] <= prediction_time)
@@ -145,7 +142,11 @@ def run(
             oos_claimed=False,
         )
 
-    probs = predict_bundle(bundle, eligible)
+    raw_probs = predict_bundle(bundle, eligible)
+    try:
+        probs = np.asarray(raw_probs, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("Production prediction produced non-numeric probabilities") from exc
     if probs.shape != (len(eligible), 3):
         raise RuntimeError(f"Production prediction returned unexpected probability shape: {probs.shape}")
     if not np.isfinite(probs).all() or not np.allclose(probs.sum(axis=1), 1.0, atol=1e-6):
