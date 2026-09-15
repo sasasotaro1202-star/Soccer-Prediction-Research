@@ -118,3 +118,33 @@ def test_prediction_runner_rejects_nonfinite_probabilities(tmp_path, monkeypatch
             prediction_time="2026-09-15T11:00:00Z",
             registry_path=str(tmp_path / "registry.json"),
         )
+
+
+def test_low_confidence_is_separate_from_fixture_eligibility(tmp_path, monkeypatch):
+    from src.prediction import runner
+
+    monkeypatch.setattr(runner, "load_adopted_model", lambda path: {"adoption_status": "ADOPT", "model_version": "v1", "oos_verified": True})
+    monkeypatch.setattr(runner, "load_bundle", lambda path: {"model_version": "v1"})
+    monkeypatch.setattr(runner, "predict_bundle", lambda bundle, X: [[0.40, 0.34, 0.26]])
+
+    fixtures_path = tmp_path / "future.csv"
+    output_path = tmp_path / "predictions.csv"
+    status_path = tmp_path / "status.json"
+    _fixture_rows().to_csv(fixtures_path, index=False)
+
+    status = runner.run(
+        fixtures_path=str(fixtures_path),
+        bundle_path=str(tmp_path / "model.pkl"),
+        output_path=str(output_path),
+        status_path=str(status_path),
+        prediction_time="2026-09-15T11:00:00Z",
+        registry_path=str(tmp_path / "registry.json"),
+    )
+
+    result = pd.read_csv(output_path)
+    assert len(result) == 1
+    assert result.loc[0, "prediction_set"] == "LOW_CONFIDENCE"
+    assert bool(result.loc[0, "abstain"])
+    assert status["prediction_rows"] == 1
+    assert status["low_confidence_rows"] == 1
+    assert status["standard_rows"] == 0
