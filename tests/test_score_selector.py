@@ -1,17 +1,27 @@
-import pytest
-
 from src.models.score_selector import select_score_candidates
 
 
-def test_selects_exactly_three_scores():
-    result = select_score_candidates(
-        [1, 1, 2, 0], [0, 1, 1, 0], [0.20, 0.35, 0.30, 0.15]
+def test_selects_exactly_three_and_preserves_raw_probability():
+    selected = select_score_candidates(
+        [
+            (0, 0, 0.20),
+            (1, 0, 0.35),
+            (0, 1, 0.30),
+            (1, 1, 0.15),
+        ]
     )
-    assert [(x.home_goals, x.away_goals) for x in result] == [(1, 1), (2, 1), (1, 0)]
-    assert [x.rank for x in result] == [1, 2, 3]
-    assert sum(x.probability for x in result) == pytest.approx(1.0)
+
+    assert len(selected) == 3
+    assert [(x.home_goals, x.away_goals) for x in selected] == [(1, 0), (0, 1), (0, 0)]
+    assert [x.probability for x in selected] == [0.35, 0.30, 0.20]
+    assert abs(sum(x.display_probability for x in selected) - 1.0) < 1e-12
+    assert selected[0].display_probability == 0.35 / 0.85
 
 
-def test_score_output_is_fixed_to_three():
-    with pytest.raises(ValueError):
-        select_score_candidates([1, 0, 2], [0, 0, 1], [0.4, 0.3, 0.3], top_k=2)
+def test_rejects_invalid_top_k():
+    try:
+        select_score_candidates([(0, 0, 1.0), (1, 0, 0.0), (0, 1, 0.0)], top_k=2)
+    except ValueError as exc:
+        assert "exactly 3" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
