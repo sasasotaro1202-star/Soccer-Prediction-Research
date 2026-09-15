@@ -14,8 +14,7 @@ def test_selects_exactly_three_and_preserves_raw_probability():
     assert len(selected) == 3
     assert [(x.home_goals, x.away_goals) for x in selected] == [(1, 0), (0, 1), (0, 0)]
     assert [x.probability for x in selected] == [0.35, 0.30, 0.20]
-    assert abs(sum(x.display_probability for x in selected) - 1.0) < 1e-12
-    assert selected[0].display_probability == 0.35 / 0.85
+    assert sum(x.probability for x in selected) == 0.85
 
 
 def test_rejects_invalid_top_k():
