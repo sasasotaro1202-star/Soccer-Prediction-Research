@@ -50,3 +50,24 @@ def test_holdout_overlap_is_blocked():
     )
     assert result["status"] == "HOLD"
     assert result["reason"] == "holdout_overlaps_development_period"
+
+
+def test_naive_holdout_boundary_fails_closed():
+    result = independent_adoption_gate(
+        {},
+        _valid_holdout(development_end_utc="2024-12-31T23:59:59"),
+    )
+    assert result["status"] == "HOLD"
+    assert result["reason"] == "holdout_temporal_boundaries_missing_or_invalid"
+
+
+def test_offset_boundaries_are_compared_in_utc():
+    result = independent_adoption_gate(
+        {},
+        _valid_holdout(
+            development_end_utc="2024-12-31T23:00:00-02:00",
+            holdout_start_utc="2025-01-01T00:00:00Z",
+        ),
+    )
+    assert result["status"] == "ADOPT"
+    assert result["holdout_integrity_verified"] is True
