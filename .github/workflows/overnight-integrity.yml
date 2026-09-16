@@ -64,7 +64,14 @@ jobs:
           python - <<'PY'
           from src.data.competition_catalog import COMPETITION_CATALOG
 
-          valid_types = {'league', 'cup', 'europe', 'friendly'}
+          # Keep this validator aligned with the catalog's deliberately broad
+          # research scope. Adding a research-only competition type must not
+          # silently turn into production eligibility; that remains a separate
+          # invariant checked below.
+          valid_types = {
+              'league', 'cup', 'europe', 'friendly',
+              'international', 'multi_sport', 'youth', 'school',
+          }
           codes = [spec.code for spec in COMPETITION_CATALOG]
           duplicates = sorted({code for code in codes if codes.count(code) > 1})
           if duplicates:
