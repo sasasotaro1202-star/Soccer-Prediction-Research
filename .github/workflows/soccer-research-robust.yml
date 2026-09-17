@@ -40,7 +40,6 @@ jobs:
         continue-on-error: true
         run: |
           set +e
-          python -m pip install --disable-pip-version-check --upgrade pip setuptools wheel
           rc=1
           for attempt in 1 2 3; do
             python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
