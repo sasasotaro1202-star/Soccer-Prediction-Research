@@ -1,3 +1,5 @@
+import pytest
+
 from src.research.xdata_pit_store import PITSnapshotStore, build_snapshot
 from src.research.offline_evaluation import EvaluationRow, evaluate, compare_candidate_to_baseline
 
