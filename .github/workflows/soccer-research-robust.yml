@@ -35,135 +35,98 @@ jobs:
           path: data/raw
           key: soccer-raw-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/data/**/*.py', 'src/data/*.py') }}
           restore-keys: soccer-raw-${{ runner.os }}-
-      - name: Install dependencies with retry
+      - name: Install dependencies with bounded retry
         id: dependencies
-        continue-on-error: true
+        shell: bash
         run: |
-          set +e
-          rc=1
+          set -euo pipefail
           for attempt in 1 2 3; do
-            python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
-            rc=$?
-            if [ "$rc" -eq 0 ]; then exit 0; fi
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt; then
+              exit 0
+            fi
+            echo "dependency installation attempt ${attempt} failed; retrying..."
             sleep $((attempt * 5))
           done
-          exit "$rc"
+          exit 1
       - name: Compile source and tests
         id: compile
-        continue-on-error: true
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
         run: python -m compileall -q src tests
-      - name: Run tests
+      - name: Run deterministic test suite
         id: tests
-        continue-on-error: true
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
         run: |
           mkdir -p artifacts
-          set +e
-          python -m pytest -q
-          rc=$?
-          printf '{"exit_code":%s,"passed":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/test_status.json
-          exit "$rc"
-      - name: Run 14-competition fixture field PIT audit
+          python -m pytest -q | tee artifacts/pytest_stdout.txt
+      - name: Run fixture/source structural audit
         id: audit
-        continue-on-error: true
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
         run: |
           mkdir -p artifacts
-          set +e
-          python -m src.data.fixture_field_audit > artifacts/audit_stdout.json
-          rc=$?
-          printf '{"exit_code":%s,"passed":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/audit_status.json
-          exit "$rc"
-      - name: Build explicit audit gate artifact
+          python -m src.data.fixture_field_audit | tee artifacts/audit_stdout.json
+      - name: Build audit gate artifact
         id: audit_gate
-        if: always()
-        continue-on-error: true
         run: |
-          mkdir -p artifacts
           python - <<'PY'
           import json
           from pathlib import Path
-          out = Path('artifacts')
-          summary_path = out / 'audit_summary.json'
-          if not summary_path.exists():
-              payload = {'full_gate_passed': False, 'blocking_reasons': ['audit summary artifact is missing']}
-          else:
-              summary = json.loads(summary_path.read_text(encoding='utf-8'))
-              reasons = []
-              if not summary.get('audit_execution_ok', False): reasons.append('audit execution did not complete successfully')
-              if int(summary.get('duplicate_source_rows', 0)) != 0: reasons.append('same-source duplicate fixture identities remain')
-              if int(summary.get('collision_rows', 0)) != 0: reasons.append('cross-source fixture outcome collisions remain')
-              if int(summary.get('team_mapping_invalid_rows', 0)) != 0: reasons.append('team identity mapping issues remain')
-              if not summary.get('coverage_scope_complete', False): reasons.append('fixture audit coverage matrix is incomplete')
-              payload = {'full_gate_passed': not reasons, 'blocking_reasons': reasons, 'pit_publication_time_gate': bool(summary.get('pit_publication_time_gate', False)), 'scope': 'structural fixture/source audit; strict publication-time PIT is separately enforced by completion_gate'}
-          (out / 'audit_gate.json').write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding='utf-8')
-          print(json.dumps(payload, indent=2, ensure_ascii=False))
+          p = Path('artifacts/audit_summary.json')
+          if not p.exists():
+              raise SystemExit('audit_summary.json missing')
+          s = json.loads(p.read_text(encoding='utf-8'))
+          reasons=[]
+          if not s.get('audit_execution_ok', False): reasons.append('audit_execution_ok=false')
+          if int(s.get('duplicate_source_rows',0)) != 0: reasons.append('duplicate_source_rows!=0')
+          if int(s.get('collision_rows',0)) != 0: reasons.append('collision_rows!=0')
+          if int(s.get('team_mapping_invalid_rows',0)) != 0: reasons.append('team_mapping_invalid_rows!=0')
+          if not s.get('coverage_scope_complete', False): reasons.append('coverage_scope_complete=false')
+          payload={'full_gate_passed':not reasons,'blocking_reasons':reasons,'pit_publication_time_gate':bool(s.get('pit_publication_time_gate',False))}
+          Path('artifacts/audit_gate.json').write_text(json.dumps(payload,indent=2,ensure_ascii=False),encoding='utf-8')
+          if reasons:
+              raise SystemExit('AUDIT GATE FAILED: ' + '; '.join(reasons))
           PY
-      - name: Run supplemental international / non-league audit
+      - name: Run supplemental international/non-league audit
         id: auxiliary_audit
-        continue-on-error: true
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
-        run: |
-          mkdir -p artifacts
-          set +e
-          python -m src.data.auxiliary_audit > artifacts/auxiliary_audit_stdout.json
-          rc=$?
-          printf '{"exit_code":%s,"passed":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/auxiliary_audit_status.json
-          exit "$rc"
+        run: python -m src.data.auxiliary_audit | tee artifacts/auxiliary_audit_stdout.json
       - name: Run strict completion and PIT replay gate
         id: gate
-        if: steps.tests.outcome == 'success' && steps.audit.outcome == 'success'
-        continue-on-error: true
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
           PIT_ENABLE_ARCHIVE_AUDIT: "1"
         run: |
           mkdir -p artifacts
-          set +e
-          python -m src.data.completion_gate > artifacts/completion_gate_stdout.json
-          rc=$?
-          if [ ! -f artifacts/completion_gate.json ]; then
-            printf '{"full_gate_passed":false,"blocking_reasons":["completion gate did not produce an artifact"]}\n' > artifacts/completion_gate.json
-          fi
-          exit "$rc"
-      - name: Create blocked gate artifact when preflight cannot continue
-        if: steps.gate.outcome != 'success'
-        continue-on-error: true
-        run: |
-          if [ ! -f artifacts/completion_gate.json ]; then
-            python - <<'PY'
+          python -m src.data.completion_gate | tee artifacts/completion_gate_stdout.json
+          test -f artifacts/completion_gate.json
+          python - <<'PY'
           import json
           from pathlib import Path
-          Path('artifacts/completion_gate.json').write_text(json.dumps({'full_gate_passed': False, 'blocking_reasons': ['completion gate was not executed because an earlier preflight step failed']}, indent=2), encoding='utf-8')
+          x=json.loads(Path('artifacts/completion_gate.json').read_text(encoding='utf-8'))
+          if not x.get('full_gate_passed',False):
+              raise SystemExit('COMPLETION/PIT GATE FAILED: ' + '; '.join(x.get('blocking_reasons',[])))
           PY
-          fi
       - name: Run research engine with bounded retries
         id: research_engine
-        if: always()
         env:
-          TESTS_PASSED: ${{ steps.tests.outcome == 'success' && 'true' || 'false' }}
-          AUDIT_PASSED: ${{ steps.audit.outcome == 'success' && 'true' || 'false' }}
+          TESTS_PASSED: "true"
+          AUDIT_PASSED: "true"
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
           RESEARCH_ATTEMPTS: "2"
           RESEARCH_RETRY_BACKOFF: "10"
           PIT_ENABLE_ARCHIVE_AUDIT: "1"
-        continue-on-error: true
         run: python -m src.research.safe_runner
       - name: Prepare future fixtures when supplied
         id: prepare_future
-        if: always()
-        continue-on-error: true
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
@@ -173,15 +136,9 @@ jobs:
             printf '{"status":"NO_FUTURE_FIXTURE_INPUT","prediction_enabled":false,"reason":"data/future_fixtures.csv is not present; no fixture is guessed or synthesized"}\n' > artifacts/future_fixture_status.json
             exit 0
           fi
-          set +e
-          python -m src.prediction.prepare_fixtures --fixtures data/future_fixtures.csv --output artifacts/future_fixtures.csv > artifacts/future_fixture_prepare_stdout.json
-          rc=$?
-          printf '{"exit_code":%s,"prepared":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/future_fixture_prepare_status.json
-          exit "$rc"
+          python -m src.prediction.prepare_fixtures --fixtures data/future_fixtures.csv --output artifacts/future_fixtures.csv | tee artifacts/future_fixture_prepare_stdout.json
       - name: Run production prediction when eligible fixtures exist
         id: prediction
-        if: always()
-        continue-on-error: true
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
@@ -191,15 +148,9 @@ jobs:
             printf '{"status":"NO_ELIGIBLE_FIXTURES","oos_claimed":false,"reason":"No prepared future fixtures exist"}\n' > artifacts/prediction_status.json
             exit 0
           fi
-          set +e
           python -m src.prediction.runner --fixtures artifacts/future_fixtures.csv --bundle artifacts/production_model.pkl --output artifacts/predictions.csv --status artifacts/prediction_status.json
-          rc=$?
-          printf '{"exit_code":%s,"runner_completed":%s}\n' "$rc" "$([ "$rc" -eq 0 ] && echo true || echo false)" > artifacts/prediction_step_status.json
-          exit "$rc"
       - name: Evaluate production contract
         id: production_contract
-        if: always()
-        continue-on-error: true
         env:
           PYTHONPATH: .
         run: python -m src.research.production_contract
@@ -211,32 +162,10 @@ jobs:
           python - <<'PY'
           import json, os
           from pathlib import Path
-          p = Path('artifacts/run_status.json')
-          if p.exists(): data = json.loads(p.read_text(encoding='utf-8'))
-          else: data = {'status':'DEGRADED','oos_claimed':False,'reason':'No run_status.json produced'}
-          data['workflow_health'] = {
-              'run_id': os.environ.get('GITHUB_RUN_ID'), 'head_sha': os.environ.get('GITHUB_SHA'),
-              'compile_step': '${{ steps.compile.outcome }}', 'dependencies_step': '${{ steps.dependencies.outcome }}',
-              'tests_step': '${{ steps.tests.outcome }}', 'audit_step': '${{ steps.audit.outcome }}',
-              'audit_gate_step': '${{ steps.audit_gate.outcome }}', 'auxiliary_audit_step': '${{ steps.auxiliary_audit.outcome }}',
-              'completion_gate_step': '${{ steps.gate.outcome }}', 'research_step': '${{ steps.research_engine.outcome }}',
-              'future_fixture_prepare_step': '${{ steps.prepare_future.outcome }}', 'prediction_step': '${{ steps.prediction.outcome }}',
-              'production_contract_step': '${{ steps.production_contract.outcome }}',
-          }
-          data['automation_policy'] = {
-              'job_success_does_not_imply_research_success': True,
-              'production_requires_audit_and_completion_gates': True,
-              'failed_gates_fail_closed': True,
-              'historical_artifacts_are_actions_only': True,
-              'openai_api_is_optional': True,
-              'future_fixture_unknowns_are_never_guessed': True,
-              'workflow_never_fails_for_research_gate_outcomes': True,
-          }
-          if data.get('audit', {}).get('audit_complete') is False:
-              data['research_scope_warning'] = '14-competition audit is incomplete; results must not be represented as full 14-competition coverage.'
-          data['auxiliary_scope_policy'] = 'World Cup, Asian Cup, EURO, Nations League, senior internationals, Emperor\'s Cup, Interhigh and JFA youth registries are auxiliary only until PIT-safe publication timing is proven.'
-          p.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str), encoding='utf-8')
-          print(json.dumps(data, indent=2, ensure_ascii=False, default=str))
+          p=Path('artifacts/run_status.json')
+          data=json.loads(p.read_text(encoding='utf-8')) if p.exists() else {'status':'DEGRADED','oos_claimed':False}
+          data['workflow_health']={'run_id':os.environ.get('GITHUB_RUN_ID'),'head_sha':os.environ.get('GITHUB_SHA')}
+          p.write_text(json.dumps(data,indent=2,ensure_ascii=False,default=str),encoding='utf-8')
           PY
       - name: Upload research artifacts
         if: always()
@@ -247,20 +176,3 @@ jobs:
           path: artifacts/
           retention-days: 30
           if-no-files-found: warn
-      - name: Finalize workflow without masking research status
-        if: always()
-        continue-on-error: true
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          p = Path('artifacts/production_contract.json')
-          if p.exists():
-              x = json.loads(p.read_text(encoding='utf-8'))
-              print('production_contract_passed=', x.get('production_contract_passed'))
-              print('failures=', x.get('failures', []))
-          else:
-              print('production_contract_passed=unknown')
-              print('failures=[production_contract.json missing]')
-          print('Workflow completed operationally; research validity is determined by artifacts, not process exit status.')
-          PY
