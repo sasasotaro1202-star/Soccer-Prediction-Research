@@ -1,30 +1,24 @@
 # Overnight execution contract
 
-Routine overnight work may continue without interactive approval when it is limited to safe, deterministic research/CI improvements.
+This repository is designed for unattended execution. The objective is not to guarantee that external services can never fail; it is to guarantee that an external failure cannot silently produce an unsafe production result.
 
-## Non-negotiable safety
-- Never weaken PIT, leakage, chronological OOS, calibration, stability, provenance, or adoption gates merely to make a workflow green.
-- Never directly replace or mutate the incumbent production model because a candidate looks better on a convenient split.
-- External/X-data remains acquisition/adapter/PIT/offline-evaluation only until it passes the same-snapshot, same-PIT-cutoff, chronological OOS adoption gate.
-- Any unverifiable or PIT-unsafe evidence is excluded from production eligibility.
-- Preserve fail-closed behavior: infrastructure/network failure is a degraded/blocked state, not a successful research result.
-- No Work mode.
+## Required behavior
 
-## Reliability
-- Use bounded retries and deterministic caching/deduplication where they preserve semantics.
-- Cancel stale long-running research runs when a newer commit supersedes them; do not let stale jobs block newer validation.
-- Keep archive verification conservative: exact fixture identity, explicit publication lower bounds, earliest qualifying capture.
-- Optimize repeated archive work by grouping identical source URLs/captures, but never reduce evidence requirements.
+- Retry transient dependency/network failures within fixed bounds.
+- Preserve diagnostics whenever a stage fails.
+- Keep deterministic tests ahead of expensive research.
+- Prevent overlapping scheduled instances of the same workload.
+- Keep incomplete PIT evidence explicitly incomplete.
+- Never replace unknown PIT availability with retrieval time.
+- Never promote a research result without the explicit production adoption gate.
+- Prefer abstention over fabricated predictions.
+- Keep Score and MOM outputs gated independently from 1X2.
+- Treat broad competition discovery as research coverage, not automatic production support.
 
-## Evaluation
-- Candidate changes must be compared with the incumbent on the same data snapshot, PIT cutoff, and chronological OOS folds.
-- Track log loss, Brier score, calibration/ECE, fold stability, drift, and stress behavior rather than accuracy alone.
-- Keep a locked final OOS evaluation separate from model-selection data.
-- Adopt only when all existing production gates pass; otherwise retain the incumbent and record the blocker.
+## Morning readiness interpretation
 
-## Autonomous progress
-- Inspect current Actions and artifacts before making changes.
-- Prefer small, testable commits.
-- Run deterministic tests and relevant audits after changes.
-- Record useful provenance and failure causes so the next run can resume without guessing.
-- Continue improving efficiency and production robustness while preserving the above contracts.
+`workflow success` = the automation executed to completion.
+
+`production ready` = the explicit evidence gates passed.
+
+These are deliberately different states.
