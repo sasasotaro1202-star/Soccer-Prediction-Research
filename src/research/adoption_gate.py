@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
+
+from src.research.stability_gate import evaluate_stability
 
 
 def _better(candidate: Mapping[str, float], baseline: Mapping[str, float], key: str, lower: bool) -> bool:
@@ -51,13 +53,14 @@ def independent_adoption_gate(
     holdout: Mapping[str, Any],
     *,
     min_holdout_rows: int = 100,
+    stability_folds: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Require improvement over a locked, independent OOS holdout.
 
     Development OOS may be used to generate/select a candidate. The holdout is
     never used for selection, calibration, threshold tuning, or other model
-    decisions. Promotion requires primary LogLoss improvement, no regression in
-    Brier/ECE/Accuracy, sufficient holdout rows, and explicit integrity evidence.
+    decisions. When stability_folds are supplied, repeatable chronological
+    improvement across multiple leagues/seasons is an additional mandatory gate.
     """
     integrity_ok, integrity_reason = _holdout_integrity(holdout)
     if not integrity_ok:
@@ -71,6 +74,17 @@ def independent_adoption_gate(
         return {"status": "HOLD", "reason": "independent_holdout_too_small", "oos_claimed": False}
     if holdout.get("same_oos") is not True:
         return {"status": "HOLD", "reason": "holdout_is_not_same_oos", "oos_claimed": False}
+
+    stability_result = None
+    if stability_folds is not None:
+        stability_result = evaluate_stability(stability_folds)
+        if stability_result.get("status") != "PASS":
+            return {
+                "status": "HOLD",
+                "reason": "multi_fold_stability_failed",
+                "stability": stability_result,
+                "oos_claimed": False,
+            }
 
     base = holdout.get("baseline", {})
     cand = holdout.get("candidate", {})
@@ -91,5 +105,7 @@ def independent_adoption_gate(
         "development_evidence_present": bool(development),
         "holdout_rows": int(holdout["n"]),
         "holdout_integrity_verified": True,
+        "stability_verified": stability_result is not None,
+        "stability": stability_result,
         "promotion_authority": "deterministic_research_engine",
     }
