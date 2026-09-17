@@ -44,6 +44,6 @@ def test_candidate_comparison_only_returns_deltas():
         {"accuracy": .50, "log_loss": 1.02, "brier": .61},
         {"accuracy": .52, "log_loss": 1.00, "brier": .59},
     )
-    assert delta["accuracy"] == .02
-    assert delta["log_loss"] == -.02
-    assert delta["brier"] == -.02
+    assert delta["accuracy"] == pytest.approx(.02)
+    assert delta["log_loss"] == pytest.approx(-.02)
+    assert delta["brier"] == pytest.approx(-.02)
