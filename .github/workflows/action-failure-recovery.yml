@@ -38,5 +38,22 @@ jobs:
         run: |
           set -euo pipefail
           echo "Automatic one-time recovery for failed workflow: ${RUN_NAME} (${RUN_ID})"
-          gh run rerun "${RUN_ID}" --failed --repo "${GITHUB_REPOSITORY}"
-          echo "Recovery rerun requested. No quality gate is bypassed; the original workflow remains authoritative."
+
+          # The recovery action itself must tolerate transient GitHub API/network
+          # failures, but it must never loop: the parent workflow is only retried
+          # when run_attempt == 1.
+          for attempt in 1 2 3; do
+            if gh run rerun "${RUN_ID}" --failed --repo "${GITHUB_REPOSITORY}"; then
+              echo "Recovery rerun requested on attempt ${attempt}."
+              break
+            fi
+            if [ "${attempt}" -eq 3 ]; then
+              echo "Recovery request failed after 3 attempts; preserving the original failure signal." >&2
+              exit 1
+            fi
+            sleep_seconds=$((attempt * 10))
+            echo "Recovery request failed; retrying in ${sleep_seconds}s..." >&2
+            sleep "${sleep_seconds}"
+          done
+
+          echo "No quality gate is bypassed; the original workflow remains authoritative."
