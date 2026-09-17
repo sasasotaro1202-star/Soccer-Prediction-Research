@@ -2,8 +2,9 @@
 
 This module is deliberately independent from the incumbent production model.
 It stores raw payloads plus immutable provenance and exposes a strict cutoff
-query.  A snapshot is usable only when its feature-availability timestamp is
-known and is at or before the prediction cutoff.
+query. A snapshot is usable only when its feature-availability timestamp is
+known, is at or before the prediction cutoff, and its recorded prediction
+cutoff is itself not later than the query cutoff.
 """
 from __future__ import annotations
 
@@ -57,7 +58,7 @@ class PITSnapshotStore:
     """Content-addressed, append-only JSONL store.
 
     Duplicate request/entity/content combinations are ignored, making repeated
-    scheduled runs idempotent.  Existing records are never overwritten.
+    scheduled runs idempotent. Existing records are never overwritten.
     """
 
     def __init__(self, root: str | Path = "cache/xdata_pit") -> None:
@@ -105,15 +106,26 @@ class PITSnapshotStore:
                 yield PITSnapshot(**json.loads(line))
 
     def query_pit_safe(self, *, source: str, entity_key: str, cutoff_at: str) -> list[PITSnapshot]:
+        """Return only snapshots demonstrably usable at ``cutoff_at``.
+
+        Both the feature availability and the snapshot's recorded prediction
+        cutoff are checked. A future or missing provenance timestamp is never
+        converted into a safe row by the query layer.
+        """
         cutoff = _parse_time(cutoff_at)
         rows = []
         for row in self.iter_snapshots():
             if row.source != source or row.entity_key != entity_key:
                 continue
-            if not row.feature_available_at:
+            if not row.feature_available_at or not row.prediction_cutoff_at:
                 continue
-            if _parse_time(row.feature_available_at) <= cutoff:
-                rows.append(row)
+            if _parse_time(row.feature_available_at) > cutoff:
+                continue
+            if _parse_time(row.prediction_cutoff_at) > cutoff:
+                continue
+            if not row.pit_safe:
+                continue
+            rows.append(row)
         rows.sort(key=lambda r: _parse_time(r.feature_available_at or r.captured_at), reverse=True)
         return rows
 
