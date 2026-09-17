@@ -19,6 +19,18 @@ def test_pit_store_is_idempotent_and_cutoff_safe(tmp_path):
     assert rows[0].pit_safe is True
 
 
+def test_query_rejects_snapshot_recorded_for_future_cutoff(tmp_path):
+    store = PITSnapshotStore(tmp_path)
+    snapshot = build_snapshot(
+        source="clubelo", request_key="future-cutoff", entity_key="ARS",
+        payload={"elo": 1900}, captured_at="2026-09-14T12:00:00Z",
+        feature_available_at="2026-09-14T11:00:00Z",
+        prediction_cutoff_at="2026-09-15T12:00:00Z",
+    )
+    assert store.put(snapshot) is True
+    assert store.query_pit_safe(source="clubelo", entity_key="ARS", cutoff_at="2026-09-14T12:00:00Z") == []
+
+
 def test_missing_availability_is_not_pit_safe(tmp_path):
     store = PITSnapshotStore(tmp_path)
     snapshot = build_snapshot(
