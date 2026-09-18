@@ -12,9 +12,11 @@ on:
 permissions:
   contents: read
 
+# Never cancel an in-flight research run merely because another push arrived.
+# A long PIT/OOS run must finish against the exact commit it checked out.
 concurrency:
   group: soccer-research-robust
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   research:
