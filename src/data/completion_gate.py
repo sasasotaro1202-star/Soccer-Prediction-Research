@@ -98,10 +98,23 @@ def _pit_preflight(root: Path) -> dict:
         enriched = archive.apply_bulk(history.loc[mask].copy())
         history = _merge_pit_evidence(history, enriched)
         before_fallback = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
-        # Arquivo.pt is a secondary, bounded archive provider. Its capture time is
-        # accepted only when it is at/after the same explicit result lower bound and
-        # the archived file contains the exact completed-result identity.
-        history = _merge_pit_evidence(history, apply_arquivo_fallback(history))
+        # Arquivo.pt is expensive because it can require many archived captures.
+        # Do not run the secondary provider when the primary Wayback evidence already
+        # satisfies the gate; this preserves correctness while avoiding unnecessary
+        # network work. If the primary provider is insufficient, fallback remains
+        # fail-closed and uses the same explicit result lower-bound rule.
+        primary_rate = before_fallback / max(1, len(history))
+        primary_competitions = 0
+        primary_features = build_match_features(history, history, windows=(3, 5, 10, 20))
+        if "pit_verified" in primary_features.columns and not primary_features.empty:
+            pv = primary_features["pit_verified"].fillna(False).astype(bool)
+            pc = primary_features.assign(pit_verified=pv).groupby("competition")["pit_verified"].sum()
+            primary_competitions = int((pc >= 500).sum())
+        if before_fallback < 7000 or primary_rate < 0.25 or primary_competitions < 5:
+            # Arquivo.pt is a secondary, bounded archive provider. Its capture time is
+            # accepted only when it is at/after the same explicit result lower bound and
+            # the archived file contains the exact completed-result identity.
+            history = _merge_pit_evidence(history, apply_arquivo_fallback(history))
         after_fallback = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
     else:
         before_fallback = after_fallback = 0
