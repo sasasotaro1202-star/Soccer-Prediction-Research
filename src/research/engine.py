@@ -79,7 +79,7 @@ def run(out_dir: str = "artifacts") -> dict:
         audit_report = run_audit(str(out))
     except Exception as exc:
         audit_report = {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}", "audit_complete": False}
-    (out / "audit_gate.json").write_text(json.dumps(audit_report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    (out / "engine_audit_summary.json").write_text(json.dumps(audit_report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     competition_adapter_matrix().to_csv(out / "pit_competition_adapter_matrix.csv", index=False)
     history, acquisition = load_available_history(); acquisition.to_csv(out / "acquisition_coverage.csv", index=False)
     coverage = build_coverage(history); coverage.to_csv(out / "coverage_matrix.csv", index=False)
