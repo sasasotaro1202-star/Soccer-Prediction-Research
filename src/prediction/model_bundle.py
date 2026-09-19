@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from src.models.baselines import candidates
+from src.prediction.secondary_outputs import fit_score_rate_model
 
 
 def _temperature_transform(proba: np.ndarray, temperature: float) -> np.ndarray:
@@ -66,8 +67,9 @@ def train_and_save_bundle(
         model.fit(d[feature_cols], d.target.astype(int))
         fitted[name] = model
 
+    score_model = fit_score_rate_model(d)
     bundle = {
-        "schema_version": 1,
+        "schema_version": 2,
         "model_version": model_version,
         "data_snapshot_id": data_snapshot_id,
         "feature_cols": list(feature_cols),
@@ -77,6 +79,8 @@ def train_and_save_bundle(
         "fit_rows": int(len(d)),
         "fit_end": str(d["kickoff_utc"].max()),
         "selection_source": "chronological_validation_locked_before_final_fit",
+        "score_model": score_model,
+        "mom_model": {"status": "UPSTREAM_PLAYER_MODEL_REQUIRED", "output_top_k": 4},
     }
     p = Path(output_path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -111,7 +115,7 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
     missing = sorted(required - set(bundle))
     if missing:
         raise RuntimeError(f"Production model bundle missing fields: {missing}")
-    if bundle["schema_version"] != 1:
+    if bundle["schema_version"] not in {1, 2}:
         raise RuntimeError(f"Unsupported production model bundle schema: {bundle['schema_version']}")
     if not isinstance(bundle["model_version"], str) or not bundle["model_version"].strip():
         raise RuntimeError("Production model bundle model_version is empty")
@@ -131,6 +135,8 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
         raise RuntimeError("Production model bundle contains invalid ensemble weights")
     if not np.isclose(float(numeric_weights.sum()), 1.0, atol=1e-8):
         raise RuntimeError("Production model bundle ensemble weights are not normalized")
+    if bundle["schema_version"] >= 2 and "score_model" not in bundle:
+        raise RuntimeError("Production model bundle schema 2 requires score_model")
     temperature = float(bundle["temperature"])
     if not np.isfinite(temperature) or temperature <= 0:
         raise RuntimeError("Production model bundle temperature is invalid")
