@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from src.data.external_adapters import ClubEloAdapter, OpenMeteoAdapter, StatsBombOpenDataAdapter, available_adapters
+from src.data.external_adapters import ClubEloAdapter, OpenMeteoAdapter, OpenMeteoHistoricalForecastAdapter, StatsBombOpenDataAdapter, available_adapters
 from src.data.external_fetch import CachedResponse, FetchMetadata
 
 
@@ -9,6 +9,7 @@ def test_adapter_registry_is_deterministic():
         "clubelo",
         "statsbomb_open_data",
         "open_meteo",
+        "open_meteo_historical_forecast",
         "api_football",
         "sportmonks",
     )
@@ -56,3 +57,16 @@ def test_feature_metadata_keeps_raw_digest_and_pit_state():
     assert record.pit_safe is True
     assert record.content_sha256 == "abc"
     assert record.value == 0.42
+
+
+def test_historical_open_meteo_request_keeps_run_and_availability_separate():
+    request = OpenMeteoHistoricalForecastAdapter().request(
+        latitude=51.5,
+        longitude=-0.12,
+        hourly="temperature_2m,precipitation",
+        run="2026-09-14T06:00:00Z",
+        feature_available_at="2026-09-14T06:30:00Z",
+    )
+    assert request.params["run"] == "2026-09-14T06:00:00Z"
+    assert request.source_timestamp == "2026-09-14T06:00:00Z"
+    assert request.feature_available_at == "2026-09-14T06:30:00Z"
