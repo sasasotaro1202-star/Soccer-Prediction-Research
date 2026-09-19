@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from src.prediction.model_bundle import load_bundle, predict_bundle
+from src.prediction.secondary_outputs import predict_mom_candidates, predict_score_candidates
 
 
 REQUIRED_FIXTURE_COLUMNS = {
@@ -19,6 +20,7 @@ REQUIRED_FIXTURE_COLUMNS = {
     "source_available_at_utc",
     "pit_verified",
     "starter_status",
+    "mom_candidates_json",
 }
 
 # These are intentionally presentation/abstention defaults, not claims about model quality.
@@ -173,6 +175,24 @@ def run(
     result["abstain"] = result["low_confidence"]
     result["prediction_set"] = np.where(result["low_confidence"], "LOW_CONFIDENCE", "STANDARD")
     result["prediction_time_utc"] = now.isoformat()
+    if bundle.get("schema_version", 1) < 2 or "score_model" not in bundle:
+        raise RuntimeError("Production bundle lacks the locked Score model")
+    score_rows = []
+    mom_rows = []
+    for row in eligible.itertuples(index=False):
+        score_rows.append(predict_score_candidates(bundle["score_model"], row.home_team, row.away_team))
+        try:
+            mom_rows.append(predict_mom_candidates(row.mom_candidates_json))
+        except Exception as exc:
+            raise RuntimeError(f"MOM prediction is unavailable for match {row.match_id}: {type(exc).__name__}: {exc}") from exc
+    for rank in range(1, 4):
+        result[f"score_{rank}"] = [f"{x[rank-1]['home_goals']}-{x[rank-1]['away_goals']}" for x in score_rows]
+        result[f"score_{rank}_probability"] = [x[rank-1]["probability"] for x in score_rows]
+    for rank in range(1, 5):
+        result[f"mom_{rank}_player_id"] = [x[rank-1]["player_id"] for x in mom_rows]
+        result[f"mom_{rank}_probability"] = [x[rank-1]["probability"] for x in mom_rows]
+    result["score_top3_probability_mass"] = sum(result[f"score_{rank}_probability"] for rank in range(1, 4))
+    result["mom_top4_probability_mass"] = sum(result[f"mom_{rank}_probability"] for rank in range(1, 5))
     result["model_version"] = str(bundle["model_version"])
     if len(result) != len(eligible) or result["match_id"].duplicated().any():
         raise RuntimeError("Production prediction output failed fixture identity invariants")
