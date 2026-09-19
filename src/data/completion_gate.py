@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Strict completion gate for the 14-competition soccer research audit."""
+"""Strict completion gate for the locked active-competition soccer research audit."""
 
 import json
 import re
@@ -19,11 +19,21 @@ from src.features.soccer_features import build_match_features
 
 SEASONS = [f"{y}/{str(y + 1)[-2:]}" for y in range(2010, 2026)]
 CANONICAL_SOURCES = {
-    "EPL": "Football-Data.co.uk", "CHA": "Football-Data.co.uk", "BL1": "Football-Data.co.uk",
-    "SA": "Football-Data.co.uk", "LL": "Football-Data.co.uk", "FL1": "Football-Data.co.uk",
-    "UCL": "openfootball", "UEL": "openfootball", "J1": "J.League Data Site / Football-Data.co.uk:JPN.csv",
-    "J2": "J.League Data Site / Football-Data.co.uk:JPN.csv", "J3": "J.League Data Site / Football-Data.co.uk:JPN.csv",
-    "DFBP": "openfootball", "CAR": "openfootball", "FRI": "ESPN:club.friendly",
+    "EPL": "Football-Data.co.uk",
+    "AG_M": "AFC / Asian Games",
+    "AG_W": "AFC / Asian Games",
+    "ERE": "Football-Data.co.uk",
+    "LL": "Football-Data.co.uk",
+    "SA": "Football-Data.co.uk",
+    "BL1": "Football-Data.co.uk",
+    "J1": "J.League Data Site / Football-Data.co.uk:JPN.csv",
+    "J2": "J.League Data Site / Football-Data.co.uk:JPN.csv",
+    "J3": "J.League Data Site / Football-Data.co.uk:JPN.csv",
+    "FL1": "Football-Data.co.uk",
+    "UCL": "openfootball",
+    "UEL": "openfootball",
+    "U23_M": "FIFA / AFC",
+    "U18_M": "JFA / AFC / UEFA",
 }
 NON_APPLICABLE_CELLS = {("J3", f"{y}/{str(y + 1)[-2:]}") for y in range(2010, 2014)}
 
@@ -92,7 +102,7 @@ def _pit_preflight(root: Path) -> dict:
     # valid result-availability bound. Retries and precise-capture scanning only
     # recover evidence that the slower adapter could miss; they do not relax PIT.
     archive = FootballDataWaybackAdapter(cache_dir=str(root / "pit_evidence"), max_workers=2)
-    supported = {"EPL", "CHA", "BL1", "SA", "LL", "FL1"}
+    supported = {"EPL", "ERE", "CHA", "BL1", "SA", "LL", "FL1"}
     mask = history["competition"].astype(str).isin(supported)
     if mask.any():
         enriched = archive.apply_bulk(history.loc[mask].copy())
@@ -202,7 +212,7 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
     )
 
     result = {
-        "target_competition_count": 14,
+        "target_competition_count": len(TARGET_COMPETITIONS),
         "requested_season_count": 16,
         "requested_competition_season_cells": len(expected),
         "historically_not_applicable_cells": len(NON_APPLICABLE_CELLS),
