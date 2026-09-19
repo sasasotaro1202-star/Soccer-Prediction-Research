@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# Active production-research scope. Everything outside this list is parked until
+# every active target has completed acquisition/PIT/OOS/production validation.
+# "CL" is treated as the standard UEFA Champions League alias for UCL.
 TARGET_COMPETITIONS = (
-    "EPL", "CHA", "BL1", "SA", "LL", "FL1", "UCL", "UEL",
-    "J1", "J2", "J3", "DFBP", "CAR", "FRI",
+    "EPL", "AG_M", "AG_W", "ERE", "LL", "SA", "BL1", "J1", "J2", "J3",
+    "FL1", "UCL", "UEL", "U23_M", "U18_M",
 )
 
 # Supplemental competitions are deliberately outside the strict 14-competition
@@ -47,8 +50,13 @@ PLANS = {
     "SA": ("Football-Data.co.uk", "football-data.org", "Sportmonks", "openfootball"),
     "LL": ("Football-Data.co.uk", "football-data.org", "Sportmonks", "openfootball"),
     "FL1": ("Football-Data.co.uk", "football-data.org", "Sportmonks", "openfootball"),
+    "ERE": ("Football-Data.co.uk", "football-data.org", "Sportmonks", "openfootball"),
+    "AG_M": ("AFC", "Asian Games", "openfootball/internationals", "ESPN"),
+    "AG_W": ("AFC", "Asian Games", "openfootball/internationals", "ESPN"),
     "UCL": ("openfootball", "football-data.org", "Sportmonks"),
     "UEL": ("openfootball", "football-data.org", "Sportmonks"),
+    "U23_M": ("FIFA", "AFC", "openfootball/internationals", "ESPN"),
+    "U18_M": ("FIFA", "AFC", "openfootball/internationals", "ESPN"),
     "J1": ("J.League", "Sportmonks", "TheStatsAPI"),
     "J2": ("J.League", "Sportmonks", "TheStatsAPI"),
     "J3": ("J.League", "Sportmonks", "TheStatsAPI"),
