@@ -37,5 +37,5 @@ def test_apply_pit_gate_is_fail_closed():
         "prediction_cutoff_utc": "2026-09-20T12:00:00Z",
     }])
     out = apply_pit_gate(frame)
-    assert out.loc[0, "production_eligible"] is False
+    assert bool(out.loc[0, "production_eligible"]) is False
     assert out.loc[0, "pit_gate_status"] == "REJECT"
