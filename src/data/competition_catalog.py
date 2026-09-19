@@ -162,3 +162,15 @@ def production_candidates() -> list[CompetitionSpec]:
 def research_targets() -> list[CompetitionSpec]:
     """Return all enabled research targets, including currently unverified ones."""
     return [spec for spec in COMPETITION_CATALOG if spec.research_enabled]
+
+
+# Active scope is intentionally narrower than the broad research catalog.
+# Parked competitions remain catalogued for later expansion, but acquisition,
+# OOS research and production work must not spend resources on them.
+ACTIVE_SCOPE = frozenset({
+    "EPL", "AG_M", "AG_W", "ERE", "LL", "SA", "BL1",
+    "J1", "J2", "J3", "FL1", "UCL", "UEL", "U23_M", "U18_M",
+})
+
+def active_competitions() -> tuple[CompetitionSpec, ...]:
+    return tuple(spec for spec in COMPETITION_CATALOG if spec.code in ACTIVE_SCOPE)
