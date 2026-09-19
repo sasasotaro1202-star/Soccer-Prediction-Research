@@ -72,4 +72,9 @@ def load_available_history(start_year:int=2010,end_year:int=2025,max_workers:int
     jleague_history,jleague_coverage=load_jleague_history(start_year=start_year,end_year=end_year); cup_history,cup_coverage=load_openfootball_history(start_year=start_year,end_year=end_year,max_workers=max_workers)
     frames=[x for x in (primary_history,jleague_history,cup_history) if not x.empty]; history=pd.concat(frames,ignore_index=True) if frames else pd.DataFrame()
     if not history.empty: history=history.sort_values(["competition","kickoff_utc","home_team","away_team","source_name"],kind="mergesort").reset_index(drop=True)
-    coverage=pd.concat([primary_coverage,jleague_coverage,cup_coverage],ignore_index=True)\n    if not history.empty:\n        history=history[history["competition"].astype(str).isin(ACTIVE_SCOPE)].copy()\n    if not coverage.empty:\n        coverage=coverage[coverage["competition"].astype(str).isin(ACTIVE_COMPETITION_SET)].copy()\n    return history,coverage
+    coverage=pd.concat([primary_coverage,jleague_coverage,cup_coverage],ignore_index=True)
+    if not history.empty:
+        history=history[history["competition"].astype(str).isin(ACTIVE_SCOPE)].copy()
+    if not coverage.empty:
+        coverage=coverage[coverage["competition"].astype(str).isin(ACTIVE_SCOPE)].copy()
+    return history,coverage
