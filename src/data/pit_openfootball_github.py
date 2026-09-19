@@ -6,7 +6,7 @@ import base64
 import json
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import requests
@@ -61,6 +61,15 @@ def _row_key(row: pd.Series) -> tuple:
         float(row["away_goals"]),
     )
 
+def _publication_lower_bound(row: pd.Series) -> datetime | None:
+    event = _utc(row.get("kickoff_utc"))
+    if event is None:
+        return None
+    if bool(row.get("kickoff_time_available", False)):
+        return event + timedelta(minutes=180)
+    return event.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+
+
 def _snapshot_keys(text: str, competition: str, season_start: int) -> set[tuple]:
     raw = text.encode("utf-8")
     frame = parse_football_txt(text, competition, season_start, "", raw)
@@ -94,12 +103,7 @@ def evidence_for_row(competition: str, season_start: int, row: pd.Series, timeou
     # Publication evidence must be observed after the completed result could exist.
     # A repository commit timestamp at/before kickoff that already contains the final
     # score is not causal evidence of publication and must never be treated as PIT-safe.
-    from datetime import timedelta
-    lower_bound = (
-        event + timedelta(minutes=180)
-        if bool(row.get("kickoff_time_available", False))
-        else event.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-    )
+    lower_bound = _publication_lower_bound(row)
     ordered = []
     for c in commits:
         dt = _utc(((c.get("commit") or {}).get("committer") or {}).get("date"))
