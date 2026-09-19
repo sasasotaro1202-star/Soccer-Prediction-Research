@@ -38,6 +38,42 @@ def _weighted_metric(parts: list[tuple[dict, int]], key: str) -> float:
     return float(sum(float(metric[key]) * n for metric, n in parts) / total)
 
 
+def _contextual_blend_weights(
+    validation: pd.DataFrame,
+    validation_models: dict,
+    feature_cols: list[str],
+    global_weights: dict[str, float],
+    min_rows: int = 60,
+) -> tuple[dict[str, dict[str, float]], dict[str, str]]:
+    """Select model mixtures by current context, with a conservative global fallback.
+
+    Candidate estimators are still trained on the same pre-validation history. Only
+    their mixture weights are specialized to a context with enough chronological
+    validation observations. This gives the system situation-specific behavior
+    without training a separate high-variance model for every competition.
+    """
+    routed: dict[str, dict[str, float]] = {}
+    reasons: dict[str, str] = {}
+    if "competition" not in validation.columns:
+        return {"__global__": global_weights}, {"__global__": "global_only"}
+
+    for context, sl in validation.groupby("competition", sort=True):
+        if len(sl) < min_rows:
+            routed[str(context)] = global_weights
+            reasons[str(context)] = "fallback_global_insufficient_validation_rows"
+            continue
+        scores = {}
+        for name, model in validation_models.items():
+            scores[name] = classification_metrics(
+                sl.target.astype(int), model.predict_proba(sl[feature_cols])
+            )
+        routed[str(context)] = _blend_weights(scores)
+        reasons[str(context)] = "context_specific_validation"
+    routed["__global__"] = global_weights
+    reasons["__global__"] = "global_fallback"
+    return routed, reasons
+
+
 def _temperature_transform(proba: np.ndarray, temperature: float) -> np.ndarray:
     p = np.clip(np.asarray(proba, dtype=float), 1e-9, 1.0)
     logits = np.log(p) / float(temperature)
@@ -110,20 +146,37 @@ def run_walk_forward(df: pd.DataFrame, feature_cols: list[str], min_train: int =
             scores[name] = _validation_score(validation_models[name], val_select, feature_cols)
         weights = _blend_weights(scores)
         best = min(scores, key=lambda k: scores[k]["logloss"])
+        context_weights, context_reasons = _contextual_blend_weights(
+            val_select, validation_models, feature_cols, weights
+        )
 
-        # Calibration is learned from genuinely out-of-fit validation predictions.
+        # Calibration remains global to avoid fitting a separate temperature to
+        # sparse competition slices. Model-mixture selection is context-specific,
+        # while the calibration layer stays deliberately conservative.
         val_probs = np.zeros((len(val_calib), 3), dtype=float)
-        for name, model in validation_models.items():
-            val_probs += weights[name] * model.predict_proba(val_calib[feature_cols])
+        for idx, row in val_calib.iterrows():
+            local_weights = context_weights.get(str(row["competition"]), weights)
+            row_prob = np.zeros(3, dtype=float)
+            for name, model in validation_models.items():
+                row_prob += local_weights[name] * model.predict_proba(
+                    row[feature_cols].to_frame().T
+                )[0]
+            val_probs[val_calib.index.get_loc(idx)] = row_prob
         val_probs = np.clip(val_probs, 1e-9, 1.0)
         val_probs /= val_probs.sum(axis=1, keepdims=True)
         calibration_temperature, calibration_used = _fit_temperature(val_calib.target.astype(int), val_probs)
 
-        selected.append({"oos_start": str(oos.kickoff_utc.min()), "selected_model": best, "blend": "recent_weighted_two_slice_validation_softmax", "weights": weights, "validation_logloss": scores[best]["logloss"], "validation_accuracy": scores[best]["accuracy"], "validation_brier": scores[best]["brier"], "validation_rps": scores[best]["rps"], "validation_ece": scores[best]["ece"], "selection_rows": len(val_select), "calibration_rows": len(val_calib), "temperature": calibration_temperature, "temperature_calibration_used": calibration_used})
+        selected.append({"oos_start": str(oos.kickoff_utc.min()), "selected_model": best, "blend": "contextual_competition_blend_with_global_fallback", "weights": weights, "context_weights": context_weights, "context_reasons": context_reasons, "validation_logloss": scores[best]["logloss"], "validation_accuracy": scores[best]["accuracy"], "validation_brier": scores[best]["brier"], "validation_rps": scores[best]["rps"], "validation_ece": scores[best]["ece"], "selection_rows": len(val_select), "calibration_rows": len(val_calib), "temperature": calibration_temperature, "temperature_calibration_used": calibration_used})
 
         # Refit candidates on all historical data available before this OOS block.
         fitted = {name: _fit_predict(model, train[feature_cols], train.target.astype(int)) for name, model in candidates(random_state).items()}
-        probs = sum(weights[name] * model.predict_proba(oos[feature_cols]) for name, model in fitted.items())
+        probs = np.zeros((len(oos), 3), dtype=float)
+        for pos, (_, row) in enumerate(oos.iterrows()):
+            local_weights = context_weights.get(str(row["competition"]), weights)
+            for name, model in fitted.items():
+                probs[pos] += local_weights[name] * model.predict_proba(
+                    row[feature_cols].to_frame().T
+                )[0]
         probs = np.clip(probs, 1e-9, 1.0)
         probs /= probs.sum(axis=1, keepdims=True)
         probs = _temperature_transform(probs, calibration_temperature)
