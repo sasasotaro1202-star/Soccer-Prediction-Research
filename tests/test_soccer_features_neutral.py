@@ -37,7 +37,7 @@ def test_neutral_elo_does_not_apply_home_advantage():
     np.testing.assert_allclose(
         neutral["global"]["A"], 1500.0 + delta_neutral, rtol=0, atol=1e-12
     )
-    assert neutral["global"]["A"] < normal["global"]["A"]
+    assert neutral["global"]["A"] > normal["global"]["A"]
 
 
 def test_build_features_respects_neutral_venue_and_pit():
