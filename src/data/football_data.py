@@ -15,7 +15,7 @@ from urllib3.util.retry import Retry
 
 from src.data.jleague_adapter import load_jleague_history
 from src.data.openfootball_adapter import load_openfootball_history
-from src.data.active_scope import ACTIVE_COMPETITION_SET
+from src.data.competition_catalog import ACTIVE_SCOPE
 
 LEAGUES={"EPL":"E0","BL1":"D1","SA":"I1","LL":"SP1","FL1":"F1","ERE":"N1"}
 BASE="https://www.football-data.co.uk/mmz4281/{season_folder}/{league}.csv"
@@ -72,4 +72,4 @@ def load_available_history(start_year:int=2010,end_year:int=2025,max_workers:int
     jleague_history,jleague_coverage=load_jleague_history(start_year=start_year,end_year=end_year); cup_history,cup_coverage=load_openfootball_history(start_year=start_year,end_year=end_year,max_workers=max_workers)
     frames=[x for x in (primary_history,jleague_history,cup_history) if not x.empty]; history=pd.concat(frames,ignore_index=True) if frames else pd.DataFrame()
     if not history.empty: history=history.sort_values(["competition","kickoff_utc","home_team","away_team","source_name"],kind="mergesort").reset_index(drop=True)
-    coverage=pd.concat([primary_coverage,jleague_coverage,cup_coverage],ignore_index=True)\n    if not history.empty:\n        history=history[history["competition"].astype(str).isin(ACTIVE_COMPETITION_SET)].copy()\n    if not coverage.empty:\n        coverage=coverage[coverage["competition"].astype(str).isin(ACTIVE_COMPETITION_SET)].copy()\n    return history,coverage
+    coverage=pd.concat([primary_coverage,jleague_coverage,cup_coverage],ignore_index=True)\n    if not history.empty:\n        history=history[history["competition"].astype(str).isin(ACTIVE_SCOPE)].copy()\n    if not coverage.empty:\n        coverage=coverage[coverage["competition"].astype(str).isin(ACTIVE_COMPETITION_SET)].copy()\n    return history,coverage
