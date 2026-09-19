@@ -131,6 +131,9 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
         stability = adoption.get("stability")
         if not isinstance(stability, dict) or stability.get("status") not in {"PASS"}:
             failures.append("adoption_stability")
+        external_stability = adoption.get("external_stability_gate")
+        if not isinstance(external_stability, dict) or external_stability.get("status") not in {"PASS"}:
+            failures.append("external_stability_gate")
         if adoption_status == "ADOPT":
             if not _file_nonempty(root, "production_model.pkl"):
                 failures.append("artifact:production_model.pkl")
