@@ -100,7 +100,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         h["source_available_at_utc"] = pd.to_datetime(h["source_available_at_utc"], utc=True, errors="coerce")
     else:
         h["source_available_at_utc"] = pd.NaT
-    h = h.dropna(subset=["kickoff_utc"]).sort_values(
+    if "neutral_venue" not in h.columns:\n        h["neutral_venue"] = pd.NA\n    h = h.dropna(subset=["kickoff_utc"]).sort_values(
         ["kickoff_utc", "competition", "home_team", "away_team", "match_id"], kind="mergesort"
     ).reset_index(drop=True)
     m = matches.copy()
@@ -212,7 +212,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         neutral = bool(r.get("neutral_venue", False)) if pd.notna(r.get("neutral_venue", False)) else False
         home_advantage = 0.0 if neutral else 1.0
         elo_home_adv = 0.0 if neutral else ELO_HOME_ADV
-        row = {"match_id": r["match_id"], "competition": comp, "season": r.get("season"), "season_start": r.get("season_start", np.nan), "kickoff_utc": kickoff, "home_team": home, "away_team": away, "prediction_cutoff_at_utc": cutoff, "neutral_venue": neutral, "home_advantage": home_advantage, "home_elo": he, "away_elo": ae, "elo_diff": he - ae, "home_comp_elo": hce, "away_comp_elo": cae, "comp_elo_diff": hce - cae, "home_elo_expected": 1.0 / (1.0 + 10.0 ** (-((he + elo_home_adv) - ae) / 400.0)), "home_rest_hours": (cutoff - team_last[home]).total_seconds() / 3600.0 if home in team_last else np.nan, "away_rest_hours": (cutoff - team_last[away]).total_seconds() / 3600.0 if away in team_last else np.nan}
+        row = {"match_id": r["match_id"], "competition": comp, "season": r.get("season"), "season_start": r.get("season_start", np.nan), "kickoff_utc": kickoff, "home_team": home, "away_team": away, "prediction_cutoff_at_utc": cutoff, "neutral_venue": neutral, "neutral_venue_known": neutral_known, "home_advantage": home_advantage, "home_elo": he, "away_elo": ae, "elo_diff": he - ae, "home_comp_elo": hce, "away_comp_elo": cae, "comp_elo_diff": hce - cae, "home_elo_expected": (1.0 / (1.0 + 10.0 ** (-((he + elo_home_adv) - ae) / 400.0))) if neutral_known else np.nan, "home_rest_hours": (cutoff - team_last[home]).total_seconds() / 3600.0 if home in team_last else np.nan, "away_rest_hours": (cutoff - team_last[away]).total_seconds() / 3600.0 if away in team_last else np.nan}
         row["rest_diff_hours"] = row["home_rest_hours"] - row["away_rest_hours"] if pd.notna(row["home_rest_hours"]) and pd.notna(row["away_rest_hours"]) else np.nan
         row["elo_gap_abs"] = abs(row["elo_diff"])
         pit_blocked = False
@@ -238,7 +238,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         away_history = list(team_games[away])[-required_window:] if required_window else []
         history_complete = (required_window == 0) or (len(home_history) >= required_window and len(away_history) >= required_window)
         history_available = history_complete and all(x["available"] <= cutoff for x in home_history + away_history)
-        row["pit_verified"] = bool(history_available and prior_window_pit_ok(home, cutoff) and prior_window_pit_ok(away, cutoff))
+        row["pit_verified"] = bool(history_available and prior_window_pit_ok(home, cutoff) and prior_window_pit_ok(away, cutoff) and neutral_known)
         rows.append(row)
     return pd.DataFrame(rows)
 
