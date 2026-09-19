@@ -13,8 +13,6 @@ import requests
 BASE_URLS = {
     "UCL": "https://raw.githubusercontent.com/openfootball/champions-league/master/{season}/cl.txt",
     "UEL": "https://raw.githubusercontent.com/openfootball/champions-league/master/{season}/el.txt",
-    "DFBP": "https://raw.githubusercontent.com/openfootball/deutschland/master/{season}/cup.txt",
-    "CAR": "https://raw.githubusercontent.com/openfootball/england/master/{season}/eflcup.txt",
 }
 SEASON_START = {"UCL": 2010, "UEL": 2010, "DFBP": 2010, "CAR": 2010}
 DATE_RE = re.compile(r"^\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Z][a-z]{2})\s+(\d{1,2})(?:\s+(\d{4}))?.*$")
