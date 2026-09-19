@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Strict completion gate for the 14-competition soccer research audit."""
+"""Strict completion gate for the active 15-competition soccer research audit."""
 
 import json
 import re
@@ -19,11 +19,21 @@ from src.features.soccer_features import build_match_features
 
 SEASONS = [f"{y}/{str(y + 1)[-2:]}" for y in range(2010, 2026)]
 CANONICAL_SOURCES = {
-    "EPL": "Football-Data.co.uk", "CHA": "Football-Data.co.uk", "BL1": "Football-Data.co.uk",
-    "SA": "Football-Data.co.uk", "LL": "Football-Data.co.uk", "FL1": "Football-Data.co.uk",
-    "UCL": "openfootball", "UEL": "openfootball", "J1": "J.League Data Site / Football-Data.co.uk:JPN.csv",
-    "J2": "J.League Data Site / Football-Data.co.uk:JPN.csv", "J3": "J.League Data Site / Football-Data.co.uk:JPN.csv",
-    "DFBP": "openfootball", "CAR": "openfootball", "FRI": "ESPN:club.friendly",
+    "EPL": "Football-Data.co.uk",
+    "AG_M": "AFC / Olympic Council of Asia official results",
+    "AG_W": "AFC / Olympic Council of Asia official results",
+    "ERE": "Football-Data.co.uk",
+    "LL": "Football-Data.co.uk",
+    "SA": "Football-Data.co.uk",
+    "BL1": "Football-Data.co.uk",
+    "J1": "J.League Data Site",
+    "J2": "J.League Data Site",
+    "J3": "J.League Data Site",
+    "FL1": "Football-Data.co.uk",
+    "UCL": "openfootball / UEFA official",
+    "UEL": "openfootball / UEFA official",
+    "U23_M": "AFC / FIFA official competition records",
+    "U18_M": "JFA / UEFA / FIFA official competition records",
 }
 NON_APPLICABLE_CELLS = {("J3", f"{y}/{str(y + 1)[-2:]}") for y in range(2010, 2014)}
 
