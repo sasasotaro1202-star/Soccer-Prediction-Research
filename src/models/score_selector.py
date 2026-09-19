@@ -26,11 +26,11 @@ def select_score_candidates(
     rather than conditional shares that misleadingly sum to 100%.
     """
     if top_k != 3:
-        raise ValueError("production Score output must contain exactly 4 candidates")
+        raise ValueError("production Score output must contain exactly 3 candidates")
 
     rows = list(candidates)
     if len(rows) < top_k:
-        raise ValueError("at least 4 score candidates are required")
+        raise ValueError("at least 3 score candidates are required")
 
     validated: list[tuple[int, int, float, int]] = []
     for index, (home_goals, away_goals, probability) in enumerate(rows):
