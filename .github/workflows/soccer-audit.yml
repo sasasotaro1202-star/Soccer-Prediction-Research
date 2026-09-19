@@ -58,6 +58,7 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
+          from src.data.competition_sources import TARGET_COMPETITIONS
 
           artifacts = Path('artifacts')
           p = artifacts / 'audit_summary.json'
@@ -67,9 +68,11 @@ jobs:
           except ValueError:
               rc = 99
 
+          expected_competitions = len(TARGET_COMPETITIONS)
+
           if not p.exists():
               fallback = {
-                  'target_competition_count': 14,
+                  'target_competition_count': expected_competitions,
                   'audit_execution_ok': False,
                   'audit_exit_code': rc,
                   'coverage_scope_complete': False,
@@ -91,8 +94,11 @@ jobs:
 
           # These are integrity invariants, not production-adoption gates.
           # Production eligibility remains fail-closed in the research workflow.
-          if data.get('target_competition_count') != 14:
-              raise SystemExit('Target competition count is not 14')
+          if data.get('target_competition_count') != expected_competitions:
+              raise SystemExit(
+                  f"Target competition count is not synchronized with TARGET_COMPETITIONS: "
+                  f"{data.get('target_competition_count')} != {expected_competitions}"
+              )
           if data.get('no_missing_to_zero') is not True:
               raise SystemExit('Missing-to-zero policy was not asserted')
           if data.get('search_engines_are_not_dataset_sources') is not True:
