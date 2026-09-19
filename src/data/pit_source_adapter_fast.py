@@ -129,9 +129,7 @@ class FootballDataWaybackAdapter(_BaseAdapter):
             return [SourceEvidence(None, "UNVERIFIABLE", reason=reason) for _ in rows]
         row_keys = [_normalized_row_key(r) for r in rows]
         bounds = [_result_lower_bound(r) for r in rows]
-        kickoff_bounds = [self._utc(row.get("kickoff_utc")) if False else None for row in rows]
-        # Use the imported adapter UTC helper; keep the expression explicit so
-        # timezone handling remains centralized in pit_source_adapter_v2.
+        # Use the shared UTC helper so timezone handling remains centralized.
         kickoff_bounds = [_utc(row.get("kickoff_utc")) if bool(row.get("kickoff_time_available", False)) else None for row in rows]
         min_bound = min((b for b, _ in bounds if b is not None), default=None)
         min_search_bound = min((b for b in kickoff_bounds if b is not None), default=min_bound)
