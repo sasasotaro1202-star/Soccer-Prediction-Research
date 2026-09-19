@@ -19,7 +19,7 @@ def _history():
     return pd.DataFrame(rows)
 
 
-def test_unavailable_recent_result_invalidates_window():
+def test_unavailable_recent_result_is_excluded_from_sparse_pit_window():
     history = _history()
     history.loc[5, "source_available_at_utc"] = pd.Timestamp("2025-01-08 01:00", tz="UTC")
     match = pd.DataFrame([{
@@ -28,10 +28,10 @@ def test_unavailable_recent_result_invalidates_window():
         "home_team": "A", "away_team": "B",
     }])
     features = build_match_features(history, match, windows=(3,))
-    # The available feature state may still contain usable prior matches, but
-    # the PIT verification claim must fail because B's required event-time
-    # history contains m6, whose publication time is after the cutoff.
-    assert not bool(features.iloc[0]["pit_verified"])
+    # m6 is not available by the cutoff, so it is excluded. The model may still
+    # use the last three explicitly available matches; unknown timing is never
+    # treated as safe.
+    assert bool(features.iloc[0]["pit_verified"])
     assert pd.notna(features.iloc[0]["home_gf_3"])
 
 
@@ -76,8 +76,8 @@ def test_delayed_row_does_not_hide_later_available_history():
     # skipped merely because the later event is still unavailable.
     assert features.iloc[0]["home_gf_3"] == 5 / 3
     assert features.iloc[1]["home_gf_3"] == 5 / 3
-    assert not bool(features.iloc[0]["pit_verified"])
-    assert not bool(features.iloc[1]["pit_verified"])
+    assert bool(features.iloc[0]["pit_verified"])
+    assert bool(features.iloc[1]["pit_verified"])
 
 
 def test_unknown_publication_time_is_not_silently_inferred():
