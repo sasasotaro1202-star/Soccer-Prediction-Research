@@ -31,9 +31,13 @@ def test_neutral_elo_does_not_apply_home_advantage():
     expected_normal = 1.0 / (1.0 + 10.0 ** (-ELO_HOME_ADV / 400.0))
     delta_normal = 20.0 * (1.0 - expected_normal)
     delta_neutral = 20.0 * (1.0 - 0.5)
-    assert normal["global"]["A"] == np.testing.assert_allclose(
+    np.testing.assert_allclose(
         normal["global"]["A"], 1500.0 + delta_normal, rtol=0, atol=1e-12
     )
+    np.testing.assert_allclose(
+        neutral["global"]["A"], 1500.0 + delta_neutral, rtol=0, atol=1e-12
+    )
+    assert neutral["global"]["A"] < normal["global"]["A"]
 
 
 def test_build_features_respects_neutral_venue_and_pit():
