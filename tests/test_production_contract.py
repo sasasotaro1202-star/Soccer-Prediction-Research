@@ -30,6 +30,7 @@ def _minimal_passing_artifacts(tmp_path):
         "status": "ADOPT",
         "oos_claimed": True,
         "stability": {"status": "PASS"},
+        "external_stability_gate": {"status": "PASS"},
     })
     # The contract only needs a non-empty bundle in the unit fixture; runtime
     # integration tests validate that the real pickle is loadable elsewhere.
