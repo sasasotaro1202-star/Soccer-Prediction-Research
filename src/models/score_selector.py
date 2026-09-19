@@ -16,9 +16,9 @@ class ScoreCandidate:
 
 
 def select_score_candidates(
-    candidates: Iterable[tuple[int, int, float]], top_k: int = 3
+    candidates: Iterable[tuple[int, int, float]], top_k: int = 4
 ) -> list[ScoreCandidate]:
-    """Return exactly three scorelines, preserving full-distribution probabilities.
+    """Return exactly four scorelines, preserving full-distribution probabilities.
 
     Score probabilities are unconditional probabilities from the full score
     distribution. They are deliberately *not* renormalized over the displayed
@@ -26,11 +26,11 @@ def select_score_candidates(
     rather than conditional shares that misleadingly sum to 100%.
     """
     if top_k != 3:
-        raise ValueError("production Score output must contain exactly 3 candidates")
+        raise ValueError("production Score output must contain exactly 4 candidates")
 
     rows = list(candidates)
     if len(rows) < top_k:
-        raise ValueError("at least 3 score candidates are required")
+        raise ValueError("at least 4 score candidates are required")
 
     validated: list[tuple[int, int, float, int]] = []
     for index, (home_goals, away_goals, probability) in enumerate(rows):
