@@ -36,8 +36,8 @@ def sample_history():
     ])
 
 
-def test_target_scope_has_exactly_14_competitions():
-    assert len(TARGET_COMPETITIONS) == 14
+def test_target_scope_has_exactly_15_competitions():
+    assert len(TARGET_COMPETITIONS) == 15
     assert len(set(TARGET_COMPETITIONS)) == 14
 
 
