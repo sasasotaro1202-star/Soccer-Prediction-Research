@@ -17,9 +17,9 @@ from src.data.espn_friendlies_adapter import load_friendlies_history
 from src.data.jleague_adapter import load_jleague_history
 from src.data.openfootball_adapter import load_openfootball_history
 
-LEAGUES={"EPL":"E0","CHA":"E1","BL1":"D1","SA":"I1","LL":"SP1","FL1":"F1"}
+LEAGUES={"EPL":"E0","BL1":"D1","SA":"I1","LL":"SP1","FL1":"F1","ERE":"N1"}
 BASE="https://www.football-data.co.uk/mmz4281/{season_folder}/{league}.csv"
-COMPETITION_TZ={"EPL":"Europe/London","CHA":"Europe/London","BL1":"Europe/Berlin","SA":"Europe/Rome","LL":"Europe/Madrid","FL1":"Europe/Paris"}
+COMPETITION_TZ={"EPL":"Europe/London","BL1":"Europe/Berlin","SA":"Europe/Rome","LL":"Europe/Madrid","FL1":"Europe/Paris","ERE":"Europe/Amsterdam"}
 RAW_STAT_MAP={"home_shots":"HS","away_shots":"AS","home_shots_on_target":"HST","away_shots_on_target":"AST","home_corners":"HC","away_corners":"AC","home_fouls":"HF","away_fouls":"AF","home_yellow_cards":"HY","away_yellow_cards":"AY","home_red_cards":"HR","away_red_cards":"AR"}
 HEADERS={"User-Agent":"SoccerPredictionResearch/1.0"}
 
