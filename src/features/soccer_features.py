@@ -129,17 +129,9 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     rows = []
     required_window = min(windows) if windows else 0
 
-    # Event-time index used solely for strict PIT verification. This is separate
-    # from the availability-ordered feature state: an unavailable row must be
-    # able to invalidate the PIT claim even when it is omitted from features.
-    team_event_indices: dict[str, list[int]] = defaultdict(list)
-    for idx, r in enumerate(h_records):
-        team_event_indices[str(r["home_team"])].append(idx)
-        team_event_indices[str(r["away_team"])].append(idx)
-    team_event_times = {
-        team: [h_records[i]["kickoff_utc"] for i in indices]
-        for team, indices in team_event_indices.items()
-    }
+    # PIT state contains only observations with explicit availability by the
+    # prediction cutoff. Unknown-publication rows are excluded rather than
+    # treated as safe or used to invalidate otherwise valid sparse windows.
 
     def reset_state() -> None:
         nonlocal team_games, team_last, team_last_available, h2h, elo, processed_event_max
@@ -180,18 +172,16 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
                 apply_row(r)
 
     def prior_window_pit_ok(team: str, cutoff: pd.Timestamp) -> bool:
-        indices = team_event_indices.get(team, [])
         if not required_window:
             return True
-        times = team_event_times.get(team, [])
-        end = bisect_left(times, cutoff)
-        prior = indices[max(0, end - required_window):end]
-        if len(prior) < required_window:
+        history = list(team_games.get(team, ()))
+        if len(history) < required_window:
             return False
+        recent = history[-required_window:]
         return all(
-            pd.notna(h_records[i]["source_available_at_utc"])
-            and h_records[i]["source_available_at_utc"] <= cutoff
-            for i in prior
+            pd.notna(x.get("available")) and x["available"] <= cutoff
+            and pd.notna(x.get("time")) and x["time"] < cutoff
+            for x in recent
         )
 
     for r in m_records:
