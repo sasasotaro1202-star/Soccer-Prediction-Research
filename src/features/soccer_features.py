@@ -100,7 +100,9 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         h["source_available_at_utc"] = pd.to_datetime(h["source_available_at_utc"], utc=True, errors="coerce")
     else:
         h["source_available_at_utc"] = pd.NaT
-    if "neutral_venue" not in h.columns:\n        h["neutral_venue"] = pd.NA\n    h = h.dropna(subset=["kickoff_utc"]).sort_values(
+    if "neutral_venue" not in h.columns:
+        h["neutral_venue"] = pd.NA
+    h = h.dropna(subset=["kickoff_utc"]).sort_values(
         ["kickoff_utc", "competition", "home_team", "away_team", "match_id"], kind="mergesort"
     ).reset_index(drop=True)
     m = matches.copy()
