@@ -67,17 +67,18 @@ jobs:
           mkdir -p artifacts/9h/phase1
           if [ -f artifacts/completion_gate.json ]; then cp artifacts/completion_gate.json artifacts/9h/phase1/completion_gate.json; fi
           if [ -f artifacts/audit_summary.json ]; then cp artifacts/audit_summary.json artifacts/9h/phase1/audit_summary.json; fi
-          printf '{"phase":"phase1_gate","head_sha":"%s","completion_step":"${ steps.completion.outcome }}\n' "$GITHUB_SHA" > artifacts/9h/phase1/phase_status.json
+          printf '{"phase":"phase1_gate","head_sha":"%s","completion_step":"${{ steps.completion.outcome }}\n' "$GITHUB_SHA" > artifacts/9h/phase1/phase_status.json
       - name: Upload phase 1 evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: soccer-9h-phase1-${ github.run_id }}
+          name: soccer-9h-phase1-${{ github.run_id }}
           path: artifacts/9h/phase1
           retention-days: 30
           if-no-files-found: warn
 
   phase2_research:
+    if: always()
     name: Phase 2 - PIT-safe OOS research
     needs: phase1_gate
     runs-on: ubuntu-latest
@@ -96,8 +97,8 @@ jobs:
           path: |
             data/raw
             data/raw/pit_evidence
-          key: soccer-9h-data-${ runner.os }}-${ hashFiles('requirements.txt', 'src/data/**/*.py', 'src/data/*.py') }}
-          restore-keys: soccer-9h-data-${ runner.os }}-
+          key: soccer-9h-data-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/data/**/*.py', 'src/data/*.py') }}
+          restore-keys: soccer-9h-data-${{ runner.os }}-
       - name: Install dependencies with retry
         shell: bash
         run: |
@@ -134,12 +135,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: soccer-9h-phase2-${ github.run_id }}
+          name: soccer-9h-phase2-${{ github.run_id }}
           path: artifacts/
           retention-days: 30
           if-no-files-found: warn
 
   phase3_verification:
+    if: always()
     name: Phase 3 - independent verification and robustness
     needs: phase2_research
     runs-on: ubuntu-latest
@@ -158,8 +160,8 @@ jobs:
           path: |
             data/raw
             data/raw/pit_evidence
-          key: soccer-9h-data-${ runner.os }}-${ hashFiles('requirements.txt', 'src/data/**/*.py', 'src/data/*.py') }}
-          restore-keys: soccer-9h-data-${ runner.os }}-
+          key: soccer-9h-data-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/data/**/*.py', 'src/data/*.py') }}
+          restore-keys: soccer-9h-data-${{ runner.os }}-
       - name: Install dependencies with retry
         shell: bash
         run: |
@@ -222,7 +224,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: soccer-9h-phase3-${ github.run_id }}
+          name: soccer-9h-phase3-${{ github.run_id }}
           path: artifacts/
           retention-days: 30
           if-no-files-found: warn
