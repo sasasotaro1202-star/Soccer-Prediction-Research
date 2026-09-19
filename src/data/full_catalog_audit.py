@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from urllib.request import Request, urlopen
 import pandas as pd
-from src.data.competition_catalog import COMPETITION_CATALOG
+from src.data.competition_catalog import ACTIVE_SCOPE, COMPETITION_CATALOG
 from src.data.competition_sources import AUXILIARY_COMPETITIONS, AUXILIARY_NAMES, AUXILIARY_PLANS, PLANS
 
 REPO = Path(__file__).resolve().parents[2]
@@ -61,6 +61,8 @@ def observed(code):
 def audit():
     rows=[]
     for s in COMPETITION_CATALOG:
+        if s.code not in ACTIVE_SCOPE:
+            continue
         code=s.code
         url=DIRECT_SOURCE_URLS.get(code,"")
         live,detail=probe(url)
@@ -80,6 +82,8 @@ def audit():
             "production_status":"NOT_ELIGIBLE_UNTIL_PIT_OOS_GATES",
         })
     for code in AUXILIARY_COMPETITIONS:
+        if code not in ACTIVE_SCOPE:
+            continue
         rows.append({
             "code":code,"name":AUXILIARY_NAMES[code],"region":"Global/Asia/Japan",
             "tier":"auxiliary","competition_type":"auxiliary","universe":"auxiliary",
@@ -93,6 +97,8 @@ def audit():
     df=pd.DataFrame(rows)
     summary={
         "catalog_entries":len(COMPETITION_CATALOG),
+        "active_scope_entries":len(ACTIVE_SCOPE),
+        "parked_catalog_entries":len(COMPETITION_CATALOG)-len(ACTIVE_SCOPE),
         "auxiliary_entries":len(AUXILIARY_COMPETITIONS),
         "total_audited":len(df),
         "live_reachable":int((df.live_probe=="REACHABLE").sum()),
