@@ -91,27 +91,35 @@ def run_walk_forward(df: pd.DataFrame, feature_cols: list[str], min_train: int =
     while start < len(d):
         oos_end = min(start + oos_block, len(d))
         train, oos = d.iloc[:start], d.iloc[start:oos_end]
-        val_n = min(max(60, int(len(train) * validation_frac)), validation_max, max(60, len(train) - 300))
-        fit, val = train.iloc[:-val_n], train.iloc[-val_n:]
+        val_n = min(max(120, int(len(train) * validation_frac)), validation_max, max(120, len(train) - 300))
+        fit, validation = train.iloc[:-val_n], train.iloc[-val_n:]
+        # Keep model/ensemble selection and probability calibration on disjoint
+        # chronological slices. Reusing the same rows for both creates a subtle
+        # research-overfit channel even though neither touches the OOS block.
+        split = len(validation) // 2
+        if split < 60 or len(validation) - split < 60:
+            raise ValueError("Validation slice must provide at least 60 rows for both selection and calibration")
+        val_select = validation.iloc[:split]
+        val_calib = validation.iloc[split:]
 
         # Fit each candidate only on the pre-validation fit slice for selection.
         validation_models = {}
         scores = {}
         for name, model in candidates(random_state).items():
             validation_models[name] = _fit_predict(model, fit[feature_cols], fit.target.astype(int))
-            scores[name] = _validation_score(validation_models[name], val, feature_cols)
+            scores[name] = _validation_score(validation_models[name], val_select, feature_cols)
         weights = _blend_weights(scores)
         best = min(scores, key=lambda k: scores[k]["logloss"])
 
         # Calibration is learned from genuinely out-of-fit validation predictions.
-        val_probs = np.zeros((len(val), 3), dtype=float)
+        val_probs = np.zeros((len(val_calib), 3), dtype=float)
         for name, model in validation_models.items():
-            val_probs += weights[name] * model.predict_proba(val[feature_cols])
+            val_probs += weights[name] * model.predict_proba(val_calib[feature_cols])
         val_probs = np.clip(val_probs, 1e-9, 1.0)
         val_probs /= val_probs.sum(axis=1, keepdims=True)
-        calibration_temperature, calibration_used = _fit_temperature(val.target.astype(int), val_probs)
+        calibration_temperature, calibration_used = _fit_temperature(val_calib.target.astype(int), val_probs)
 
-        selected.append({"oos_start": str(oos.kickoff_utc.min()), "selected_model": best, "blend": "recent_weighted_two_slice_validation_softmax", "weights": weights, "validation_logloss": scores[best]["logloss"], "validation_accuracy": scores[best]["accuracy"], "validation_brier": scores[best]["brier"], "validation_rps": scores[best]["rps"], "validation_ece": scores[best]["ece"], "temperature": calibration_temperature, "temperature_calibration_used": calibration_used})
+        selected.append({"oos_start": str(oos.kickoff_utc.min()), "selected_model": best, "blend": "recent_weighted_two_slice_validation_softmax", "weights": weights, "validation_logloss": scores[best]["logloss"], "validation_accuracy": scores[best]["accuracy"], "validation_brier": scores[best]["brier"], "validation_rps": scores[best]["rps"], "validation_ece": scores[best]["ece"], "selection_rows": len(val_select), "calibration_rows": len(val_calib), "temperature": calibration_temperature, "temperature_calibration_used": calibration_used})
 
         # Refit candidates on all historical data available before this OOS block.
         fitted = {name: _fit_predict(model, train[feature_cols], train.target.astype(int)) for name, model in candidates(random_state).items()}
