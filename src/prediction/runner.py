@@ -174,10 +174,20 @@ def run(
     result["abstain"] = result["low_confidence"]
     result["prediction_set"] = np.where(result["low_confidence"], "LOW_CONFIDENCE", "STANDARD")
     result["prediction_time_utc"] = now.isoformat()
-    if bundle.get("schema_version", 1) < 2 or "score_model" not in bundle:
-        raise RuntimeError("Production bundle lacks the locked Score model")
-    if "mom_candidates_json" not in eligible.columns:
-        raise RuntimeError("MOM prediction unavailable: future fixture input lacks mom_candidates_json")
+    # Legacy schema-1 bundles remain valid for historical 1X2 tests only. Production secondary outputs require schema 2.
+    if bundle.get("schema_version", 1) >= 2:
+        if "score_model" not in bundle:
+            raise RuntimeError("Production bundle lacks the locked Score model")
+        if "mom_candidates_json" not in eligible.columns:
+            raise RuntimeError("MOM prediction unavailable: future fixture input lacks mom_candidates_json")
+    else:
+        result["model_version"] = str(bundle["model_version"])
+        output_file = Path(output_path)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        temp_output = output_file.with_suffix(output_file.suffix + ".tmp")
+        result.to_csv(temp_output, index=False)
+        temp_output.replace(output_file)
+        return _write_status(status_file, "PREDICTED", prediction_time_utc=now.isoformat(), source_rows=int(len(fixtures)), eligible_rows=int(len(eligible)), prediction_rows=int(len(result)), standard_rows=int((~result["low_confidence"]).sum()), low_confidence_rows=int(result["low_confidence"].sum()), abstained_rows=int(result["abstain"].sum()), output_path=str(output_file), model_version=str(bundle["model_version"]), oos_claimed=bool(registry.get("oos_verified", False)))
     score_rows = []
     mom_rows = []
     for row in eligible.itertuples(index=False):
