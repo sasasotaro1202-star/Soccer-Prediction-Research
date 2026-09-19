@@ -8,6 +8,13 @@ on:
       - "tests/test_*audit*.py"
       - "tests/test_espn_friendlies_adapter.py"
       - ".github/workflows/soccer-coverage-pit-audit.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/data/**"
+      - "tests/test_*audit*.py"
+      - "tests/test_espn_friendlies_adapter.py"
+      - ".github/workflows/soccer-coverage-pit-audit.yml"
   workflow_dispatch:
   schedule:
     - cron: "37 2 * * 1"
