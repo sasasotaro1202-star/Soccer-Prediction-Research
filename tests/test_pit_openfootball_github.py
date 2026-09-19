@@ -22,3 +22,23 @@ def test_openfootball_row_identity_is_stable():
         2.0,
         3.0,
     )
+
+
+def test_openfootball_publication_lower_bound_is_post_result():
+    from src.data.pit_openfootball_github import _publication_lower_bound
+
+    row = pd.Series({
+        "kickoff_utc": pd.Timestamp("2025-02-11T18:45:00Z"),
+        "kickoff_time_available": True,
+    })
+    assert _publication_lower_bound(row) == pd.Timestamp("2025-02-11T21:45:00Z")
+
+
+def test_openfootball_date_only_publication_lower_bound_is_next_day():
+    from src.data.pit_openfootball_github import _publication_lower_bound
+
+    row = pd.Series({
+        "kickoff_utc": pd.Timestamp("2025-02-11T18:45:00Z"),
+        "kickoff_time_available": False,
+    })
+    assert _publication_lower_bound(row) == pd.Timestamp("2025-02-12T00:00:00Z")
