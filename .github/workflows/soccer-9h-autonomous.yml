@@ -113,6 +113,13 @@ jobs:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
         run: python -m pytest -q
+      - name: Rebuild audit artifacts before research
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: |
+          python -m src.data.fixture_field_audit
+          PIT_ENABLE_ARCHIVE_AUDIT=1 python -m src.data.completion_gate
       - name: Run bounded research engine
         env:
           TESTS_PASSED: "true"
