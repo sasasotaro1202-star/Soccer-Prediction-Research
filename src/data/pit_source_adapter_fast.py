@@ -113,6 +113,13 @@ class FootballDataWaybackAdapter(_BaseAdapter):
         return diag
 
     def _prefetch_url(self, url, rows, workers=None):
+        """Resolve PIT evidence by scanning archive captures incrementally.
+
+        The previous implementation downloaded every post-bound capture before
+        matching rows. That is unnecessarily expensive and can starve later
+        competitions. We now scan captures chronologically and stop as soon as
+        every row is resolved. This preserves the earliest-capture semantics.
+        """
         if not rows:
             return []
         captures = self.captures(url)
@@ -122,83 +129,75 @@ class FootballDataWaybackAdapter(_BaseAdapter):
             return [SourceEvidence(None, "UNVERIFIABLE", reason=reason) for _ in rows]
         row_keys = [_normalized_row_key(r) for r in rows]
         bounds = [_result_lower_bound(r) for r in rows]
+        # Use the shared UTC helper so timezone handling remains centralized.
+        kickoff_bounds = [_utc(row.get("kickoff_utc")) if bool(row.get("kickoff_time_available", False)) else None for row in rows]
+        min_bound = min((b for b, _ in bounds if b is not None), default=None)
+        min_search_bound = min((b for b in kickoff_bounds if b is not None), default=min_bound)
+        candidates = [c for c in captures if (_utc(c.get("timestamp")) is not None and min_search_bound is not None and _utc(c.get("timestamp")) >= min_search_bound)]
+        candidates.sort(key=lambda c: c.get("timestamp", ""))
         results = [None] * len(rows)
-        unresolved = {k: i for i, k in enumerate(row_keys) if k is not None}
-        valid_bounds = [b for b, _ in bounds if b is not None]
+        unresolved = {i for i, key in enumerate(row_keys) if key is not None}
         if not unresolved:
             return [SourceEvidence(None, "UNVERIFIABLE", reason="missing_record_identity") for _ in rows]
-        if not valid_bounds:
-            return [SourceEvidence(None, "UNVERIFIABLE", reason="missing_event_time") for _ in rows]
-        search_bounds = [self._search_floor(r, b) for r, (b, _) in zip(rows, bounds)]
-        valid_search_bounds = [b for b in search_bounds if b is not None]
-        min_search_bound = min(valid_search_bounds) if valid_search_bounds else min(valid_bounds)
-        unique = {}
-        for capture in captures:
-            ts = _utc(capture.get("timestamp"))
-            if ts is None or ts < min_search_bound:
-                continue
-            digest = capture.get("digest") or f"{capture.get('timestamp','')}|{capture.get('original','')}"
-            previous = unique.get(digest)
-            # PIT requires the earliest observation of identical content, not the latest.
-            if previous is None or (_utc(previous.get("timestamp")) or ts) > ts:
-                unique[digest] = capture
-        candidates = sorted(unique.values(), key=lambda c: c.get("timestamp", ""))
         if not candidates:
             reasons = ";".join(sorted(set(reason for _, reason in bounds)))
             return [SourceEvidence(None, "UNVERIFIABLE", reason=f"captures_exist_but_no_capture_after_result_lower_bound:{reasons}") for _ in rows]
 
-        def fetch(capture):
-            return capture, self._load_snapshot_keys(capture, url)
+        def resolve_from(capture, diagnostic, *, precise=False):
+            ts = _utc(capture.get("timestamp"))
+            if ts is None or diagnostic.keys is None:
+                return
+            for i in list(unresolved):
+                if row_keys[i] not in diagnostic.keys:
+                    continue
+                lower_bound, bound_reason = bounds[i]
+                if lower_bound is None:
+                    continue
+                accepted = kickoff_bounds[i] if precise and kickoff_bounds[i] is not None else lower_bound
+                if ts >= accepted:
+                    reason = "kickoff" if precise and kickoff_bounds[i] is not None else bound_reason.lower()
+                    results[i] = SourceEvidence(ts.isoformat(), "VERIFIED", self._snapshot_url(capture, url), capture.get("digest"), f"archived_completed_result_first_observed_after_{reason}")
+                    unresolved.remove(i)
 
-        keysets = []
-        with ThreadPoolExecutor(max_workers=workers or self.max_workers) as pool:
-            futures = [pool.submit(fetch, capture) for capture in candidates]
-            for future in as_completed(futures):
-                keysets.append(future.result())
-        keysets.sort(key=lambda x: x[0].get("timestamp", ""))
+        snapshot_errors = set()
+        # Conservative pass: chronological captures, one download at a time.
+        for capture in candidates:
+            if not unresolved:
+                break
+            _, diagnostic = capture, self._load_snapshot_keys(capture, url)
+            if diagnostic.keys is None:
+                snapshot_errors.add(diagnostic.status)
+                continue
+            resolve_from(capture, diagnostic, precise=False)
 
-        def scan(allow_early_precise_capture=False):
-            for capture, diagnostic in keysets:
+        # Narrow second pass for exact kickoff timestamps. Only unresolved rows
+        # with a known kickoff can use this earlier publication bound.
+        if unresolved and any(x is not None for x in kickoff_bounds):
+            for capture in candidates:
                 if not unresolved:
                     break
-                ts = _utc(capture.get("timestamp"))
-                if ts is None or diagnostic.keys is None:
+                diagnostic = self._load_snapshot_keys(capture, url)
+                if diagnostic.keys is None:
+                    snapshot_errors.add(diagnostic.status)
                     continue
-                for key in diagnostic.keys.intersection(unresolved.keys()):
-                    i = unresolved[key]
-                    conservative_bound, bound_reason = bounds[i]
-                    if conservative_bound is None:
-                        continue
-                    accepted_bound = conservative_bound
-                    accepted_reason = bound_reason.lower()
-                    if allow_early_precise_capture and bool(rows[i].get("kickoff_time_available", False)):
-                        kickoff = _utc(rows[i].get("kickoff_utc"))
-                        if kickoff is not None and kickoff <= ts < conservative_bound:
-                            accepted_bound = kickoff
-                            accepted_reason = "kickoff"
-                    if ts >= accepted_bound:
-                        results[i] = SourceEvidence(ts.isoformat(), "VERIFIED", self._snapshot_url(capture, url), capture.get("digest"), f"archived_completed_result_first_observed_after_{accepted_reason}")
-                        del unresolved[key]
+                resolve_from(capture, diagnostic, precise=True)
 
-        scan(False)
-        if unresolved:
-            scan(True)
-        snapshot_errors = sorted({d.status for _, d in keysets if d.keys is None and d.status})
-        for i, value in enumerate(results):
-            if value is not None:
+        out=[]
+        for i, result in enumerate(results):
+            if result is not None:
+                out.append(result)
                 continue
-            key = row_keys[i]
-            lower_bound, _ = bounds[i]
+            key=row_keys[i]; lower_bound,_=bounds[i]
             if key is None:
-                reason = "missing_record_identity"
+                reason="missing_record_identity"
             elif lower_bound is None:
-                reason = "missing_event_time"
+                reason="missing_event_time"
             elif snapshot_errors:
-                reason = "no_archive_snapshot_contains_completed_result:" + ",".join(snapshot_errors)
+                reason="no_archive_snapshot_contains_completed_result:" + ",".join(sorted(snapshot_errors))
             else:
-                reason = "no_archive_snapshot_contains_completed_result"
-            results[i] = SourceEvidence(None, "UNVERIFIABLE", reason=reason)
-        return results
+                reason="no_archive_snapshot_contains_completed_result"
+            out.append(SourceEvidence(None,"UNVERIFIABLE",reason=reason))
+        return out
 
     def apply_bulk(self, history):
         if history is None or history.empty:
