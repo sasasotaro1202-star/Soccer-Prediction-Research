@@ -67,9 +67,10 @@ def train_and_save_bundle(
         model.fit(d[feature_cols], d.target.astype(int))
         fitted[name] = model
 
-    score_model = fit_score_rate_model(d)
+    has_score_columns = {"home_team", "away_team", "home_goals", "away_goals"}.issubset(d.columns)
+    score_model = fit_score_rate_model(d) if has_score_columns else None
     bundle = {
-        "schema_version": 2,
+        "schema_version": 2 if score_model is not None else 1,
         "model_version": model_version,
         "data_snapshot_id": data_snapshot_id,
         "feature_cols": list(feature_cols),
@@ -79,7 +80,7 @@ def train_and_save_bundle(
         "fit_rows": int(len(d)),
         "fit_end": str(d["kickoff_utc"].max()),
         "selection_source": "chronological_validation_locked_before_final_fit",
-        "score_model": score_model,
+        **({"score_model": score_model} if score_model is not None else {}),
         "mom_model": {"status": "UPSTREAM_PLAYER_MODEL_REQUIRED", "output_top_k": 4},
     }
     p = Path(output_path)
