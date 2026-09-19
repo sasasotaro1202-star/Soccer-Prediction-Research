@@ -2,8 +2,8 @@ from src.data.fixture_field_audit import TARGET_COMPETITIONS, COMPETITION_NAMES,
 import pandas as pd
 
 
-def test_target_competitions_are_exactly_fourteen():
-    assert len(TARGET_COMPETITIONS) == 14
+def test_target_competitions_are_exactly_fifteen():
+    assert len(TARGET_COMPETITIONS) == 15
     assert len(set(TARGET_COMPETITIONS)) == 14
     assert set(TARGET_COMPETITIONS) == set(COMPETITION_NAMES)
 
