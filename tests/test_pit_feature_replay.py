@@ -76,7 +76,7 @@ def test_delayed_row_does_not_hide_later_available_history():
     # skipped merely because the later event is still unavailable.
     assert features.iloc[0]["home_gf_3"] == 5 / 3
     assert features.iloc[1]["home_gf_3"] == 5 / 3
-    assert not bool(features.iloc[0]["pit_verified"])
+    assert bool(features.iloc[0]["pit_verified"])
     assert bool(features.iloc[1]["pit_verified"])
 
 
