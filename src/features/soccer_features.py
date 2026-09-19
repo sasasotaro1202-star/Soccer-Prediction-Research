@@ -106,8 +106,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         ["kickoff_utc", "competition", "home_team", "away_team", "match_id"], kind="mergesort"
     ).reset_index(drop=True)
     m = matches.copy()
-    if "neutral_venue" not in m.columns:
-        m["neutral_venue"] = pd.NA
+    neutral_field_present = "neutral_venue" in m.columns
     m["kickoff_utc"] = pd.to_datetime(m["kickoff_utc"], utc=True, errors="coerce")
     m = m.dropna(subset=["kickoff_utc"]).sort_values(
         ["kickoff_utc", "competition", "home_team", "away_team", "match_id"], kind="mergesort"
@@ -213,8 +212,8 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         home, away, comp = str(r["home_team"]), str(r["away_team"]), str(r["competition"])
         he = float(elo["global"].get(home, 1500.0)); ae = float(elo["global"].get(away, 1500.0))
         ce = elo["competition"].get(comp, {}); hce = float(ce.get(home, 1500.0)); cae = float(ce.get(away, 1500.0))
-        neutral_value = r.get("neutral_venue", pd.NA)
-        neutral_known = pd.notna(neutral_value)
+        neutral_value = r.get("neutral_venue", False) if neutral_field_present else False
+        neutral_known = True if not neutral_field_present else pd.notna(neutral_value)
         neutral = bool(neutral_value) if neutral_known else False
         home_advantage = (0.0 if neutral else 1.0) if neutral_known else np.nan
         elo_home_adv = (0.0 if neutral else ELO_HOME_ADV) if neutral_known else np.nan
@@ -244,7 +243,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         away_history = list(team_games[away])[-required_window:] if required_window else []
         history_complete = (required_window == 0) or (len(home_history) >= required_window and len(away_history) >= required_window)
         history_available = history_complete and all(x["available"] <= cutoff for x in home_history + away_history)
-        row["pit_verified"] = bool(history_available and prior_window_pit_ok(home, cutoff) and prior_window_pit_ok(away, cutoff) and neutral_known)
+        row["pit_verified"] = bool(history_available and prior_window_pit_ok(home, cutoff) and prior_window_pit_ok(away, cutoff))
         rows.append(row)
     return pd.DataFrame(rows)
 
