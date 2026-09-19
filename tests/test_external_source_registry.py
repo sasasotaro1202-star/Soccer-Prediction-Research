@@ -1,7 +1,7 @@
 from src.data.external_source_registry import EXTERNAL_SOURCES, audit_sources, production_sources, source_spec
 
 
-def test_external_source_registry_contains_exact_eight_candidates():
+def test_external_source_registry_contains_expected_candidates():
     assert [spec.key for spec in audit_sources()] == [
         "clubelo",
         "statsbomb_open_data",
@@ -11,8 +11,11 @@ def test_external_source_registry_contains_exact_eight_candidates():
         "api_football",
         "fbref",
         "sportmonks",
+        "x_api",
+        "instagram_graph_api",
+        "facebook_graph_api",
     ]
-    assert len(EXTERNAL_SOURCES) == 8
+    assert len(EXTERNAL_SOURCES) == 11
 
 
 def test_external_sources_are_fail_closed_by_default():
