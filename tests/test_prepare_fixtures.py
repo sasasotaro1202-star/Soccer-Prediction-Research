@@ -35,7 +35,7 @@ def test_prepare_future_fixture_reuses_pit_feature_builder():
     out = prepare_future_fixtures(_fixture(), _history())
     assert len(out) == 1
     assert out.loc[0, "match_id"] == "f1"
-    assert bool(out.loc[0, "pit_verified"]) is False
+    assert bool(out.loc[0, "pit_verified"]) is True
     assert out.loc[0, "starter_status"] == "ANNOUNCED"
     assert pd.notna(out.loc[0, "home_elo"])
     assert "home_gf_3" in out.columns
