@@ -20,7 +20,6 @@ REQUIRED_FIXTURE_COLUMNS = {
     "source_available_at_utc",
     "pit_verified",
     "starter_status",
-    "mom_candidates_json",
 }
 
 # These are intentionally presentation/abstention defaults, not claims about model quality.
@@ -177,6 +176,8 @@ def run(
     result["prediction_time_utc"] = now.isoformat()
     if bundle.get("schema_version", 1) < 2 or "score_model" not in bundle:
         raise RuntimeError("Production bundle lacks the locked Score model")
+    if "mom_candidates_json" not in eligible.columns:
+        raise RuntimeError("MOM prediction unavailable: future fixture input lacks mom_candidates_json")
     score_rows = []
     mom_rows = []
     for row in eligible.itertuples(index=False):
