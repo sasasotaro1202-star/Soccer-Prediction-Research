@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
-from bisect import bisect_left
 
 import numpy as np
 import pandas as pd
