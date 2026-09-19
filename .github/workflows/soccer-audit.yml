@@ -38,9 +38,8 @@ jobs:
         env:
           PYTHONPATH: .
         shell: bash
-        continue-on-error: true
         run: |
-          set -uo pipefail
+          set -euo pipefail
           mkdir -p artifacts
           set +e
           python -m src.data.fixture_field_audit 2>&1 | tee artifacts/audit_stdout.log
@@ -48,7 +47,8 @@ jobs:
           set -e
           printf '%s\n' "$rc" > artifacts/audit_exit_code.txt
           if [ "$rc" -ne 0 ]; then
-            echo "Audit execution returned exit code $rc; preserving diagnostics and continuing so the workflow remains operationally green."
+            echo "Audit execution returned exit code $rc; diagnostics were preserved in artifacts."
+            exit "$rc"
           fi
       - name: Validate audit completeness and record gate state
         if: always()
