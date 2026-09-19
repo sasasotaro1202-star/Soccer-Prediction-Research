@@ -110,3 +110,5 @@ if __name__=="__main__":
     (out/"full_catalog_audit_summary.json").write_text(json.dumps(summary,indent=2,ensure_ascii=False),encoding="utf-8")
     print(json.dumps(summary,indent=2,ensure_ascii=False))
     print(df[["code","name","acquisition_status","live_probe","pit_status"]].to_string(index=False))
+
+# Audit is intentionally rerun on subsequent commits so live source reachability is refreshed.
