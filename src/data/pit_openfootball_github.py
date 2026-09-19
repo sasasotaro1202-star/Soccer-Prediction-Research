@@ -91,27 +91,35 @@ def evidence_for_row(competition: str, season_start: int, row: pd.Series, timeou
         commits = _commits(path, timeout)
     except Exception as exc:
         return OpenFootballEvidence("UNVERIFIABLE", reason=f"github_commit_request:{type(exc).__name__}:{exc}")
+    # Publication evidence must be observed after the completed result could exist.
+    # A repository commit timestamp at/before kickoff that already contains the final
+    # score is not causal evidence of publication and must never be treated as PIT-safe.
+    from datetime import timedelta
+    lower_bound = (
+        event + timedelta(minutes=180)
+        if bool(row.get("kickoff_time_available", False))
+        else event.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    )
     ordered = []
     for c in commits:
         dt = _utc(((c.get("commit") or {}).get("committer") or {}).get("date"))
         sha = c.get("sha")
-        if dt is not None and sha and dt <= event:
+        if dt is not None and sha and dt >= lower_bound:
             ordered.append((dt, sha))
     ordered.sort()
     wanted = _row_key(row)
     for dt, sha in ordered:
         try:
             if wanted in _snapshot_keys(_file_at_commit(path, sha, timeout), competition, int(season_start)):
-                # A versioned result snapshot that already contains the final score
-                # is not proof of pre-match availability. Only snapshots at/before
-                # kickoff can be considered PIT candidates; downstream gates still
-                # require an explicit pre-cutoff evidence record.
+                # The commit timestamp is the observed source-publication proxy.
+                # Downstream PIT gates still require this timestamp to be <= the
+                # prediction cutoff before the row can influence a future prediction.
                 return OpenFootballEvidence(
                     "VERIFIED",
                     dt.isoformat(),
                     f"https://github.com/{REPOSITORY}/blob/{sha}/{path}",
                     sha,
-                    "versioned_openfootball_snapshot_contains_result_at_or_before_kickoff",
+                    "versioned_openfootball_snapshot_first_observed_after_result_lower_bound",
                 )
         except Exception:
             continue
