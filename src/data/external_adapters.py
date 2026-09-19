@@ -213,7 +213,8 @@ class ConfiguredApiAdapter(ExternalAdapter):
 ADAPTER_FACTORIES: dict[str, Callable[[], ExternalAdapter]] = {
     "clubelo": ClubEloAdapter,
     "statsbomb_open_data": StatsBombOpenDataAdapter,
-    "open_meteo": OpenMeteoAdapter,\n    "open_meteo_historical_forecast": OpenMeteoHistoricalForecastAdapter,
+    "open_meteo": OpenMeteoAdapter,
+    "open_meteo_historical_forecast": OpenMeteoHistoricalForecastAdapter,
     "api_football": lambda: ConfiguredApiAdapter("api_football", "https://v3.football.api-sports.io"),
     "sportmonks": lambda: ConfiguredApiAdapter("sportmonks", "https://api.sportmonks.com/v3/football"),
 }
