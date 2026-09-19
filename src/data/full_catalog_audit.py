@@ -16,11 +16,16 @@ DIRECT_SOURCE_URLS = {
     "SA":"https://www.football-data.co.uk/mmz4281/2526/I1.csv",
     "LL":"https://www.football-data.co.uk/mmz4281/2526/SP1.csv",
     "FL1":"https://www.football-data.co.uk/mmz4281/2526/F1.csv",
+    "ERE":"https://www.football-data.co.uk/mmz4281/2526/N1.csv",
+    "AG_M":"https://www.olympics.com/en/news/football-asian-games-2026-schedule-results-standings-complete-list",
+    "AG_W":"https://www.olympics.com/en/news/football-asian-games-2026-schedule-results-standings-complete-list",
     "J1":"https://www.football-data.co.uk/mmz4281/2526/JPN.csv",
     "J2":"https://www.football-data.co.uk/mmz4281/2526/JPN2.csv",
     "J3":"https://data.j-league.or.jp/",
     "UCL":"https://raw.githubusercontent.com/openfootball/champions-league/master/2025-26/cl.txt",
     "UEL":"https://raw.githubusercontent.com/openfootball/champions-league/master/2025-26/el.txt",
+    "U23_M":"https://inside.fifa.com/tournaments/mens/u23",
+    "U18_M":"https://www.fifa.com/en/tournaments/mens/u18",
     "DFBP":"https://raw.githubusercontent.com/openfootball/deutschland/master/2025-26/cup.txt",
     "CAR":"https://raw.githubusercontent.com/openfootball/england/master/2025-26/eflcup.txt",
     "FRI":"https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard",
@@ -28,6 +33,7 @@ DIRECT_SOURCE_URLS = {
 ADAPTER_HINTS = {
     "EPL":"football_data","CHA":"football_data","BL1":"football_data","SA":"football_data",
     "LL":"football_data","FL1":"football_data","J1":"jleague","J2":"jleague","J3":"jleague",
+    "ERE":"football_data","AG_M":"olympics_results","AG_W":"olympics_results","U23_M":"international_results","U18_M":"international_results",
     "UCL":"openfootball","UEL":"openfootball","DFBP":"openfootball","CAR":"openfootball","FRI":"espn_friendlies",
 }
 AUX_ADAPTER_HINTS = {
