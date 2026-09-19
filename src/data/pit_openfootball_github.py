@@ -130,6 +130,13 @@ def evidence_for_row(competition: str, season_start: int, row: pd.Series, timeou
     return OpenFootballEvidence("UNVERIFIABLE", reason="no_versioned_snapshot_contains_completed_result")
 
 def apply_bulk(history: pd.DataFrame, timeout: int = 30) -> pd.DataFrame:
+    """Verify openfootball rows with shared versioned-snapshot caches.
+
+    The evidence rule is unchanged: the first repository snapshot observed at or
+    after the conservative result-publication lower bound must contain the exact
+    completed-result identity. Shared caches avoid one GitHub API/file request per
+    match, which is both slower and more likely to hit rate limits.
+    """
     if history.empty:
         return history.copy()
     out = history.copy()
@@ -137,11 +144,57 @@ def apply_bulk(history: pd.DataFrame, timeout: int = 30) -> pd.DataFrame:
         if c not in out.columns:
             out[c] = None
     mask = out["competition"].astype(str).isin(PATHS)
-    for idx, row in out.loc[mask].iterrows():
-        ev = evidence_for_row(str(row["competition"]), int(row["season_start"]), row, timeout)
-        out.at[idx, "source_available_at_utc"] = ev.available_at_utc
-        out.at[idx, "pit_evidence_status"] = ev.status
-        out.at[idx, "pit_evidence_reason"] = ev.reason
-        out.at[idx, "pit_evidence_url"] = ev.evidence_url
-        out.at[idx, "capture_digest"] = ev.commit_sha
+    for (competition, season_start), group in out.loc[mask].groupby(["competition", "season_start"], sort=False):
+        path = f"{_season(int(season_start))}/{PATHS[str(competition)]}"
+        try:
+            commits = _commits(path, timeout)
+        except Exception as exc:
+            for idx in group.index:
+                out.at[idx, "pit_evidence_status"] = "UNVERIFIABLE"
+                out.at[idx, "pit_evidence_reason"] = f"github_commit_request:{type(exc).__name__}:{exc}"
+            continue
+        parsed_cache = {}
+        ordered_commits = []
+        for commit in commits:
+            dt = _utc(((commit.get("commit") or {}).get("committer") or {}).get("date"))
+            sha = commit.get("sha")
+            if dt is not None and sha:
+                ordered_commits.append((dt, sha))
+        ordered_commits.sort()
+        pending = {}
+        for idx, row in group.iterrows():
+            wanted = _row_key(row)
+            lower_bound = _publication_lower_bound(row)
+            if wanted is not None and lower_bound is not None:
+                pending[idx] = (wanted, lower_bound)
+        for dt, sha in ordered_commits:
+            if not pending:
+                break
+            eligible = {idx for idx, (_, bound) in pending.items() if dt >= bound}
+            if not eligible:
+                continue
+            if sha not in parsed_cache:
+                try:
+                    parsed_cache[sha] = _snapshot_keys(_file_at_commit(path, sha, timeout), str(competition), int(season_start))
+                except Exception:
+                    parsed_cache[sha] = None
+            keys = parsed_cache[sha]
+            if keys is None:
+                continue
+            for idx in list(eligible):
+                wanted, bound = pending[idx]
+                if wanted in keys:
+                    url = f"https://github.com/{REPOSITORY}/blob/{sha}/{path}"
+                    out.at[idx, "source_available_at_utc"] = dt.isoformat()
+                    out.at[idx, "pit_evidence_status"] = "VERIFIED"
+                    out.at[idx, "pit_evidence_reason"] = "versioned_openfootball_snapshot_first_observed_after_result_lower_bound"
+                    out.at[idx, "pit_evidence_url"] = url
+                    out.at[idx, "capture_digest"] = sha
+                    del pending[idx]
+        for idx in group.index:
+            if str(out.at[idx, "pit_evidence_status"]) == "VERIFIED":
+                continue
+            out.at[idx, "pit_evidence_status"] = "UNVERIFIABLE"
+            if pd.isna(out.at[idx, "source_available_at_utc"]):
+                out.at[idx, "pit_evidence_reason"] = "no_versioned_snapshot_contains_completed_result"
     return out
