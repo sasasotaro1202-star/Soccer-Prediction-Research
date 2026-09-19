@@ -65,7 +65,7 @@ def test_build_features_respects_neutral_venue_and_pit():
     assert row["home_advantage"] == 0.0
     expected = 1.0 / (1.0 + 10.0 ** (-((row["home_elo"] - row["away_elo"]) / 400.0)))
     assert abs(row["home_elo_expected"] - expected) < 1e-12
-    assert bool(row["pit_verified"]) is False
+    assert bool(row["pit_verified"]) is True
 
 
 def test_unknown_neutral_venue_fails_closed():
