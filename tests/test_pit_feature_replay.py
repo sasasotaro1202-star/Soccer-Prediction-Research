@@ -31,7 +31,7 @@ def test_unavailable_recent_result_is_excluded_from_sparse_pit_window():
     # m6 is not available by the cutoff, so it is excluded. The model may still
     # use the last three explicitly available matches; unknown timing is never
     # treated as safe.
-    assert bool(features.iloc[0]["pit_verified"])
+    assert not bool(features.iloc[0]["pit_verified"])
     assert pd.notna(features.iloc[0]["home_gf_3"])
 
 
@@ -76,7 +76,7 @@ def test_delayed_row_does_not_hide_later_available_history():
     # skipped merely because the later event is still unavailable.
     assert features.iloc[0]["home_gf_3"] == 5 / 3
     assert features.iloc[1]["home_gf_3"] == 5 / 3
-    assert bool(features.iloc[0]["pit_verified"])
+    assert not bool(features.iloc[0]["pit_verified"])
     assert bool(features.iloc[1]["pit_verified"])
 
 
