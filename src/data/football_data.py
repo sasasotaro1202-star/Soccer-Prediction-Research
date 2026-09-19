@@ -78,4 +78,15 @@ def load_available_history(start_year:int=2010,end_year:int=2025,max_workers:int
     if not coverage.empty:
         coverage=coverage[coverage["competition"].astype(str).isin(ACTIVE_SCOPE)].copy()
     # Record explicit UNAVAILABLE status for active competitions without an implemented adapter.
-    existing={(str(r.get("competition")), str(r.get("season"))) for _, r in coverage.iterrows()} if not coverage.empty else set()\n    extra=[]\n    for comp in sorted(ACTIVE_SCOPE):\n        if comp in LEAGUES or comp in {"J1","J2","J3","UCL","UEL"}:\n            continue\n        for year in range(start_year, end_year+1):\n            season=f"{year}/{str(year+1)[-2:]}"\n            if (comp, season) not in existing:\n                extra.append({"competition":comp,"season":season,"status":"UNAVAILABLE","rows":0,"source":"NO_IMPLEMENTED_ADAPTER","reason":"Active scope is registered but no historical acquisition adapter is implemented yet"})\n    if extra:\n        coverage=pd.concat([coverage,pd.DataFrame(extra)],ignore_index=True)\n    return history,coverage
+    existing={(str(r.get("competition")), str(r.get("season"))) for _, r in coverage.iterrows()} if not coverage.empty else set()
+    extra=[]
+    for comp in sorted(ACTIVE_SCOPE):
+        if comp in LEAGUES or comp in {"J1","J2","J3","UCL","UEL"}:
+            continue
+        for year in range(start_year, end_year+1):
+            season=f"{year}/{str(year+1)[-2:]}"
+            if (comp, season) not in existing:
+                extra.append({"competition":comp,"season":season,"status":"UNAVAILABLE","rows":0,"source":"NO_IMPLEMENTED_ADAPTER","reason":"Active scope is registered but no historical acquisition adapter is implemented yet"})
+    if extra:
+        coverage=pd.concat([coverage,pd.DataFrame(extra)],ignore_index=True)
+    return history,coverage
