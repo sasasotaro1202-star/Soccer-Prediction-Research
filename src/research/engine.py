@@ -19,6 +19,7 @@ from src.prediction.model_bundle import train_and_save_bundle
 from src.research.adoption import adoption_decision
 from src.research.llm import weakness_advice
 from src.research.registry import save_registry
+from src.research.stability_gate import evaluate_stability
 
 EXCLUDED_MODEL_COLUMNS = {"match_id", "competition", "season", "season_start", "kickoff_utc", "home_team", "away_team", "prediction_cutoff_at_utc", "home_goals", "away_goals", "target", "pit_verified", "feature_source_max_available_at_utc"}
 PIT_POLICY = "explicit_source_publication_time_only; unknown_publication_time_excluded"
@@ -94,6 +95,24 @@ def run(out_dir: str = "artifacts") -> dict:
     if len(wf) < 3:
         report = {"status": "BLOCKED", "reason": "At least three chronological OOS blocks are required: development plus two locked holdout blocks.", "snapshot_id": snapshot_id(history), "pit_policy": PIT_POLICY, "pit_verified_rows": pit_verified, "pit_total_rows": pit_total, "archive_audit": archive_audit, "audit": audit_report, "oos_claimed": False}; _write_status(out, report); return report
     development_oos = wf.iloc[:-2].copy(); locked = wf.tail(2).copy(); development_oos.to_csv(out / "development_oos_metrics.csv", index=False); locked.to_csv(out / "locked_oos_metrics.csv", index=False)
+    stability_folds = []
+    for _, row in wf.iterrows():
+        stability_folds.append({
+            "league": row.get("leagues", ""),
+            "season": row.get("seasons", ""),
+            "baseline": {
+                "logloss": row.get("baseline_logistic_logloss"),
+                "brier": row.get("baseline_logistic_brier"),
+                "accuracy": row.get("baseline_logistic_accuracy"),
+            },
+            "candidate": {
+                "logloss": row.get("logloss"),
+                "brier": row.get("brier"),
+                "accuracy": row.get("accuracy"),
+            },
+        })
+    stability = evaluate_stability(stability_folds)
+    (out / "stability_gate.json").write_text(json.dumps(stability, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     candidate_lock = {"status": "LOCKED", "selection_source": "historical_validation_only", "selection_artifact": "model_selection.csv", "development_oos_blocks": int(len(development_oos)), "locked_oos_blocks": int(len(locked)), "locked_oos_untouched": True, "target_accuracy": TARGET_ACCURACY, "model_family": "validation-selected calibrated ensemble", "feature_policy": "PIT-safe numeric features only", "pit_policy": PIT_POLICY}
     (out / "candidate_lock.json").write_text(json.dumps(candidate_lock, indent=2, ensure_ascii=False), encoding="utf-8")
     baseline_cols = ["oos_start", "oos_end", "baseline_logistic_logloss", "baseline_logistic_accuracy", "baseline_logistic_brier", "baseline_logistic_rps", "baseline_logistic_ece", "n"]
@@ -101,6 +120,7 @@ def run(out_dir: str = "artifacts") -> dict:
     baseline = locked[baseline_cols].rename(columns={"baseline_logistic_logloss": "logloss", "baseline_logistic_accuracy": "accuracy", "baseline_logistic_brier": "brier", "baseline_logistic_rps": "rps", "baseline_logistic_ece": "ece"})
     candidate = locked[candidate_cols].copy()
     adoption = adoption_decision(baseline, candidate, development_oos=development_oos, min_accuracy=TARGET_ACCURACY)
+    adoption["external_stability_gate"] = stability
     (out / "adoption_decision.json").write_text(json.dumps(adoption, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     model_bundle = None
     if adoption.get("status") == "ADOPT" and not selections.empty:
@@ -127,7 +147,7 @@ def run(out_dir: str = "artifacts") -> dict:
             (out / "production_model.json").write_text(json.dumps(model_bundle, indent=2, ensure_ascii=False), encoding="utf-8")
     oos_n = int(wf["n"].sum()) if "n" in wf.columns else 0; oos_acc = float(np.average(wf["accuracy"], weights=wf["n"])) if oos_n else float("nan")
     locked_n = int(locked["n"].sum()); locked_acc = float(np.average(locked["accuracy"], weights=locked["n"])) if locked_n else float("nan")
-    report = {"status": "OK", "snapshot_id": snapshot_id(history), "oos": wf.mean(numeric_only=True).to_dict(), "coverage": coverage.to_dict(orient="records"), "archive_audit": archive_audit, "pit_policy": PIT_POLICY, "pit_verified_rows": pit_verified, "pit_total_rows": pit_total, "pit_verified_rate": float(pit_verified / pit_total) if pit_total else 0.0, "oos_protocol": {"development_blocks": int(len(development_oos)), "locked_blocks": 2, "locked_oos_untouched": True, "selection_source": "historical_validation_only"}, "accuracy_target": {"target_accuracy": TARGET_ACCURACY, "locked_oos_accuracy": locked_acc, "weighted_oos_accuracy": oos_acc, "target_met": bool(locked_acc >= TARGET_ACCURACY) if locked_n else False, "target_gap": float(locked_acc - TARGET_ACCURACY) if locked_n else float("nan"), "oos_sample_size": oos_n, "locked_oos_sample_size": locked_n}, "adoption": adoption, "production_model": "calibrated_ensemble" if adoption.get("status") == "ADOPT" else "baseline_logistic", "production_model_bundle": model_bundle, "audit": audit_report, "ai_research": weakness_advice(wf.mean(numeric_only=True).to_dict())}
+    report = {"status": "OK", "snapshot_id": snapshot_id(history), "oos": wf.mean(numeric_only=True).to_dict(), "coverage": coverage.to_dict(orient="records"), "archive_audit": archive_audit, "pit_policy": PIT_POLICY, "pit_verified_rows": pit_verified, "pit_total_rows": pit_total, "pit_verified_rate": float(pit_verified / pit_total) if pit_total else 0.0, "oos_protocol": {"development_blocks": int(len(development_oos)), "locked_blocks": 2, "locked_oos_untouched": True, "selection_source": "historical_validation_only"}, "stability_gate": stability, "accuracy_target": {"target_accuracy": TARGET_ACCURACY, "locked_oos_accuracy": locked_acc, "weighted_oos_accuracy": oos_acc, "target_met": bool(locked_acc >= TARGET_ACCURACY) if locked_n else False, "target_gap": float(locked_acc - TARGET_ACCURACY) if locked_n else float("nan"), "oos_sample_size": oos_n, "locked_oos_sample_size": locked_n}, "adoption": adoption, "production_model": "calibrated_ensemble" if adoption.get("status") == "ADOPT" else "baseline_logistic", "production_model_bundle": model_bundle, "audit": audit_report, "ai_research": weakness_advice(wf.mean(numeric_only=True).to_dict())}
     _write_status(out, report); return report
 
 
