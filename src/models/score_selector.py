@@ -16,9 +16,9 @@ class ScoreCandidate:
 
 
 def select_score_candidates(
-    candidates: Iterable[tuple[int, int, float]], top_k: int = 4
+    candidates: Iterable[tuple[int, int, float]], top_k: int = 3
 ) -> list[ScoreCandidate]:
-    """Return exactly four scorelines, preserving full-distribution probabilities.
+    """Return exactly three scorelines, preserving full-distribution probabilities.
 
     Score probabilities are unconditional probabilities from the full score
     distribution. They are deliberately *not* renormalized over the displayed
