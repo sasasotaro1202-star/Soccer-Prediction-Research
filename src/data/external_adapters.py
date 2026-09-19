@@ -145,6 +145,41 @@ class OpenMeteoAdapter(ExternalAdapter):
         )
 
 
+class OpenMeteoHistoricalForecastAdapter(ExternalAdapter):
+    """Archived forecast snapshots for PIT-safe weather research.
+
+    The caller must provide the forecast run initialisation/availability timestamp.
+    We never equate a run's valid time with its publication time. The provider's
+    archived single-run API is therefore used only when an explicit availability
+    cutoff can be supplied and audited.
+    """
+
+    source = "open_meteo"
+    base_url = "https://historical-forecast-api.open-meteo.com/v1/forecast"
+
+    def request(
+        self,
+        *,
+        latitude: float,
+        longitude: float,
+        hourly: str,
+        run: datetime | str,
+        feature_available_at: datetime | str,
+    ) -> SourceRequest:
+        return SourceRequest(
+            self.source,
+            self.base_url,
+            {
+                "latitude": latitude,
+                "longitude": longitude,
+                "hourly": hourly,
+                "run": _cutoff(run),
+            },
+            source_timestamp=_cutoff(run),
+            feature_available_at=_cutoff(feature_available_at),
+        )
+
+
 class ConfiguredApiAdapter(ExternalAdapter):
     """Generic authenticated adapter used by API-Football/Sportmonks.
 
@@ -178,7 +213,7 @@ class ConfiguredApiAdapter(ExternalAdapter):
 ADAPTER_FACTORIES: dict[str, Callable[[], ExternalAdapter]] = {
     "clubelo": ClubEloAdapter,
     "statsbomb_open_data": StatsBombOpenDataAdapter,
-    "open_meteo": OpenMeteoAdapter,
+    "open_meteo": OpenMeteoAdapter,\n    "open_meteo_historical_forecast": OpenMeteoHistoricalForecastAdapter,
     "api_football": lambda: ConfiguredApiAdapter("api_football", "https://v3.football.api-sports.io"),
     "sportmonks": lambda: ConfiguredApiAdapter("sportmonks", "https://api.sportmonks.com/v3/football"),
 }
