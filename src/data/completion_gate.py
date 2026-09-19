@@ -92,7 +92,7 @@ def _pit_preflight(root: Path) -> dict:
     # valid result-availability bound. Retries and precise-capture scanning only
     # recover evidence that the slower adapter could miss; they do not relax PIT.
     archive = FootballDataWaybackAdapter(cache_dir=str(root / "pit_evidence"), max_workers=2)
-    supported = {"EPL", "CHA", "BL1", "SA", "LL", "FL1"}
+    supported = {"EPL", "ERE", "BL1", "SA", "LL", "FL1"}
     mask = history["competition"].astype(str).isin(supported)
     if mask.any():
         enriched = archive.apply_bulk(history.loc[mask].copy())
@@ -202,7 +202,7 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
     )
 
     result = {
-        "target_competition_count": 14,
+        "target_competition_count": len(TARGET_COMPETITIONS),
         "requested_season_count": 16,
         "requested_competition_season_cells": len(expected),
         "historically_not_applicable_cells": len(NON_APPLICABLE_CELLS),
