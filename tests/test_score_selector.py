@@ -7,6 +7,7 @@ def test_selects_exactly_three_and_preserves_raw_probability():
             (0, 0, 0.20),
             (1, 0, 0.35),
             (0, 1, 0.30),
+            (1, 1, 0.15),
         ]
     )
 
