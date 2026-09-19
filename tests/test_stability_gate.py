@@ -37,3 +37,15 @@ def test_one_logloss_regression_blocks_stability():
     result = evaluate_stability(folds)
     assert result["status"] == "HOLD"
     assert result["worst_logloss_delta"] > 0
+
+
+def test_pipe_delimited_fold_coverage_is_unioned():
+    folds = [
+        _fold("EPL|Bundesliga", "2022|2023", 1.00, .95),
+        _fold("Serie A", "2024", 1.02, .98),
+        _fold("Ligue 1", "2025", 1.01, .99),
+    ]
+    result = evaluate_stability(folds)
+    assert result["status"] == "PASS"
+    assert result["unique_leagues"] == ["Bundesliga", "EPL", "Ligue 1", "Serie A"]
+    assert result["unique_seasons"] == ["2022", "2023", "2024", "2025"]
