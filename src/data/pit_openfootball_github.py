@@ -95,19 +95,23 @@ def evidence_for_row(competition: str, season_start: int, row: pd.Series, timeou
     for c in commits:
         dt = _utc(((c.get("commit") or {}).get("committer") or {}).get("date"))
         sha = c.get("sha")
-        if dt is not None and sha and dt >= event:
+        if dt is not None and sha and dt <= event:
             ordered.append((dt, sha))
     ordered.sort()
     wanted = _row_key(row)
     for dt, sha in ordered:
         try:
             if wanted in _snapshot_keys(_file_at_commit(path, sha, timeout), competition, int(season_start)):
+                # A versioned result snapshot that already contains the final score
+                # is not proof of pre-match availability. Only snapshots at/before
+                # kickoff can be considered PIT candidates; downstream gates still
+                # require an explicit pre-cutoff evidence record.
                 return OpenFootballEvidence(
                     "VERIFIED",
                     dt.isoformat(),
                     f"https://github.com/{REPOSITORY}/blob/{sha}/{path}",
                     sha,
-                    "versioned_openfootball_snapshot_contains_completed_result",
+                    "versioned_openfootball_snapshot_contains_result_at_or_before_kickoff",
                 )
         except Exception:
             continue
