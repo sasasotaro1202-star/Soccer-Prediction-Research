@@ -280,7 +280,22 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
         result["blocking_reasons"].append(f"PIT replay preflight failed: {pit_preflight_error}")
     elif not pit_gate:
         result["blocking_reasons"].append("insufficient PIT-verified replay rows using explicit archived publication evidence")
-    (root / "completion_gate.json").write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    serialized = json.dumps(result, indent=2, ensure_ascii=False, default=str)
+    (root / "completion_gate.json").write_text(serialized, encoding="utf-8")
+    # Research consumes a distinct audit-gate artifact. It is intentionally derived
+    # from the same fail-closed audit result; no weaker parallel gate is introduced.
+    audit_gate = {
+        "full_gate_passed": bool(result.get("full_gate_passed", False)),
+        "pit_publication_time_gate": bool(result.get("pit_publication_time_gate", False)),
+        "coverage_scope_complete": bool(result.get("coverage_scope_complete", False)),
+        "collision_rows": int(result.get("collision_rows", 0)),
+        "duplicate_source_rows": int(result.get("duplicate_source_rows", 0)),
+        "team_mapping_issues": int(result.get("team_mapping_issues", 0)),
+        "blocking_reasons": list(result.get("blocking_reasons", [])),
+        "source": "completion_gate",
+        "fail_closed": True,
+    }
+    (root / "audit_gate.json").write_text(json.dumps(audit_gate, indent=2, ensure_ascii=False), encoding="utf-8")
     return result
 
 
