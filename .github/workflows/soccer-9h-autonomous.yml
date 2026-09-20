@@ -230,6 +230,24 @@ jobs:
           PIT_ENABLE_SECONDARY_ARCHIVE: "1"
           PIT_REPLAY_ROWS_PER_GROUP: "1"
         run: python -m src.research.safe_runner
+      - name: Strict production contract verification
+        if: always()
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: |
+          set -euo pipefail
+          python -m src.research.production_contract
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("artifacts/production_contract.json")
+          if not p.exists():
+              raise SystemExit("production_contract.json missing after contract evaluation")
+          payload=json.loads(p.read_text(encoding="utf-8"))
+          if payload.get("production_contract_passed") is not True:
+              raise SystemExit("strict production contract did not pass")
+          PY
       - name: Write 9-hour health record
         if: always()
         run: |
