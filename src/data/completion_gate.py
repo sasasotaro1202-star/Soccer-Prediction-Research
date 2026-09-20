@@ -17,6 +17,7 @@ from src.data.pit_source_adapter_fast import FootballDataWaybackAdapter
 from src.data.pit_archive_fallback import apply_arquivo_fallback
 from src.features.soccer_features import build_match_features
 from src.data.pit_openfootball_github import apply_bulk as apply_openfootball_pit
+from src.data.pit_openfootball_history import apply_openfootball_history
 
 SEASONS = [f"{y}/{str(y + 1)[-2:]}" for y in range(2010, 2026)]
 CANONICAL_SOURCES = {
@@ -137,6 +138,10 @@ def _pit_preflight(root: Path) -> dict:
         history = _merge_pit_evidence(history, of_enriched)
         openfootball_verified = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
 
+    before_versioned = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+    history = _merge_pit_evidence(history, apply_openfootball_history(history, cache_dir=str(root / "pit_evidence")))
+    after_versioned = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+
     features = build_match_features(history, history, windows=(3, 5, 10, 20))
     features.to_csv(root / "pit_replay_features.csv", index=False)
     verified = features["pit_verified"].fillna(False).astype(bool) if "pit_verified" in features.columns else pd.Series(False, index=features.index)
@@ -150,6 +155,7 @@ def _pit_preflight(root: Path) -> dict:
         "archive_enriched_rows": before_fallback,
         "arquivo_fallback_enriched_rows": max(0, after_fallback - before_fallback),
         "openfootball_verified_rows": openfootball_verified,
+        "versioned_openfootball_verified_rows": max(0, after_versioned - before_versioned),
     }
 
 
