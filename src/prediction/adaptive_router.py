@@ -1,4 +1,4 @@
-"""PIT-safe, OOS-driven adaptive model routing.
+"""PIT-safe, OOS-driven adaptive model routing for multiclass 1X2 probabilities.
 
 The router is deliberately conservative:
 - routing evidence must be available before the prediction timestamp;
@@ -20,7 +20,9 @@ REQUIRED_OOS_COLUMNS = {
     "outcome_available_at_utc",
     "y",
     "model",
-    "probability",
+    "p_home",
+    "p_draw",
+    "p_away",
 }
 DEFAULT_MODELS = ("ml_ensemble", "elo", "poisson", "market")
 DEFAULT_CONTEXT_COLUMNS = (
@@ -33,9 +35,16 @@ DEFAULT_CONTEXT_COLUMNS = (
 )
 
 
-def _log_loss(y: np.ndarray, p: np.ndarray) -> float:
-    p = np.clip(np.asarray(p, dtype=float), 1e-6, 1.0 - 1e-6)
-    return float(-np.mean(y * np.log(p) + (1.0 - y) * np.log(1.0 - p)))
+def _multiclass_log_loss(y: np.ndarray, probs: np.ndarray) -> float:
+    y = np.asarray(y, dtype=int)
+    p = np.asarray(probs, dtype=float)
+    if p.ndim != 2 or p.shape[1] != 3 or len(y) != len(p):
+        raise ValueError("Expected N x 3 probability matrix and N outcomes")
+    if not np.isfinite(p).all() or not np.allclose(p.sum(axis=1), 1.0, atol=1e-6):
+        raise ValueError("Probabilities must be finite and sum to one")
+    if not np.isin(y, [0, 1, 2]).all():
+        raise ValueError("1X2 outcomes must be encoded as 0=H, 1=D, 2=A")
+    return float(-np.mean(np.log(np.clip(p[np.arange(len(y)), y], 1e-12, 1.0))))
 
 
 @dataclass(frozen=True)
@@ -120,11 +129,14 @@ class AdaptiveModelRouter:
         if d.empty:
             raise ValueError("No PIT-safe historical OOS routing evidence")
         d["y"] = pd.to_numeric(d["y"], errors="coerce")
-        d["probability"] = pd.to_numeric(d["probability"], errors="coerce")
-        d = d.dropna(subset=["y", "probability"])
-        if d.empty or not d["y"].isin([0, 1]).all():
-            raise ValueError("Routing evidence must contain binary outcomes 0/1")
-        d["probability"] = d["probability"].clip(1e-6, 1 - 1e-6)
+        for col in ("p_home", "p_draw", "p_away"):
+            d[col] = pd.to_numeric(d[col], errors="coerce")
+        d = d.dropna(subset=["y", "p_home", "p_draw", "p_away"])
+        if d.empty or not d["y"].isin([0, 1, 2]).all():
+            raise ValueError("Routing outcomes must be encoded as 0=H, 1=D, 2=A")
+        probs = d[["p_home", "p_draw", "p_away"]].to_numpy(float)
+        if (probs < 0).any() or (probs > 1).any() or not np.allclose(probs.sum(axis=1), 1.0, atol=1e-6):
+            raise ValueError("OOS routing probabilities must be valid 3-class distributions")
 
         global_scores: dict[str, float] = {}
         for model in self.models:
@@ -132,7 +144,7 @@ class AdaptiveModelRouter:
             if x.empty:
                 global_scores[model] = 1.0
             else:
-                global_scores[model] = _log_loss(x["y"].to_numpy(), x["probability"].to_numpy())
+                global_scores[model] = _multiclass_log_loss(x["y"].to_numpy(int), x[["p_home", "p_draw", "p_away"]].to_numpy(float))
         inv = {m: 1.0 / max(s, 1e-6) for m, s in global_scores.items()}
         self._global_weights = self._bounded(self._normalize(inv), self.base_weights)
 
@@ -169,15 +181,17 @@ class AdaptiveModelRouter:
             raise ValueError("Candidate probabilities are missing one or more configured models")
         arrays = {m: np.asarray(candidate_probabilities[m], dtype=float) for m in self.models}
         shape = next(iter(arrays.values())).shape
-        if len(shape) != 1 or any(a.shape != shape for a in arrays.values()):
-            raise ValueError("Candidate probabilities must be equally shaped 1-D arrays")
+        if len(shape) != 2 or shape[1] != 3 or any(a.shape != shape for a in arrays.values()):
+            raise ValueError("Candidate probabilities must be equally shaped N x 3 arrays")
         if any(not np.isfinite(a).all() for a in arrays.values()):
             raise ValueError("Candidate probabilities contain non-finite values")
         if any(((a < 0) | (a > 1)).any() for a in arrays.values()):
             raise ValueError("Candidate probabilities must be in [0, 1]")
+        if any(not np.allclose(a.sum(axis=1), 1.0, atol=1e-6) for a in arrays.values()):
+            raise ValueError("Each candidate probability row must sum to one")
         key = self._regime_key(context, context_columns)
         weights = self._regime_weights.get(key, self._global_weights)
-        matrix = np.vstack([arrays[m] for m in self.models])
+        matrix = np.stack([arrays[m] for m in self.models], axis=0)
         blended = np.average(matrix, axis=0, weights=[weights[m] for m in self.models])
         return {
             "probabilities": blended,
