@@ -17,7 +17,7 @@ permissions:
 
 concurrency:
   group: soccer-9h-autonomous
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 # Three sequential 180-minute phases provide up to 9 hours of repository-side work.
 # No production/PIT gate is weakened to keep the workflow green.
