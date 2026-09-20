@@ -252,6 +252,7 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
         "pit_replay_verified_competitions": pit["verified_competitions"],
         "pit_archive_enriched_rows": pit.get("archive_enriched_rows", 0),
         "pit_arquivo_fallback_enriched_rows": pit.get("arquivo_fallback_enriched_rows", 0),
+        "versioned_openfootball_verified_rows": pit.get("versioned_openfootball_verified_rows", 0),
         "pit_publication_time_gate": pit_gate,
         "no_missing_to_zero": True,
         "full_gate_passed": full_gate_passed,
