@@ -108,7 +108,11 @@ class AdaptiveModelRouter:
         if d[["prediction_time_utc", "outcome_available_at_utc"]].isna().any().any():
             raise ValueError("OOS routing evidence contains invalid timestamps")
         # Hard PIT invariant: outcome evidence must predate the current routing cutoff.
-        cutoff = pd.Timestamp(as_of, tz="UTC") if as_of is not None else d["prediction_time_utc"].max()
+        if as_of is not None:
+            cutoff = pd.Timestamp(as_of)
+            cutoff = cutoff.tz_localize("UTC") if cutoff.tzinfo is None else cutoff.tz_convert("UTC")
+        else:
+            cutoff = d["prediction_time_utc"].max()
         if cutoff is pd.NaT:
             raise ValueError("No valid routing cutoff")
         d = d[d["outcome_available_at_utc"] < cutoff].copy()
