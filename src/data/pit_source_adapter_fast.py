@@ -140,7 +140,10 @@ class FootballDataWaybackAdapter(_BaseAdapter):
     def _prefetch_url(self, url, rows, workers=None):
         if not rows:
             return []
-        captures = self.captures(url)
+        # Use the resilient CDX path here as well; otherwise the retry helper
+        # would only warm the cache and the actual PIT scan could still make a
+        # single failed CDX request look like a genuine no-capture condition.
+        captures = self._capture_rows_resilient(url)
         if not captures:
             diag = self._capture_diag.get(url, CaptureDiagnostic("CDX_REQUEST_FAILURE"))
             reason = "no_archive_captures" if diag.status == "CDX_NO_CAPTURE" else f"{diag.status.lower()}: {diag.error or ''}".strip()
