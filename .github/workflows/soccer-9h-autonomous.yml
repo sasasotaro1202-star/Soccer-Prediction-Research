@@ -109,10 +109,23 @@ jobs:
           done
           exit 1
       - name: Run full tests again on exact commit
+        id: research_tests
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
         run: python -m pytest -q
+      - name: Persist preflight status artifacts
+        if: always()
+        env:
+          TEST_OUTCOME: ${{ steps.research_tests.outcome }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          Path("artifacts").mkdir(parents=True, exist_ok=True)
+          passed = os.environ.get("TEST_OUTCOME") == "success"
+          Path("artifacts/test_status.json").write_text(json.dumps({"exit_code": 0 if passed else 1, "passed": passed}), encoding="utf-8")
+          PY
       - name: Rebuild audit artifacts before research
         env:
           PYTHONPATH: .
@@ -120,6 +133,17 @@ jobs:
         run: |
           python -m src.data.fixture_field_audit
           PIT_ENABLE_ARCHIVE_AUDIT=1 python -m src.data.completion_gate
+      - name: Persist audit execution status
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("artifacts/audit_summary.json")
+          payload=json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+          passed=bool(payload.get("audit_execution_ok", False))
+          Path("artifacts/audit_status.json").write_text(json.dumps({"exit_code": 0 if passed else 1, "passed": passed}), encoding="utf-8")
+          PY
       - name: Run bounded research engine
         env:
           TESTS_PASSED: "true"
