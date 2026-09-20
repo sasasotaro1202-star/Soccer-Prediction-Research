@@ -177,6 +177,19 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
                 rows.append({"competition": comp, "season": season, "canonical_source": CANONICAL_SOURCES[comp], "status": "NOT_APPLICABLE", "rows": 0, "reason": "Competition did not exist in this historical season"})
                 continue
             candidates = acquisition[(acquisition.competition == comp) & acquisition.season.map(lambda x: _season_display(comp, x) == season)]
+            # Calendar-year competitions (J1/J2/J3/Asian Games/youth) are emitted by
+            # their adapters as YYYY, while the locked gate matrix uses YYYY/YY.
+            # Normalize through the same season-key convention used by the audit
+            # builder so an explicit adapter row cannot be mistaken for missing audit.
+            if candidates.empty:
+                try:
+                    target_year = int(season[:4])
+                    normalized_season = season
+                    if comp in {"J1", "J2", "J3", "AG_M", "AG_W", "U23_M", "U18_M"}:
+                        normalized_season = str(target_year)
+                    candidates = acquisition[(acquisition.competition == comp) & (acquisition.season.map(lambda x: str(x).strip()) == normalized_season)]
+                except (TypeError, ValueError):
+                    pass
             if candidates.empty:
                 status, count, reason = "MISSING_AUDIT_CELL", 0, "Adapter did not emit an explicit acquisition status"
             else:
