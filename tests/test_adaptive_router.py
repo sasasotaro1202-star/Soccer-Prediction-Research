@@ -9,7 +9,7 @@ def _oos():
     rows = []
     for i in range(180):
         ts = pd.Timestamp("2025-01-01", tz="UTC") + pd.Timedelta(days=i)
-        y = i % 2
+        y = i % 3
         for model, p in (
             ("ml_ensemble", 0.55 if y else 0.45),
             ("elo", 0.52 if y else 0.48),
@@ -22,7 +22,7 @@ def _oos():
                     "outcome_available_at_utc": ts + pd.Timedelta(hours=2),
                     "y": y,
                     "model": model,
-                    "probability": p,
+                    "p_home": p[0],\n                    "p_draw": p[1],\n                    "p_away": p[2],
                     "competition": "EPL",
                     "strength_gap_bin": "MID",
                     "scoring_environment_bin": "MID",
@@ -41,7 +41,7 @@ def test_router_requires_pit_safe_oos():
     router.fit(d, as_of="2025-06-29T00:00:00Z")
     out = router.route(
         {c: "MID" for c in ("competition", "strength_gap_bin", "scoring_environment_bin", "rest_bin")},
-        {m: np.array([0.5]) for m in ("ml_ensemble", "elo", "poisson", "market")},
+        {m: np.array([[0.5, 0.3, 0.2]]) for m in ("ml_ensemble", "elo", "poisson", "market")},
     )
     assert out["routing_source"] in {"GLOBAL_OOS", "REGIME_OOS"}
 
@@ -58,7 +58,7 @@ def test_sparse_regime_falls_back_to_global():
             "starter_status": "ANNOUNCED",
             "odds_missing": "FALSE",
         },
-        {m: np.array([0.7]) for m in ("ml_ensemble", "elo", "poisson", "market")},
+        {m: np.array([[0.7, 0.2, 0.1]]) for m in ("ml_ensemble", "elo", "poisson", "market")},
     )
     assert out["routing_source"] == "GLOBAL_OOS"
     assert np.isclose(sum(out["weights"].values()), 1.0)
@@ -75,7 +75,7 @@ def test_routing_is_deterministic_and_probability_valid():
         "starter_status": "ANNOUNCED",
         "odds_missing": "FALSE",
     }
-    probs = {m: np.array([0.2, 0.8]) for m in ("ml_ensemble", "elo", "poisson", "market")}
+    probs = {m: np.array([[0.2, 0.5, 0.3], [0.4, 0.3, 0.3]]) for m in ("ml_ensemble", "elo", "poisson", "market")}
     a = router.route(ctx, probs)
     b = router.route(ctx, probs)
     assert np.allclose(a["probabilities"], b["probabilities"])
@@ -88,9 +88,9 @@ def test_invalid_candidate_probabilities_fail_closed():
         router.route(
             {},
             {
-                "ml_ensemble": [0.5],
-                "elo": [0.5],
-                "poisson": [1.2],
-                "market": [0.5],
+                "ml_ensemble": [[0.5, 0.3, 0.2]],
+                "elo": [[0.5, 0.3, 0.2]],
+                "poisson": [[1.2, -0.1, -0.1]],
+                "market": [[0.5, 0.3, 0.2]],
             },
         )
