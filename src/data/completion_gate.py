@@ -103,7 +103,7 @@ def _pit_preflight(root: Path) -> dict:
     # exact completed-result identity is present in an archive capture at/after a
     # valid result-availability bound. Retries and precise-capture scanning only
     # recover evidence that the slower adapter could miss; they do not relax PIT.
-    archive = FootballDataWaybackAdapter(cache_dir=str(root / "pit_evidence"), max_workers=2)
+    archive = FootballDataWaybackAdapter(cache_dir=str(root / "pit_evidence"), max_workers=4)
     supported = {"EPL", "ERE", "CHA", "BL1", "SA", "LL", "FL1"}
     mask = history["competition"].astype(str).isin(supported)
     if mask.any():
