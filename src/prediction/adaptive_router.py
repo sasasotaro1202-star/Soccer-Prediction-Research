@@ -35,7 +35,11 @@ DEFAULT_CONTEXT_COLUMNS = (
 )
 
 
-def _multiclass_log_loss(y: np.ndarray, probs: np.ndarray) -> float:
+def _multiclass_log_loss(
+    y: np.ndarray,
+    probs: np.ndarray,
+    sample_weight: np.ndarray | None = None,
+) -> float:
     y = np.asarray(y, dtype=int)
     p = np.asarray(probs, dtype=float)
     if p.ndim != 2 or p.shape[1] != 3 or len(y) != len(p):
@@ -44,7 +48,13 @@ def _multiclass_log_loss(y: np.ndarray, probs: np.ndarray) -> float:
         raise ValueError("Probabilities must be finite and sum to one")
     if not np.isin(y, [0, 1, 2]).all():
         raise ValueError("1X2 outcomes must be encoded as 0=H, 1=D, 2=A")
-    return float(-np.mean(np.log(np.clip(p[np.arange(len(y)), y], 1e-12, 1.0))))
+    losses = -np.log(np.clip(p[np.arange(len(y)), y], 1e-12, 1.0))
+    if sample_weight is None:
+        return float(np.mean(losses))
+    w = np.asarray(sample_weight, dtype=float)
+    if len(w) != len(losses) or not np.isfinite(w).all() or (w < 0).any() or float(w.sum()) <= 0:
+        raise ValueError("Sample weights must be finite, non-negative, and non-zero")
+    return float(np.average(losses, weights=w))
 
 
 @dataclass(frozen=True)
@@ -138,13 +148,22 @@ class AdaptiveModelRouter:
         if (probs < 0).any() or (probs > 1).any() or not np.allclose(probs.sum(axis=1), 1.0, atol=1e-6):
             raise ValueError("OOS routing probabilities must be valid 3-class distributions")
 
+        if self.config.decay_days <= 0 or not np.isfinite(self.config.decay_days):
+            raise ValueError("decay_days must be finite and positive")
+        ages = (cutoff - d["prediction_time_utc"]).dt.total_seconds() / 86400.0
+        d["_recency_weight"] = np.exp(-np.maximum(ages, 0.0) / self.config.decay_days).clip(lower=1e-6)
+
         global_scores: dict[str, float] = {}
         for model in self.models:
             x = d[d["model"].astype(str) == model]
             if x.empty:
                 global_scores[model] = 1.0
             else:
-                global_scores[model] = _multiclass_log_loss(x["y"].to_numpy(int), x[["p_home", "p_draw", "p_away"]].to_numpy(float))
+                global_scores[model] = _multiclass_log_loss(
+                    x["y"].to_numpy(int),
+                    x[["p_home", "p_draw", "p_away"]].to_numpy(float),
+                    x["_recency_weight"].to_numpy(float),
+                )
         inv = {m: 1.0 / max(s, 1e-6) for m, s in global_scores.items()}
         self._global_weights = self._bounded(self._normalize(inv), self.base_weights)
 
@@ -160,7 +179,15 @@ class AdaptiveModelRouter:
             scores = {}
             for model in self.models:
                 x = group[group["model"].astype(str) == model]
-                scores[model] = _log_loss(x["y"].to_numpy(), x["probability"].to_numpy()) if not x.empty else global_scores[model]
+                scores[model] = (
+                    _multiclass_log_loss(
+                        x["y"].to_numpy(int),
+                        x[["p_home", "p_draw", "p_away"]].to_numpy(float),
+                        x["_recency_weight"].to_numpy(float),
+                    )
+                    if not x.empty
+                    else global_scores[model]
+                )
             inv_regime = self._normalize({m: 1.0 / max(s, 1e-6) for m, s in scores.items()})
             alpha = min(1.0, n / max(self.config.shrinkage_samples, 1))
             blended = {
