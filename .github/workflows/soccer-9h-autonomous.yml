@@ -67,7 +67,7 @@ jobs:
           mkdir -p artifacts/9h/phase1
           if [ -f artifacts/completion_gate.json ]; then cp artifacts/completion_gate.json artifacts/9h/phase1/completion_gate.json; fi
           if [ -f artifacts/audit_summary.json ]; then cp artifacts/audit_summary.json artifacts/9h/phase1/audit_summary.json; fi
-          printf '{"phase":"phase1_gate","head_sha":"%s","completion_step":"${{ steps.completion.outcome }}\n' "$GITHUB_SHA" > artifacts/9h/phase1/phase_status.json
+          printf '{"phase":"phase1_gate","head_sha":"%s","completion_step":"${{ steps.completion.outcome }}"}\n' "$GITHUB_SHA" > artifacts/9h/phase1/phase_status.json
       - name: Upload phase 1 evidence
         if: always()
         uses: actions/upload-artifact@v6
