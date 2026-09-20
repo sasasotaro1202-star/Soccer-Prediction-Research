@@ -235,3 +235,5 @@ jobs:
           path: artifacts/
           retention-days: 30
           if-no-files-found: warn
+
+# Operational trigger: latest-head full research verification requested.
