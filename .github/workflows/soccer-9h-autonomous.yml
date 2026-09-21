@@ -3,7 +3,7 @@ name: Soccer 9H Autonomous Research
 on:
   workflow_dispatch:
   schedule:
-    - cron: "15 0,8,16 * * *"
+    - cron: "15 0,9,18 * * *"
 
 permissions:
   contents: read
