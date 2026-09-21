@@ -15,7 +15,9 @@ def test_score_model_is_pit_only_and_returns_exactly_three():
         ]
     )
     model = fit_score_rate_model(history)
-    assert model["schema_version"] == 1
+    assert model["schema_version"] == 2
+    assert model["method"] == "pit_smoothed_venue_split_team_goal_rates"
+    assert model["teams"]["A"]["home_matches"] == 2.0
     assert len(predict_score_candidates(model, "A", "B")) == 3
     assert all(0 <= x["probability"] <= 1 for x in predict_score_candidates(model, "A", "B"))
 
