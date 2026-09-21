@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: soccer-9h-autonomous
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # Three sequential 180-minute phases provide up to 9 hours of repository-side work.
 # No production/PIT gate is weakened to keep the workflow green.
@@ -295,4 +295,4 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
-# This workflow intentionally lives on main so the schedule is active.\n# Each scheduled/manual run checks out the latest target research branch.\n
+# This workflow intentionally lives on main so the schedule is active.
