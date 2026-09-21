@@ -196,6 +196,46 @@ def _routing_context(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 
+def _context_keys(frame: pd.DataFrame) -> list[tuple[str, pd.Series]]:
+    """Return routing keys from most specific to broadest granularity."""
+    d = _routing_context(frame)
+    levels: list[tuple[str, pd.Series]] = []
+    if "routing_context" in d.columns:
+        levels.append(("FULL", d["routing_context"].astype("string")))
+    if {"competition", "routing_strength_gap"}.issubset(d.columns):
+        levels.append((
+            "COMP_STRENGTH",
+            d["competition"].astype("string").fillna("__MISSING__")
+            + "|"
+            + d["routing_strength_gap"].astype("string").fillna("MISSING"),
+        ))
+    if "competition" in d.columns:
+        levels.append(("COMP", d["competition"].astype("string").fillna("__MISSING__")))
+    return levels
+
+
+def _lookup_context_weights(
+    row: pd.Series,
+    context_weights: dict[str, dict[str, float]],
+    fallback: dict[str, float],
+) -> tuple[dict[str, float], str]:
+    """Resolve the most specific learned context, then safely fall back."""
+    routed = _routing_context(pd.DataFrame([row])).iloc[0]
+    keys = [
+        ("FULL", str(routed.get("routing_context", ""))),
+        (
+            "COMP_STRENGTH",
+            f"{routed.get('competition', '__MISSING__')}|{routed.get('routing_strength_gap', 'MISSING')}",
+        ),
+        ("COMP", str(routed.get("competition", "__MISSING__"))),
+    ]
+    for level, key in keys:
+        learned = context_weights.get(f"{level}:{key}")
+        if learned is not None:
+            return learned, f"{level}:{key}"
+    return fallback, "GLOBAL"
+
+
 def _contextual_blend_weights(
     validation: pd.DataFrame,
     validation_models: dict,
@@ -204,29 +244,39 @@ def _contextual_blend_weights(
     *,
     min_rows: int = 60,
 ) -> tuple[dict[str, dict[str, float]], dict[str, str]]:
-    """Optimize mixture weights per competition with a conservative global fallback."""
+    """Learn context-specific mixtures with hierarchical sparse-data fallback."""
     routed: dict[str, dict[str, float]] = {}
     reasons: dict[str, str] = {}
-    context_validation = _routing_context(validation)
-    if "routing_context" not in context_validation.columns:
-        return {"__global__": global_weights}, {"__global__": "global_only"}
+    context_data = _routing_context(validation)
 
-    for context, sl in context_validation.groupby("routing_context", sort=True, dropna=False):
-        context_name = str(context)
-        if len(sl) < min_rows:
-            routed[context_name] = dict(global_weights)
-            reasons[context_name] = "fallback_global_insufficient_validation_rows"
-            continue
-        probs = {name: model.predict_proba(sl[feature_cols]) for name, model in validation_models.items()}
-        optimized, used = _optimize_blend_weights(
-            sl.target.astype(int),
-            probs,
-            global_weights,
-        )
-        routed[context_name] = optimized if used else dict(global_weights)
-        reasons[context_name] = "context_specific_optimized_validation" if used else "fallback_global_optimizer_failed"
-    routed["__global__"] = dict(global_weights)
-    reasons["__global__"] = "global_fallback"
+    levels = _context_keys(context_data)
+    for level, keys in levels:
+        temp = context_data.copy()
+        temp["_routing_key"] = keys.astype("string")
+        for key, sl in temp.groupby("_routing_key", sort=True, dropna=False):
+            context_name = f"{level}:{key}"
+            if len(sl) < min_rows:
+                routed[context_name] = dict(global_weights)
+                reasons[context_name] = "fallback_global_insufficient_validation_rows"
+                continue
+            probs = {
+                name: model.predict_proba(sl[feature_cols])
+                for name, model in validation_models.items()
+            }
+            optimized, used = _optimize_blend_weights(
+                sl.target.astype(int),
+                probs,
+                global_weights,
+            )
+            routed[context_name] = optimized if used else dict(global_weights)
+            reasons[context_name] = (
+                "context_specific_optimized_validation"
+                if used
+                else "fallback_global_optimizer_failed"
+            )
+
+    routed["GLOBAL"] = dict(global_weights)
+    reasons["GLOBAL"] = "global_fallback"
     return routed, reasons
 
 
@@ -280,7 +330,7 @@ def run_walk_forward(
         )
         best = min(scores, key=lambda k: scores[k]["logloss"])
         context_weights, context_reasons = _contextual_blend_weights(
-            _routing_context(val_select),
+            val_select,
             validation_models,
             feature_cols,
             weights,
@@ -288,17 +338,10 @@ def run_walk_forward(
 
         # Probability calibration is fitted only on the second validation half.
         val_probs = np.zeros((len(val_calib), 3), dtype=float)
-        routed_calib = _routing_context(val_calib)
-        if "routing_context" in routed_calib.columns:
-            for context, indices in routed_calib.groupby("routing_context", sort=False, dropna=False).groups.items():
-                positions = np.asarray(list(indices), dtype=int)
-                local = context_weights.get(str(context), weights)
-                sl = val_calib.loc[positions, feature_cols]
-                for name, model in validation_models.items():
-                    val_probs[positions] += local[name] * model.predict_proba(sl)
-        else:
+        for pos, (_, row) in enumerate(val_calib.iterrows()):
+            local, _route = _lookup_context_weights(row, context_weights, weights)
             for name, model in validation_models.items():
-                val_probs += weights[name] * model.predict_proba(val_calib[feature_cols])
+                val_probs[pos] += local[name] * model.predict_proba(row[feature_cols].to_frame().T)[0]
         val_probs = np.clip(val_probs, 1e-9, 1.0)
         val_probs /= val_probs.sum(axis=1, keepdims=True)
         calibration_temperature, calibration_used = _fit_temperature(val_calib.target.astype(int), val_probs)
@@ -328,17 +371,10 @@ def run_walk_forward(
             for name, model in candidates(random_state).items()
         }
         probs = np.zeros((len(oos), 3), dtype=float)
-        routed_oos = _routing_context(oos)
-        if "routing_context" in routed_oos.columns:
-            for context, indices in routed_oos.groupby("routing_context", sort=False, dropna=False).groups.items():
-                positions = np.asarray(list(indices), dtype=int)
-                local = context_weights.get(str(context), weights)
-                sl = oos.loc[positions, feature_cols]
-                for name, model in fitted.items():
-                    probs[positions] += local[name] * model.predict_proba(sl)
-        else:
+        for pos, (_, row) in enumerate(oos.iterrows()):
+            local, _route = _lookup_context_weights(row, context_weights, weights)
             for name, model in fitted.items():
-                probs += weights[name] * model.predict_proba(oos[feature_cols])
+                probs[pos] += local[name] * model.predict_proba(row[feature_cols].to_frame().T)[0]
         probs = np.clip(probs, 1e-9, 1.0)
         probs /= probs.sum(axis=1, keepdims=True)
         probs = _temperature_transform(probs, calibration_temperature)
