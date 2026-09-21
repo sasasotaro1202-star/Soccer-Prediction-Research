@@ -24,10 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
-      - name: Checkout current production research branch
+      - name: Checkout exact workflow-trigger commit
         uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ github.sha }}
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
@@ -84,10 +84,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
-      - name: Checkout current production research branch
+      - name: Checkout exact workflow-trigger commit
         uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ github.sha }}
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
@@ -189,10 +189,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
-      - name: Checkout current production research branch
+      - name: Checkout exact workflow-trigger commit
         uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ github.sha }}
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
