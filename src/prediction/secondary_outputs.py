@@ -35,6 +35,20 @@ def fit_score_rate_model(history: pd.DataFrame, *, shrinkage: float = 20.0) -> d
     away_mean = float(d["away_goals"].mean())
     overall_mean = float((d["home_goals"].sum() + d["away_goals"].sum()) / max(1, 2 * len(d)))
 
+    # Competition-specific scoring environments are shrunk toward the global venue means.
+    # This separates league/run-environment effects from team strength without introducing
+    # high-dimensional competition x team parameters.
+    competition_rates: dict[str, dict[str, float]] = {}
+    if "competition" in d.columns:
+        comp = d.assign(_competition=d["competition"].astype(str)).groupby("_competition", sort=True)
+        for name, g in comp:
+            n = len(g)
+            competition_rates[str(name)] = {
+                "home_mean": float((g["home_goals"].sum() + shrinkage * home_mean) / (n + shrinkage)),
+                "away_mean": float((g["away_goals"].sum() + shrinkage * away_mean) / (n + shrinkage)),
+                "matches": float(n),
+            }
+
     rows: dict[str, dict[str, float]] = {}
     d_home = d.assign(_team=d["home_team"].astype(str))
     d_away = d.assign(_team=d["away_team"].astype(str))
@@ -90,16 +104,27 @@ def fit_score_rate_model(history: pd.DataFrame, *, shrinkage: float = 20.0) -> d
         "home_mean": home_mean,
         "away_mean": away_mean,
         "overall_mean": overall_mean,
+        "competition_rates": competition_rates,
         "teams": rows,
     }
 
 
-def _score_lambdas(score_model: dict[str, Any], home_team: str, away_team: str) -> tuple[float, float]:
+def _score_lambdas(
+    score_model: dict[str, Any],
+    home_team: str,
+    away_team: str,
+    competition: str | None = None,
+) -> tuple[float, float]:
     teams = score_model.get("teams", {})
     home = teams.get(str(home_team))
     away = teams.get(str(away_team))
     base_home = max(float(score_model["home_mean"]), 1e-6)
     base_away = max(float(score_model["away_mean"]), 1e-6)
+    comp_rates = score_model.get("competition_rates", {})
+    comp = comp_rates.get(str(competition)) if competition is not None else None
+    if isinstance(comp, dict):
+        base_home = max(float(comp.get("home_mean", base_home)), 1e-6)
+        base_away = max(float(comp.get("away_mean", base_away)), 1e-6)
     if home is None or away is None:
         raise RuntimeError("Score model has no PIT-trained rate for one or both fixture teams")
 
@@ -120,18 +145,24 @@ def predict_score_distribution(
     score_model: dict[str, Any],
     home_team: str,
     away_team: str,
+    competition: str | None = None,
     *,
     max_goals: int = 7,
 ) -> list[tuple[int, int, float]]:
     """Return the full PIT-trained score distribution for evaluation/derivation."""
     if max_goals < 1:
         raise ValueError("max_goals must be at least 1")
-    home_lambda, away_lambda = _score_lambdas(score_model, home_team, away_team)
+    home_lambda, away_lambda = _score_lambdas(score_model, home_team, away_team, competition)
     return score_distribution(home_lambda, away_lambda, max_goals=max_goals)
 
 
-def predict_score_candidates(score_model: dict[str, Any], home_team: str, away_team: str) -> list[dict[str, Any]]:
-    candidates = predict_score_distribution(score_model, home_team, away_team, max_goals=7)
+def predict_score_candidates(
+    score_model: dict[str, Any],
+    home_team: str,
+    away_team: str,
+    competition: str | None = None,
+) -> list[dict[str, Any]]:
+    candidates = predict_score_distribution(score_model, home_team, away_team, competition, max_goals=7)
     selected = select_score_candidates(candidates)
     return [
         {
@@ -145,9 +176,14 @@ def predict_score_candidates(score_model: dict[str, Any], home_team: str, away_t
 
 
 
-def predict_score_markets(score_model: dict[str, Any], home_team: str, away_team: str) -> dict[str, float]:
+def predict_score_markets(
+    score_model: dict[str, Any],
+    home_team: str,
+    away_team: str,
+    competition: str | None = None,
+) -> dict[str, float]:
     """Return O/U and BTTS probabilities from the same full score distribution."""
-    distribution = predict_score_distribution(score_model, home_team, away_team, max_goals=7)
+    distribution = predict_score_distribution(score_model, home_team, away_team, competition, max_goals=7)
     total = np.asarray([h + a for h, a, _ in distribution], dtype=float)
     home_goals = np.asarray([h for h, _, _ in distribution], dtype=int)
     away_goals = np.asarray([a for _, a, _ in distribution], dtype=int)
