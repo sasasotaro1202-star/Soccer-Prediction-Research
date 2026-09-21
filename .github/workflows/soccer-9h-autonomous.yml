@@ -20,10 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
-      - name: Checkout target research branch
+      - name: Checkout current production research branch
         uses: actions/checkout@v6
         with:
-          ref: fix/active-scope-audit-consistency
+          ref: main
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
@@ -80,10 +80,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
-      - name: Checkout target research branch
+      - name: Checkout current production research branch
         uses: actions/checkout@v6
         with:
-          ref: fix/active-scope-audit-consistency
+          ref: main
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
@@ -185,10 +185,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
-      - name: Checkout target research branch
+      - name: Checkout current production research branch
         uses: actions/checkout@v6
         with:
-          ref: fix/active-scope-audit-consistency
+          ref: main
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
