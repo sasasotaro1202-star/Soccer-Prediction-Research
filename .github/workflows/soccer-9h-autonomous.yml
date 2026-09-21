@@ -54,7 +54,6 @@ jobs:
         run: python -m src.data.fixture_field_audit
       - name: Run strict completion gate
         id: completion
-        continue-on-error: true
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
@@ -172,7 +171,7 @@ jobs:
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
-        run: python -m src.research.production_contract || true
+        run: python -m src.research.production_contract
       - name: Upload phase 2 evidence
         if: always()
         uses: actions/upload-artifact@v6
@@ -230,7 +229,6 @@ jobs:
         run: python -m src.data.fixture_field_audit
       - name: Re-run PIT/completion diagnostics
         id: phase3_audit
-        continue-on-error: true
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
@@ -238,7 +236,6 @@ jobs:
           PIT_ENABLE_SECONDARY_ARCHIVE: "1"
         run: python -m src.data.completion_gate
       - name: Re-run research engine for reproducibility
-        continue-on-error: true
         env:
           TESTS_PASSED: ${{ steps.phase3_tests.outcome == 'success' }}
           AUDIT_PASSED: ${{ steps.phase3_audit.outcome == 'success' }}
