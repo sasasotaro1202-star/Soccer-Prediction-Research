@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import hashlib
+import os
 import json
 from typing import Any
 
@@ -154,6 +155,10 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             if registry_features is not None and model_features is not None:
                 if _canonical_hash(registry_features) != _canonical_hash(model_features):
                     failures.append("feature_schema_provenance_mismatch")
+            expected_sha = os.getenv("GITHUB_SHA", "").strip()
+            recorded_sha = str(registry.get("git_commit_sha", "")).strip()
+            if expected_sha and recorded_sha and recorded_sha != "unknown" and recorded_sha != expected_sha:
+                failures.append("git_commit_provenance_mismatch")
     if str(adoption.get("status", "")).upper() in {"ADOPT", "CHAMPION", "ADOPTED"}:
         score_gate = _read_json(root / "score_oos_gate.json")
         if score_gate.get("status") != "PASS":
