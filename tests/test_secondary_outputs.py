@@ -3,7 +3,7 @@ import json
 import pandas as pd
 import pytest
 
-from src.prediction.secondary_outputs import fit_score_rate_model, predict_mom_candidates, predict_score_candidates
+from src.prediction.secondary_outputs import fit_score_rate_model, predict_mom_candidates, predict_score_candidates, predict_score_markets
 
 
 def test_score_model_is_pit_only_and_returns_exactly_three():
@@ -52,3 +52,21 @@ def test_mom_requires_four_eligible_players():
             {"player_id": "p2", "probability": 0.5},
             {"player_id": "p3", "probability": 0.0},
         ]))
+
+
+def test_score_markets_are_coherent_probabilities():
+    history = pd.DataFrame(
+        [
+            {"home_team": "A", "away_team": "B", "home_goals": 2, "away_goals": 0, "pit_verified": True},
+            {"home_team": "B", "away_team": "A", "home_goals": 0, "away_goals": 1, "pit_verified": True},
+            {"home_team": "A", "away_team": "C", "home_goals": 3, "away_goals": 1, "pit_verified": True},
+            {"home_team": "C", "away_team": "B", "home_goals": 1, "away_goals": 1, "pit_verified": True},
+        ]
+    )
+    model = fit_score_rate_model(history)
+    markets = predict_score_markets(model, "A", "B")
+    for line in ("0_5", "1_5", "2_5", "3_5", "4_5"):
+        assert markets[f"over_{line}"] + markets[f"under_{line}"] == pytest.approx(1.0, abs=1e-9)
+        assert 0.0 <= markets[f"over_{line}"] <= 1.0
+        assert 0.0 <= markets[f"under_{line}"] <= 1.0
+    assert markets["btts_yes"] + markets["btts_no"] == pytest.approx(1.0, abs=1e-9)
