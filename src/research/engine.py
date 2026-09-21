@@ -13,6 +13,7 @@ from src.data.football_data import load_available_history
 from src.data.fixture_field_audit import run_audit
 from src.data.pit_source_adapter import competition_adapter_matrix
 from src.data.source_registry import SOCCER_SOURCES
+from src.evaluation.score_walk_forward import run_score_walk_forward
 from src.evaluation.walk_forward import TARGET_ACCURACY, run_walk_forward
 from src.features.soccer_features import add_target, build_match_features
 from src.prediction.model_bundle import train_and_save_bundle
@@ -91,6 +92,33 @@ def run(out_dir: str = "artifacts") -> dict:
     pit_verified = int(feats["pit_verified"].sum()) if "pit_verified" in feats.columns else 0; pit_total = int(len(feats))
     if pit_verified == 0:
         report = {"status": "BLOCKED", "reason": "No match rows have sufficient historical result state under deterministic PIT.", "acquired_rows": int(len(history)), "snapshot_id": snapshot_id(history), "pit_policy": PIT_POLICY, "pit_verified_rows": 0, "pit_verified_rate": 0.0, "archive_audit": archive_audit, "audit": audit_report, "oos_claimed": False}; report["ai_research"] = weakness_advice(report); _write_status(out, report); return report
+    try:
+        score_oos = run_score_walk_forward(
+            feats,
+            min_train=max(500, int(os.getenv("SOCCER_SCORE_MIN_TRAIN", "1000"))),
+            oos_block=max(500, int(os.getenv("SOCCER_SCORE_OOS_BLOCK", "2000"))),
+        )
+        score_oos.to_csv(out / "score_oos_metrics.csv", index=False)
+        score_oos_status = {
+            "status": "PASS",
+            "blocks": int(len(score_oos)),
+            "rows": int(score_oos["n"].sum()) if "n" in score_oos.columns else 0,
+            "finite_metrics": bool(np.isfinite(score_oos.select_dtypes(include=[np.number]).to_numpy()).all()),
+        }
+    except Exception as exc:
+        score_oos = pd.DataFrame()
+        score_oos_status = {
+            "status": "ERROR",
+            "error": f"{type(exc).__name__}: {exc}",
+            "blocks": 0,
+            "rows": 0,
+            "finite_metrics": False,
+        }
+    (out / "score_oos_gate.json").write_text(
+        json.dumps(score_oos_status, indent=2, ensure_ascii=False, default=str),
+        encoding="utf-8",
+    )
+
     wf, selections = run_walk_forward(feats, _model_features(feats)); wf.to_csv(out / "oos_metrics.csv", index=False); selections.to_csv(out / "model_selection.csv", index=False)
     if len(wf) < 3:
         report = {"status": "BLOCKED", "reason": "At least three chronological OOS blocks are required: development plus two locked holdout blocks.", "snapshot_id": snapshot_id(history), "pit_policy": PIT_POLICY, "pit_verified_rows": pit_verified, "pit_total_rows": pit_total, "archive_audit": archive_audit, "audit": audit_report, "oos_claimed": False}; _write_status(out, report); return report
@@ -147,7 +175,7 @@ def run(out_dir: str = "artifacts") -> dict:
             (out / "production_model.json").write_text(json.dumps(model_bundle, indent=2, ensure_ascii=False), encoding="utf-8")
     oos_n = int(wf["n"].sum()) if "n" in wf.columns else 0; oos_acc = float(np.average(wf["accuracy"], weights=wf["n"])) if oos_n else float("nan")
     locked_n = int(locked["n"].sum()); locked_acc = float(np.average(locked["accuracy"], weights=locked["n"])) if locked_n else float("nan")
-    report = {"status": "OK", "snapshot_id": snapshot_id(history), "oos": wf.mean(numeric_only=True).to_dict(), "coverage": coverage.to_dict(orient="records"), "archive_audit": archive_audit, "pit_policy": PIT_POLICY, "pit_verified_rows": pit_verified, "pit_total_rows": pit_total, "pit_verified_rate": float(pit_verified / pit_total) if pit_total else 0.0, "oos_protocol": {"development_blocks": int(len(development_oos)), "locked_blocks": 2, "locked_oos_untouched": True, "selection_source": "historical_validation_only"}, "stability_gate": stability, "accuracy_target": {"target_accuracy": TARGET_ACCURACY, "locked_oos_accuracy": locked_acc, "weighted_oos_accuracy": oos_acc, "target_met": bool(locked_acc >= TARGET_ACCURACY) if locked_n else False, "target_gap": float(locked_acc - TARGET_ACCURACY) if locked_n else float("nan"), "oos_sample_size": oos_n, "locked_oos_sample_size": locked_n}, "adoption": adoption, "production_model": "calibrated_ensemble" if adoption.get("status") == "ADOPT" else "baseline_logistic", "production_model_bundle": model_bundle, "audit": audit_report, "ai_research": weakness_advice(wf.mean(numeric_only=True).to_dict())}
+    report = {"status": "OK", "snapshot_id": snapshot_id(history), "oos": wf.mean(numeric_only=True).to_dict(), "score_oos": score_oos.mean(numeric_only=True).to_dict() if not score_oos.empty else {}, "score_oos_status": score_oos_status, "coverage": coverage.to_dict(orient="records"), "archive_audit": archive_audit, "pit_policy": PIT_POLICY, "pit_verified_rows": pit_verified, "pit_total_rows": pit_total, "pit_verified_rate": float(pit_verified / pit_total) if pit_total else 0.0, "oos_protocol": {"development_blocks": int(len(development_oos)), "locked_blocks": 2, "locked_oos_untouched": True, "selection_source": "historical_validation_only"}, "stability_gate": stability, "accuracy_target": {"target_accuracy": TARGET_ACCURACY, "locked_oos_accuracy": locked_acc, "weighted_oos_accuracy": oos_acc, "target_met": bool(locked_acc >= TARGET_ACCURACY) if locked_n else False, "target_gap": float(locked_acc - TARGET_ACCURACY) if locked_n else float("nan"), "oos_sample_size": oos_n, "locked_oos_sample_size": locked_n}, "adoption": adoption, "production_model": "calibrated_ensemble" if adoption.get("status") == "ADOPT" else "baseline_logistic", "production_model_bundle": model_bundle, "audit": audit_report, "ai_research": weakness_advice(wf.mean(numeric_only=True).to_dict())}
     _write_status(out, report); return report
 
 
