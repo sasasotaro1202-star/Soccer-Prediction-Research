@@ -70,6 +70,51 @@ def _archive_audit_sample(history: pd.DataFrame, out: Path) -> dict:
         return {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
 
 
+def _load_authoritative_pit_features(history: pd.DataFrame, out: Path) -> pd.DataFrame | None:
+    """Reuse completion-gate PIT features only after strict identity/count checks."""
+    gate_path = out / "completion_gate.json"
+    features_path = out / "pit_replay_features.csv"
+    if not gate_path.exists() or not features_path.exists():
+        return None
+    try:
+        gate = json.loads(gate_path.read_text(encoding="utf-8"))
+        if gate.get("full_gate_passed") is not True or gate.get("pit_publication_time_gate") is not True:
+            return None
+        expected_verified = int(gate.get("pit_replay_verified_rows", 0))
+        expected_total = int(gate.get("pit_replay_rows", 0))
+        if expected_verified <= 0 or expected_total != len(history):
+            return None
+        feats = pd.read_csv(features_path, low_memory=False)
+        if "match_id" not in feats.columns or "pit_verified" not in feats.columns:
+            return None
+        if len(feats) != len(history) or feats["match_id"].duplicated().any():
+            return None
+        if int(feats["pit_verified"].fillna(False).astype(bool).sum()) != expected_verified:
+            return None
+        if set(feats["match_id"].astype(str)) != set(history["match_id"].astype(str)):
+            return None
+        identity = ["match_id", "competition", "season_start", "kickoff_utc", "home_team", "away_team"]
+        available = [col for col in identity if col in feats.columns and col in history.columns]
+        left = history[available].copy()
+        right = feats[available].copy()
+        for frame in (left, right):
+            frame["match_id"] = frame["match_id"].astype(str)
+            if "season_start" in frame.columns:
+                frame["season_start"] = pd.to_numeric(frame["season_start"], errors="coerce")
+            if "kickoff_utc" in frame.columns:
+                frame["kickoff_utc"] = pd.to_datetime(frame["kickoff_utc"], utc=True, errors="coerce").astype("string")
+            for col in ("competition", "home_team", "away_team"):
+                if col in frame.columns:
+                    frame[col] = frame[col].astype("string")
+        left = left.sort_values("match_id", kind="mergesort").reset_index(drop=True)
+        right = right.sort_values("match_id", kind="mergesort").reset_index(drop=True)
+        if not left.equals(right):
+            return None
+        return feats
+    except Exception:
+        return None
+
+
 def _write_status(out: Path, report: dict) -> None:
     (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
 
@@ -87,10 +132,15 @@ def run(out_dir: str = "artifacts") -> dict:
     if history.empty:
         report = {"status": "BLOCKED", "reason": "No historical data acquired", "oos_claimed": False, "audit": audit_report}; _write_status(out, report); return report
     archive_audit = _archive_audit_sample(history, out)
-    feats = add_target(build_match_features(history, history), history); feats.to_csv(out / "pit_replay_features.csv", index=False)
-    pit_verified = int(feats["pit_verified"].sum()) if "pit_verified" in feats.columns else 0; pit_total = int(len(feats))
+    feats = _load_authoritative_pit_features(history, out)
+    pit_feature_source = "completion_gate_artifact"
+    if feats is None:
+        feats = add_target(build_match_features(history, history), history)
+        feats.to_csv(out / "pit_replay_features.csv", index=False)
+        pit_feature_source = "engine_rebuild_fallback"
+    pit_verified = int(feats["pit_verified"].fillna(False).astype(bool).sum()) if "pit_verified" in feats.columns else 0; pit_total = int(len(feats))
     if pit_verified == 0:
-        report = {"status": "BLOCKED", "reason": "No match rows have sufficient historical result state under deterministic PIT.", "acquired_rows": int(len(history)), "snapshot_id": snapshot_id(history), "pit_policy": PIT_POLICY, "pit_verified_rows": 0, "pit_verified_rate": 0.0, "archive_audit": archive_audit, "audit": audit_report, "oos_claimed": False}; report["ai_research"] = weakness_advice(report); _write_status(out, report); return report
+        report = {"status": "BLOCKED", "reason": "No match rows have sufficient historical result state under deterministic PIT.", "acquired_rows": int(len(history)), "snapshot_id": snapshot_id(history), "pit_policy": PIT_POLICY, "pit_verified_rows": 0, "pit_verified_rate": 0.0, "pit_feature_source": pit_feature_source, "archive_audit": archive_audit, "audit": audit_report, "oos_claimed": False}; report["ai_research"] = weakness_advice(report); _write_status(out, report); return report
     wf, selections = run_walk_forward(feats, _model_features(feats)); wf.to_csv(out / "oos_metrics.csv", index=False); selections.to_csv(out / "model_selection.csv", index=False)
     if len(wf) < 3:
         report = {"status": "BLOCKED", "reason": "At least three chronological OOS blocks are required: development plus two locked holdout blocks.", "snapshot_id": snapshot_id(history), "pit_policy": PIT_POLICY, "pit_verified_rows": pit_verified, "pit_total_rows": pit_total, "archive_audit": archive_audit, "audit": audit_report, "oos_claimed": False}; _write_status(out, report); return report
