@@ -42,7 +42,7 @@ def save_registry(
     history_path = p.with_name(p.stem + "_history.jsonl")
     with history_path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-    if adoption_status.upper() in {"CHAMPION", "ADOPTED"}:
+    if adoption_status.upper() in {"ADOPT", "CHAMPION", "ADOPTED"}:
         p.write_text(json.dumps(record, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     elif not p.exists():
         p.write_text(json.dumps({"status": "NO_CHAMPION", "latest_candidate": record}, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
