@@ -198,7 +198,7 @@ def _routing_context(frame: pd.DataFrame) -> pd.DataFrame:
 
 def _context_keys(frame: pd.DataFrame) -> list[tuple[str, pd.Series]]:
     """Return routing keys from most specific to broadest granularity."""
-    d = _routing_context(frame)
+    d = frame
     levels: list[tuple[str, pd.Series]] = []
     if "routing_context" in d.columns:
         levels.append(("FULL", d["routing_context"].astype("string")))
@@ -220,14 +220,19 @@ def _lookup_context_weights(
     fallback: dict[str, float],
 ) -> tuple[dict[str, float], str]:
     """Resolve the most specific learned context, then safely fall back."""
-    routed = _routing_context(pd.DataFrame([row])).iloc[0]
+    if "routing_context" in row.index:
+        full = str(row.get("routing_context", ""))
+        comp = str(row.get("competition", "__MISSING__"))
+        strength = str(row.get("routing_strength_gap", "MISSING"))
+    else:
+        routed = _routing_context(pd.DataFrame([row])).iloc[0]
+        full = str(routed.get("routing_context", ""))
+        comp = str(routed.get("competition", "__MISSING__"))
+        strength = str(routed.get("routing_strength_gap", "MISSING"))
     keys = [
-        ("FULL", str(routed.get("routing_context", ""))),
-        (
-            "COMP_STRENGTH",
-            f"{routed.get('competition', '__MISSING__')}|{routed.get('routing_strength_gap', 'MISSING')}",
-        ),
-        ("COMP", str(routed.get("competition", "__MISSING__"))),
+        ("FULL", full),
+        ("COMP_STRENGTH", f"{comp}|{strength}"),
+        ("COMP", comp),
     ]
     for level, key in keys:
         learned = context_weights.get(f"{level}:{key}")
@@ -338,7 +343,8 @@ def run_walk_forward(
 
         # Probability calibration is fitted only on the second validation half.
         val_probs = np.zeros((len(val_calib), 3), dtype=float)
-        for pos, (_, row) in enumerate(val_calib.iterrows()):
+        routed_calib = _routing_context(val_calib)
+        for pos, (_, row) in enumerate(routed_calib.iterrows()):
             local, _route = _lookup_context_weights(row, context_weights, weights)
             for name, model in validation_models.items():
                 val_probs[pos] += local[name] * model.predict_proba(row[feature_cols].to_frame().T)[0]
@@ -371,7 +377,8 @@ def run_walk_forward(
             for name, model in candidates(random_state).items()
         }
         probs = np.zeros((len(oos), 3), dtype=float)
-        for pos, (_, row) in enumerate(oos.iterrows()):
+        routed_oos = _routing_context(oos)
+        for pos, (_, row) in enumerate(routed_oos.iterrows()):
             local, _route = _lookup_context_weights(row, context_weights, weights)
             for name, model in fitted.items():
                 probs[pos] += local[name] * model.predict_proba(row[feature_cols].to_frame().T)[0]
