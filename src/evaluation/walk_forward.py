@@ -134,6 +134,61 @@ def _validation_score(model, val: pd.DataFrame, feature_cols: list[str]) -> dict
     metrics = classification_metrics(val.target.astype(int), model.predict_proba(val[feature_cols]))
     return {k: metrics[k] for k in ("logloss", "accuracy", "brier", "rps", "ece")}
 
+def _routing_context(frame: pd.DataFrame) -> pd.DataFrame:
+    """Derive low-cardinality prediction-time context bins without using outcomes."""
+    d = frame.copy()
+
+    if "elo_diff" in d.columns:
+        elo = pd.to_numeric(d["elo_diff"], errors="coerce")
+        d["routing_strength_gap"] = pd.cut(
+            elo,
+            bins=[-np.inf, -200.0, -75.0, 75.0, 200.0, np.inf],
+            labels=["LARGE_AWAY", "AWAY", "EVEN", "HOME", "LARGE_HOME"],
+        ).astype("string")
+    else:
+        d["routing_strength_gap"] = "MISSING"
+
+    home_goal = pd.to_numeric(d.get("home_goal_total_avg_5", np.nan), errors="coerce")
+    away_goal = pd.to_numeric(d.get("away_goal_total_avg_5", np.nan), errors="coerce")
+    goal_env = (home_goal + away_goal) / 2.0
+    d["routing_scoring_environment"] = pd.cut(
+        goal_env,
+        bins=[-np.inf, 1.8, 2.3, 2.8, np.inf],
+        labels=["LOW", "MID_LOW", "MID_HIGH", "HIGH"],
+    ).astype("string")
+
+    rest = pd.to_numeric(d.get("rest_diff_hours", np.nan), errors="coerce")
+    d["routing_rest"] = pd.cut(
+        rest,
+        bins=[-np.inf, -24.0, -6.0, 6.0, 24.0, np.inf],
+        labels=["AWAY_MAJOR", "AWAY_SMALL", "EVEN", "HOME_SMALL", "HOME_MAJOR"],
+    ).astype("string")
+
+    if "neutral_venue_known" in d.columns:
+        known = d["neutral_venue_known"].astype("boolean")
+        neutral = d.get("neutral_venue", pd.Series(False, index=d.index)).astype("boolean")
+        d["routing_venue"] = np.where(
+            known.fillna(False),
+            np.where(neutral.fillna(False), "NEUTRAL", "HOME_AWAY"),
+            "UNKNOWN",
+        )
+    else:
+        d["routing_venue"] = "UNKNOWN"
+
+    d["routing_context"] = (
+        d.get("competition", pd.Series("__MISSING__", index=d.index)).astype("string").fillna("__MISSING__")
+        + "|"
+        + d["routing_strength_gap"].fillna("MISSING")
+        + "|"
+        + d["routing_scoring_environment"].fillna("MISSING")
+        + "|"
+        + d["routing_rest"].fillna("MISSING")
+        + "|"
+        + d["routing_venue"].astype("string")
+    )
+    return d
+
+
 
 def _contextual_blend_weights(
     validation: pd.DataFrame,
@@ -146,10 +201,11 @@ def _contextual_blend_weights(
     """Optimize mixture weights per competition with a conservative global fallback."""
     routed: dict[str, dict[str, float]] = {}
     reasons: dict[str, str] = {}
-    if "competition" not in validation.columns:
+    context_validation = _routing_context(validation)
+    if "routing_context" not in context_validation.columns:
         return {"__global__": global_weights}, {"__global__": "global_only"}
 
-    for context, sl in validation.groupby("competition", sort=True):
+    for context, sl in context_validation.groupby("routing_context", sort=True, dropna=False):
         context_name = str(context)
         if len(sl) < min_rows:
             routed[context_name] = dict(global_weights)
@@ -218,7 +274,7 @@ def run_walk_forward(
         )
         best = min(scores, key=lambda k: scores[k]["logloss"])
         context_weights, context_reasons = _contextual_blend_weights(
-            val_select,
+            _routing_context(val_select),
             validation_models,
             feature_cols,
             weights,
@@ -226,8 +282,9 @@ def run_walk_forward(
 
         # Probability calibration is fitted only on the second validation half.
         val_probs = np.zeros((len(val_calib), 3), dtype=float)
-        if "competition" in val_calib.columns:
-            for context, indices in val_calib.groupby("competition", sort=False).groups.items():
+        routed_calib = _routing_context(val_calib)
+        if "routing_context" in routed_calib.columns:
+            for context, indices in routed_calib.groupby("routing_context", sort=False, dropna=False).groups.items():
                 positions = np.asarray(list(indices), dtype=int)
                 local = context_weights.get(str(context), weights)
                 sl = val_calib.loc[positions, feature_cols]
@@ -265,8 +322,9 @@ def run_walk_forward(
             for name, model in candidates(random_state).items()
         }
         probs = np.zeros((len(oos), 3), dtype=float)
-        if "competition" in oos.columns:
-            for context, indices in oos.groupby("competition", sort=False).groups.items():
+        routed_oos = _routing_context(oos)
+        if "routing_context" in routed_oos.columns:
+            for context, indices in routed_oos.groupby("routing_context", sort=False, dropna=False).groups.items():
                 positions = np.asarray(list(indices), dtype=int)
                 local = context_weights.get(str(context), weights)
                 sl = oos.loc[positions, feature_cols]
