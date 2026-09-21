@@ -192,8 +192,8 @@ def run(
     score_market_rows = []
     mom_rows = []
     for row in eligible.itertuples(index=False):
-        score_rows.append(predict_score_candidates(bundle["score_model"], row.home_team, row.away_team))
-        score_market_rows.append(predict_score_markets(bundle["score_model"], row.home_team, row.away_team))
+        score_rows.append(predict_score_candidates(bundle["score_model"], row.home_team, row.away_team, row.competition))
+        score_market_rows.append(predict_score_markets(bundle["score_model"], row.home_team, row.away_team, row.competition))
         try:
             mom_rows.append(predict_mom_candidates(row.mom_candidates_json))
         except Exception as exc:
