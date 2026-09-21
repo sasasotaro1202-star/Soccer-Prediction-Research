@@ -144,10 +144,19 @@ jobs:
           passed=bool(payload.get("audit_execution_ok", False))
           Path("artifacts/audit_status.json").write_text(json.dumps({"exit_code": 0 if passed else 1, "passed": passed}), encoding="utf-8")
           PY
+      - name: Export actual preflight state for research
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_ENV"
+          import json
+          from pathlib import Path
+          test_payload = json.loads(Path("artifacts/test_status.json").read_text()) if Path("artifacts/test_status.json").exists() else {}
+          audit_payload = json.loads(Path("artifacts/audit_status.json").read_text()) if Path("artifacts/audit_status.json").exists() else {}
+          print(f"TESTS_PASSED={'true' if test_payload.get('passed') is True else 'false'}")
+          print(f"AUDIT_PASSED={'true' if audit_payload.get('passed') is True else 'false'}")
+          PY
       - name: Run bounded research engine
         env:
-          TESTS_PASSED: "true"
-          AUDIT_PASSED: "true"
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
           RESEARCH_ATTEMPTS: "2"
