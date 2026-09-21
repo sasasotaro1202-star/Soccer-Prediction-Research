@@ -14,6 +14,8 @@ REQUIRED_ARTIFACTS = (
     "model_selection.csv",
     "development_oos_metrics.csv",
     "locked_oos_metrics.csv",
+    "score_oos_metrics.csv",
+    "score_oos_gate.json",
     "candidate_lock.json",
     "adoption_decision.json",
 )
@@ -152,6 +154,17 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             if registry_features is not None and model_features is not None:
                 if _canonical_hash(registry_features) != _canonical_hash(model_features):
                     failures.append("feature_schema_provenance_mismatch")
+    if str(adoption.get("status", "")).upper() in {"ADOPT", "CHAMPION", "ADOPTED"}:
+        score_gate = _read_json(root / "score_oos_gate.json")
+        if score_gate.get("status") != "PASS":
+            failures.append("score_oos_gate")
+        if int(score_gate.get("blocks", 0)) < 2:
+            failures.append("score_oos_blocks")
+        if int(score_gate.get("rows", 0)) <= 0:
+            failures.append("score_oos_rows")
+        if score_gate.get("finite_metrics") is not True:
+            failures.append("score_oos_finite_metrics")
+
     candidate_lock = _read_json(root / "candidate_lock.json")
     if candidate_lock:
         if candidate_lock.get("locked_oos_untouched") is not True: failures.append("candidate_lock_integrity")
