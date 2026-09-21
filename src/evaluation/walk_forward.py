@@ -148,8 +148,14 @@ def _routing_context(frame: pd.DataFrame) -> pd.DataFrame:
     else:
         d["routing_strength_gap"] = "MISSING"
 
-    home_goal = pd.to_numeric(d.get("home_goal_total_avg_5", np.nan), errors="coerce")
-    away_goal = pd.to_numeric(d.get("away_goal_total_avg_5", np.nan), errors="coerce")
+    home_goal = pd.to_numeric(
+        d["home_goal_total_avg_5"] if "home_goal_total_avg_5" in d.columns else pd.Series(np.nan, index=d.index),
+        errors="coerce",
+    )
+    away_goal = pd.to_numeric(
+        d["away_goal_total_avg_5"] if "away_goal_total_avg_5" in d.columns else pd.Series(np.nan, index=d.index),
+        errors="coerce",
+    )
     goal_env = (home_goal + away_goal) / 2.0
     d["routing_scoring_environment"] = pd.cut(
         goal_env,
