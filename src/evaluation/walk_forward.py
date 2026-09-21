@@ -226,12 +226,16 @@ def run_walk_forward(
 
         # Probability calibration is fitted only on the second validation half.
         val_probs = np.zeros((len(val_calib), 3), dtype=float)
-        for name, model in validation_models.items():
-            local_weights = context_weights.get(str(val_calib.iloc[0]["competition"]) if "competition" in val_calib.columns and len(val_calib) else "__global__", weights)
-            # Build row-wise context weights without leaking the calibration outcomes.
-            for pos, (_, row) in enumerate(val_calib.iterrows()):
-                local = context_weights.get(str(row["competition"]), weights) if "competition" in val_calib.columns else weights
-                val_probs[pos] += local[name] * model.predict_proba(row[feature_cols].to_frame().T)[0]
+        if "competition" in val_calib.columns:
+            for context, indices in val_calib.groupby("competition", sort=False).groups.items():
+                positions = np.asarray(list(indices), dtype=int)
+                local = context_weights.get(str(context), weights)
+                sl = val_calib.loc[positions, feature_cols]
+                for name, model in validation_models.items():
+                    val_probs[positions] += local[name] * model.predict_proba(sl)
+        else:
+            for name, model in validation_models.items():
+                val_probs += weights[name] * model.predict_proba(val_calib[feature_cols])
         val_probs = np.clip(val_probs, 1e-9, 1.0)
         val_probs /= val_probs.sum(axis=1, keepdims=True)
         calibration_temperature, calibration_used = _fit_temperature(val_calib.target.astype(int), val_probs)
@@ -261,24 +265,16 @@ def run_walk_forward(
             for name, model in candidates(random_state).items()
         }
         probs = np.zeros((len(oos), 3), dtype=float)
-        for name, model in fitted.items():
-            local_weights = weights
-            if "competition" in oos.columns:
-                # Context weights were learned only from val_select.
-                # Unknown/rare competitions fall back to the global optimized mixture.
-                local_weights = context_weights.get(str(oos.iloc[0]["competition"]), weights)
-                if len(oos) > 1:
-                    probs += local_weights[name] * model.predict_proba(oos[feature_cols])
-                    # The OOS block may contain multiple competitions. Recompute row-wise below.
-                    break
-            if "competition" not in oos.columns:
-                probs += local_weights[name] * model.predict_proba(oos[feature_cols])
         if "competition" in oos.columns:
-            probs = np.zeros((len(oos), 3), dtype=float)
-            for pos, (_, row) in enumerate(oos.iterrows()):
-                local = context_weights.get(str(row["competition"]), weights)
+            for context, indices in oos.groupby("competition", sort=False).groups.items():
+                positions = np.asarray(list(indices), dtype=int)
+                local = context_weights.get(str(context), weights)
+                sl = oos.loc[positions, feature_cols]
                 for name, model in fitted.items():
-                    probs[pos] += local[name] * model.predict_proba(row[feature_cols].to_frame().T)[0]
+                    probs[positions] += local[name] * model.predict_proba(sl)
+        else:
+            for name, model in fitted.items():
+                probs += weights[name] * model.predict_proba(oos[feature_cols])
         probs = np.clip(probs, 1e-9, 1.0)
         probs /= probs.sum(axis=1, keepdims=True)
         probs = _temperature_transform(probs, calibration_temperature)
