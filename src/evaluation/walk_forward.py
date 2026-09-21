@@ -161,7 +161,7 @@ def _routing_context(frame: pd.DataFrame) -> pd.DataFrame:
         goal_env,
         bins=[-np.inf, 1.8, 2.3, 2.8, np.inf],
         labels=["LOW", "MID_LOW", "MID_HIGH", "HIGH"],
-    ).astype("string")
+    ).astype("string").fillna("MISSING")
 
     rest_source = (
         d["rest_diff_hours"]
