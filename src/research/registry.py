@@ -37,6 +37,7 @@ def save_registry(
         "training_end": training_end,
         "calibration": calibration or {},
         "adoption_status": adoption_status,
+        "oos_verified": adoption_status.upper() in {"ADOPT", "CHAMPION", "ADOPTED"},
         "created_at_utc": _utc_now(),
     }
     history_path = p.with_name(p.stem + "_history.jsonl")
