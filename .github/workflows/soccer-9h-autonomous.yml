@@ -62,7 +62,8 @@ jobs:
           mkdir -p artifacts/9h/phase1
           if [ -f artifacts/completion_gate.json ]; then cp artifacts/completion_gate.json artifacts/9h/phase1/completion_gate.json; fi
           if [ -f artifacts/audit_summary.json ]; then cp artifacts/audit_summary.json artifacts/9h/phase1/audit_summary.json; fi
-          printf '{"phase":"phase1_gate","head_sha":"%s","completion_step":"${{ steps.completion.outcome }}"}\n' "$GITHUB_SHA" > artifacts/9h/phase1/phase_status.json
+          TARGET_SHA="$(git rev-parse HEAD)"
+          printf '{"phase":"phase1_gate","head_sha":"%s","workflow_sha":"%s","completion_step":"${{ steps.completion.outcome }}"}\n' "$TARGET_SHA" "$GITHUB_SHA" > artifacts/9h/phase1/phase_status.json
       - name: Upload phase 1 evidence
         if: always()
         uses: actions/upload-artifact@v6
@@ -79,8 +80,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
-      - name: Checkout exact commit
+      - name: Checkout target research branch
         uses: actions/checkout@v6
+        with:
+          ref: fix/active-scope-audit-consistency
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
@@ -182,8 +185,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
-      - name: Checkout exact commit
+      - name: Checkout target research branch
         uses: actions/checkout@v6
+        with:
+          ref: fix/active-scope-audit-consistency
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
@@ -270,7 +275,8 @@ jobs:
           status = Path("artifacts/run_status.json")
           payload = {
               "workflow": "soccer-9h-autonomous",
-              "head_sha": os.environ.get("GITHUB_SHA"),
+              "head_sha": os.popen("git rev-parse HEAD").read().strip(),
+              "workflow_sha": os.environ.get("GITHUB_SHA"),
               "run_id": os.environ.get("GITHUB_RUN_ID"),
               "gate_present": gate.exists(),
               "run_status_present": status.exists(),
