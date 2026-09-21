@@ -1,6 +1,10 @@
 name: Soccer 9H Autonomous Research
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/soccer-9h-autonomous.yml"
   workflow_dispatch:
   schedule:
     - cron: "15 0,9,18 * * *"
@@ -9,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: soccer-9h-autonomous
+  group: soccer-9h-autonomous-main
   cancel-in-progress: false
 
 # Three sequential 180-minute phases provide up to 9 hours of repository-side work.
