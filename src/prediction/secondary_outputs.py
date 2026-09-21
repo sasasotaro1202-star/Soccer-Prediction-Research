@@ -36,20 +36,31 @@ def fit_score_rate_model(history: pd.DataFrame, *, shrinkage: float = 20.0) -> d
     overall_mean = float((d["home_goals"].sum() + d["away_goals"].sum()) / max(1, 2 * len(d)))
 
     rows: dict[str, dict[str, float]] = {}
-    teams = sorted(set(d["home_team"].astype(str)) | set(d["away_team"].astype(str)))
+    d_home = d.assign(_team=d["home_team"].astype(str))
+    d_away = d.assign(_team=d["away_team"].astype(str))
+    home_agg = d_home.groupby("_team", sort=False).agg(
+        home_matches=("home_goals", "size"),
+        home_scored=("home_goals", "sum"),
+        home_conceded=("away_goals", "sum"),
+    )
+    away_agg = d_away.groupby("_team", sort=False).agg(
+        away_matches=("away_goals", "size"),
+        away_scored=("away_goals", "sum"),
+        away_conceded=("home_goals", "sum"),
+    )
+    teams = sorted(set(home_agg.index.astype(str)) | set(away_agg.index.astype(str)))
     for team in teams:
-        home = d[d["home_team"].astype(str) == team]
-        away = d[d["away_team"].astype(str) == team]
+        h = home_agg.loc[team] if team in home_agg.index else None
+        a = away_agg.loc[team] if team in away_agg.index else None
+        home_n = int(h["home_matches"]) if h is not None else 0
+        away_n = int(a["away_matches"]) if a is not None else 0
+        home_scored = float(h["home_scored"]) if h is not None else 0.0
+        home_conceded = float(h["home_conceded"]) if h is not None else 0.0
+        away_scored = float(a["away_scored"]) if a is not None else 0.0
+        away_conceded = float(a["away_conceded"]) if a is not None else 0.0
 
-        home_n = len(home)
-        away_n = len(away)
-        home_scored = float(home["home_goals"].sum())
-        home_conceded = float(home["away_goals"].sum())
-        away_scored = float(away["away_goals"].sum())
-        away_conceded = float(away["home_goals"].sum())
-
-        # Venue-specific rates retain the important home/away asymmetry while
-        # shrinkage keeps small-sample teams close to the global environment.
+        # Venue-specific rates retain home/away asymmetry while shrinkage keeps
+        # small-sample teams close to the global scoring environment.
         home_scored_rate = (home_scored + shrinkage * home_mean) / (home_n + shrinkage)
         home_conceded_rate = (home_conceded + shrinkage * away_mean) / (home_n + shrinkage)
         away_scored_rate = (away_scored + shrinkage * away_mean) / (away_n + shrinkage)
