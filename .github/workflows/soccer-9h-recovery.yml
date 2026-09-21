@@ -41,7 +41,7 @@ jobs:
           payload = json.loads(sys.argv[1])
           runs = payload.get("workflow_runs", [])
 
-          if any(r.get("status") in {"queued", "in_progress"} for r in runs):
+          if any(r.get("status") in {"pending", "queued", "waiting", "in_progress"} for r in runs):
               print("ACTIVE")
               raise SystemExit(0)
 
