@@ -57,7 +57,7 @@ def load_champion(path: str) -> dict[str, Any] | None:
         data = json.loads(p.read_text(encoding="utf-8"))
     except Exception:
         return None
-    if data.get("adoption_status", "").upper() not in {"CHAMPION", "ADOPTED"}:
+    if data.get("adoption_status", "").upper() not in {"ADOPT", "CHAMPION", "ADOPTED"}:
         return None
     return data
 
