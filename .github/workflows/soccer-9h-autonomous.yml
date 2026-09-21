@@ -212,6 +212,7 @@ jobs:
           done
           exit 1
       - name: Compile and run tests
+        id: phase3_tests
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
@@ -224,6 +225,7 @@ jobs:
           PYTHONHASHSEED: "0"
         run: python -m src.data.fixture_field_audit
       - name: Re-run PIT/completion diagnostics
+        id: phase3_audit
         continue-on-error: true
         env:
           PYTHONPATH: .
@@ -234,8 +236,8 @@ jobs:
       - name: Re-run research engine for reproducibility
         continue-on-error: true
         env:
-          TESTS_PASSED: "true"
-          AUDIT_PASSED: "true"
+          TESTS_PASSED: ${{ steps.phase3_tests.outcome == 'success' }}
+          AUDIT_PASSED: ${{ steps.phase3_audit.outcome == 'success' }}
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
           RESEARCH_ATTEMPTS: "2"
