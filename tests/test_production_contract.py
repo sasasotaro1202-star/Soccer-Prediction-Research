@@ -81,3 +81,16 @@ def test_blocked_status_cannot_pass(tmp_path):
     result = evaluate_production_contract(str(tmp_path))
     assert result.passed is False
     assert any(x.startswith("run_status:") for x in result.failures)
+
+
+def test_stale_git_commit_provenance_cannot_pass(tmp_path, monkeypatch):
+    _minimal_passing_artifacts(tmp_path)
+    _write(tmp_path / "model_registry.json", {
+        "adoption_status": "ADOPT",
+        "model_version": "v1",
+        "git_commit_sha": "old-commit",
+    })
+    monkeypatch.setenv("GITHUB_SHA", "new-commit")
+    result = evaluate_production_contract(str(tmp_path))
+    assert result.passed is False
+    assert "git_commit_provenance_mismatch" in result.failures
