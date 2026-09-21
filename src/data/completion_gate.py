@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Strict completion gate for the 14-competition soccer research audit."""
+"""Strict completion gate for the locked active-competition soccer research audit."""
 
 import json
 import re
@@ -16,14 +16,26 @@ from src.data.football_data import load_available_history
 from src.data.pit_source_adapter_fast import FootballDataWaybackAdapter
 from src.data.pit_archive_fallback import apply_arquivo_fallback
 from src.features.soccer_features import build_match_features
+from src.data.pit_openfootball_github import apply_bulk as apply_openfootball_pit
+from src.data.pit_openfootball_history import apply_openfootball_history
 
 SEASONS = [f"{y}/{str(y + 1)[-2:]}" for y in range(2010, 2026)]
 CANONICAL_SOURCES = {
-    "EPL": "Football-Data.co.uk", "CHA": "Football-Data.co.uk", "BL1": "Football-Data.co.uk",
-    "SA": "Football-Data.co.uk", "LL": "Football-Data.co.uk", "FL1": "Football-Data.co.uk",
-    "UCL": "openfootball", "UEL": "openfootball", "J1": "J.League Data Site / Football-Data.co.uk:JPN.csv",
-    "J2": "J.League Data Site / Football-Data.co.uk:JPN.csv", "J3": "J.League Data Site / Football-Data.co.uk:JPN.csv",
-    "DFBP": "openfootball", "CAR": "openfootball", "FRI": "ESPN:club.friendly",
+    "EPL": "Football-Data.co.uk",
+    "AG_M": "AFC / Asian Games",
+    "AG_W": "AFC / Asian Games",
+    "ERE": "Football-Data.co.uk",
+    "LL": "Football-Data.co.uk",
+    "SA": "Football-Data.co.uk",
+    "BL1": "Football-Data.co.uk",
+    "J1": "J.League Data Site / Football-Data.co.uk:JPN.csv",
+    "J2": "J.League Data Site / Football-Data.co.uk:JPN.csv",
+    "J3": "J.League Data Site / Football-Data.co.uk:JPN.csv",
+    "FL1": "Football-Data.co.uk",
+    "UCL": "openfootball",
+    "UEL": "openfootball",
+    "U23_M": "FIFA / AFC",
+    "U18_M": "JFA / AFC / UEFA",
 }
 NON_APPLICABLE_CELLS = {("J3", f"{y}/{str(y + 1)[-2:]}") for y in range(2010, 2014)}
 
@@ -91,8 +103,8 @@ def _pit_preflight(root: Path) -> dict:
     # exact completed-result identity is present in an archive capture at/after a
     # valid result-availability bound. Retries and precise-capture scanning only
     # recover evidence that the slower adapter could miss; they do not relax PIT.
-    archive = FootballDataWaybackAdapter(cache_dir=str(root / "pit_evidence"), max_workers=2)
-    supported = {"EPL", "CHA", "BL1", "SA", "LL", "FL1"}
+    archive = FootballDataWaybackAdapter(cache_dir=str(root / "pit_evidence"), max_workers=4)
+    supported = {"EPL", "ERE", "CHA", "BL1", "SA", "LL", "FL1"}
     mask = history["competition"].astype(str).isin(supported)
     if mask.any():
         enriched = archive.apply_bulk(history.loc[mask].copy())
@@ -119,6 +131,17 @@ def _pit_preflight(root: Path) -> dict:
     else:
         before_fallback = after_fallback = 0
 
+    of_mask = history["competition"].astype(str).isin({"UCL", "UEL"})
+    openfootball_verified = 0
+    if of_mask.any():
+        of_enriched = apply_openfootball_pit(history.loc[of_mask].copy())
+        history = _merge_pit_evidence(history, of_enriched)
+        openfootball_verified = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+
+    before_versioned = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+    history = _merge_pit_evidence(history, apply_openfootball_history(history, cache_dir=str(root / "pit_evidence")))
+    after_versioned = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+
     features = build_match_features(history, history, windows=(3, 5, 10, 20))
     features.to_csv(root / "pit_replay_features.csv", index=False)
     verified = features["pit_verified"].fillna(False).astype(bool) if "pit_verified" in features.columns else pd.Series(False, index=features.index)
@@ -131,6 +154,8 @@ def _pit_preflight(root: Path) -> dict:
         "verified_competitions": verified_competitions,
         "archive_enriched_rows": before_fallback,
         "arquivo_fallback_enriched_rows": max(0, after_fallback - before_fallback),
+        "openfootball_verified_rows": openfootball_verified,
+        "versioned_openfootball_verified_rows": max(0, after_versioned - before_versioned),
     }
 
 
@@ -152,6 +177,19 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
                 rows.append({"competition": comp, "season": season, "canonical_source": CANONICAL_SOURCES[comp], "status": "NOT_APPLICABLE", "rows": 0, "reason": "Competition did not exist in this historical season"})
                 continue
             candidates = acquisition[(acquisition.competition == comp) & acquisition.season.map(lambda x: _season_display(comp, x) == season)]
+            # Calendar-year competitions (J1/J2/J3/Asian Games/youth) are emitted by
+            # their adapters as YYYY, while the locked gate matrix uses YYYY/YY.
+            # Normalize through the same season-key convention used by the audit
+            # builder so an explicit adapter row cannot be mistaken for missing audit.
+            if candidates.empty:
+                try:
+                    target_year = int(season[:4])
+                    normalized_season = season
+                    if comp in {"J1", "J2", "J3", "AG_M", "AG_W", "U23_M", "U18_M"}:
+                        normalized_season = str(target_year)
+                    candidates = acquisition[(acquisition.competition == comp) & (acquisition.season.map(lambda x: str(x).strip()) == normalized_season)]
+                except (TypeError, ValueError):
+                    pass
             if candidates.empty:
                 status, count, reason = "MISSING_AUDIT_CELL", 0, "Adapter did not emit an explicit acquisition status"
             else:
@@ -202,7 +240,7 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
     )
 
     result = {
-        "target_competition_count": 14,
+        "target_competition_count": len(TARGET_COMPETITIONS),
         "requested_season_count": 16,
         "requested_competition_season_cells": len(expected),
         "historically_not_applicable_cells": len(NON_APPLICABLE_CELLS),
@@ -227,6 +265,7 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
         "pit_replay_verified_competitions": pit["verified_competitions"],
         "pit_archive_enriched_rows": pit.get("archive_enriched_rows", 0),
         "pit_arquivo_fallback_enriched_rows": pit.get("arquivo_fallback_enriched_rows", 0),
+        "versioned_openfootball_verified_rows": pit.get("versioned_openfootball_verified_rows", 0),
         "pit_publication_time_gate": pit_gate,
         "no_missing_to_zero": True,
         "full_gate_passed": full_gate_passed,
@@ -254,7 +293,22 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
         result["blocking_reasons"].append(f"PIT replay preflight failed: {pit_preflight_error}")
     elif not pit_gate:
         result["blocking_reasons"].append("insufficient PIT-verified replay rows using explicit archived publication evidence")
-    (root / "completion_gate.json").write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    serialized = json.dumps(result, indent=2, ensure_ascii=False, default=str)
+    (root / "completion_gate.json").write_text(serialized, encoding="utf-8")
+    # Research consumes a distinct audit-gate artifact. It is intentionally derived
+    # from the same fail-closed audit result; no weaker parallel gate is introduced.
+    audit_gate = {
+        "full_gate_passed": bool(result.get("full_gate_passed", False)),
+        "pit_publication_time_gate": bool(result.get("pit_publication_time_gate", False)),
+        "coverage_scope_complete": bool(result.get("coverage_scope_complete", False)),
+        "collision_rows": int(result.get("collision_rows", 0)),
+        "duplicate_source_rows": int(result.get("duplicate_source_rows", 0)),
+        "team_mapping_issues": int(result.get("team_mapping_issues", 0)),
+        "blocking_reasons": list(result.get("blocking_reasons", [])),
+        "source": "completion_gate",
+        "fail_closed": True,
+    }
+    (root / "audit_gate.json").write_text(json.dumps(audit_gate, indent=2, ensure_ascii=False), encoding="utf-8")
     return result
 
 

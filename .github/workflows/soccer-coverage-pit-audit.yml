@@ -8,6 +8,13 @@ on:
       - "tests/test_*audit*.py"
       - "tests/test_espn_friendlies_adapter.py"
       - ".github/workflows/soccer-coverage-pit-audit.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/data/**"
+      - "tests/test_*audit*.py"
+      - "tests/test_espn_friendlies_adapter.py"
+      - ".github/workflows/soccer-coverage-pit-audit.yml"
   workflow_dispatch:
   schedule:
     - cron: "37 2 * * 1"
@@ -62,25 +69,62 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
+          from src.data.fixture_field_audit import TARGET_COMPETITIONS, _is_applicable, AuditConfig
+
           summary = json.loads(Path('artifacts/coverage-pit-audit/audit_summary.json').read_text(encoding='utf-8'))
           gate = json.loads(Path('artifacts/coverage-pit-audit/completion_gate.json').read_text(encoding='utf-8'))
           print(json.dumps(summary, indent=2, ensure_ascii=False))
           print(json.dumps(gate, indent=2, ensure_ascii=False))
+
+          config = AuditConfig()
+          expected_target_count = len(TARGET_COMPETITIONS)
+          expected_all_cells = expected_target_count * (config.end_year - config.start_year + 1)
+          expected_not_applicable = sum(
+              1 for comp in TARGET_COMPETITIONS
+              for year in range(config.start_year, config.end_year + 1)
+              if not _is_applicable(comp, year)
+          )
+          expected_applicable = expected_all_cells - expected_not_applicable
+
           failures = []
-          if summary.get('target_competition_count') != 14: failures.append('Target competition count is not 14')
-          if summary.get('no_missing_to_zero') is not True: failures.append('Missing-to-zero invariant failed')
-          if summary.get('search_engines_are_not_dataset_sources') is not True: failures.append('Search-source invariant failed')
-          if gate.get('requested_competition_season_cells') != 220: failures.append(f"Expected 220 applicable competition-season cells, got {gate.get('requested_competition_season_cells')}")
-          if gate.get('historically_not_applicable_cells') != 4: failures.append('Expected four historically non-applicable J3 cells')
+          if summary.get('target_competition_count') != expected_target_count:
+              failures.append(
+                  f"Target competition count drift: "
+                  f"{summary.get('target_competition_count')} != {expected_target_count}"
+              )
+          if summary.get('no_missing_to_zero') is not True:
+              failures.append('Missing-to-zero invariant failed')
+          if summary.get('search_engines_are_not_dataset_sources') is not True:
+              failures.append('Search-source invariant failed')
+          if gate.get('requested_competition_season_cells') != expected_applicable:
+              failures.append(
+                  f"Expected {expected_applicable} applicable competition-season cells, "
+                  f"got {gate.get('requested_competition_season_cells')}"
+              )
+          if gate.get('historically_not_applicable_cells') != expected_not_applicable:
+              failures.append(
+                  f"Expected {expected_not_applicable} historically non-applicable cells, "
+                  f"got {gate.get('historically_not_applicable_cells')}"
+              )
           if not gate.get('technical_audit_ok', False): failures.append('Technical audit matrix is incomplete')
           if not gate.get('coverage_scope_complete', False): failures.append('One or more competition-season cells lack explicit acquisition status')
           if gate.get('parse_error_cells', 0) != 0: failures.append('Parse-error cells remain')
           if gate.get('duplicate_source_rows', 0) != 0: failures.append('Duplicate source identities remain')
           if not gate.get('collision_audit_available', False): failures.append('Collision audit is unavailable')
-          if gate.get('team_mapping_issues', 0) != 0: failures.append('Team mapping issues remain')
+          if gate.get('team_mapping_issues', 0) != 0: failures.append('Team identity mapping issues remain')
           if not gate.get('pit_publication_time_gate', False): failures.append('Publication-time PIT gate is not safe')
-          result = {'validation_passed': not failures, 'blocking_invariants': failures, 'research_gate_remains_strict': True}
-          Path('artifacts/coverage-pit-audit/validation_status.json').write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding='utf-8')
+
+          result = {
+              'validation_passed': not failures,
+              'blocking_invariants': failures,
+              'research_gate_remains_strict': True,
+              'expected_target_competition_count': expected_target_count,
+              'expected_applicable_competition_season_cells': expected_applicable,
+              'expected_not_applicable_cells': expected_not_applicable,
+          }
+          Path('artifacts/coverage-pit-audit/validation_status.json').write_text(
+              json.dumps(result, indent=2, ensure_ascii=False), encoding='utf-8'
+          )
           print(json.dumps(result, indent=2, ensure_ascii=False))
           # A blocked research gate is an expected research state, not an Actions failure.
           # Never weaken the gate to make CI green; preserve the failure in the artifact.

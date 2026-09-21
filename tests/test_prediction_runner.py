@@ -59,6 +59,12 @@ def test_eligibility_is_forward_looking_and_starter_gated():
     assert out["match_id"].tolist() == ["ok"]
 
 
+def test_duplicate_match_ids_fail_closed():
+    d = pd.concat([_fixtures(Path(".")), _fixtures(Path(".")).iloc[[0]]], ignore_index=True)
+    with pytest.raises(RuntimeError, match="duplicate match_id"):
+        _eligible_fixtures(d, pd.Timestamp("2026-09-14T12:00:00Z"))
+
+
 def test_missing_required_fixture_field_fails_closed():
     d = _fixtures(Path(".")).drop(columns=["source_available_at_utc"])
     with pytest.raises(RuntimeError, match="missing required columns"):

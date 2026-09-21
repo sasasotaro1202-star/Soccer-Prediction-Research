@@ -6,6 +6,7 @@ import unicodedata
 from io import BytesIO
 import pandas as pd
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.data.pit_source_adapter_v2 import *
 from src.data.pit_source_adapter_v2 import (
@@ -36,10 +37,34 @@ class FootballDataWaybackAdapter(_BaseAdapter):
 
     _date_key = staticmethod(_DATE_KEY)
 
-    def __init__(self, *args, snapshot_retries: int = 4, retry_backoff: float = 1.5, **kwargs):
+    def __init__(self, *args, snapshot_retries: int = 4, retry_backoff: float = 1.5, cdx_retries: int = 3, cdx_backoff: float = 1.0, **kwargs):
         super().__init__(*args, **kwargs)
         self.snapshot_retries = max(1, int(snapshot_retries))
         self.retry_backoff = max(0.0, float(retry_backoff))
+        self.cdx_retries = max(1, int(cdx_retries))
+        self.cdx_backoff = max(0.0, float(cdx_backoff))
+
+    def _capture_rows_resilient(self, url):
+        """Retry archive index discovery before declaring a URL unavailable.
+
+        This only improves retrieval reliability; evidence acceptance remains
+        unchanged and fail-closed in the base adapter.
+        """
+        last_error = None
+        for attempt in range(1, self.cdx_retries + 1):
+            try:
+                rows = self.captures(url)
+                diag = self._capture_diag.get(url)
+                if rows or (diag is not None and diag.status == "CDX_NO_CAPTURE"):
+                    return rows
+            except Exception as exc:
+                last_error = exc
+            if attempt < self.cdx_retries:
+                time.sleep(self.cdx_backoff * attempt)
+                self._captures.pop(url, None)
+        if last_error:
+            self._capture_diag[url] = CaptureDiagnostic("CDX_REQUEST_FAILURE", error_type=type(last_error).__name__, error=str(last_error))
+        return self._captures.get(url, [])
 
     @staticmethod
     def _with_season_start(history):
@@ -115,7 +140,10 @@ class FootballDataWaybackAdapter(_BaseAdapter):
     def _prefetch_url(self, url, rows, workers=None):
         if not rows:
             return []
-        captures = self.captures(url)
+        # Use the resilient CDX path here as well; otherwise the retry helper
+        # would only warm the cache and the actual PIT scan could still make a
+        # single failed CDX request look like a genuine no-capture condition.
+        captures = self._capture_rows_resilient(url)
         if not captures:
             diag = self._capture_diag.get(url, CaptureDiagnostic("CDX_REQUEST_FAILURE"))
             reason = "no_archive_captures" if diag.status == "CDX_NO_CAPTURE" else f"{diag.status.lower()}: {diag.error or ''}".strip()
@@ -203,7 +231,27 @@ class FootballDataWaybackAdapter(_BaseAdapter):
     def apply_bulk(self, history):
         if history is None or history.empty:
             return history.copy() if history is not None else history
-        return super().apply_bulk(self._with_season_start(history))
+        work = self._with_season_start(history)
+        # Discover archive indexes concurrently across independent season URLs.
+        # Snapshot downloads remain separately bounded by max_workers; no PIT rule changes.
+        groups = []
+        for (competition, start_year), group in work.groupby(["competition", "season_start"], dropna=False):
+            try:
+                url = source_url(str(competition), int(start_year))
+            except Exception:
+                continue
+            groups.append((url, group))
+        if groups:
+            workers = min(4, max(1, len(groups)))
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futures = {pool.submit(self._capture_rows_resilient, url): url for url, _ in groups}
+                for future in as_completed(futures):
+                    url = futures[future]
+                    try:
+                        future.result()
+                    except Exception as exc:
+                        self._capture_diag[url] = CaptureDiagnostic("CDX_REQUEST_FAILURE", error_type=type(exc).__name__, error=str(exc))
+        return super().apply_bulk(work)
 
     def diagnostic_bulk(self, history):
         if history is None or history.empty:
