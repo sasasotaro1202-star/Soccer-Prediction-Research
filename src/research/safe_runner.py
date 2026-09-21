@@ -47,8 +47,8 @@ def run_with_retries() -> int:
     out = Path(os.getenv("RESEARCH_OUTPUT_DIR", "artifacts"))
     out.mkdir(parents=True, exist_ok=True)
 
-    tests_passed = os.getenv("TESTS_PASSED", "true").lower() == "true"
-    audit_passed = os.getenv("AUDIT_PASSED", "true").lower() == "true"
+    tests_passed = os.getenv("TESTS_PASSED", "false").lower() == "true"
+    audit_passed = os.getenv("AUDIT_PASSED", "false").lower() == "true"
     gate = _load_gate(out)
     audit_gate = _load_audit_gate(out)
 
