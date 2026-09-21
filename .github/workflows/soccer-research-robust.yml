@@ -1,13 +1,9 @@
 name: Soccer Research Robust
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "artifacts/**"
   workflow_dispatch:
   schedule:
-    - cron: "17 3 * * *"
+    - cron: "45 3 * * *"
 
 permissions:
   contents: read
