@@ -20,6 +20,7 @@ def test_adopt_status_is_persisted_as_active_registry(tmp_path):
     assert record["adoption_status"] == "ADOPT"
     stored = json.loads(path.read_text())
     assert stored["adoption_status"] == "ADOPT"
+    assert stored["oos_verified"] is True
     assert load_champion(str(path))["model_version"] == "v1"
 
 
