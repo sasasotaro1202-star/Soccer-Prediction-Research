@@ -163,7 +163,12 @@ def _routing_context(frame: pd.DataFrame) -> pd.DataFrame:
         labels=["LOW", "MID_LOW", "MID_HIGH", "HIGH"],
     ).astype("string")
 
-    rest = pd.to_numeric(d.get("rest_diff_hours", np.nan), errors="coerce")
+    rest_source = (
+        d["rest_diff_hours"]
+        if "rest_diff_hours" in d.columns
+        else pd.Series(np.nan, index=d.index, dtype=float)
+    )
+    rest = pd.to_numeric(rest_source, errors="coerce")
     d["routing_rest"] = pd.cut(
         rest,
         bins=[-np.inf, -24.0, -6.0, 6.0, 24.0, np.inf],
