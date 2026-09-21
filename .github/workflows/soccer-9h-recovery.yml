@@ -1,0 +1,178 @@
+name: Soccer 9H Recovery Controller
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: soccer-9h-recovery
+  cancel-in-progress: true
+
+jobs:
+  watchdog:
+    name: Monitor and recover 9H research
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect latest 9H runs and recover when needed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          API="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/soccer-9h-autonomous.yml/runs?per_page=10"
+          JSON="$(curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${API}")"
+
+          python - "${JSON}" <<'PY'
+          import json
+          import sys
+          from datetime import datetime, timezone
+
+          payload = json.loads(sys.argv[1])
+          runs = payload.get("workflow_runs", [])
+
+          active = [
+              r for r in runs
+              if r.get("status") in {"queued", "in_progress"}
+          ]
+          if active:
+              print("RECOVERY: active 9H run exists; no action required.")
+              raise SystemExit(0)
+
+          def when(r):
+              raw = r.get("updated_at") or r.get("created_at")
+              if not raw:
+                  return datetime.min.replace(tzinfo=timezone.utc)
+              return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+
+          completed = [r for r in runs if r.get("status") == "completed"]
+          completed.sort(key=when, reverse=True)
+
+          if not completed:
+              print("RECOVERY: no completed 9H run found; dispatch required.")
+              raise SystemExit(10)
+
+          latest = completed[0]
+          conclusion = latest.get("conclusion")
+          updated_at = when(latest)
+          age_hours = (datetime.now(timezone.utc) - updated_at).total_seconds() / 3600.0
+
+          print(
+              f"RECOVERY: latest_run={latest.get('id')} "
+              f"conclusion={conclusion} age_hours={age_hours:.2f}"
+          )
+
+          if conclusion in {"failure", "timed_out"}:
+              raise SystemExit(20)
+
+          if conclusion != "success" or age_hours >= 8.0:
+              raise SystemExit(10)
+
+          raise SystemExit(0)
+          PY
+        continue-on-error: true
+
+      - name: Rerun failed 9H jobs when possible
+        if: steps.inspect.outcome == 'failure'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          API="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/soccer-9h-autonomous.yml/runs?per_page=10"
+          JSON="$(curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${API}")"
+
+          RUN_ID="$(python - "${JSON}" <<'PY'
+          import json, sys
+          payload = json.loads(sys.argv[1])
+          runs = payload.get("workflow_runs", [])
+          active = [r for r in runs if r.get("status") in {"queued","in_progress"}]
+          if active:
+              print("")
+              raise SystemExit(0)
+          completed = [r for r in runs if r.get("status") == "completed"]
+          completed.sort(key=lambda r: r.get("updated_at") or r.get("created_at") or "", reverse=True)
+          print(completed[0].get("id", "") if completed else "")
+          PY
+          )"
+
+          if [ -z "${RUN_ID}" ]; then
+            echo "RECOVERY: no completed run available for rerun."
+            exit 0
+          fi
+
+          CODE="$(curl -sS -o /tmp/rerun.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/rerun-failed-jobs")"
+
+          case "${CODE}" in
+            201|202)
+              echo "RECOVERY: rerun-failed-jobs accepted for run ${RUN_ID}."
+              exit 0
+              ;;
+            *)
+              echo "RECOVERY: rerun-failed-jobs returned HTTP ${CODE}; full dispatch will be attempted."
+              ;;
+          esac
+
+      - name: Dispatch a fresh 9H run when no active run exists
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          API="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/soccer-9h-autonomous.yml/runs?per_page=10"
+          JSON="$(curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${API}")"
+
+          python - "${JSON}" <<'PY'
+          import json, sys
+          payload = json.loads(sys.argv[1])
+          active = [r for r in payload.get("workflow_runs", []) if r.get("status") in {"queued","in_progress"}]
+          if active:
+              print("RECOVERY: active run now present; skip fresh dispatch.")
+              raise SystemExit(0)
+          PY
+
+          CODE="$(curl -sS -o /tmp/dispatch.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -d '{"ref":"main"}' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/soccer-9h-autonomous.yml/dispatches")"
+
+          case "${CODE}" in
+            204)
+              echo "RECOVERY: fresh 9H workflow dispatch accepted."
+              ;;
+            409)
+              echo "RECOVERY: dispatch conflict; another controller/run likely won the race."
+              ;;
+            *)
+              echo "RECOVERY: dispatch returned HTTP ${CODE}."
+              cat /tmp/dispatch.json || true
+              exit 1
+              ;;
+          esac
