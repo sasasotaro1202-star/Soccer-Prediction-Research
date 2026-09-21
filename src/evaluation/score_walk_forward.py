@@ -8,7 +8,6 @@ import pandas as pd
 from src.prediction.secondary_outputs import (
     fit_score_rate_model,
     predict_score_distribution,
-    predict_score_markets,
 )
 
 
@@ -46,11 +45,13 @@ def _score_block_metrics(block: pd.DataFrame, model: dict) -> dict[str, float]:
         away_abs += abs(best_a - actual_a)
         total_abs += abs((best_h + best_a) - (actual_h + actual_a))
 
-        markets = predict_score_markets(model, row.home_team, row.away_team)
+        probs = np.asarray([float(p) for _, _, p in dist], dtype=float)
+        totals = np.asarray([int(h + a) for h, a, _ in dist], dtype=int)
+        btts_mask = np.asarray([int(h) >= 1 and int(a) >= 1 for h, a, _ in dist], dtype=bool)
+        p_over25 = float(probs[totals >= 3].sum())
+        p_btts = float(probs[btts_mask].sum())
         y_over25 = int(actual_h + actual_a >= 3)
         y_btts = int(actual_h >= 1 and actual_a >= 1)
-        p_over25 = markets["over_2_5"]
-        p_btts = markets["btts_yes"]
         over25_logloss.append(_binary_logloss(y_over25, p_over25))
         over25_brier.append((p_over25 - y_over25) ** 2)
         btts_logloss.append(_binary_logloss(y_btts, p_btts))
