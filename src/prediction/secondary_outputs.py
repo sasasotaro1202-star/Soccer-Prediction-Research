@@ -83,7 +83,7 @@ def fit_score_rate_model(history: pd.DataFrame, *, shrinkage: float = 20.0) -> d
     }
 
 
-def predict_score_candidates(score_model: dict[str, Any], home_team: str, away_team: str) -> list[dict[str, Any]]:
+def _score_lambdas(score_model: dict[str, Any], home_team: str, away_team: str) -> tuple[float, float]:
     teams = score_model.get("teams", {})
     home = teams.get(str(home_team))
     away = teams.get(str(away_team))
@@ -102,9 +102,11 @@ def predict_score_candidates(score_model: dict[str, Any], home_team: str, away_t
     league_away = max(base_away, 1e-6)
     home_lambda = league_home * (home_attack / league_home) * (away_defense / league_home)
     away_lambda = league_away * (away_attack / league_away) * (home_defense / league_away)
-    home_lambda = float(np.clip(home_lambda, 0.05, 5.0))
-    away_lambda = float(np.clip(away_lambda, 0.05, 5.0))
+    return float(np.clip(home_lambda, 0.05, 5.0)), float(np.clip(away_lambda, 0.05, 5.0))
 
+
+def predict_score_candidates(score_model: dict[str, Any], home_team: str, away_team: str) -> list[dict[str, Any]]:
+    home_lambda, away_lambda = _score_lambdas(score_model, home_team, away_team)
     candidates = score_distribution(home_lambda, away_lambda, max_goals=7)
     selected = select_score_candidates(candidates)
     return [
@@ -117,6 +119,24 @@ def predict_score_candidates(score_model: dict[str, Any], home_team: str, away_t
         for x in selected
     ]
 
+
+
+def predict_score_markets(score_model: dict[str, Any], home_team: str, away_team: str) -> dict[str, float]:
+    """Return O/U and BTTS probabilities from the same full score distribution."""
+    home_lambda, away_lambda = _score_lambdas(score_model, home_team, away_team)
+    distribution = score_distribution(home_lambda, away_lambda, max_goals=7)
+    total = np.asarray([h + a for h, a, _ in distribution], dtype=float)
+    home_goals = np.asarray([h for h, _, _ in distribution], dtype=int)
+    away_goals = np.asarray([a for _, a, _ in distribution], dtype=int)
+    probs = np.asarray([p for _, _, p in distribution], dtype=float)
+    out: dict[str, float] = {}
+    for line in (0.5, 1.5, 2.5, 3.5, 4.5):
+        key = str(line).replace(".5", "_5")
+        out[f"over_{key}"] = float(probs[total > line].sum())
+        out[f"under_{key}"] = float(probs[total < line].sum())
+    out["btts_yes"] = float(probs[(home_goals >= 1) & (away_goals >= 1)].sum())
+    out["btts_no"] = float(probs[(home_goals == 0) | (away_goals == 0)].sum())
+    return out
 
 def _parse_mom_input(value: Any) -> tuple[list[str], list[float]]:
     if isinstance(value, str):
