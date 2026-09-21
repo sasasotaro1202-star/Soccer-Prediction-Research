@@ -21,6 +21,22 @@ def test_score_model_is_pit_only_and_returns_exactly_three():
     assert len(predict_score_candidates(model, "A", "B")) == 3
     assert all(0 <= x["probability"] <= 1 for x in predict_score_candidates(model, "A", "B"))
 
+def test_score_model_uses_shrunk_competition_environment():
+    history = pd.DataFrame(
+        [
+            {"home_team": "A", "away_team": "B", "home_goals": 4, "away_goals": 0, "competition": "HIGH", "pit_verified": True},
+            {"home_team": "B", "away_team": "A", "home_goals": 0, "away_goals": 1, "competition": "LOW", "pit_verified": True},
+            {"home_team": "A", "away_team": "B", "home_goals": 1, "away_goals": 0, "competition": "HIGH", "pit_verified": True},
+            {"home_team": "B", "away_team": "A", "home_goals": 0, "away_goals": 1, "competition": "LOW", "pit_verified": True},
+        ]
+    )
+    model = fit_score_rate_model(history)
+    assert set(model["competition_rates"]) == {"HIGH", "LOW"}
+    high = predict_score_candidates(model, "A", "B", "HIGH")
+    low = predict_score_candidates(model, "A", "B", "LOW")
+    assert high[0]["probability"] != low[0]["probability"]
+
+
 
 def test_score_model_fails_closed_for_unknown_team():
     history = pd.DataFrame(
