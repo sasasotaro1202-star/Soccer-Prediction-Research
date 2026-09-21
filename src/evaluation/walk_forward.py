@@ -173,7 +173,7 @@ def _routing_context(frame: pd.DataFrame) -> pd.DataFrame:
         rest,
         bins=[-np.inf, -24.0, -6.0, 6.0, 24.0, np.inf],
         labels=["AWAY_MAJOR", "AWAY_SMALL", "EVEN", "HOME_SMALL", "HOME_MAJOR"],
-    ).astype("string")
+    ).astype("string").fillna("MISSING")
 
     if "neutral_venue_known" in d.columns:
         known = d["neutral_venue_known"].astype("boolean")
