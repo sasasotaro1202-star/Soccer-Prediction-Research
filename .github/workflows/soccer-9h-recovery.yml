@@ -66,7 +66,13 @@ jobs:
               else:
                   active.append(r)
           if active:
-              print("ACTIVE")
+              current_active = [r for r in active if r.get("head_sha") == main_sha]
+              if current_active:
+                  print("ACTIVE")
+                  raise SystemExit(0)
+              # An active run exists, but it is running an obsolete commit.
+              # Queue the current main rather than waiting for stale work to finish.
+              print("DISPATCH")
               raise SystemExit(0)
 
           def when(r):
