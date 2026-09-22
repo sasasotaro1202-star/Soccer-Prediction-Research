@@ -3,6 +3,7 @@ name: Soccer 9H Recovery Controller
 # The controller is intentionally re-run on repository updates so stale 9H runs are moved to current main.
 # Latest-main re-evaluation is intentionally explicit for operational recovery.
 # Heartbeat: push-triggered recovery also reconciles any pending run whose SHA is behind main.
+# Conservative immutable PIT snapshots are reconciled on this cycle.
 
 on:
   push:

@@ -18,6 +18,7 @@ from src.data.pit_archive_fallback import apply_arquivo_fallback
 from src.features.soccer_features import build_match_features
 from src.data.pit_openfootball_github import apply_bulk as apply_openfootball_pit
 from src.data.pit_openfootball_history import apply_openfootball_history
+from src.data.pit_engsoccerdata import apply_snapshot_pit
 
 SEASONS = [f"{y}/{str(y + 1)[-2:]}" for y in range(2010, 2026)]
 CANONICAL_SOURCES = {
@@ -138,6 +139,18 @@ def _pit_preflight(root: Path) -> dict:
         history = _merge_pit_evidence(history, of_enriched)
         openfootball_verified = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
 
+    snapshot_before = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+    try:
+        history = _merge_pit_evidence(
+            history,
+            apply_snapshot_pit(history, cache_dir=str(root / "pit_evidence")),
+        )
+        snapshot_after = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+        snapshot_error = None
+    except Exception as exc:
+        snapshot_after = snapshot_before
+        snapshot_error = f"{type(exc).__name__}: {exc}"
+
     before_versioned = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
     history = _merge_pit_evidence(history, apply_openfootball_history(history, cache_dir=str(root / "pit_evidence")))
     after_versioned = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
@@ -154,6 +167,8 @@ def _pit_preflight(root: Path) -> dict:
         "verified_competitions": verified_competitions,
         "archive_enriched_rows": before_fallback,
         "arquivo_fallback_enriched_rows": max(0, after_fallback - before_fallback),
+        "engsoccerdata_snapshot_verified_rows": max(0, snapshot_after - snapshot_before),
+        "engsoccerdata_snapshot_error": snapshot_error,
         "openfootball_verified_rows": openfootball_verified,
         "versioned_openfootball_verified_rows": max(0, after_versioned - before_versioned),
     }
