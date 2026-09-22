@@ -101,6 +101,17 @@ def _score_block_metrics(
     }
 
 
+def _advance_past_same_kickoff(df: pd.DataFrame, index: int) -> int:
+    """Move a row-count boundary past all rows sharing the same kickoff time."""
+    boundary = int(index)
+    if boundary <= 0 or boundary >= len(df):
+        return boundary
+    kickoff = df.iloc[boundary - 1]["kickoff_utc"]
+    while boundary < len(df) and df.iloc[boundary]["kickoff_utc"] == kickoff:
+        boundary += 1
+    return boundary
+
+
 def run_score_walk_forward(
     df: pd.DataFrame,
     *,
@@ -142,9 +153,9 @@ def run_score_walk_forward(
         )
 
     rows = []
-    start = int(min_train)
+    start = _advance_past_same_kickoff(d, int(min_train))
     while start < len(d):
-        end = min(start + int(oos_block), len(d))
+        end = _advance_past_same_kickoff(d, min(start + int(oos_block), len(d)))
         train = d.iloc[:start]
         oos = d.iloc[start:end]
         prediction_cutoff = oos["kickoff_utc"].min() - pd.Timedelta(minutes=60)
