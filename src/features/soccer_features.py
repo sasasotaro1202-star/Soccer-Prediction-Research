@@ -263,5 +263,21 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
 def add_target(features: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
     actual = matches[["match_id", "home_goals", "away_goals"]].copy()
     out = features.merge(actual, on="match_id", how="left", validate="one_to_one")
-    out["target"] = np.where(out.home_goals > out.away_goals, 0, np.where(out.home_goals == out.away_goals, 1, 2))
+    # Missing outcomes must remain missing. Treating NaN comparisons as an away win
+    # would create synthetic labels and contaminate chronological OOS training.
+    home_goals = pd.to_numeric(out["home_goals"], errors="coerce")
+    away_goals = pd.to_numeric(out["away_goals"], errors="coerce")
+    out["target"] = np.select(
+        [
+            home_goals.isna() | away_goals.isna(),
+            home_goals > away_goals,
+            home_goals == away_goals,
+        ],
+        [
+            np.nan,
+            0,
+            1,
+        ],
+        default=2,
+    )
     return out
