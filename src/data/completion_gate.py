@@ -22,6 +22,7 @@ from src.data.pit_engsoccerdata import apply_snapshot_pit
 from src.data.pit_openfootball_country import apply_country_openfootball_pit
 from src.data.pit_jleague_2020_github import apply_jleague_2020_github_pit
 from src.data.pit_footballcsv_espana import apply_footballcsv_espana_pit
+from src.data.pit_footballcsv_weekly import apply_footballcsv_weekly_pit
 from src.data.pit_footballcsv_italy import apply_footballcsv_italy_pit
 
 SEASONS = [f"{y}/{str(y + 1)[-2:]}" for y in range(2010, 2026)]
@@ -181,6 +182,18 @@ def _pit_preflight(root: Path) -> dict:
         ll_footballcsv_after = ll_footballcsv_before
         ll_footballcsv_error = f"{type(exc).__name__}: {exc}"
 
+    footballcsv_weekly_before = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+    try:
+        history = _merge_pit_evidence(
+            history,
+            apply_footballcsv_weekly_pit(history, cache_dir=str(root / "pit_evidence")),
+        )
+        footballcsv_weekly_after = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+        footballcsv_weekly_error = None
+    except Exception as exc:
+        footballcsv_weekly_after = footballcsv_weekly_before
+        footballcsv_weekly_error = f"{type(exc).__name__}: {exc}"
+
     jleague_2020_before = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
     try:
         history = _merge_pit_evidence(
@@ -263,6 +276,8 @@ def _pit_preflight(root: Path) -> dict:
         "country_openfootball_verified_rows": max(0, country_openfootball_after - country_openfootball_before),
         "country_openfootball_error": country_openfootball_error,
         "jleague_2020_github_verified_rows": max(0, jleague_2020_after - jleague_2020_before),
+        "footballcsv_weekly_verified_rows": max(0, footballcsv_weekly_after - footballcsv_weekly_before),
+        "footballcsv_weekly_error": footballcsv_weekly_error,
         "ll_footballcsv_verified_rows": max(0, ll_footballcsv_after - ll_footballcsv_before),
         "ll_footballcsv_error": ll_footballcsv_error,
         "sa_footballcsv_verified_rows": max(0, sa_footballcsv_after - sa_footballcsv_before),
@@ -375,6 +390,7 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
             "jleague_2020_github_verified": int(pit.get("jleague_2020_github_verified_rows", 0)),
             "ll_footballcsv_verified": int(pit.get("ll_footballcsv_verified_rows", 0)),
             "sa_footballcsv_verified": int(pit.get("sa_footballcsv_verified_rows", 0)),
+            "footballcsv_weekly_verified": int(pit.get("footballcsv_weekly_verified_rows", 0)),
             "openfootball_verified": int(pit.get("openfootball_verified_rows", 0)),
             "versioned_openfootball_verified": int(pit.get("versioned_openfootball_verified_rows", 0)),
         },
@@ -383,6 +399,7 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
             "jleague_2020_github": pit.get("jleague_2020_github_error"),
             "ll_footballcsv": pit.get("ll_footballcsv_error"),
             "sa_footballcsv": pit.get("sa_footballcsv_error"),
+            "footballcsv_weekly": pit.get("footballcsv_weekly_error"),
             "engsoccerdata_snapshot": pit.get("engsoccerdata_snapshot_error"),
         },
         "competition_breakdown": pit.get("pit_competition_breakdown", {}),
