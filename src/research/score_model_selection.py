@@ -7,7 +7,7 @@ import pandas as pd
 
 
 METHODS = ("primary", "recency", "dixon_coles")
-RECENCY_HALF_LIVES = (400.0, 800.0, 1200.0, 1600.0)
+RECENCY_HALF_LIVES_DAYS = (180.0, 365.0, 730.0, 1095.0)
 METRICS = (
     "score_logloss",
     "over_2_5_logloss",
@@ -50,13 +50,13 @@ def _summary(frame: pd.DataFrame, method: str, *, half_life_rows: float | None =
 
 def _recency_specs(frame: pd.DataFrame) -> list[tuple[str, float | None]]:
     specs: list[tuple[str, float | None]] = []
-    for half in RECENCY_HALF_LIVES:
-        prefix = f"recency_h{int(half)}_score_logloss"
+    for half in RECENCY_HALF_LIVES_DAYS:
+        prefix = f"recency_d{int(half)}_score_logloss"
         if prefix in frame.columns:
-            specs.append((f"recency_h{int(half)}", half))
+            specs.append((f"recency_d{int(half)}", half))
     if not specs and "recency_score_logloss" in frame.columns:
         # Backward compatibility for older artifacts; this is the historical 800-row default.
-        specs.append(("recency", 800.0))
+        specs.append(("recency", 365.0))
     return specs
 
 
@@ -163,13 +163,14 @@ def select_score_model(
     selected_loss = primary["score_logloss"]
     selected_parameters: dict[str, Any] = {}
 
-    for key, half_life in _recency_specs(work):
+    for key, half_life_days in _recency_specs(work):
         try:
             record, accepted = _check_challenger(
                 work,
                 primary,
                 "recency",
-                half_life_rows=half_life,
+                half_life_rows=None,
+                half_life_days=half_life_days,
                 max_metric_regression=max_metric_regression,
                 min_relative_improvement=min_relative_improvement,
                 min_improvement_share=min_improvement_share,
@@ -309,10 +310,12 @@ def verify_selected_score_model(
 
     half_life = None
     if selected == "recency":
-        half_life = float((selection.get("selected_parameters") or {}).get("half_life_rows", 800.0))
+        half_life_days = float(
+            (selection.get("selected_parameters") or {}).get("half_life_days", 365.0)
+        )
 
     required = {"n"} | {
-        _col(selected, metric, half_life_rows=half_life) for metric in METRICS
+        _col(selected, metric, half_life_rows=None) for metric in METRICS
     }
     # Backward-compatible 800-row artifacts use the untagged names.
     if selected == "recency" and all(
@@ -330,7 +333,7 @@ def verify_selected_score_model(
         }
 
     if selected == "recency":
-        status_col = "recency_h%d_status" % int(half_life)
+        status_col = "recency_d%d_status" % int(half_life_days)
         if status_col not in locked_oos.columns:
             status_col = "recency_status"
     else:
@@ -350,7 +353,7 @@ def verify_selected_score_model(
         selected_metrics = {
             m: _weighted_mean(
                 locked_oos[
-                    f"recency_h{int(half_life)}_{m}"
+                    f"recency_d{int(half_life_days)}_{m}"
                     if f"recency_h{int(half_life)}_{m}" in locked_oos.columns
                     else f"recency_{m}"
                 ],
@@ -379,7 +382,7 @@ def verify_selected_score_model(
     }
     block_ok = []
     selected_ll_col = (
-        f"recency_h{int(half_life)}_score_logloss"
+        f"recency_d{int(half_life_days)}_score_logloss"
         if selected == "recency" and f"recency_h{int(half_life)}_score_logloss" in locked_oos.columns
         else _col(selected, "score_logloss", half_life_rows=half_life)
     )
@@ -427,7 +430,7 @@ def verify_selected_score_model(
             "market_metrics_finite": market_metrics_finite,
         },
         **(
-            {"selected_parameters": {"half_life_rows": half_life}}
+            {"selected_parameters": {"half_life_days": half_life_days}}
             if selected == "recency"
             else {}
         ),
