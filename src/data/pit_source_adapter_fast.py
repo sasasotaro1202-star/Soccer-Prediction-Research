@@ -75,11 +75,14 @@ class FootballDataWaybackAdapter(_BaseAdapter):
         cache = self._snapshot_cache_path(capture)
         raw = None
         last_error = None
-        snapshot_urls = [self._snapshot_url(capture, original_url)]
         capture_original = str(capture.get("original", "")).strip()
-        if capture_original and capture_original != original_url:
+        snapshot_urls = []
+        if capture_original:
             snapshot_urls.append(self._snapshot_url(capture, capture_original))
-        snapshot_urls = list(dict.fromkeys(snapshot_urls))
+        if original_url and original_url != capture_original:
+            snapshot_urls.append(self._snapshot_url(capture, original_url))
+        if not snapshot_urls:
+            raise ValueError("Wayback replay requires an original URL")
 
         for attempt in range(1, self.snapshot_retries + 1):
             try:
