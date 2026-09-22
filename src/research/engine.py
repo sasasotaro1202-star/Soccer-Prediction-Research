@@ -208,6 +208,12 @@ def run(out_dir: str = "artifacts") -> dict:
     pit_verified = int(feats["pit_verified"].sum()) if "pit_verified" in feats.columns else 0; pit_total = int(len(feats))
     if pit_verified == 0:
         report = {"status": "BLOCKED", "reason": "No match rows have sufficient historical result state under deterministic PIT.", "acquired_rows": int(len(history)), "snapshot_id": snapshot_id(history), "pit_policy": PIT_POLICY, "pit_verified_rows": 0, "pit_verified_rate": 0.0, "archive_audit": archive_audit, "audit": audit_report, "oos_claimed": False}; report["ai_research"] = weakness_advice(report); _write_status(out, report); return report
+    minimum_score_blocks = 5
+    minimum_score_rows_per_block = 500
+    score_oos = pd.DataFrame()
+    primary_finite = False
+    score_block_rows = pd.Series(dtype=float)
+    score_block_rows_ok = False
     try:
         score_oos = run_score_walk_forward(
             feats,
@@ -216,8 +222,6 @@ def run(out_dir: str = "artifacts") -> dict:
         )
         score_oos.to_csv(out / "score_oos_metrics.csv", index=False)
         primary_finite = _primary_score_metrics_finite(score_oos)
-        minimum_score_blocks = 5
-        minimum_score_rows_per_block = 500
         enough_score_blocks = len(score_oos) >= minimum_score_blocks
         score_block_rows = pd.to_numeric(score_oos["n"], errors="coerce") if "n" in score_oos.columns else pd.Series(dtype=float)
         score_block_rows_ok = bool(
@@ -242,12 +246,20 @@ def run(out_dir: str = "artifacts") -> dict:
         }
     except Exception as exc:
         score_oos = pd.DataFrame()
+        primary_finite = False
+        score_block_rows = pd.Series(dtype=float)
+        score_block_rows_ok = False
         score_oos_status = {
             "status": "ERROR",
             "error": f"{type(exc).__name__}: {exc}",
             "blocks": 0,
+            "minimum_total_blocks": minimum_score_blocks,
+            "minimum_rows_per_block": minimum_score_rows_per_block,
+            "block_rows": [],
+            "block_rows_ok": False,
             "rows": 0,
             "finite_metrics": False,
+            "primary_metrics_finite": False,
         }
     (out / "score_oos_gate.json").write_text(
         json.dumps(score_oos_status, indent=2, ensure_ascii=False, default=str),
