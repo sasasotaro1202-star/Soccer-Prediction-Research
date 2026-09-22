@@ -28,3 +28,22 @@ def test_country_row_key_uses_exact_result_identity():
         2,
         0,
     )
+
+
+def test_country_provider_records_empty_history_as_unverifiable(tmp_path, monkeypatch):
+    import src.data.pit_openfootball_country as country
+
+    history = pd.DataFrame([{
+        "competition": "EPL",
+        "season_start": 2024,
+        "kickoff_utc": "2024-08-17T15:00:00Z",
+        "kickoff_time_available": True,
+        "home_team": "Arsenal FC",
+        "away_team": "Wolverhampton Wanderers FC",
+        "home_goals": 2,
+        "away_goals": 0,
+    }])
+    monkeypatch.setattr(country, "_commits", lambda *args, **kwargs: [])
+    out = country.apply_country_openfootball_pit(history, cache_dir=str(tmp_path))
+    assert out.loc[0, "pit_evidence_status"] == "UNVERIFIABLE"
+    assert out.loc[0, "pit_evidence_reason"] == "immutable_openfootball_commit_history_empty"
