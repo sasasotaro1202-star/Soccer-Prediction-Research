@@ -18,6 +18,10 @@ def test_autonomous_workflow_has_continuous_9h_cycle_and_strict_concurrency():
     assert "production_provenance.json" in text
     assert "pit_preflight_manifest.json" in text
     assert 'PIT_OPENFOOTBALL_COUNTRY_MAX_COMMIT_PAGES: "12"' in text
+    assert "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803" in text
+    assert "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1" in text
+    assert "actions/cache@caa296126883cff596d87d8935842f9db880ef25" in text
+    assert "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f" in text
 
 
 def test_recovery_workflow_has_watchdog_and_self_chaining_dispatch():
