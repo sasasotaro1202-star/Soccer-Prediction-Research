@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.features.soccer_features import build_match_features
+from src.features.soccer_features import add_target, build_match_features
 
 
 def _history():
@@ -117,3 +117,17 @@ def test_two_explicitly_available_history_rows_are_pit_valid(monkeypatch):
     features = build_match_features(history, match, windows=(3, 5))
     assert bool(features.iloc[0]["pit_verified"])
     assert pd.notna(features.iloc[0]["home_gf_3"])
+
+
+def test_missing_match_outcome_does_not_become_away_win():
+    features = pd.DataFrame([
+        {"match_id": "m1", "kickoff_utc": pd.Timestamp("2025-01-01", tz="UTC")},
+        {"match_id": "m2", "kickoff_utc": pd.Timestamp("2025-01-02", tz="UTC")},
+    ])
+    matches = pd.DataFrame([
+        {"match_id": "m1", "home_goals": 2, "away_goals": 1},
+        {"match_id": "m2", "home_goals": pd.NA, "away_goals": pd.NA},
+    ])
+    out = add_target(features, matches)
+    assert out.loc[0, "target"] == 0
+    assert pd.isna(out.loc[1, "target"])
