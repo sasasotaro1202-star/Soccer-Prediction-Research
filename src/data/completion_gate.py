@@ -22,6 +22,7 @@ from src.data.pit_engsoccerdata import apply_snapshot_pit
 from src.data.pit_openfootball_country import apply_country_openfootball_pit
 from src.data.pit_jleague_2020_github import apply_jleague_2020_github_pit
 from src.data.pit_footballcsv_espana import apply_footballcsv_espana_pit
+from src.data.pit_footballcsv_italy import apply_footballcsv_italy_pit
 
 SEASONS = [f"{y}/{str(y + 1)[-2:]}" for y in range(2010, 2026)]
 CANONICAL_SOURCES = {
@@ -156,6 +157,18 @@ def _pit_preflight(root: Path) -> dict:
         country_openfootball_after = country_openfootball_before
         country_openfootball_error = f"{type(exc).__name__}: {exc}"
 
+    sa_footballcsv_before = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+    try:
+        history = _merge_pit_evidence(
+            history,
+            apply_footballcsv_italy_pit(history, cache_dir=str(root / "pit_evidence")),
+        )
+        sa_footballcsv_after = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+        sa_footballcsv_error = None
+    except Exception as exc:
+        sa_footballcsv_after = sa_footballcsv_before
+        sa_footballcsv_error = f"{type(exc).__name__}: {exc}"
+
     ll_footballcsv_before = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
     try:
         history = _merge_pit_evidence(
@@ -252,6 +265,8 @@ def _pit_preflight(root: Path) -> dict:
         "jleague_2020_github_verified_rows": max(0, jleague_2020_after - jleague_2020_before),
         "ll_footballcsv_verified_rows": max(0, ll_footballcsv_after - ll_footballcsv_before),
         "ll_footballcsv_error": ll_footballcsv_error,
+        "sa_footballcsv_verified_rows": max(0, sa_footballcsv_after - sa_footballcsv_before),
+        "sa_footballcsv_error": sa_footballcsv_error,
         "jleague_2020_github_error": jleague_2020_error,
         "engsoccerdata_snapshot_error": snapshot_error,
         "openfootball_verified_rows": openfootball_verified,
