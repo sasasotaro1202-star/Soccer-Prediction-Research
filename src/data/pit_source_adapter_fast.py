@@ -67,15 +67,34 @@ class FootballDataWaybackAdapter(_BaseAdapter):
         cache = self._snapshot_cache_path(capture)
         raw = None
         last_error = None
+        snapshot_urls = [self._snapshot_url(capture, original_url)]
+        capture_original = str(capture.get("original", "")).strip()
+        if capture_original and capture_original != original_url:
+            snapshot_urls.append(self._snapshot_url(capture, capture_original))
+        snapshot_urls = list(dict.fromkeys(snapshot_urls))
+
         for attempt in range(1, self.snapshot_retries + 1):
             try:
                 if cache.exists():
                     raw = cache.read_bytes()
                 else:
-                    response = requests.get(self._snapshot_url(capture, original_url), timeout=self.timeout, headers={"User-Agent": "SoccerPredictionResearch/1.0 PIT-Audit"})
-                    response.raise_for_status()
-                    raw = response.content
-                    cache.write_bytes(raw)
+                    last_error = None
+                    for snapshot_url in snapshot_urls:
+                        try:
+                            response = requests.get(
+                                snapshot_url,
+                                timeout=self.timeout,
+                                headers={"User-Agent": "SoccerPredictionResearch/1.0 PIT-Audit"},
+                            )
+                            response.raise_for_status()
+                            raw = response.content
+                            cache.write_bytes(raw)
+                            last_error = None
+                            break
+                        except (requests.RequestException, OSError) as exc:
+                            last_error = exc
+                    if raw is None and last_error is not None:
+                        raise last_error
                 break
             except (requests.RequestException, OSError) as exc:
                 last_error = exc
