@@ -226,6 +226,7 @@ def _pit_preflight(root: Path) -> dict:
         "openfootball_verified_rows": openfootball_verified,
         "versioned_openfootball_verified_rows": max(0, after_versioned - before_versioned),
         "pit_competition_breakdown": pit_competition_breakdown,
+        "pit_evidence_status_breakdown": pit_evidence_status_breakdown,
     }
 
 
@@ -336,6 +337,8 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
         "pit_archive_enriched_rows": pit.get("archive_enriched_rows", 0),
         "pit_arquivo_fallback_enriched_rows": pit.get("arquivo_fallback_enriched_rows", 0),
         "versioned_openfootball_verified_rows": pit.get("versioned_openfootball_verified_rows", 0),
+        "pit_competition_breakdown": pit.get("pit_competition_breakdown", {}),
+        "pit_evidence_status_breakdown": pit.get("pit_evidence_status_breakdown", {}),
         "pit_publication_time_gate": pit_gate,
         "no_missing_to_zero": True,
         "full_gate_passed": full_gate_passed,
