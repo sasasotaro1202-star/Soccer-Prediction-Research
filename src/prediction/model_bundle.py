@@ -185,6 +185,9 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
         score_model = bundle.get("score_model")
         if not isinstance(score_model, dict):
             raise RuntimeError("Production model bundle score_model must be an object")
+        score_parameters = bundle.get("score_parameters")
+        if not isinstance(score_parameters, dict):
+            score_parameters = {}
         method = str(score_model.get("method", ""))
         expected_prefix = {
             "primary": "pit_smoothed_",
@@ -195,6 +198,16 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
             raise RuntimeError(
                 f"Production score method/model mismatch: score_method={score_method!r}, model_method={method!r}"
             )
+        if score_method == "recency":
+            half_life = float(score_parameters.get("half_life_rows", score_model.get("half_life_rows", 800.0)))
+            model_half_life = float(score_model.get("half_life_rows", half_life))
+            if (
+                not np.isfinite(half_life)
+                or half_life <= 0
+                or not np.isfinite(model_half_life)
+                or abs(half_life - model_half_life) > 1e-9
+            ):
+                raise RuntimeError("Production recency score parameter provenance mismatch")
         if score_method != "primary":
             gate = bundle.get("score_locked_verification")
             if not isinstance(gate, dict) or gate.get("status") != "PASS" or str(gate.get("selected_method")) != score_method:
