@@ -110,13 +110,13 @@ def fit_score_rate_model(history: pd.DataFrame, *, shrinkage: float = 20.0) -> d
 
 
 
-def fit_recency_score_rate_model(
+def fit_time_decay_score_rate_model(
     history: pd.DataFrame,
     *,
     shrinkage: float = 20.0,
-    half_life_rows: float = 800.0,
+    half_life_days: float = 180.0,
 ) -> dict[str, Any]:
-    """PIT-safe score-rate challenger with deterministic exponential row decay."""
+    """PIT-safe score-rate challenger with deterministic exponential time decay."""
     required = {"kickoff_utc", "home_team", "away_team", "home_goals", "away_goals", "pit_verified"}
     missing = sorted(required - set(history.columns))
     if missing:
@@ -129,9 +129,10 @@ def fit_recency_score_rate_model(
     d = d.sort_values("kickoff_utc", kind="mergesort").reset_index(drop=True)
     if d.empty:
         raise ValueError("No PIT-verified score rows available")
-    half = max(float(half_life_rows), 1.0)
-    pos = np.arange(len(d), dtype=float)
-    d["_weight"] = np.exp((pos - float(len(d) - 1)) / half)
+    half_days = max(float(half_life_days), 1.0)
+    latest = d["kickoff_utc"].max()
+    age_days = (latest - d["kickoff_utc"]).dt.total_seconds() / 86400.0
+    d["_weight"] = np.exp(-np.log(2.0) * age_days / half_days)
     weight_sum = max(float(d["_weight"].sum()), 1e-12)
     home_mean = float((d["home_goals"] * d["_weight"]).sum() / weight_sum)
     away_mean = float((d["away_goals"] * d["_weight"]).sum() / weight_sum)
@@ -191,10 +192,10 @@ def fit_recency_score_rate_model(
         }
     return {
         "schema_version": 1,
-        "method": "pit_recency_weighted_venue_split_team_goal_rates",
+        "method": "pit_time_decay_weighted_venue_split_team_goal_rates",
         "training_rows": int(len(d)),
         "shrinkage": float(shrinkage),
-        "half_life_rows": float(half),
+        "half_life_days": float(half_days),
         "training_rows": int(len(d)),
         "effective_weight_sum": float(weight_sum),
         "home_mean": home_mean,
