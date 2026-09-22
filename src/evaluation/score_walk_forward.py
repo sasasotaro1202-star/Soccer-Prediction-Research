@@ -6,6 +6,10 @@ import numpy as np
 import pandas as pd
 
 from src.models.dixon_coles import fit_dixon_coles_model, predict_dixon_coles_distribution
+from src.models.negative_binomial import (
+    fit_negative_binomial_score_model,
+    predict_negative_binomial_distribution,
+)
 from src.prediction.secondary_outputs import (
     fit_recency_score_rate_model,
     fit_time_decay_score_rate_model,
@@ -226,6 +230,32 @@ def run_score_walk_forward(
                     "dc_error": f"{type(exc).__name__}: {exc}",
                 }
             )
+        # Challenger: Negative-Binomial goal-count distribution for overdispersion.
+        try:
+            nb_model = fit_negative_binomial_score_model(train)
+            nb_metrics = _score_block_metrics(
+                oos,
+                nb_model,
+                distribution_fn=predict_negative_binomial_distribution,
+            )
+            metrics.update({f"negative_binomial_{k}": v for k, v in nb_metrics.items() if k != "n"})
+            metrics["negative_binomial_home_dispersion"] = float(nb_model.get("home_dispersion", 0.0))
+            metrics["negative_binomial_away_dispersion"] = float(nb_model.get("away_dispersion", 0.0))
+            metrics["negative_binomial_status"] = "PASS"
+            metrics["negative_binomial_error"] = ""
+        except Exception as exc:
+            for key in (
+                "score_logloss", "exact_score_hit_rate", "top3_score_hit_rate",
+                "top4_score_hit_rate", "home_goals_mae", "away_goals_mae",
+                "total_goals_mae", "over_2_5_logloss", "over_2_5_brier",
+                "btts_logloss", "btts_brier",
+            ):
+                metrics[f"negative_binomial_{key}"] = float("nan")
+            metrics["negative_binomial_home_dispersion"] = float("nan")
+            metrics["negative_binomial_away_dispersion"] = float("nan")
+            metrics["negative_binomial_status"] = "ERROR"
+            metrics["negative_binomial_error"] = f"{type(exc).__name__}: {exc}"
+
         metrics.update(
             {
                 "oos_start": str(oos["kickoff_utc"].min()),
