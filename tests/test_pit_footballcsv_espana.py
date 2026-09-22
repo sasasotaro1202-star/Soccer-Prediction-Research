@@ -34,7 +34,7 @@ def test_provider_accepts_snapshot_only_after_result_lower_bound(monkeypatch):
     commits = [
         {
             "sha": "before",
-            "commit": {"committer": {"date": "2020-09-11T00:00:00Z"}},
+            "commit": {"committer": {"date": "2020-09-10T23:59:00Z"}},
         },
         {
             "sha": "after",
