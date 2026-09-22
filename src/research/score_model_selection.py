@@ -23,7 +23,7 @@ def _summary(frame: pd.DataFrame, method: str) -> dict[str, float]:
 def select_score_model(
     development_oos: pd.DataFrame,
     *,
-    min_blocks: int = 2,
+    min_blocks: int = 3,
     min_relative_improvement: float = 0.005,
     max_metric_regression: float = 0.01,
     min_improvement_share: float = 2.0 / 3.0,
