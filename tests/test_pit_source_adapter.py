@@ -103,7 +103,7 @@ def test_date_only_does_not_claim_same_day_result_availability():
     assert reason == "DATE_ONLY_NEXT_DAY"
 
 
-def test_precise_replay_accepts_completed_result_observed_before_180m_but_after_kickoff(tmp_path, monkeypatch):
+def test_replay_rejects_completed_result_observed_before_180m_even_after_kickoff(tmp_path, monkeypatch):
     adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
     monkeypatch.setattr(
         adapter,
@@ -123,9 +123,8 @@ def test_precise_replay_accepts_completed_result_observed_before_180m_but_after_
     )
     row = pd.Series({"competition":"EPL","season_start":2025,"home_team":"Team A","away_team":"Team B","source_event_date":"2025-09-01","kickoff_utc":"2025-09-01T18:00:00Z","kickoff_time_available":True,"home_goals":2,"away_goals":1,"result":"H"})
     evidence = adapter._prefetch_url("https://example.invalid/test.csv", [row], workers=1)[0]
-    assert evidence.evidence_status == "VERIFIED"
-    assert evidence.source_available_at_utc == "2025-09-01T19:30:00+00:00"
-    assert evidence.reason.endswith("after_kickoff")
+    assert evidence.evidence_status == "UNVERIFIABLE"
+    assert evidence.source_available_at_utc is None
 
 
 def test_arquivo_cdx_mapping_error_is_treated_as_no_capture(monkeypatch):
