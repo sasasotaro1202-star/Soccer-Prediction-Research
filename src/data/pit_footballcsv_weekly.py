@@ -139,18 +139,31 @@ def _snapshot(path: str, sha: str, cache_dir: str, timeout: int) -> str:
     cache = _cache_file(cache_dir, "snapshot", REPOSITORY, path, sha)
     if cache.exists():
         return cache.read_text(encoding="utf-8")
-    response = requests.get(
-        f"https://raw.githubusercontent.com/{REPOSITORY}/{sha}/{path}",
-        headers={"User-Agent": "SoccerPredictionResearch/footballcsv-weekly-PIT"},
-        timeout=timeout,
-    )
-    response.raise_for_status()
-    text = response.content.decode("utf-8", errors="replace")
-    if text.lstrip().lower().startswith(("<!doctype html", "<html")):
-        raise ValueError("html_instead_of_snapshot")
-    cache.write_text(text, encoding="utf-8")
-    return text
 
+    last_error: Exception | None = None
+    for attempt in range(1, 4):
+        try:
+            response = requests.get(
+                f"https://raw.githubusercontent.com/{REPOSITORY}/{sha}/{path}",
+                headers={"User-Agent": "SoccerPredictionResearch/footballcsv-weekly-PIT"},
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            text = response.content.decode("utf-8", errors="replace")
+            if text.lstrip().lower().startswith(("<!doctype html", "<html")):
+                raise ValueError("html_instead_of_snapshot")
+            cache.write_text(text, encoding="utf-8")
+            return text
+        except (requests.RequestException, OSError, ValueError) as exc:
+            last_error = exc
+            if attempt < 3:
+                time.sleep(float(attempt * 2))
+
+    raise RuntimeError(
+        f"snapshot_fetch_failed:{type(last_error).__name__}:{last_error}"
+        if last_error is not None
+        else "snapshot_fetch_failed"
+    )
 
 def _norm(value: object) -> str:
     text = unicodedata.normalize("NFKD", str(value))
