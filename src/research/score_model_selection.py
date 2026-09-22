@@ -32,6 +32,14 @@ def select_score_model(
     if development_oos.empty:
         return {"selected_method": "primary", "status": "HOLD", "reason": "No development OOS rows available", "evaluated_blocks": 0}
     work = development_oos.copy()
+    if len(work) < max(int(min_blocks), 1):
+        return {
+            "selected_method": "primary",
+            "status": "HOLD",
+            "reason": "Too few development OOS blocks for score-method selection",
+            "evaluated_blocks": int(len(work)),
+            "required_development_blocks": int(max(int(min_blocks), 1)),
+        }
     primary = _summary(work, "primary")
     if not np.isfinite(primary["score_logloss"]):
         return {"selected_method": "primary", "status": "HOLD", "reason": "Primary score LogLoss is non-finite", "evaluated_blocks": int(len(work))}
@@ -110,12 +118,35 @@ def verify_selected_score_model(
     selected = str(selection.get("selected_method", "primary"))
     if locked_oos.empty:
         return {"selected_method": selected, "status": "HOLD", "reason": "Locked OOS is empty", "locked_oos_inspected": True}
+    if len(locked_oos) < 2:
+        return {
+            "selected_method": selected,
+            "status": "HOLD",
+            "reason": "At least two locked OOS blocks are required for score verification",
+            "locked_oos_inspected": True,
+            "locked_oos_blocks": int(len(locked_oos)),
+        }
     if selected == "primary":
+        required = {"n"} | {_col("primary", metric) for metric in METRICS}
+        if not required.issubset(locked_oos.columns):
+            return {
+                "selected_method": "primary",
+                "status": "HOLD",
+                "reason": "Primary locked OOS score/market metrics are incomplete",
+                "locked_oos_inspected": True,
+            }
+        base = _summary(locked_oos, "primary")
+        finite = all(np.isfinite(base[m]) for m in METRICS)
         return {
             "selected_method": "primary",
-            "status": "PASS",
-            "reason": "Primary score method retained; no challenger promotion required",
+            "status": "PASS" if finite else "REJECT",
+            "reason": "Primary score model survived explicit locked OOS score/market evidence" if finite else "Primary locked OOS score/market metric is non-finite",
             "locked_oos_inspected": True,
+            "locked_oos_blocks": int(len(locked_oos)),
+            "baseline_metrics": base,
+            "checks": {
+                "all_primary_score_and_market_metrics_finite": bool(finite),
+            },
         }
     if selected not in METHODS[1:]:
         return {
