@@ -79,7 +79,8 @@ def _utc(value: object) -> datetime | None:
 def _snapshot_text(snapshot: dict[str, str], cache_dir: str, timeout: int) -> str:
     commit_sha = str(snapshot["commit_sha"])
     path = str(snapshot["path"])
-    cache_path = Path(cache_dir) / f"engsoccerdata-{commit_sha}.csv"
+    path_key = path.replace("/", "_")
+    cache_path = Path(cache_dir) / f"engsoccerdata-{commit_sha}-{path_key}"
     if cache_path.exists():
         return cache_path.read_text(encoding="utf-8")
     url = f"https://raw.githubusercontent.com/{REPOSITORY}/{commit_sha}/{path}"
