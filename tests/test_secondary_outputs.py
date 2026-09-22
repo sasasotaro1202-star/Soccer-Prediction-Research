@@ -4,7 +4,7 @@ import json
 import pandas as pd
 import pytest
 
-from src.prediction.secondary_outputs import fit_score_rate_model, predict_mom_candidates, predict_score_candidates, predict_score_distribution, predict_score_distribution, predict_score_markets
+from src.prediction.secondary_outputs import fit_score_rate_model, predict_mom_candidates, predict_score_candidates, predict_score_distribution, predict_score_markets
 
 
 def test_score_model_is_pit_only_and_returns_exactly_three():
