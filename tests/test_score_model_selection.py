@@ -62,14 +62,14 @@ def test_primary_locked_oos_rejects_non_finite_btts_evidence():
 
 def test_recency_half_life_is_selected_from_development_oos():
     frame = _frame(True).copy()
-    for half in (400, 800, 1200, 1600):
+    for half in (180, 365, 730, 1095):
         for metric in ("score_logloss", "over_2_5_logloss", "over_2_5_brier", "btts_logloss", "btts_brier"):
-            frame[f"recency_h{half}_{metric}"] = frame[f"recency_{metric}"]
-        frame[f"recency_h{half}_status"] = ["PASS"] * len(frame)
-    frame["recency_h400_score_logloss"] = [0.90, 0.91, 0.89]
+            frame[f"recency_d{half}_{metric}"] = frame[f"recency_{metric}"]
+        frame[f"recency_d{half}_status"] = ["PASS"] * len(frame)
+    frame["recency_d180_score_logloss"] = [0.90, 0.91, 0.89]
     result = select_score_model(frame)
     assert result["selected_method"] == "recency"
-    assert result["selected_parameters"]["half_life_rows"] == 400.0
+    assert result["selected_parameters"]["half_life_days"] == 180.0
 
 
 def test_locked_oos_can_confirm_development_selected_recency():
