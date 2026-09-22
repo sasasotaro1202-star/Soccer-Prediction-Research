@@ -31,6 +31,14 @@ def select_score_model(
     """Select a score method from development OOS only; locked OOS is never inspected."""
     if development_oos.empty:
         return {"selected_method": "primary", "status": "HOLD", "reason": "No development OOS rows available", "evaluated_blocks": 0}
+    if len(development_oos) < max(int(min_blocks), 1):
+        return {
+            "selected_method": "primary",
+            "status": "HOLD",
+            "reason": "At least the minimum number of development OOS blocks is required",
+            "evaluated_blocks": int(len(development_oos)),
+            "required_development_blocks": int(max(int(min_blocks), 1)),
+        }
     work = development_oos.copy()
     primary = _summary(work, "primary")
     if not np.isfinite(primary["score_logloss"]):
