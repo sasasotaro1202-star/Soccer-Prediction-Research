@@ -3,7 +3,7 @@ import json
 import pandas as pd
 import pytest
 
-from src.prediction.secondary_outputs import fit_score_rate_model, predict_mom_candidates, predict_score_candidates, predict_score_markets
+from src.prediction.secondary_outputs import fit_score_rate_model, predict_mom_candidates, predict_score_candidates, predict_score_distribution, predict_score_markets
 
 
 def test_score_model_is_pit_only_and_returns_exactly_three():
@@ -20,6 +20,22 @@ def test_score_model_is_pit_only_and_returns_exactly_three():
     assert model["teams"]["A"]["home_matches"] == 1.0
     assert len(predict_score_candidates(model, "A", "B")) == 3
     assert all(0 <= x["probability"] <= 1 for x in predict_score_candidates(model, "A", "B"))
+
+def test_score_distribution_retains_low_tail_without_excessive_truncation():
+    history = pd.DataFrame(
+        [
+            {"home_team": "A", "away_team": "B", "home_goals": 2, "away_goals": 0, "pit_verified": True},
+            {"home_team": "B", "away_team": "A", "home_goals": 0, "away_goals": 1, "pit_verified": True},
+            {"home_team": "A", "away_team": "C", "home_goals": 3, "away_goals": 1, "pit_verified": True},
+            {"home_team": "C", "away_team": "B", "home_goals": 1, "away_goals": 1, "pit_verified": True},
+        ]
+    )
+    model = fit_score_rate_model(history)
+    distribution = predict_score_distribution(model, "A", "B", max_goals=12)
+    assert len(distribution) == 169
+    assert sum(p for _, _, p in distribution) == pytest.approx(1.0, abs=1e-10)
+    assert all(np.isfinite(p) and p >= 0 for _, _, p in distribution)
+
 
 def test_score_model_uses_shrunk_competition_environment():
     history = pd.DataFrame(

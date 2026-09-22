@@ -33,7 +33,7 @@ def _score_block_metrics(block: pd.DataFrame, model: dict) -> dict[str, float]:
             row.home_team,
             row.away_team,
             row.competition if hasattr(row, "competition") else None,
-            max_goals=7,
+            max_goals=12,
         )
         lookup = {(int(h), int(a)): float(p) for h, a, p in dist}
         actual_prob = lookup.get((actual_h, actual_a), 0.0)

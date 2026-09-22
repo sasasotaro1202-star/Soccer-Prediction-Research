@@ -4,7 +4,7 @@ import math
 import numpy as np
 
 
-def score_distribution(home_lambda: float, away_lambda: float, max_goals: int = 7):
+def score_distribution(home_lambda: float, away_lambda: float, max_goals: int = 12):
     cells = []
     for h in range(max_goals + 1):
         for a in range(max_goals + 1):

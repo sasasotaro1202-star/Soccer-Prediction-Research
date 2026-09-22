@@ -147,7 +147,7 @@ def predict_score_distribution(
     away_team: str,
     competition: str | None = None,
     *,
-    max_goals: int = 7,
+    max_goals: int = 12,
 ) -> list[tuple[int, int, float]]:
     """Return the full PIT-trained score distribution for evaluation/derivation."""
     if max_goals < 1:
@@ -162,7 +162,7 @@ def predict_score_candidates(
     away_team: str,
     competition: str | None = None,
 ) -> list[dict[str, Any]]:
-    candidates = predict_score_distribution(score_model, home_team, away_team, competition, max_goals=7)
+    candidates = predict_score_distribution(score_model, home_team, away_team, competition, max_goals=12)
     selected = select_score_candidates(candidates)
     return [
         {
@@ -183,7 +183,7 @@ def predict_score_markets(
     competition: str | None = None,
 ) -> dict[str, float]:
     """Return O/U and BTTS probabilities from the same full score distribution."""
-    distribution = predict_score_distribution(score_model, home_team, away_team, competition, max_goals=7)
+    distribution = predict_score_distribution(score_model, home_team, away_team, competition, max_goals=12)
     total = np.asarray([h + a for h, a, _ in distribution], dtype=float)
     home_goals = np.asarray([h for h, _, _ in distribution], dtype=int)
     away_goals = np.asarray([a for _, a, _ in distribution], dtype=int)
