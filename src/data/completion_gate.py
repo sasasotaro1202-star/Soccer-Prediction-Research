@@ -173,6 +173,45 @@ def _pit_preflight(root: Path) -> dict:
     verified = features["pit_verified"].fillna(False).astype(bool) if "pit_verified" in features.columns else pd.Series(False, index=features.index)
     per_comp = features.assign(pit_verified=verified).groupby("competition")["pit_verified"].agg(["sum", "count"])
     verified_competitions = int((per_comp["sum"] >= 500).sum()) if not per_comp.empty else 0
+
+    # Preserve a machine-readable bottleneck map so subsequent recovery cycles can
+    # target evidence gaps instead of blindly repeating the full audit.
+    pit_competition_breakdown = {}
+    if not per_comp.empty:
+        for competition, row in per_comp.sort_values(["sum", "count"], ascending=[False, False]).iterrows():
+            pit_competition_breakdown[str(competition)] = {
+                "pit_verified_rows": int(row["sum"]),
+                "replay_rows": int(row["count"]),
+                "pit_verified_rate": float(row["sum"] / row["count"]) if row["count"] else 0.0,
+            }
+    raw_status_counts = (
+        history.assign(
+            competition=history["competition"].astype(str),
+            pit_evidence_status=history.get(
+                "pit_evidence_status",
+                pd.Series("UNKNOWN", index=history.index),
+            ).astype(str),
+        )
+        .groupby(["competition", "pit_evidence_status"])
+        .size()
+        if not history.empty else pd.Series(dtype=int)
+    )
+    pit_evidence_status_breakdown = {}
+    if not raw_status_counts.empty:
+        for (competition, status), count in raw_status_counts.items():
+            pit_evidence_status_breakdown.setdefault(str(competition), {})[str(status)] = int(count)
+    (root / "pit_competition_breakdown.json").write_text(
+        json.dumps(
+            {
+                "replay_by_competition": pit_competition_breakdown,
+                "raw_evidence_status_by_competition": pit_evidence_status_breakdown,
+                "verified_competitions_threshold": 500,
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
     return {
         "rows": int(len(features)),
         "pit_verified_rows": int(verified.sum()),
@@ -186,6 +225,7 @@ def _pit_preflight(root: Path) -> dict:
         "engsoccerdata_snapshot_error": snapshot_error,
         "openfootball_verified_rows": openfootball_verified,
         "versioned_openfootball_verified_rows": max(0, after_versioned - before_versioned),
+        "pit_competition_breakdown": pit_competition_breakdown,
     }
 
 
