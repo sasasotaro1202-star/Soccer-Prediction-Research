@@ -125,9 +125,18 @@ def run(out_dir: str = "artifacts") -> dict:
         )
         score_oos.to_csv(out / "score_oos_metrics.csv", index=False)
         primary_finite = _primary_score_metrics_finite(score_oos)
+        score_blocks = int(len(score_oos))
+        minimum_locked_blocks = 2
+        minimum_development_blocks = 2
+        chronological_split_valid = score_blocks >= (minimum_development_blocks + minimum_locked_blocks)
         score_oos_status = {
-            "status": "PASS" if primary_finite else "ERROR",
-            "blocks": int(len(score_oos)),
+            "status": "PASS" if primary_finite and chronological_split_valid else "HOLD" if primary_finite else "ERROR",
+            "blocks": score_blocks,
+            "development_blocks": max(0, score_blocks - minimum_locked_blocks),
+            "locked_blocks": min(minimum_locked_blocks, score_blocks),
+            "minimum_development_blocks": minimum_development_blocks,
+            "minimum_locked_blocks": minimum_locked_blocks,
+            "chronological_split_valid": chronological_split_valid,
             "rows": int(score_oos["n"].sum()) if "n" in score_oos.columns else 0,
             "finite_metrics": primary_finite,
             "primary_metrics_finite": primary_finite,
@@ -147,7 +156,7 @@ def run(out_dir: str = "artifacts") -> dict:
         json.dumps(score_oos_status, indent=2, ensure_ascii=False, default=str),
         encoding="utf-8",
     )
-    score_development_oos = score_oos.iloc[:-2].copy() if len(score_oos) >= 3 else score_oos.copy()
+    score_development_oos = score_oos.iloc[:-2].copy() if len(score_oos) >= 4 else pd.DataFrame()
     score_selection = select_score_model(score_development_oos)
     score_locked_oos = score_oos.tail(2).copy() if len(score_oos) >= 2 else pd.DataFrame()
     score_locked_gate = verify_selected_score_model(score_selection, score_locked_oos)
@@ -190,9 +199,13 @@ def run(out_dir: str = "artifacts") -> dict:
     candidate = locked[candidate_cols].copy()
     adoption = adoption_decision(baseline, candidate, development_oos=development_oos, min_accuracy=TARGET_ACCURACY)
     adoption["external_stability_gate"] = stability
+    adoption["score_locked_gate"] = score_locked_gate
+    if adoption.get("status") == "ADOPT" and score_locked_gate.get("status") != "PASS":
+        adoption["status"] = "REJECT"
+        adoption["reason"] = "1X2 adoption passed, but Score/O-U/BTTS locked evidence did not pass"
     (out / "adoption_decision.json").write_text(json.dumps(adoption, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     model_bundle = None
-    if adoption.get("status") == "ADOPT" and not selections.empty:
+    if adoption.get("status") == "ADOPT" and score_locked_gate.get("status") == "PASS" and not selections.empty:
         selection = selections.iloc[-1].to_dict()
         model_version = hashlib.sha256(
             json.dumps(
