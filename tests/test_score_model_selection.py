@@ -65,7 +65,7 @@ def test_recency_half_life_is_selected_from_development_oos():
     frame = _frame(True).copy()
     for half in (180, 365, 730, 1095):
         for metric in ("score_logloss", "over_2_5_logloss", "over_2_5_brier", "btts_logloss", "btts_brier"):
-            frame[f"recency_d{half}_{metric}"] = frame[f"recency_{metric}"]
+            frame[f"recency_d{half}_{metric}"] = frame[f"recency_d365_{metric}"]
         frame[f"recency_d{half}_status"] = ["PASS"] * len(frame)
     frame["recency_d180_score_logloss"] = [0.90, 0.91, 0.89]
     result = select_score_model(frame)
