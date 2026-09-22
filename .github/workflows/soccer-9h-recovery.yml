@@ -38,12 +38,14 @@ jobs:
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "${API}")"
 
-          DECISION="$(python - "${JSON}" "${MAIN_SHA}" <<'PY'
+          printf '%s' "${JSON}" > /tmp/9h-runs.json
+          DECISION="$(python - "/tmp/9h-runs.json" "${MAIN_SHA}" <<'PY'
           import json
           import sys
           from datetime import datetime, timezone
 
-          payload = json.loads(sys.argv[1])
+          from pathlib import Path
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
           main_sha = sys.argv[2]
           runs = payload.get("workflow_runs", [])
 
@@ -160,7 +162,7 @@ jobs:
                   ;;
                 *)
                   echo "RECOVERY: dispatch failed with HTTP ${CODE}."
-                  cat /tmp/dispatch.json || true
+                  if [ -f /tmp/dispatch.json ]; then cat /tmp/dispatch.json; fi
                   exit 1
                   ;;
               esac
