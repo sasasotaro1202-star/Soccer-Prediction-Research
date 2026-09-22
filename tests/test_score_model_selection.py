@@ -1,5 +1,5 @@
 import pandas as pd
-from src.research.score_model_selection import select_score_model
+from src.research.score_model_selection import select_score_model, verify_selected_score_model
 
 def _frame(better=True):
     return pd.DataFrame({
@@ -39,3 +39,23 @@ def test_unavailable_challenger_does_not_block_primary():
     result=select_score_model(frame)
     assert result["selected_method"]=="recency"
     assert result["candidate_records"]["dixon_coles"]["status"]=="UNAVAILABLE"
+
+
+def test_locked_oos_can_confirm_development_selected_recency():
+    development = _frame(True)
+    selection = select_score_model(development)
+    locked = development.copy()
+    result = verify_selected_score_model(selection, locked)
+    assert result["status"] == "PASS"
+    assert result["selected_method"] == "recency"
+    assert result["locked_oos_inspected"] is True
+
+
+def test_locked_oos_rejects_challenger_that_regresses():
+    development = _frame(True)
+    selection = select_score_model(development)
+    locked = development.copy()
+    locked["recency_score_logloss"] = [1.20, 1.20, 1.20]
+    result = verify_selected_score_model(selection, locked)
+    assert result["status"] == "REJECT"
+    assert result["selected_method"] == "primary"
