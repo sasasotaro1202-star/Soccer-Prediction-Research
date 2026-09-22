@@ -358,6 +358,7 @@ jobs:
                     exit 1
                   fi
                   echo "RECOVERY: fresh 9H workflow dispatch accepted."
+                  verify_current_main_active
                   ;;
               esac
               ;;
