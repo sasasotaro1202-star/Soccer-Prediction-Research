@@ -64,6 +64,21 @@ jobs:
           PYTHONHASHSEED: "0"
           PIT_ENABLE_ARCHIVE_AUDIT: "1"
         run: python -m src.data.completion_gate
+      - name: Enforce strict completion gate
+        env:
+          PYTHONPATH: .
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("artifacts/completion_gate.json")
+          if not p.exists():
+              raise SystemExit("completion_gate.json missing")
+          payload = json.loads(p.read_text(encoding="utf-8"))
+          if payload.get("full_gate_passed") is not True:
+              reasons = payload.get("blocking_reasons", [])
+              raise SystemExit("strict completion gate failed: " + " | ".join(map(str, reasons)))
+          PY
       - name: Preserve gate result
         if: always()
         run: |
@@ -82,7 +97,7 @@ jobs:
           if-no-files-found: warn
 
   phase2_research:
-    if: always()
+    if: needs.phase1_gate.result == 'success'
     name: Phase 2 - PIT-safe OOS research
     needs: phase1_gate
     runs-on: ubuntu-latest
@@ -187,7 +202,7 @@ jobs:
           if-no-files-found: warn
 
   phase3_verification:
-    if: always()
+    if: needs.phase2_research.result == 'success'
     name: Phase 3 - independent verification and robustness
     needs: phase2_research
     runs-on: ubuntu-latest
