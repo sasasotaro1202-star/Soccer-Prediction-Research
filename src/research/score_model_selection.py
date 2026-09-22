@@ -4,7 +4,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-METHODS = ("primary", "recency", "time_decay", "dixon_coles", "negative_binomial")
+METHODS = ("primary", "neutral_aware", "recency", "time_decay", "dixon_coles", "negative_binomial")
 METRICS = ("score_logloss", "over_2_5_logloss", "over_2_5_brier", "btts_logloss", "btts_brier")
 
 def _weighted_mean(values: pd.Series, weights: pd.Series) -> float:
@@ -61,6 +61,7 @@ def select_score_model(
 
     for method in METHODS[1:]:
         status_col = {
+            "neutral_aware": "neutral_aware_status",
             "recency": "recency_status",
             "time_decay": "time_decay_status",
             "dixon_coles": "dc_status",
@@ -232,6 +233,7 @@ def verify_selected_score_model(
         }
 
     status_col = {
+        "neutral_aware": "neutral_aware_status",
         "recency": "recency_status",
         "time_decay": "time_decay_status",
         "dixon_coles": "dc_status",
