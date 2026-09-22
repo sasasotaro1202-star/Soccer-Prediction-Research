@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          API="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/soccer-9h-autonomous.yml/runs?per_page=10"
+          API="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/soccer-9h-autonomous.yml/runs?per_page=100"
           MAIN_SHA="$(curl -fsSL \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
@@ -66,6 +66,7 @@ jobs:
           runs = payload.get("workflow_runs", [])
 
           now = datetime.now(timezone.utc)
+          max_active_age_hours = 10.5
           active = []
           for r in runs:
               if r.get("head_branch") != "main":
@@ -73,23 +74,30 @@ jobs:
               status = r.get("status")
               if status not in {"pending", "queued", "waiting", "in_progress"}:
                   continue
-              started = r.get("run_started_at") or r.get("created_at")
-              if started:
-                  try:
-                      age_hours = (now - datetime.fromisoformat(started.replace("Z", "+00:00"))).total_seconds() / 3600.0
-                  except ValueError:
-                      age_hours = 0.0
-                  if age_hours <= 10.0 and (not main_sha or r.get("head_sha") == main_sha):
-                      active.append(r)
-              else:
-                  active.append(r)
+              active.append(r)
+
+          def age_hours(run):
+              started = run.get("run_started_at") or run.get("created_at")
+              if not started:
+                  return None
+              try:
+                  return (now - datetime.fromisoformat(started.replace("Z", "+00:00"))).total_seconds() / 3600.0
+              except ValueError:
+                  return None
+
+          current_active = [r for r in active if r.get("head_sha") == main_sha]
+          fresh_current_active = []
+          for r in current_active:
+              age = age_hours(r)
+              if age is None or age <= max_active_age_hours:
+                  fresh_current_active.append(r)
+
+          if fresh_current_active:
+              print("ACTIVE")
+              raise SystemExit(0)
+
           if active:
-              current_active = [r for r in active if r.get("head_sha") == main_sha]
-              if current_active:
-                  print("ACTIVE")
-                  raise SystemExit(0)
-              # An active run exists, but it is running an obsolete commit.
-              # Queue the current main rather than waiting for stale work to finish.
+              # Only stale/obsolete runs remain; reconcile them before a fresh dispatch.
               print("DISPATCH")
               raise SystemExit(0)
 
@@ -169,6 +177,37 @@ jobs:
           PY
           }
 
+          cancel_stale_current_main_runs() {
+            python - "/tmp/9h-runs.json" "${MAIN_SHA}" <<'PY'
+          import json
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          main_sha = sys.argv[2]
+          now = datetime.now(timezone.utc)
+          max_active_age_hours = 10.5
+
+          for run in payload.get("workflow_runs", []):
+              if run.get("head_branch") != "main":
+                  continue
+              if run.get("head_sha") != main_sha:
+                  continue
+              if run.get("status") not in {"pending", "queued", "waiting", "in_progress"}:
+                  continue
+              started = run.get("run_started_at") or run.get("created_at")
+              if not started:
+                  continue
+              try:
+                  age = (now - datetime.fromisoformat(started.replace("Z", "+00:00"))).total_seconds() / 3600.0
+              except ValueError:
+                  continue
+              if age > max_active_age_hours:
+                  print(run.get("id"))
+          PY
+          }
+
           cancel_duplicate_current_main_runs() {
             python - "/tmp/9h-runs.json" "${MAIN_SHA}" <<'PY'
           import json
@@ -234,6 +273,24 @@ jobs:
                     ;;
                 esac
               done < <(cancel_duplicate_current_main_runs)
+              while IFS= read -r STALE_CURRENT_RUN_ID; do
+                [ -z "${STALE_CURRENT_RUN_ID}" ] && continue
+                CANCEL_CODE="$(curl -sS -o /tmp/cancel-stale-current.json -w "%{http_code}" -X POST \
+                  -H "Authorization: Bearer ${GH_TOKEN}" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs/${STALE_CURRENT_RUN_ID}/cancel")"
+                case "${CANCEL_CODE}" in
+                  202|409)
+                    echo "RECOVERY: cancelled/conflicted over-age current-main run ${STALE_CURRENT_RUN_ID}."
+                    ;;
+                  *)
+                    echo "RECOVERY: failed to cancel over-age current-main run ${STALE_CURRENT_RUN_ID} (HTTP ${CANCEL_CODE})."
+                    if [ -f /tmp/cancel-stale-current.json ]; then cat /tmp/cancel-stale-current.json; fi
+                    exit 1
+                    ;;
+                esac
+              done < <(cancel_stale_current_main_runs)
               echo "RECOVERY: current-main research run is active; obsolete and duplicate runs reconciled."
               ;;
             DEFER)
@@ -268,6 +325,25 @@ jobs:
               esac
               ;;
             DISPATCH)
+              while IFS= read -r STALE_CURRENT_RUN_ID; do
+                [ -z "${STALE_CURRENT_RUN_ID}" ] && continue
+                CANCEL_CODE="$(curl -sS -o /tmp/cancel-stale-current-dispatch.json -w "%{http_code}" -X POST \
+                  -H "Authorization: Bearer ${GH_TOKEN}" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs/${STALE_CURRENT_RUN_ID}/cancel")"
+                case "${CANCEL_CODE}" in
+                  202|409)
+                    echo "RECOVERY: cancelled/conflicted over-age current-main run ${STALE_CURRENT_RUN_ID} before fresh dispatch."
+                    ;;
+                  *)
+                    echo "RECOVERY: failed to cancel over-age current-main run ${STALE_CURRENT_RUN_ID} before fresh dispatch (HTTP ${CANCEL_CODE})."
+                    if [ -f /tmp/cancel-stale-current-dispatch.json ]; then cat /tmp/cancel-stale-current-dispatch.json; fi
+                    exit 1
+                    ;;
+                esac
+              done < <(cancel_stale_current_main_runs)
+
               while IFS= read -r STALE_RUN_ID; do
                 [ -z "${STALE_RUN_ID}" ] && continue
                 CANCEL_CODE="$(curl -sS -o /tmp/cancel.json -w "%{http_code}" -X POST \
