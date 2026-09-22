@@ -153,3 +153,25 @@ def test_bundle_uses_locked_oos_verified_negative_binomial_score_method(tmp_path
     bundle = load_bundle(str(path))
     assert bundle["score_method"] == "negative_binomial"
     assert bundle["score_model"]["method"] == "negative_binomial_pit_overdispersed_team_rates"
+
+
+def test_bundle_uses_locked_oos_verified_neutral_aware_score_method(tmp_path):
+    df = _fixture().copy()
+    df["home_team"] = np.where(np.arange(len(df)) % 2 == 0, "A", "B")
+    df["away_team"] = np.where(np.arange(len(df)) % 2 == 0, "B", "A")
+    df["home_goals"] = np.where(df["target"] == 0, 2, np.where(df["target"] == 1, 1, 3))
+    df["away_goals"] = np.where(df["target"] == 2, 2, np.where(df["target"] == 1, 1, 0))
+    path = tmp_path / "production_model.pkl"
+    train_and_save_bundle(
+        df,
+        ["f1", "f2"],
+        {"weights": {"logistic": 1.0}, "temperature": 1.0},
+        str(path),
+        "test-version",
+        "snapshot-1",
+        score_selection={"selected_method": "neutral_aware", "status": "ADOPT_CANDIDATE"},
+        score_locked_gate={"selected_method": "neutral_aware", "status": "PASS"},
+    )
+    bundle = load_bundle(str(path))
+    assert bundle["score_method"] == "neutral_aware"
+    assert bundle["score_model"]["method"] == "neutral_aware_pit_smoothed_venue_split_team_goal_rates"
