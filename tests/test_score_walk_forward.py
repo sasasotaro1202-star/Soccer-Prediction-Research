@@ -27,10 +27,10 @@ def test_score_walk_forward_produces_multiple_pit_safe_blocks():
     result = run_score_walk_forward(_rows(), min_train=10, oos_block=5)
     assert len(result) == 3
     assert int(result["n"].sum()) == 14
-    for half in (400, 800, 1200, 1600):
+    for half in (180, 365, 730, 1095):
         for suffix in ("score_logloss", "over_2_5_logloss", "over_2_5_brier", "btts_logloss", "btts_brier"):
-            assert f"recency_h{half}_{suffix}" in result.columns
-        assert f"recency_h{half}_status" in result.columns
+            assert f"recency_d{half}_{suffix}" in result.columns
+        assert f"recency_d{half}_status" in result.columns
 
     for col in (
         "score_logloss",
