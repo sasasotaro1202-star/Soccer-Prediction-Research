@@ -189,6 +189,14 @@ def run(
         result.to_csv(temp_output, index=False)
         temp_output.replace(output_file)
         return _write_status(status_file, "PREDICTED", prediction_time_utc=now.isoformat(), source_rows=int(len(fixtures)), eligible_rows=int(len(eligible)), prediction_rows=int(len(result)), standard_rows=int((~result["low_confidence"]).sum()), low_confidence_rows=int(result["low_confidence"].sum()), abstained_rows=int(result["abstain"].sum()), output_path=str(output_file), model_version=str(bundle["model_version"]), oos_claimed=bool(registry.get("oos_verified", False)))
+    selected_score_method = str(bundle.get("score_method", "primary"))
+    if selected_score_method == "neutral_aware":
+        if "neutral_venue" not in eligible.columns:
+            raise RuntimeError("Neutral-aware Score production requires explicit neutral_venue fixture evidence")
+        neutral_missing = eligible["neutral_venue"].isna()
+        if bool(neutral_missing.any()):
+            raise RuntimeError("Neutral-aware Score production blocked because neutral_venue is unknown for an eligible fixture")
+
     score_rows = []
     score_market_rows = []
     mom_rows = []
@@ -196,7 +204,7 @@ def run(
     mom_input_available = "mom_candidates_json" in eligible.columns
     for row in eligible.itertuples(index=False):
         neutral_venue = getattr(row, "neutral_venue", False) if hasattr(row, "neutral_venue") else False
-        if isinstance(neutral_venue, float) and np.isnan(neutral_venue):
+        if pd.isna(neutral_venue):
             neutral_venue = False
         score_rows.append(
             predict_score_candidates(
