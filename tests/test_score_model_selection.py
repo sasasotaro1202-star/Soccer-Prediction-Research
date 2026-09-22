@@ -92,3 +92,16 @@ def test_primary_locked_oos_returns_explicit_market_evidence():
     assert result["selected_method"] == "primary"
     assert result["locked_oos_inspected"] is True
     assert result["checks"]["all_required_locked_metrics_finite"] is True
+
+
+def test_selector_can_choose_negative_binomial_challenger():
+    frame = _frame(False).copy()
+    frame["negative_binomial_score_logloss"] = [0.94, 0.95, 0.93]
+    frame["negative_binomial_over_2_5_logloss"] = [0.699, 0.719, 0.709]
+    frame["negative_binomial_over_2_5_brier"] = [0.199, 0.209, 0.189]
+    frame["negative_binomial_btts_logloss"] = [0.679, 0.689, 0.669]
+    frame["negative_binomial_btts_brier"] = [0.209, 0.219, 0.199]
+    frame["negative_binomial_status"] = ["PASS"] * 3
+    result = select_score_model(frame)
+    assert result["selected_method"] == "negative_binomial"
+    assert result["candidate_records"]["negative_binomial"]["status"] == "ACCEPT"
