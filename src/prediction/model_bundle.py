@@ -87,11 +87,10 @@ def train_and_save_bundle(
     score_parameters = {}
     if has_score_columns:
         if selected_score_method == "recency":
-            requested_days = float(
-                (score_selection.get("selected_parameters") or {}).get(
-                    "half_life_days", 365.0
-                )
-            )
+            score_params = score_selection.get("selected_parameters") or {}
+            if "half_life_days" not in score_params:
+                raise ValueError("Locked Score recency selection missing explicit half_life_days")
+            requested_days = float(score_params["half_life_days"])
             if not np.isfinite(requested_days) or requested_days <= 0:
                 raise ValueError("Invalid locked Score recency half-life")
             score_parameters = {"half_life_days": requested_days}
@@ -184,6 +183,23 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
     score_method = str(bundle.get("score_method", "primary"))
     if score_method not in {"primary", "recency", "dixon_coles"}:
         raise RuntimeError(f"Unsupported production score method: {score_method}")
+    if score_method == "recency":
+        score_parameters = bundle.get("score_parameters")
+        if not isinstance(score_parameters, dict) or "half_life_days" not in score_parameters:
+            raise RuntimeError("Production recency Score bundle requires explicit half_life_days provenance")
+        try:
+            half_life_days = float(score_parameters["half_life_days"])
+            model_half_life_days = float(bundle["score_model"].get("half_life_days"))
+        except (TypeError, ValueError):
+            raise RuntimeError("Production recency Score bundle has invalid half_life_days provenance")
+        if (
+            not np.isfinite(half_life_days)
+            or not np.isfinite(model_half_life_days)
+            or half_life_days <= 0
+            or model_half_life_days <= 0
+            or abs(half_life_days - model_half_life_days) > 1e-9
+        ):
+            raise RuntimeError("Production recency Score parameter provenance mismatch")
     if bundle["schema_version"] >= 2:
         score_model = bundle.get("score_model")
         if not isinstance(score_model, dict):
