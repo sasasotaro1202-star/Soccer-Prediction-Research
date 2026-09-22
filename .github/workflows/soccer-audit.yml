@@ -18,9 +18,9 @@ jobs:
     timeout-minutes: 120
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -38,18 +38,12 @@ jobs:
         env:
           PYTHONPATH: .
         shell: bash
-        continue-on-error: true
         run: |
-          set -uo pipefail
+          set -euo pipefail
           mkdir -p artifacts
-          set +e
           python -m src.data.fixture_field_audit 2>&1 | tee artifacts/audit_stdout.log
           rc=${PIPESTATUS[0]}
-          set -e
-          printf '%s\n' "$rc" > artifacts/audit_exit_code.txt
-          if [ "$rc" -ne 0 ]; then
-            echo "Audit execution returned exit code $rc; preserving diagnostics and continuing so the workflow remains operationally green."
-          fi
+          printf '%s\n' "${rc}" > artifacts/audit_exit_code.txt
       - name: Validate audit completeness and record gate state
         if: always()
         env:
@@ -69,7 +63,7 @@ jobs:
 
           if not p.exists():
               fallback = {
-                  'target_competition_count': 14,
+                  'target_competition_count': 15,
                   'audit_execution_ok': False,
                   'audit_exit_code': rc,
                   'coverage_scope_complete': False,
@@ -91,7 +85,7 @@ jobs:
 
           # These are integrity invariants, not production-adoption gates.
           # Production eligibility remains fail-closed in the research workflow.
-          if data.get('target_competition_count') != 14:
+          if data.get('target_competition_count') != 15:
               raise SystemExit('Target competition count is not 14')
           if data.get('no_missing_to_zero') is not True:
               raise SystemExit('Missing-to-zero policy was not asserted')
@@ -99,7 +93,7 @@ jobs:
               raise SystemExit('Search engines were not explicitly excluded as datasets')
       - name: Upload audit artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: soccer-coverage-pit-audit-${{ github.run_id }}
           path: artifacts/
