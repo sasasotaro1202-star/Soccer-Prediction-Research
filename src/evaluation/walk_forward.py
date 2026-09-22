@@ -150,7 +150,11 @@ def _contextual_temperatures(
     for route, positions in routed.groupby(routed, sort=True).groups.items():
         route_key = str(route)
         idx = np.asarray(list(positions), dtype=int)
-        if route_key == "GLOBAL" or len(idx) < int(min_rows):
+        if route_key == "GLOBAL":
+            temperatures[route_key] = float(global_temperature)
+            reasons[route_key] = "global_fallback"
+            continue
+        if len(idx) < int(min_rows):
             temperatures[route_key] = float(global_temperature)
             reasons[route_key] = "fallback_global_insufficient_calibration_rows"
             continue
