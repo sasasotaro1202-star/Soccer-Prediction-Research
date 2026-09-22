@@ -47,3 +47,28 @@ def test_country_provider_records_empty_history_as_unverifiable(tmp_path, monkey
     out = country.apply_country_openfootball_pit(history, cache_dir=str(tmp_path))
     assert out.loc[0, "pit_evidence_status"] == "UNVERIFIABLE"
     assert out.loc[0, "pit_evidence_reason"] == "immutable_openfootball_commit_history_empty"
+
+
+def test_country_commits_pages_until_oldest_required_bound(monkeypatch, tmp_path):
+    import src.data.pit_openfootball_country as country
+
+    calls = []
+    pages = {
+        1: [{"sha": "new", "commit": {"committer": {"date": "2024-01-01T00:00:00Z"}}}] * 100,
+        2: [{"sha": "old", "commit": {"committer": {"date": "2020-01-01T00:00:00Z"}}}],
+    }
+
+    def fake_request(url, timeout=30):
+        calls.append(url)
+        page = int(url.split("page=")[-1])
+        return pages[page]
+
+    monkeypatch.setattr(country, "_request_json", fake_request)
+    out = country._commits(
+        "openfootball/england",
+        "2020-21/1-premierleague.txt",
+        str(tmp_path),
+        min_commit_time="2020-06-01T00:00:00Z",
+    )
+    assert len(out) == 2
+    assert any("page=2" in url for url in calls)
