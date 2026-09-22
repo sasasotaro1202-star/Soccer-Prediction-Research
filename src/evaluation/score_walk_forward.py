@@ -8,6 +8,7 @@ import pandas as pd
 from src.models.dixon_coles import fit_dixon_coles_model, predict_dixon_coles_distribution
 from src.prediction.secondary_outputs import (
     fit_recency_score_rate_model,
+    fit_time_decay_score_rate_model,
     fit_score_rate_model,
     predict_score_distribution,
 )
@@ -165,6 +166,30 @@ def run_score_walk_forward(
                 "recency_btts_brier": float("nan"),
                 "recency_status": "ERROR",
                 "recency_error": f"{type(exc).__name__}: {exc}",
+            })
+
+        # Challenger: elapsed-time-decay venue/team rates.
+        try:
+            time_decay_model = fit_time_decay_score_rate_model(train)
+            time_decay_metrics = _score_block_metrics(oos, time_decay_model)
+            metrics.update({f"time_decay_{k}": v for k, v in time_decay_metrics.items() if k != "n"})
+            metrics["time_decay_status"] = "PASS"
+            metrics["time_decay_error"] = ""
+        except Exception as exc:
+            metrics.update({
+                "time_decay_score_logloss": float("nan"),
+                "time_decay_exact_score_hit_rate": float("nan"),
+                "time_decay_top3_score_hit_rate": float("nan"),
+                "time_decay_top4_score_hit_rate": float("nan"),
+                "time_decay_home_goals_mae": float("nan"),
+                "time_decay_away_goals_mae": float("nan"),
+                "time_decay_total_goals_mae": float("nan"),
+                "time_decay_over_2_5_logloss": float("nan"),
+                "time_decay_over_2_5_brier": float("nan"),
+                "time_decay_btts_logloss": float("nan"),
+                "time_decay_btts_brier": float("nan"),
+                "time_decay_status": "ERROR",
+                "time_decay_error": f"{type(exc).__name__}: {exc}",
             })
 
         # Challenger: Dixon-Coles low-score dependence correction. A challenger
