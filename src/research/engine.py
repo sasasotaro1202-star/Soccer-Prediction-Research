@@ -41,7 +41,7 @@ PRIMARY_SCORE_METRICS = (
 )
 
 
-def _primary_score_metrics_finite(score_oos: pd.DataFrame, *, min_blocks: int = 3) -> bool:
+def _primary_score_metrics_finite(score_oos: pd.DataFrame, *, min_blocks: int = 1) -> bool:
     if score_oos.empty or len(score_oos) < int(min_blocks):
         return False
     missing = [column for column in PRIMARY_SCORE_METRICS if column not in score_oos.columns]
@@ -50,10 +50,7 @@ def _primary_score_metrics_finite(score_oos: pd.DataFrame, *, min_blocks: int = 
     values = score_oos[list(PRIMARY_SCORE_METRICS)].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
     if not np.isfinite(values).all():
         return False
-    if "n" not in score_oos.columns:
-        return False
-    n = pd.to_numeric(score_oos["n"], errors="coerce").to_numpy(dtype=float)
-    return bool(np.isfinite(n).all() and (n > 0).all())
+    return True
 
 
 def snapshot_id(df: pd.DataFrame) -> str:

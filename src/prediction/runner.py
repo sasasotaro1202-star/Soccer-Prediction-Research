@@ -178,8 +178,9 @@ def run(
     if bundle.get("schema_version", 1) >= 2:
         if "score_model" not in bundle:
             raise RuntimeError("Production bundle lacks the locked Score model")
-        if "mom_candidates_json" not in eligible.columns:
-            raise RuntimeError("MOM prediction unavailable: future fixture input lacks mom_candidates_json")
+        # MOM is a secondary layer. Missing upstream PIT-safe player evidence
+        # must not suppress validated 1X2/Score/O-U/BTTS outputs.
+        # The per-fixture loop below marks MOM as BLOCKED_UPSTREAM_PLAYER_MODEL.
     else:
         result["model_version"] = str(bundle["model_version"])
         output_file = Path(output_path)

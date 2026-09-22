@@ -4,7 +4,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-METHODS = ("primary", "recency", "time_decay", "dixon_coles")
+METHODS = ("primary", "recency", "time_decay", "dixon_coles", "negative_binomial")
 METRICS = ("score_logloss", "over_2_5_logloss", "over_2_5_brier", "btts_logloss", "btts_brier")
 
 def _weighted_mean(values: pd.Series, weights: pd.Series) -> float:
@@ -41,7 +41,12 @@ def select_score_model(
     selected_loss = primary["score_logloss"]
 
     for method in METHODS[1:]:
-        status_col = {"recency": "recency_status", "time_decay": "time_decay_status", "dixon_coles": "dc_status"}[method]
+        status_col = {
+            "recency": "recency_status",
+            "time_decay": "time_decay_status",
+            "dixon_coles": "dc_status",
+            "negative_binomial": "negative_binomial_status",
+        }[method]
         if status_col not in work.columns or not work[status_col].astype(str).eq("PASS").all():
             records[method] = {"status": "UNAVAILABLE", "metrics": {}}
             continue

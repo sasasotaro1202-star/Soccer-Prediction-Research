@@ -351,6 +351,15 @@ def predict_score_distribution(
             competition,
             max_goals=max_goals,
         )
+    if method.startswith("negative_binomial_"):
+        from src.models.negative_binomial import predict_negative_binomial_distribution
+        return predict_negative_binomial_distribution(
+            score_model,
+            home_team,
+            away_team,
+            competition,
+            max_goals=max_goals,
+        )
     home_lambda, away_lambda = _score_lambdas(score_model, home_team, away_team, competition)
     return score_distribution(home_lambda, away_lambda, max_goals=max_goals)
 
