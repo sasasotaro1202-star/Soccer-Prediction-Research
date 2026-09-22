@@ -110,7 +110,7 @@ def run_with_retries() -> int:
         "errors": errors,
         "oos_claimed": False,
     })
-    return 0
+    return 1
 
 
 if __name__ == "__main__":
