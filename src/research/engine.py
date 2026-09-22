@@ -41,14 +41,19 @@ PRIMARY_SCORE_METRICS = (
 )
 
 
-def _primary_score_metrics_finite(score_oos: pd.DataFrame) -> bool:
-    if score_oos.empty:
+def _primary_score_metrics_finite(score_oos: pd.DataFrame, *, min_blocks: int = 3) -> bool:
+    if score_oos.empty or len(score_oos) < int(min_blocks):
         return False
     missing = [column for column in PRIMARY_SCORE_METRICS if column not in score_oos.columns]
     if missing:
         return False
     values = score_oos[list(PRIMARY_SCORE_METRICS)].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
-    return bool(np.isfinite(values).all())
+    if not np.isfinite(values).all():
+        return False
+    if "n" not in score_oos.columns:
+        return False
+    n = pd.to_numeric(score_oos["n"], errors="coerce").to_numpy(dtype=float)
+    return bool(np.isfinite(n).all() and (n > 0).all())
 
 
 def snapshot_id(df: pd.DataFrame) -> str:
@@ -147,9 +152,16 @@ def run(out_dir: str = "artifacts") -> dict:
         json.dumps(score_oos_status, indent=2, ensure_ascii=False, default=str),
         encoding="utf-8",
     )
-    score_development_oos = score_oos.iloc[:-2].copy() if len(score_oos) >= 3 else score_oos.copy()
+    score_protocol_ready = len(score_oos) >= 3 and primary_finite
+    score_development_oos = score_oos.iloc[:-2].copy() if score_protocol_ready else pd.DataFrame()
     score_selection = select_score_model(score_development_oos)
-    score_locked_oos = score_oos.tail(2).copy() if len(score_oos) >= 2 else pd.DataFrame()
+    score_locked_oos = score_oos.tail(2).copy() if score_protocol_ready else pd.DataFrame()
+    score_selection["protocol"] = {
+        "minimum_total_blocks": 3,
+        "development_blocks": int(len(score_development_oos)),
+        "locked_blocks": int(len(score_locked_oos)),
+        "locked_oos_untouched_for_selection": True,
+    }
     score_locked_gate = verify_selected_score_model(score_selection, score_locked_oos)
     (out / "score_model_selection.json").write_text(
         json.dumps(score_selection, indent=2, ensure_ascii=False, default=str),
