@@ -240,12 +240,12 @@ def run(out_dir: str = "artifacts") -> dict:
         json.dumps(score_oos_status, indent=2, ensure_ascii=False, default=str),
         encoding="utf-8",
     )
-    score_protocol_ready = len(score_oos) >= 3 and primary_finite
+    score_protocol_ready = len(score_oos) >= 5 and primary_finite
     score_development_oos = score_oos.iloc[:-2].copy() if score_protocol_ready else pd.DataFrame()
     score_selection = select_score_model(score_development_oos)
     score_locked_oos = score_oos.tail(2).copy() if score_protocol_ready else pd.DataFrame()
     score_selection["protocol"] = {
-        "minimum_total_blocks": 3,
+        "minimum_total_blocks": 5,
         "development_blocks": int(len(score_development_oos)),
         "locked_blocks": int(len(score_locked_oos)),
         "locked_oos_untouched_for_selection": True,
