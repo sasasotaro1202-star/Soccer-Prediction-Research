@@ -143,29 +143,40 @@ def run_score_walk_forward(
         model = fit_score_rate_model(train)
         metrics = _score_block_metrics(oos, model)
 
-        # Challenger: recency-weighted venue/team rates. Never alters primary metrics.
-        try:
-            recency_model = fit_recency_score_rate_model(train)
-            recency_metrics = _score_block_metrics(oos, recency_model)
-            metrics.update({f"recency_{k}": v for k, v in recency_metrics.items() if k != "n"})
-            metrics["recency_status"] = "PASS"
-            metrics["recency_error"] = ""
-        except Exception as exc:
-            metrics.update({
-                "recency_score_logloss": float("nan"),
-                "recency_exact_score_hit_rate": float("nan"),
-                "recency_top3_score_hit_rate": float("nan"),
-                "recency_top4_score_hit_rate": float("nan"),
-                "recency_home_goals_mae": float("nan"),
-                "recency_away_goals_mae": float("nan"),
-                "recency_total_goals_mae": float("nan"),
-                "recency_over_2_5_logloss": float("nan"),
-                "recency_over_2_5_brier": float("nan"),
-                "recency_btts_logloss": float("nan"),
-                "recency_btts_brier": float("nan"),
-                "recency_status": "ERROR",
-                "recency_error": f"{type(exc).__name__}: {exc}",
-            })
+        # Challenger family: time-decay half-life is tuned on development OOS only.
+        # Each half-life is evaluated independently; no locked OOS row is used here.
+        for half_life in (400.0, 800.0, 1200.0, 1600.0):
+            tag = int(half_life)
+            try:
+                recency_model = fit_recency_score_rate_model(
+                    train,
+                    half_life_rows=half_life,
+                )
+                recency_metrics = _score_block_metrics(oos, recency_model)
+                metrics.update({
+                    f"recency_h{tag}_{k}": v
+                    for k, v in recency_metrics.items()
+                    if k != "n"
+                })
+                metrics[f"recency_h{tag}_status"] = "PASS"
+                metrics[f"recency_h{tag}_error"] = ""
+            except Exception as exc:
+                for metric in (
+                    "score_logloss",
+                    "exact_score_hit_rate",
+                    "top3_score_hit_rate",
+                    "top4_score_hit_rate",
+                    "home_goals_mae",
+                    "away_goals_mae",
+                    "total_goals_mae",
+                    "over_2_5_logloss",
+                    "over_2_5_brier",
+                    "btts_logloss",
+                    "btts_brier",
+                ):
+                    metrics[f"recency_h{tag}_{metric}"] = float("nan")
+                metrics[f"recency_h{tag}_status"] = "ERROR"
+                metrics[f"recency_h{tag}_error"] = f"{type(exc).__name__}: {exc}"
 
         # Challenger: Dixon-Coles low-score dependence correction. A challenger
         # error is recorded, not allowed to contaminate primary Poisson metrics.
