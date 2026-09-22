@@ -195,8 +195,21 @@ def run(
     mom_statuses = []
     mom_input_available = "mom_candidates_json" in eligible.columns
     for row in eligible.itertuples(index=False):
-        score_rows.append(predict_score_candidates(bundle["score_model"], row.home_team, row.away_team, row.competition))
-        score_market_rows.append(predict_score_markets(bundle["score_model"], row.home_team, row.away_team, row.competition))
+        neutral_venue = getattr(row, "neutral_venue", False) if hasattr(row, "neutral_venue") else False
+        if isinstance(neutral_venue, float) and np.isnan(neutral_venue):
+            neutral_venue = False
+        score_rows.append(
+            predict_score_candidates(
+                bundle["score_model"], row.home_team, row.away_team, row.competition,
+                neutral_venue=bool(neutral_venue),
+            )
+        )
+        score_market_rows.append(
+            predict_score_markets(
+                bundle["score_model"], row.home_team, row.away_team, row.competition,
+                neutral_venue=bool(neutral_venue),
+            )
+        )
         if not mom_input_available:
             # MOM is an optional secondary layer. Missing upstream player probabilities
             # must block only MOM, never the validated 1X2/Score/O-U/BTTS outputs.
