@@ -12,6 +12,8 @@ def test_engine_failure_after_retries_is_nonzero_and_degraded(tmp_path, monkeypa
     monkeypatch.setattr(safe_runner, "_load_audit_gate", lambda *_args, **_kwargs: {"full_gate_passed": True})
     monkeypatch.setattr(safe_runner, "_load_gate", lambda *_args, **_kwargs: {"full_gate_passed": True})
     monkeypatch.setattr(safe_runner, "_load_audit_gate", lambda *_args, **_kwargs: {"full_gate_passed": True})
+    monkeypatch.setattr(safe_runner, "_load_gate", lambda *_args, **_kwargs: {"full_gate_passed": True})
+    monkeypatch.setattr(safe_runner, "_load_audit_gate", lambda *_args, **_kwargs: {"full_gate_passed": True})
 
     monkeypatch.setattr(
         "src.research.engine.run",
