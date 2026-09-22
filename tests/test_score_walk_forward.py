@@ -56,3 +56,9 @@ def test_score_walk_forward_requires_result_publication_time():
         assert "source_available_at_utc" in str(exc)
     else:
         raise AssertionError("score OOS must fail closed without publication-time evidence")
+
+def test_score_walk_forward_does_not_require_oos_label_publication_timestamp():
+    frame = _fixture()
+    frame.loc[frame.index[-2:], "source_available_at_utc"] = pd.NaT
+    result = run_score_walk_forward(frame, min_train=10, oos_block=5)
+    assert not result.empty
