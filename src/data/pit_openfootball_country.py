@@ -102,13 +102,31 @@ def _commits(repo: str, path: str, cache_dir: str) -> list[dict[str, Any]]:
                 return payload
         except Exception:
             pass
-    payload = _request_json(
-        f"{GITHUB_API}/repos/{repo}/commits?path={path}&per_page=100"
-    )
-    if not isinstance(payload, list):
+
+    # GitHub paginates commit history at 100 items per page. A single page can
+    # silently omit old immutable publication evidence for long-lived files.
+    # Fetch a bounded number of pages; truncation only reduces verification
+    # coverage because rows are VERIFIED only from explicitly observed commits.
+    try:
+        max_pages = max(1, int(os.getenv("PIT_OPENFOOTBALL_COUNTRY_COMMIT_MAX_PAGES", "10")))
+    except ValueError:
+        max_pages = 10
+
+    commits: list[dict[str, Any]] = []
+    for page in range(1, max_pages + 1):
+        payload = _request_json(
+            f"{GITHUB_API}/repos/{repo}/commits?path={path}&per_page=100&page={page}"
+        )
+        if not isinstance(payload, list):
+            break
+        commits.extend(item for item in payload if isinstance(item, dict))
+        if len(payload) < 100:
+            break
+
+    if not commits:
         return []
-    cache.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    return payload
+    cache.write_text(json.dumps(commits, ensure_ascii=False), encoding="utf-8")
+    return commits
 
 def _snapshot(repo: str, path: str, sha: str, cache_dir: str, timeout: int) -> str:
     cache = _cache_file(cache_dir, "snapshot", repo, path, sha)
