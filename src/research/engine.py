@@ -166,7 +166,18 @@ def run(out_dir: str = "artifacts") -> dict:
     model_bundle = None
     if adoption.get("status") == "ADOPT" and not selections.empty:
         selection = selections.iloc[-1].to_dict()
-        model_version = hashlib.sha256(json.dumps({"snapshot_id": snapshot_id(history), "selection": selection}, sort_keys=True, default=str).encode()).hexdigest()[:16]
+        model_version = hashlib.sha256(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_id(history),
+                    "selection": selection,
+                    "score_selection": score_selection,
+                    "score_locked_gate": score_locked_gate,
+                },
+                sort_keys=True,
+                default=str,
+            ).encode()
+        ).hexdigest()[:16]
         try:
             model_bundle = train_and_save_bundle(
                 feats,
@@ -187,9 +198,17 @@ def run(out_dir: str = "artifacts") -> dict:
                 data_snapshot_id=snapshot_id(history),
                 metrics={"locked_oos": locked.to_dict(orient="records"), "development_oos": development_oos.to_dict(orient="records")},
                 adoption_status="ADOPT",
-                parameters={"weights": model_bundle.get("weights", {}), "feature_count": model_bundle.get("feature_count"), "fit_rows": model_bundle.get("fit_rows")},
+                parameters={
+                    "weights": model_bundle.get("weights", {}),
+                    "feature_count": model_bundle.get("feature_count"),
+                    "fit_rows": model_bundle.get("fit_rows"),
+                    "score_method": model_bundle.get("score_method", "primary"),
+                },
                 training_end=model_bundle.get("fit_end"),
-                calibration={"temperature": model_bundle.get("temperature")},
+                calibration={
+                    "temperature": model_bundle.get("temperature"),
+                    "score_method": model_bundle.get("score_method", "primary"),
+                },
             )
             (out / "production_model.json").write_text(json.dumps({**model_bundle, "adoption_status": "ADOPT", "registry": registry}, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
         except Exception as exc:
