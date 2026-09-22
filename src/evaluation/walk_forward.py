@@ -128,6 +128,68 @@ def _fit_temperature(y: pd.Series, proba: np.ndarray) -> tuple[float, bool]:
     return (t if improved else 1.0), improved
 
 
+def _contextual_temperatures(
+    y: pd.Series,
+    proba: np.ndarray,
+    routes: list[str],
+    global_temperature: float,
+    *,
+    min_rows: int = 60,
+    prior_strength: int = 240,
+) -> tuple[dict[str, float], dict[str, str]]:
+    """Fit sparse-safe route temperatures using calibration rows only."""
+    if len(y) != len(routes) or np.asarray(proba).shape != (len(y), 3):
+        return {"GLOBAL": float(global_temperature)}, {"GLOBAL": "global_fallback_invalid_input"}
+
+    routed = pd.Series(routes, dtype="string").fillna("GLOBAL")
+    temperatures: dict[str, float] = {"GLOBAL": float(global_temperature)}
+    reasons: dict[str, str] = {"GLOBAL": "global_fallback"}
+
+    yv = np.asarray(y, dtype=int)
+    pv = np.asarray(proba, dtype=float)
+    for route, positions in routed.groupby(routed, sort=True).groups.items():
+        route_key = str(route)
+        idx = np.asarray(list(positions), dtype=int)
+        if route_key == "GLOBAL" or len(idx) < int(min_rows):
+            temperatures[route_key] = float(global_temperature)
+            reasons[route_key] = "fallback_global_insufficient_calibration_rows"
+            continue
+
+        fitted, used = _fit_temperature(yv[idx], pv[idx])
+        if not used or not np.isfinite(fitted):
+            temperatures[route_key] = float(global_temperature)
+            reasons[route_key] = "fallback_global_context_temperature_not_improved"
+            continue
+
+        # Empirical-Bayes-style shrinkage limits overreaction in sparse contexts.
+        alpha = float(len(idx) / (len(idx) + max(int(prior_strength), 1)))
+        shrunk = float(global_temperature + alpha * (fitted - global_temperature))
+        temperatures[route_key] = float(np.clip(shrunk, 0.70, 1.60))
+        reasons[route_key] = "context_temperature_shrunk_from_calibration"
+
+    return temperatures, reasons
+
+
+def _apply_contextual_temperatures(
+    proba: np.ndarray,
+    routes: list[str],
+    temperatures: dict[str, float],
+    fallback: float,
+) -> np.ndarray:
+    p = np.asarray(proba, dtype=float)
+    if p.ndim != 2 or p.shape[1] != 3 or len(routes) != len(p):
+        raise ValueError("Probability/route shape mismatch in contextual temperature calibration")
+    out = np.empty_like(p, dtype=float)
+    for i, route in enumerate(routes):
+        temperature = float(temperatures.get(str(route), fallback))
+        if not np.isfinite(temperature) or temperature <= 0:
+            temperature = float(fallback)
+        out[i] = _temperature_transform(p[i : i + 1], temperature)[0]
+    if not np.isfinite(out).all():
+        raise ValueError("Contextual temperature calibration produced invalid probabilities")
+    return out
+
+
 def _validation_score(model, val: pd.DataFrame, feature_cols: list[str]) -> dict:
     if val.empty:
         raise ValueError("validation slice is empty")
@@ -458,6 +520,12 @@ def run_walk_forward(
         val_probs = np.clip(val_probs, 1e-9, 1.0)
         val_probs /= val_probs.sum(axis=1, keepdims=True)
         calibration_temperature, calibration_used = _fit_temperature(val_calib.target.astype(int), val_probs)
+        contextual_temperatures, contextual_temperature_reasons = _contextual_temperatures(
+            val_calib.target.astype(int),
+            val_probs,
+            _calibration_routes,
+            calibration_temperature,
+        )
 
         selected.append({
             "oos_start": str(oos.kickoff_utc.min()),
@@ -476,6 +544,8 @@ def run_walk_forward(
             "calibration_rows": len(val_calib),
             "temperature": calibration_temperature,
             "temperature_calibration_used": calibration_used,
+            "contextual_temperatures": contextual_temperatures,
+            "contextual_temperature_reasons": contextual_temperature_reasons,
         })
 
         # Refit candidates on all historical data available before this OOS block.
@@ -492,7 +562,12 @@ def run_walk_forward(
         )
         probs = np.clip(probs, 1e-9, 1.0)
         probs /= probs.sum(axis=1, keepdims=True)
-        probs = _temperature_transform(probs, calibration_temperature)
+        probs = _apply_contextual_temperatures(
+            probs,
+            _oos_routes,
+            contextual_temperatures,
+            calibration_temperature,
+        )
 
         candidate_metrics = classification_metrics(oos.target.astype(int), probs)
         baseline_metrics = classification_metrics(
