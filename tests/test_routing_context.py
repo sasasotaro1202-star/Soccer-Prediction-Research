@@ -116,7 +116,7 @@ def test_contextual_temperature_uses_global_fallback_for_sparse_routes():
         min_rows=6,
     )
     assert temps["GLOBAL"] == 1.0
-    assert reasons["GLOBAL"] == "global_fallback"
+    assert reasons["GLOBAL"] == "fallback_global_insufficient_calibration_rows"
     assert np.allclose(_apply_contextual_temperatures(proba, ["GLOBAL"] * 10, temps, 1.0), proba)
 
 
