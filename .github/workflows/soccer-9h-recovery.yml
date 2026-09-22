@@ -15,8 +15,11 @@ on:
       - "tests/**"
       - "requirements.txt"
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Soccer 9H Autonomous Research"]
+    types: [completed]
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
 
 permissions:
   actions: write
@@ -103,24 +106,44 @@ jobs:
               print("DISPATCH")
               raise SystemExit(0)
 
-          latest = completed[0]
+          current_completed = [r for r in completed if r.get("head_sha") == main_sha]
+          latest = current_completed[0] if current_completed else completed[0]
           conclusion = latest.get("conclusion")
           age_hours = (datetime.now(timezone.utc) - when(latest)).total_seconds() / 3600.0
           latest_sha = latest.get("head_sha")
+          run_attempt = int(latest.get("run_attempt") or 1)
+
+          failure_streak = 0
+          for r in current_completed:
+              if r.get("conclusion") in {"failure", "timed_out", "cancelled"}:
+                  failure_streak += 1
+              else:
+                  break
+
           print(
-              f"STATE conclusion={conclusion} run_id={latest.get('id')} age_hours={age_hours:.2f} latest_sha={latest_sha} main_sha={main_sha}",
+              f"STATE conclusion={conclusion} run_id={latest.get('id')} attempt={run_attempt} "
+              f"age_hours={age_hours:.2f} latest_sha={latest_sha} main_sha={main_sha} "
+              f"failure_streak={failure_streak}",
               file=sys.stderr,
           )
 
-          # Never retry an obsolete commit when main has advanced. Dispatch the current main.
+          # Never retry an obsolete commit when main has advanced. A successful
+          # current-main cycle immediately chains the next cycle.
           if latest_sha and main_sha and latest_sha != main_sha:
               print("DISPATCH")
-          elif conclusion in {"failure", "timed_out"}:
-              print(f"RERUN {latest.get('id')}")
-          elif conclusion != "success" or age_hours >= 8.0:
+          elif conclusion == "success":
               print("DISPATCH")
+          elif conclusion in {"failure", "timed_out", "cancelled"}:
+              # Retry a failed attempt once. Repeated same-SHA failures are
+              # deliberately cooled down to avoid a wasteful dispatch storm.
+              if run_attempt < 2:
+                  print(f"RERUN {latest.get('id')}")
+              elif failure_streak <= 2 or age_hours >= 1.0:
+                  print("DISPATCH")
+              else:
+                  print("DEFER")
           else:
-              print("ACTIVE")
+              print("DISPATCH")
           PY
           )"
 
@@ -148,7 +171,10 @@ jobs:
 
           case "${ACTION}" in
             ACTIVE)
-              echo "RECOVERY: active run exists or recent success; no action."
+              echo "RECOVERY: current-main research run is active."
+              ;;
+            DEFER)
+              echo "RECOVERY: repeated same-SHA failure cooldown is active; watchdog will re-check."
               ;;
             RERUN)
               CODE="$(curl -sS -o /tmp/rerun.json -w "%{http_code}" -X POST \

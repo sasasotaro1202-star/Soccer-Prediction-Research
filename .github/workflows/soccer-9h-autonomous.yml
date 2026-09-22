@@ -17,8 +17,8 @@ concurrency:
   cancel-in-progress: false
 
 # Three sequential 180-minute phases provide up to 9 hours of repository-side work.
-# Eight-hour starts reduce idle gaps while preserving strict single-run concurrency;
-# the 15-minute recovery controller handles failures, stale runs, and schedule delays.
+# Scheduled starts provide a baseline; the recovery controller also chains successful cycles
+# immediately and watches every 5 minutes for missed/stale/cancelled runs.
 # No production/PIT gate is weakened to keep the workflow green.
 jobs:
   phase1_gate:
@@ -69,6 +69,18 @@ jobs:
           if [ -f artifacts/audit_summary.json ]; then cp artifacts/audit_summary.json artifacts/9h/phase1/audit_summary.json; fi
           TARGET_SHA="$(git rev-parse HEAD)"
           printf '{"phase":"phase1_gate","head_sha":"%s","workflow_sha":"%s","completion_step":"${{ steps.completion.outcome }}"}\n' "$TARGET_SHA" "$GITHUB_SHA" > artifacts/9h/phase1/phase_status.json
+      - name: Enforce strict completion gate before expensive research
+        if: steps.completion.outcome == 'success'
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("artifacts/completion_gate.json")
+          payload = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+          if payload.get("full_gate_passed") is not True:
+              print("STRICT PIT/completion gate blocked Phase 2/3; preserving evidence only.")
+              raise SystemExit(1)
+          PY
       - name: Upload phase 1 evidence
         if: always()
         uses: actions/upload-artifact@v6
@@ -79,7 +91,7 @@ jobs:
           if-no-files-found: warn
 
   phase2_research:
-    if: always()
+    if: needs.phase1_gate.result == 'success'
     name: Phase 2 - PIT-safe OOS research
     needs: phase1_gate
     runs-on: ubuntu-latest
@@ -184,7 +196,7 @@ jobs:
           if-no-files-found: warn
 
   phase3_verification:
-    if: always()
+    if: needs.phase2_research.result == 'success'
     name: Phase 3 - independent verification and robustness
     needs: phase2_research
     runs-on: ubuntu-latest
