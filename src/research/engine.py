@@ -25,6 +25,30 @@ from src.research.stability_gate import evaluate_stability
 EXCLUDED_MODEL_COLUMNS = {"match_id", "competition", "season", "season_start", "kickoff_utc", "home_team", "away_team", "prediction_cutoff_at_utc", "home_goals", "away_goals", "target", "pit_verified", "feature_source_max_available_at_utc"}
 PIT_POLICY = "explicit_source_publication_time_only; unknown_publication_time_excluded"
 
+PRIMARY_SCORE_METRICS = (
+    "score_logloss",
+    "exact_score_hit_rate",
+    "top3_score_hit_rate",
+    "top4_score_hit_rate",
+    "home_goals_mae",
+    "away_goals_mae",
+    "total_goals_mae",
+    "over_2_5_logloss",
+    "over_2_5_brier",
+    "btts_logloss",
+    "btts_brier",
+)
+
+
+def _primary_score_metrics_finite(score_oos: pd.DataFrame) -> bool:
+    if score_oos.empty:
+        return False
+    missing = [column for column in PRIMARY_SCORE_METRICS if column not in score_oos.columns]
+    if missing:
+        return False
+    values = score_oos[list(PRIMARY_SCORE_METRICS)].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
+    return bool(np.isfinite(values).all())
+
 
 def snapshot_id(df: pd.DataFrame) -> str:
     excluded = {"retrieved_at_utc", "source_available_at_utc", "pit_evidence_url", "capture_digest"}
@@ -99,11 +123,15 @@ def run(out_dir: str = "artifacts") -> dict:
             oos_block=max(500, int(os.getenv("SOCCER_SCORE_OOS_BLOCK", "2000"))),
         )
         score_oos.to_csv(out / "score_oos_metrics.csv", index=False)
+        primary_finite = _primary_score_metrics_finite(score_oos)
         score_oos_status = {
-            "status": "PASS",
+            "status": "PASS" if primary_finite else "ERROR",
             "blocks": int(len(score_oos)),
             "rows": int(score_oos["n"].sum()) if "n" in score_oos.columns else 0,
-            "finite_metrics": bool(np.isfinite(score_oos.select_dtypes(include=[np.number]).to_numpy()).all()),
+            "finite_metrics": primary_finite,
+            "primary_metrics_finite": primary_finite,
+            "recency_status": sorted(set(score_oos["recency_status"].astype(str))) if "recency_status" in score_oos.columns else [],
+            "dc_status": sorted(set(score_oos["dc_status"].astype(str))) if "dc_status" in score_oos.columns else [],
         }
     except Exception as exc:
         score_oos = pd.DataFrame()
