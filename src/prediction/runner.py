@@ -191,21 +191,50 @@ def run(
     score_rows = []
     score_market_rows = []
     mom_rows = []
+    mom_statuses = []
+    mom_input_available = "mom_candidates_json" in eligible.columns
     for row in eligible.itertuples(index=False):
         score_rows.append(predict_score_candidates(bundle["score_model"], row.home_team, row.away_team, row.competition))
         score_market_rows.append(predict_score_markets(bundle["score_model"], row.home_team, row.away_team, row.competition))
+        if not mom_input_available:
+            # MOM is an optional secondary layer. Missing upstream player probabilities
+            # must block only MOM, never the validated 1X2/Score/O-U/BTTS outputs.
+            mom_rows.append([])
+            mom_statuses.append("BLOCKED_UPSTREAM_PLAYER_MODEL")
+            continue
+        raw_mom = getattr(row, "mom_candidates_json", None)
+        if raw_mom is None or (isinstance(raw_mom, float) and np.isnan(raw_mom)) or str(raw_mom).strip() == "":
+            mom_rows.append([])
+            mom_statuses.append("BLOCKED_UPSTREAM_PLAYER_MODEL")
+            continue
         try:
-            mom_rows.append(predict_mom_candidates(row.mom_candidates_json))
-        except Exception as exc:
-            raise RuntimeError(f"MOM prediction is unavailable for match {row.match_id}: {type(exc).__name__}: {exc}") from exc
+            selected_mom = predict_mom_candidates(raw_mom)
+            if not selected_mom:
+                mom_rows.append([])
+                mom_statuses.append("BLOCKED_UPSTREAM_PLAYER_MODEL")
+            else:
+                mom_rows.append(selected_mom)
+                mom_statuses.append("PREDICTED")
+        except Exception:
+            # Fail closed at the MOM layer: invalid player evidence cannot be converted
+            # into guessed players/probabilities and cannot suppress other outputs.
+            mom_rows.append([])
+            mom_statuses.append("BLOCKED_INVALID_UPSTREAM_EVIDENCE")
     for rank in range(1, 4):
         result[f"score_{rank}"] = [f"{x[rank-1]['home_goals']}-{x[rank-1]['away_goals']}" for x in score_rows]
         result[f"score_{rank}_probability"] = [x[rank-1]["probability"] for x in score_rows]
     for key in ("over_0_5", "under_0_5", "over_1_5", "under_1_5", "over_2_5", "under_2_5", "over_3_5", "under_3_5", "over_4_5", "under_4_5", "btts_yes", "btts_no"):
         result[f"market_{key}"] = [float(x[key]) for x in score_market_rows]
     for rank in range(1, 5):
-        result[f"mom_{rank}_player_id"] = [x[rank-1]["player_id"] for x in mom_rows]
-        result[f"mom_{rank}_probability"] = [x[rank-1]["probability"] for x in mom_rows]
+        result[f"mom_{rank}_player_id"] = [
+            x[rank - 1]["player_id"] if len(x) >= rank else pd.NA
+            for x in mom_rows
+        ]
+        result[f"mom_{rank}_probability"] = [
+            float(x[rank - 1]["probability"]) if len(x) >= rank else np.nan
+            for x in mom_rows
+        ]
+    result["mom_status"] = mom_statuses
     result["score_top3_probability_mass"] = sum(result[f"score_{rank}_probability"] for rank in range(1, 4))
     result["mom_top4_probability_mass"] = sum(result[f"mom_{rank}_probability"] for rank in range(1, 5))
     result["model_version"] = str(bundle["model_version"])
