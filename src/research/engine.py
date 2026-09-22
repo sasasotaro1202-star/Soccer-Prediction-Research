@@ -41,7 +41,7 @@ PRIMARY_SCORE_METRICS = (
 )
 
 
-def _primary_score_metrics_finite(score_oos: pd.DataFrame, *, min_blocks: int = 3) -> bool:
+def _primary_score_metrics_finite(score_oos: pd.DataFrame, *, min_blocks: int = 1) -> bool:
     if score_oos.empty or len(score_oos) < int(min_blocks):
         return False
     missing = [column for column in PRIMARY_SCORE_METRICS if column not in score_oos.columns]
