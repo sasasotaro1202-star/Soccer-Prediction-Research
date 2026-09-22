@@ -10,6 +10,49 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 
+
+class EloLogisticClassifier:
+    """Low-dimensional Elo-only candidate for cross-regime robustness.
+
+    The estimator intentionally ignores richer features. It learns the mapping
+    from prediction-time Elo context to H/D/A outcomes using only pre-kickoff
+    numeric state already present in the feature frame.
+    """
+
+    _FEATURES = ("elo_diff", "comp_elo_diff", "home_elo_expected")
+
+    def __init__(self, random_state: int = 42):
+        self.random_state = random_state
+        self.model = Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scale", StandardScaler()),
+            ("model", LogisticRegression(max_iter=2000, C=0.5, random_state=random_state)),
+        ])
+        self.classes_ = np.array([0, 1, 2], dtype=int)
+
+    def _select(self, X):
+        missing = [c for c in self._FEATURES if c not in X.columns]
+        if missing:
+            raise ValueError(f"Elo candidate missing required columns: {missing}")
+        return X[list(self._FEATURES)]
+
+    def fit(self, X, y):
+        self.model.fit(self._select(X), np.asarray(y, dtype=int))
+        self._fitted_classes = np.asarray(getattr(self.model, "classes_", self.classes_), dtype=int)
+        return self
+
+    def predict_proba(self, X):
+        raw = np.asarray(self.model.predict_proba(self._select(X)), dtype=float)
+        out = np.zeros((len(X), 3), dtype=float)
+        for j, cls in enumerate(self._fitted_classes):
+            cls = int(cls)
+            if cls in (0, 1, 2):
+                out[:, cls] = raw[:, j]
+        row_sum = out.sum(axis=1, keepdims=True)
+        if np.any(row_sum <= 0):
+            raise ValueError("Elo candidate produced an invalid probability row")
+        return out / row_sum
+
 def candidates(random_state: int = 42):
     """Return a compact, diverse and leakage-safe candidate set.
 
@@ -20,6 +63,7 @@ def candidates(random_state: int = 42):
     fitting historical noise.
     """
     return {
+        "elo_logistic": EloLogisticClassifier(random_state=random_state),
         "logistic": Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
             ("scale", StandardScaler()),
