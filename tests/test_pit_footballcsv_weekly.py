@@ -53,7 +53,7 @@ def test_provider_accepts_only_snapshot_at_or_after_lower_bound(tmp_path):
         "src.data.pit_footballcsv_weekly._snapshot",
         side_effect=fake_snapshot,
     ):
-        result = apply_footballcsv_weekly_pit(_history().iloc[[10]], cache_dir=str(tmp_path))
+        result = apply_footballcsv_weekly_pit(_history().loc[[10]], cache_dir=str(tmp_path))
 
     assert result.loc[10, "pit_evidence_status"] == "VERIFIED"
     assert result.loc[10, "source_available_at_utc"] == "2020-09-12T17:30:00+00:00"
@@ -72,7 +72,7 @@ def test_provider_fails_closed_on_ambiguous_identity(tmp_path):
         "src.data.pit_footballcsv_weekly._snapshot",
         return_value=ambiguous,
     ):
-        result = apply_footballcsv_weekly_pit(_history().iloc[[10]], cache_dir=str(tmp_path))
+        result = apply_footballcsv_weekly_pit(_history().loc[[10]], cache_dir=str(tmp_path))
 
     assert result.empty
 
