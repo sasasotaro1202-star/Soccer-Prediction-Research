@@ -7,7 +7,7 @@ on:
       - ".github/workflows/soccer-9h-autonomous.yml"
   workflow_dispatch:
   schedule:
-    - cron: "15 0,9,18 * * *"
+    - cron: "15 0,8,16 * * *"
 
 permissions:
   contents: read
@@ -16,7 +16,7 @@ concurrency:
   group: soccer-9h-autonomous-main
   cancel-in-progress: false
 
-# Three sequential 180-minute phases provide up to 9 hours of repository-side work.
+# Three sequential 180-minute phases provide up to 9 hours of repository-side work.\n# Eight-hour starts reduce idle gaps while preserving strict single-run concurrency;\n# the 15-minute recovery controller handles failures, stale runs, and schedule delays.
 # No production/PIT gate is weakened to keep the workflow green.
 jobs:
   phase1_gate:
