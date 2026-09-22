@@ -167,7 +167,7 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             failures.append("score_oos_gate")
         if int(score_gate.get("blocks", 0)) < 3:
             failures.append("score_oos_blocks")
-        if int(score_gate.get("rows", 0)) <= 0:
+        if int(score_gate.get("rows", 0)) < 3000:
             failures.append("score_oos_rows")
         if score_gate.get("finite_metrics") is not True:
             failures.append("score_oos_finite_metrics")
