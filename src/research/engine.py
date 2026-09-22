@@ -71,6 +71,27 @@ def _archive_audit_sample(history: pd.DataFrame, out: Path) -> dict:
         return {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
 
 
+def _primary_score_metrics_finite(score_oos: pd.DataFrame) -> bool:
+    """Validate only primary score/O-U/BTTS metrics; challengers may be unavailable."""
+    cols = [
+        "score_logloss",
+        "exact_score_hit_rate",
+        "top3_score_hit_rate",
+        "top4_score_hit_rate",
+        "home_goals_mae",
+        "away_goals_mae",
+        "total_goals_mae",
+        "over_2_5_logloss",
+        "over_2_5_brier",
+        "btts_logloss",
+        "btts_brier",
+    ]
+    return (
+        set(cols).issubset(score_oos.columns)
+        and bool(np.isfinite(score_oos[cols].to_numpy(dtype=float)).all())
+    )
+
+
 def _write_status(out: Path, report: dict) -> None:
     (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
 
@@ -103,7 +124,8 @@ def run(out_dir: str = "artifacts") -> dict:
             "status": "PASS",
             "blocks": int(len(score_oos)),
             "rows": int(score_oos["n"].sum()) if "n" in score_oos.columns else 0,
-            "finite_metrics": bool(np.isfinite(score_oos.select_dtypes(include=[np.number]).to_numpy()).all()),
+            "finite_metrics": _primary_score_metrics_finite(score_oos),
+            "finite_metric_scope": "primary_score_metrics_only",
         }
     except Exception as exc:
         score_oos = pd.DataFrame()
