@@ -178,6 +178,12 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
         verified_score_method = str(score_locked_gate.get("selected_method", "primary"))
         if score_selection.get("selection_rule", {}).get("locked_oos_inspected") is not False:
             failures.append("score_selection_locked_oos_separation")
+        if int(score_gate.get("development_blocks", 0)) < int(score_gate.get("minimum_development_blocks", 2)):
+            failures.append("score_development_blocks")
+        if int(score_gate.get("locked_blocks", 0)) < int(score_gate.get("minimum_locked_blocks", 2)):
+            failures.append("score_locked_blocks")
+        if score_gate.get("chronological_split_valid") is not True:
+            failures.append("score_chronological_split")
         if score_locked_gate.get("status") != "PASS":
             failures.append("score_locked_gate")
         if verified_score_method != selected_score_method:
