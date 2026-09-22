@@ -114,9 +114,14 @@ def fit_recency_score_rate_model(
     history: pd.DataFrame,
     *,
     shrinkage: float = 20.0,
-    half_life_rows: float = 800.0,
+    half_life_days: float | None = 365.0,
+    half_life_rows: float | None = None,
 ) -> dict[str, Any]:
-    """PIT-safe score-rate challenger with deterministic exponential row decay."""
+    """PIT-safe score-rate challenger with deterministic exponential time decay.
+
+    The preferred parameter is half_life_days because row density differs by
+    competition. half_life_rows is retained only for backward-compatible tests/artifacts.
+    """
     required = {"kickoff_utc", "home_team", "away_team", "home_goals", "away_goals", "pit_verified"}
     missing = sorted(required - set(history.columns))
     if missing:
@@ -129,9 +134,19 @@ def fit_recency_score_rate_model(
     d = d.sort_values("kickoff_utc", kind="mergesort").reset_index(drop=True)
     if d.empty:
         raise ValueError("No PIT-verified score rows available")
-    half = max(float(half_life_rows), 1.0)
-    pos = np.arange(len(d), dtype=float)
-    d["_weight"] = np.exp((pos - float(len(d) - 1)) / half)
+    latest_time = d["kickoff_utc"].max()
+    if half_life_rows is not None:
+        half_rows = max(float(half_life_rows), 1.0)
+        pos = np.arange(len(d), dtype=float)
+        d["_weight"] = np.exp((pos - float(len(d) - 1)) / half_rows)
+        decay_unit = "rows"
+        decay_value = float(half_rows)
+    else:
+        half_days = max(float(half_life_days if half_life_days is not None else 365.0), 1.0)
+        days_ago = (latest_time - d["kickoff_utc"]).dt.total_seconds().to_numpy(dtype=float) / 86400.0
+        d["_weight"] = np.exp(-np.log(2.0) * np.maximum(days_ago, 0.0) / half_days)
+        decay_unit = "days"
+        decay_value = float(half_days)
     weight_sum = max(float(d["_weight"].sum()), 1e-12)
     home_mean = float((d["home_goals"] * d["_weight"]).sum() / weight_sum)
     away_mean = float((d["away_goals"] * d["_weight"]).sum() / weight_sum)
@@ -194,7 +209,10 @@ def fit_recency_score_rate_model(
         "method": "pit_recency_weighted_venue_split_team_goal_rates",
         "training_rows": int(len(d)),
         "shrinkage": float(shrinkage),
-        "half_life_rows": float(half),
+        "half_life_rows": float(half_life_rows) if half_life_rows is not None else None,
+        "half_life_days": float(half_life_days) if half_life_rows is None else None,
+        "decay_unit": decay_unit,
+        "decay_value": decay_value,
         "training_rows": int(len(d)),
         "effective_weight_sum": float(weight_sum),
         "home_mean": home_mean,
