@@ -5,6 +5,7 @@ import math
 import numpy as np
 import pandas as pd
 
+from src.models.dixon_coles import fit_dixon_coles_model, predict_dixon_coles_distribution
 from src.prediction.secondary_outputs import (
     fit_score_rate_model,
     predict_score_distribution,
@@ -16,7 +17,12 @@ def _binary_logloss(y: int, p: float) -> float:
     return float(-(y * math.log(p) + (1 - y) * math.log(1 - p)))
 
 
-def _score_block_metrics(block: pd.DataFrame, model: dict) -> dict[str, float]:
+def _score_block_metrics(
+    block: pd.DataFrame,
+    model: dict,
+    *,
+    distribution_fn=predict_score_distribution,
+) -> dict[str, float]:
     exact_hits = top3_hits = top4_hits = 0
     exact_losses = []
     home_abs = away_abs = total_abs = 0.0
@@ -28,7 +34,7 @@ def _score_block_metrics(block: pd.DataFrame, model: dict) -> dict[str, float]:
     for row in block.itertuples(index=False):
         actual_h = int(row.home_goals)
         actual_a = int(row.away_goals)
-        dist = predict_score_distribution(
+        dist = distribution_fn(
             model,
             row.home_team,
             row.away_team,
@@ -122,7 +128,29 @@ def run_score_walk_forward(
         train = d.iloc[:start]
         oos = d.iloc[start:end]
         model = fit_score_rate_model(train)
-        metrics = _score_block_metrics(oos, model)
+        poisson_metrics = _score_block_metrics(oos, model)
+        try:
+            dc_model = fit_dixon_coles_model(train)
+            dc_metrics = _score_block_metrics(
+                oos,
+                dc_model,
+                distribution_fn=predict_dixon_coles_distribution,
+            )
+            dc_status = "PASS"
+            dc_error = ""
+        except Exception as exc:
+            dc_metrics = {}
+            dc_status = "ERROR"
+            dc_error = f"{type(exc).__name__}: {exc}"
+
+        metrics = {
+            **poisson_metrics,
+            **{f"dc_{k}": v for k, v in dc_metrics.items() if k != "n"},
+            "dc_rho": float(dc_model.get("rho", 0.0)) if dc_status == "PASS" else float("nan"),
+            "dc_rho_fit_used": bool(dc_model.get("rho_fit_used", False)) if dc_status == "PASS" else False,
+            "dc_status": dc_status,
+            "dc_error": dc_error,
+        }
         metrics.update(
             {
                 "oos_start": str(oos["kickoff_utc"].min()),
