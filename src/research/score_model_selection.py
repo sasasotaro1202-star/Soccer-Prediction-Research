@@ -177,7 +177,12 @@ def verify_selected_score_model(
             "missing_columns": sorted(required - set(locked_oos.columns)),
         }
 
-    status_col = {"recency": "recency_status", "time_decay": "time_decay_status", "dixon_coles": "dc_status"}.get(selected)
+    status_col = {
+        "recency": "recency_status",
+        "time_decay": "time_decay_status",
+        "dixon_coles": "dc_status",
+        "negative_binomial": "negative_binomial_status",
+    }.get(selected)
     if status_col in locked_oos.columns and not locked_oos[status_col].astype(str).eq("PASS").all():
         return {
             "selected_method": "primary",
