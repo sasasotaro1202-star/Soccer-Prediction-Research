@@ -157,7 +157,7 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                 keysets.append(future.result())
         keysets.sort(key=lambda x: x[0].get("timestamp", ""))
 
-        def scan(allow_early_precise_capture=False):
+        def scan():
             for capture, diagnostic in keysets:
                 if not unresolved:
                     break
@@ -171,11 +171,6 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                         continue
                     accepted_bound = conservative_bound
                     accepted_reason = bound_reason.lower()
-                    if allow_early_precise_capture and bool(rows[i].get("kickoff_time_available", False)):
-                        kickoff = _utc(rows[i].get("kickoff_utc"))
-                        if kickoff is not None and kickoff <= ts < conservative_bound:
-                            accepted_bound = kickoff
-                            accepted_reason = "kickoff"
                     if ts >= accepted_bound:
                         results[i] = SourceEvidence(ts.isoformat(), "VERIFIED", self._snapshot_url(capture, url), capture.get("digest"), f"archived_completed_result_first_observed_after_{accepted_reason}")
                         del unresolved[key]
