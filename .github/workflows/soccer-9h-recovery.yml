@@ -19,7 +19,7 @@ on:
     workflows: ["Soccer 9H Autonomous Research"]
     types: [completed]
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
 
 permissions:
   actions: write
