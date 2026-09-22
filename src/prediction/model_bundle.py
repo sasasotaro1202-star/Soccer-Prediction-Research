@@ -10,7 +10,7 @@ import pandas as pd
 from src.models.baselines import candidates
 from src.models.dixon_coles import fit_dixon_coles_model
 from src.models.negative_binomial import fit_negative_binomial_score_model
-from src.prediction.secondary_outputs import fit_recency_score_rate_model, fit_score_rate_model, fit_time_decay_score_rate_model
+from src.prediction.secondary_outputs import fit_neutral_aware_score_rate_model, fit_recency_score_rate_model, fit_score_rate_model, fit_time_decay_score_rate_model
 
 
 def _temperature_transform(proba: np.ndarray, temperature: float) -> np.ndarray:
@@ -79,14 +79,16 @@ def train_and_save_bundle(
     verified_score_method = str(score_locked_gate.get("selected_method", "primary"))
     if (
         score_locked_gate.get("status") == "PASS"
-        and requested_score_method in {"recency", "time_decay", "dixon_coles", "negative_binomial"}
+        and requested_score_method in {"neutral_aware", "recency", "time_decay", "dixon_coles", "negative_binomial"}
         and verified_score_method == requested_score_method
     ):
         selected_score_method = requested_score_method
 
     score_model = None
     if has_score_columns:
-        if selected_score_method == "recency":
+        if selected_score_method == "neutral_aware":
+            score_model = fit_neutral_aware_score_rate_model(d)
+        elif selected_score_method == "recency":
             score_model = fit_recency_score_rate_model(d)
         elif selected_score_method == "time_decay":
             score_model = fit_time_decay_score_rate_model(d)
@@ -171,7 +173,7 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
     if bundle["schema_version"] >= 2 and "score_model" not in bundle:
         raise RuntimeError("Production model bundle schema 2 requires score_model")
     score_method = str(bundle.get("score_method", "primary"))
-    if score_method not in {"primary", "recency", "time_decay", "dixon_coles", "negative_binomial"}:
+    if score_method not in {"primary", "neutral_aware", "recency", "time_decay", "dixon_coles", "negative_binomial"}:
         raise RuntimeError(f"Unsupported production score method: {score_method}")
     if bundle["schema_version"] >= 2:
         score_model = bundle.get("score_model")
@@ -180,6 +182,7 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
         method = str(score_model.get("method", ""))
         expected_prefix = {
             "primary": "pit_smoothed_",
+            "neutral_aware": "neutral_aware_pit_smoothed_",
             "recency": "pit_recency_weighted_",
             "time_decay": "pit_time_decay_weighted_",
             "dixon_coles": "dixon_coles_",
