@@ -171,7 +171,24 @@ jobs:
 
           case "${ACTION}" in
             ACTIVE)
-              echo "RECOVERY: current-main research run is active."
+              # A current-main run may already be queued while an obsolete run
+              # is still in progress. Always cancel obsolete runs first; never
+              # let stale work occupy the single-run lane indefinitely.
+              while IFS= read -r STALE_RUN_ID; do
+                [ -z "${STALE_RUN_ID}" ] && continue
+                CANCEL_CODE="$(curl -sS -o /tmp/cancel-active.json -w "%{http_code}" -X POST                   -H "Authorization: Bearer ${GH_TOKEN}"                   -H "Accept: application/vnd.github+json"                   -H "X-GitHub-Api-Version: 2022-11-28"                   "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs/${STALE_RUN_ID}/cancel")"
+                case "${CANCEL_CODE}" in
+                  202|409)
+                    echo "RECOVERY: cancelled/conflicted obsolete run ${STALE_RUN_ID} while current-main run is active."
+                    ;;
+                  *)
+                    echo "RECOVERY: failed to cancel obsolete run ${STALE_RUN_ID} while current-main run is active (HTTP ${CANCEL_CODE})."
+                    if [ -f /tmp/cancel-active.json ]; then cat /tmp/cancel-active.json; fi
+                    exit 1
+                    ;;
+                esac
+              done < <(cancel_obsolete_runs)
+              echo "RECOVERY: current-main research run is active; obsolete runs reconciled."
               ;;
             DEFER)
               echo "RECOVERY: repeated same-SHA failure cooldown is active; watchdog will re-check."
