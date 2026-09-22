@@ -165,8 +165,10 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
         score_gate = _read_json(root / "score_oos_gate.json")
         if score_gate.get("status") != "PASS":
             failures.append("score_oos_gate")
-        if int(score_gate.get("blocks", 0)) < 2:
+        if int(score_gate.get("blocks", 0)) < 5:
             failures.append("score_oos_blocks")
+        if int(score_gate.get("minimum_total_blocks", 5)) > int(score_gate.get("blocks", 0)):
+            failures.append("score_oos_minimum_total_blocks")
         if int(score_gate.get("rows", 0)) <= 0:
             failures.append("score_oos_rows")
         if score_gate.get("finite_metrics") is not True:
