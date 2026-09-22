@@ -192,7 +192,7 @@ SOCCER_SOURCES: Final[tuple[SourceSpec, ...]] = (
         live_capable=False,
         auth_required=False,
         primary_for=("EPL", "BL1", "LL", "FL1", "SA", "ERE"),
-        notes="Audit-only Git mirror with path-level immutable snapshots. Accept only commit timestamps at/after the conservative result lower bound and unique exact date/team/score identity; 2019-20 snapshots can establish pre-2020-21 availability, while 2020-21 weekly snapshots cover only their observed update windows.",
+        notes="Audit-only Git mirror with path-level immutable snapshots. Accept only commit timestamps at/after the conservative result lower bound and unique exact date/team/score identity. Independently inspected 2017-18 and 2018-19 snapshots are observed at 2020-06-11 and may support only later prediction cutoffs; 2019-20 and 2020-21 snapshots retain their observed update windows.",
     ),
     SourceSpec(
         name="footballcsv/cache.footballdata (versioned Italy 2019-20/2020-21 snapshots)",
