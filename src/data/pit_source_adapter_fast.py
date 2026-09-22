@@ -42,6 +42,14 @@ class FootballDataWaybackAdapter(_BaseAdapter):
         self.retry_backoff = max(0.0, float(retry_backoff))
 
     @staticmethod
+    def _snapshot_url(capture, original_url):
+        timestamp = str(capture.get("timestamp", "")).strip()
+        target = str(original_url or "").strip()
+        if not timestamp or not target:
+            raise ValueError("Wayback capture URL requires timestamp and original URL")
+        return f"{WAYBACK_WEB}/{timestamp}id_/{target}"
+
+    @staticmethod
     def _with_season_start(history):
         work = history.copy()
         if "season_start" not in work.columns:
