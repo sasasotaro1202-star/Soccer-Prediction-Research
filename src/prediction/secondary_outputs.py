@@ -290,7 +290,6 @@ def fit_time_decay_score_rate_model(
         "training_rows": int(len(d)),
         "shrinkage": float(shrinkage),
         "half_life_days": float(half_days),
-        "training_rows": int(len(d)),
         "effective_weight_sum": float(weight_sum),
         "home_mean": home_mean,
         "away_mean": away_mean,
