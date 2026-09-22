@@ -162,7 +162,7 @@ def _build_research_gates(
         and len(development_oos) >= 1
         and len(locked_oos) == 2
         and score_oos_gate.get("status") == "PASS"
-        and int(score_oos_gate.get("blocks", 0)) >= 3
+        and int(score_oos_gate.get("blocks", 0)) >= 5
         and score_oos_gate.get("finite_metrics") is True
         and score_locked_gate.get("status") == "PASS"
     )
@@ -218,9 +218,14 @@ def run(out_dir: str = "artifacts") -> dict:
         )
         score_oos.to_csv(out / "score_oos_metrics.csv", index=False)
         primary_finite = _primary_score_metrics_finite(score_oos)
+        minimum_score_blocks = 5
+        enough_score_blocks = len(score_oos) >= minimum_score_blocks
         score_oos_status = {
-            "status": "PASS" if primary_finite else "ERROR",
+            "status": "PASS" if primary_finite and enough_score_blocks else "ERROR",
             "blocks": int(len(score_oos)),
+            "minimum_total_blocks": minimum_score_blocks,
+            "development_blocks_expected": 3,
+            "locked_blocks": 2,
             "rows": int(score_oos["n"].sum()) if "n" in score_oos.columns else 0,
             "finite_metrics": primary_finite,
             "primary_metrics_finite": primary_finite,
@@ -240,12 +245,12 @@ def run(out_dir: str = "artifacts") -> dict:
         json.dumps(score_oos_status, indent=2, ensure_ascii=False, default=str),
         encoding="utf-8",
     )
-    score_protocol_ready = len(score_oos) >= 3 and primary_finite
+    score_protocol_ready = len(score_oos) >= 5 and primary_finite
     score_development_oos = score_oos.iloc[:-2].copy() if score_protocol_ready else pd.DataFrame()
     score_selection = select_score_model(score_development_oos)
     score_locked_oos = score_oos.tail(2).copy() if score_protocol_ready else pd.DataFrame()
     score_selection["protocol"] = {
-        "minimum_total_blocks": 3,
+        "minimum_total_blocks": 5,
         "development_blocks": int(len(score_development_oos)),
         "locked_blocks": int(len(score_locked_oos)),
         "locked_oos_untouched_for_selection": True,
