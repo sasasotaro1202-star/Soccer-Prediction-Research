@@ -104,3 +104,16 @@ def test_all_required_history_available_makes_window_pit_valid():
     features = build_match_features(history, match, windows=(3,))
     assert bool(features.iloc[0]["pit_verified"])
     assert features.iloc[0]["home_gf_3"] == 4 / 3
+
+
+def test_two_explicitly_available_history_rows_are_pit_valid(monkeypatch):
+    monkeypatch.setenv("SOCCER_MIN_PIT_HISTORY_GAMES", "2")
+    history = _history().iloc[:4].copy()
+    match = pd.DataFrame([{
+        "match_id": "m5", "competition": "EPL", "season": "2024/25",
+        "kickoff_utc": pd.Timestamp("2025-01-07", tz="UTC"),
+        "home_team": "A", "away_team": "B",
+    }])
+    features = build_match_features(history, match, windows=(3, 5))
+    assert bool(features.iloc[0]["pit_verified"])
+    assert pd.notna(features.iloc[0]["home_gf_3"])
