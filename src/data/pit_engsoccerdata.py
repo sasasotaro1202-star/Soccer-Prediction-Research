@@ -23,8 +23,18 @@ from src.data.pit_source_adapter_v2 import _result_lower_bound
 REPOSITORY = "jalapic/engsoccerdata"
 TEAMNAMES_PATH = "data-raw/teamnames.csv"
 
-SNAPSHOTS = {
-    "EPL": {
+SNAPSHOTS = [
+    {
+        "competition": "EPL",
+        "path": "data-raw/england.csv",
+        "commit_sha": "86c2a8df92e8f3bf76680b0dbfc97834d20f1f87",
+        "blob_sha": "6377f7d0bd5aaf34c484be2cdb72d11a1483f77e",
+        "teamnames_blob_sha": "572cceeb121a574768db0dda9833c40fd18ea794",
+        "country": "England",
+        "observed_at_utc": "2022-01-18T20:51:44+00:00",
+    },
+    {
+        "competition": "EPL",
         "path": "data-raw/england.csv",
         "commit_sha": "f34131cf85311c2fe0e681ab3811eb94acee330b",
         "blob_sha": "2472650a74a31a4a64e4a554a59e82c388f05151",
@@ -32,7 +42,17 @@ SNAPSHOTS = {
         "country": "England",
         "observed_at_utc": "2022-11-05T19:16:32+00:00",
     },
-    "LL": {
+    {
+        "competition": "LL",
+        "path": "data-raw/spain.csv",
+        "commit_sha": "d771707184c9b1ab65e1a9a0595b6da3aad9a505",
+        "blob_sha": "66f23e5dfddf1223e5512dab380b49800f4d16db",
+        "teamnames_blob_sha": "424f64e8fe941a25e9b96372d4a31e23e7615d7a",
+        "country": "Spain",
+        "observed_at_utc": "2020-10-24T18:48:54+00:00",
+    },
+    {
+        "competition": "LL",
         "path": "data-raw/spain.csv",
         "commit_sha": "f409c8bdfb7417883fd157b8398443b5cadc3d55",
         "blob_sha": "8d90011a646f1d16705eb452dedf3381af4bd298",
@@ -40,7 +60,17 @@ SNAPSHOTS = {
         "country": "Spain",
         "observed_at_utc": "2022-11-03T21:56:57+00:00",
     },
-    "BL1": {
+    {
+        "competition": "BL1",
+        "path": "data-raw/germany.csv",
+        "commit_sha": "257a3ec253badbce350dc7a72710574200ca0d42",
+        "blob_sha": "67befb4f1194b2a93f21b8325e50e2a82ec80516",
+        "teamnames_blob_sha": "eae2d295f89bcebd01cf16ee6cab4d7dc3783e02",
+        "country": "Germany",
+        "observed_at_utc": "2020-10-23T03:22:16+00:00",
+    },
+    {
+        "competition": "BL1",
         "path": "data-raw/germany.csv",
         "commit_sha": "04bcec3219da6a944b17799bb0d66a85f4953e17",
         "blob_sha": "a426758401ec282c5bf24b50037e460647bc2db9",
@@ -48,7 +78,17 @@ SNAPSHOTS = {
         "country": "Germany",
         "observed_at_utc": "2022-11-04T18:58:20+00:00",
     },
-    "SA": {
+    {
+        "competition": "SA",
+        "path": "data-raw/italy.csv",
+        "commit_sha": "cdc7008bec7781baea13aa3cee544c4a7e263c12",
+        "blob_sha": "c1f03db8d2a4f2e2440243c3d6079ac87f5c714e",
+        "teamnames_blob_sha": "a4099eb6a4940231da6f75ccb87ab29f4bbd547b",
+        "country": "Italy",
+        "observed_at_utc": "2020-10-24T04:26:18+00:00",
+    },
+    {
+        "competition": "SA",
         "path": "data-raw/italy.csv",
         "commit_sha": "ab345a1c6a6df821872785c64d93e910bdac496b",
         "blob_sha": "37e5b702b25ef5aa9684cd97f181ada8841f67dd",
@@ -56,7 +96,17 @@ SNAPSHOTS = {
         "country": "Italy",
         "observed_at_utc": "2022-11-04T04:42:23+00:00",
     },
-    "FL1": {
+    {
+        "competition": "FL1",
+        "path": "data-raw/france.csv",
+        "commit_sha": "49af5838849beb2068578fedf66228c9e2177fd2",
+        "blob_sha": "67befb4f1194b2a93f21b8325e50e2a82ec80516",
+        "teamnames_blob_sha": "804a58cfd6968b705d3850d08594827e863a2acb",
+        "country": "France",
+        "observed_at_utc": "2020-10-23T04:25:45+00:00",
+    },
+    {
+        "competition": "FL1",
         "path": "data-raw/france.csv",
         "commit_sha": "880b4a9e7e89baa15d66252a19df2c636f2152f9",
         "blob_sha": "30805787f1ab1de79b5bc1225abf56e53a71125b",
@@ -64,15 +114,26 @@ SNAPSHOTS = {
         "country": "France",
         "observed_at_utc": "2022-11-04T15:11:07+00:00",
     },
-    "ERE": {
+    {
+        "competition": "ERE",
+        "path": "data-raw/holland.csv",
+        "commit_sha": "bda660d02aa3ed1e1fcbef01fbdbd5b1c816898d",
+        "blob_sha": "6d34538e20cc8e51968eddd45ba0aa615b832f6a",
+        "teamnames_blob_sha": "d8191be6c49f169a6b249e681e85c8e00dbdae3a",
+        "country": None,
+        "observed_at_utc": "2020-10-24T06:11:43+00:00",
+    },
+    {
+        "competition": "ERE",
         "path": "data-raw/holland.csv",
         "commit_sha": "cf06c5c6f918e558bd579feaa990c0cffe2ad42e",
         "blob_sha": "a84a96a234e7e90dadd3c802b2a277d1e0df33dc",
         "teamnames_blob_sha": "73e61675b3d24989f03c906242e58c99583e7aee",
-        "country": "Holland",
+        "country": None,
         "observed_at_utc": "2022-11-03T22:10:20+00:00",
     },
-}
+]
+
 
 
 def _headers() -> dict[str, str]:
@@ -224,7 +285,8 @@ def apply_snapshot_pit(
     cache_root.mkdir(parents=True, exist_ok=True)
     alias_cache: dict[str, dict[str, str]] = {}
 
-    for competition, snapshot in SNAPSHOTS.items():
+    for snapshot in sorted(SNAPSHOTS, key=lambda item: item["observed_at_utc"]):
+        competition = str(snapshot["competition"])
         mask = out["competition"].astype(str).eq(competition)
         if not mask.any():
             continue
@@ -252,7 +314,12 @@ def apply_snapshot_pit(
                     teamnames_cache_path.write_text(teamnames_text, encoding="utf-8")
                 alias_cache[alias_key] = _team_aliases(
                     teamnames_text,
-                    country=str(snapshot.get("country", "")).strip() or None,
+                    country=(
+                        str(snapshot.get("country")).strip()
+                        if snapshot.get("country") is not None
+                        and str(snapshot.get("country")).strip()
+                        else None
+                    ),
                 )
 
             aliases = alias_cache[alias_key]
