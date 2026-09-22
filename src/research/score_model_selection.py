@@ -109,13 +109,60 @@ def verify_selected_score_model(
     """Evaluate the development-selected score method on untouched locked OOS."""
     selected = str(selection.get("selected_method", "primary"))
     if locked_oos.empty:
-        return {"selected_method": selected, "status": "HOLD", "reason": "Locked OOS is empty", "locked_oos_inspected": True}
+        return {
+            "selected_method": selected,
+            "status": "HOLD",
+            "reason": "Locked OOS is empty",
+            "locked_oos_inspected": True,
+        }
+    if len(locked_oos) < 2:
+        return {
+            "selected_method": "primary",
+            "status": "HOLD",
+            "reason": "At least two untouched locked OOS blocks are required",
+            "locked_oos_inspected": True,
+            "locked_oos_blocks": int(len(locked_oos)),
+        }
+
+    # The primary method is itself subject to the locked evidence gate. This is
+    # intentionally explicit so retaining the incumbent cannot bypass finite
+    # score/O-U/BTTS evidence checks.
+    required_primary = {"n"} | {_col("primary", metric) for metric in METRICS}
+    if not required_primary.issubset(locked_oos.columns):
+        return {
+            "selected_method": "primary",
+            "status": "HOLD",
+            "reason": "Locked OOS primary score/market metrics are incomplete",
+            "locked_oos_inspected": True,
+            "locked_oos_blocks": int(len(locked_oos)),
+        }
+
+    primary = _summary(locked_oos, "primary")
+    if not all(np.isfinite(primary[m]) for m in METRICS):
+        return {
+            "selected_method": "primary",
+            "status": "REJECT",
+            "reason": "Primary locked OOS score/market metric is non-finite",
+            "locked_oos_inspected": True,
+            "locked_oos_blocks": int(len(locked_oos)),
+            "baseline_metrics": primary,
+        }
+
     if selected == "primary":
         return {
             "selected_method": "primary",
             "status": "PASS",
-            "reason": "Primary score method retained; no challenger promotion required",
+            "reason": "Primary score method retained after explicit locked score/O-U/BTTS evidence verification",
             "locked_oos_inspected": True,
+            "locked_oos_blocks": int(len(locked_oos)),
+            "baseline_metrics": primary,
+            "checks": {
+                "finite_score_logloss": np.isfinite(primary["score_logloss"]),
+                "finite_over_2_5_logloss": np.isfinite(primary["over_2_5_logloss"]),
+                "finite_over_2_5_brier": np.isfinite(primary["over_2_5_brier"]),
+                "finite_btts_logloss": np.isfinite(primary["btts_logloss"]),
+                "finite_btts_brier": np.isfinite(primary["btts_brier"]),
+            },
         }
     if selected not in METHODS[1:]:
         return {
