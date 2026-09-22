@@ -7,6 +7,8 @@ from pathlib import Path
 import hashlib
 import os
 import json
+
+import numpy as np
 from typing import Any
 
 REQUIRED_GATES = ("data", "schema", "leakage", "features", "training", "backtest", "oos", "prediction", "sanity", "artifact")
@@ -182,6 +184,36 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             failures.append("score_locked_gate")
         if verified_score_method != selected_score_method:
             failures.append("score_locked_method_mismatch")
+        if score_locked_gate.get("locked_oos_inspected") is not True:
+            failures.append("score_locked_oos_inspection_missing")
+        required_locked_metrics = [
+            "score_logloss",
+            "over_2_5_logloss",
+            "over_2_5_brier",
+            "btts_logloss",
+            "btts_brier",
+        ]
+        locked_metrics = (
+            score_locked_gate.get("selected_metrics")
+            or score_locked_gate.get("baseline_metrics")
+            or {}
+        )
+        missing_locked_metrics = [
+            metric for metric in required_locked_metrics if metric not in locked_metrics
+        ]
+        if missing_locked_metrics:
+            failures.append(
+                "score_locked_metrics_missing:" + ",".join(missing_locked_metrics)
+            )
+        else:
+            try:
+                if not all(
+                    np.isfinite(float(locked_metrics[metric]))
+                    for metric in required_locked_metrics
+                ):
+                    failures.append("score_locked_metrics_non_finite")
+            except (TypeError, ValueError):
+                failures.append("score_locked_metrics_non_finite")
 
     candidate_lock = _read_json(root / "candidate_lock.json")
     if candidate_lock:

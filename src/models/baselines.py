@@ -125,6 +125,22 @@ def candidates(random_state: int = 42):
             ("imputer", SimpleImputer(strategy="median")),
             ("model", HistGradientBoostingClassifier(max_iter=220, learning_rate=0.05, max_leaf_nodes=15, l2_regularization=1.0, random_state=random_state)),
         ]),
+        "logistic_l2_strong": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scale", StandardScaler()),
+            ("model", LogisticRegression(max_iter=2000, C=0.15, random_state=random_state)),
+        ]),
+        "hist_gb_robust": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("model", HistGradientBoostingClassifier(
+                max_iter=320,
+                learning_rate=0.035,
+                max_leaf_nodes=31,
+                min_samples_leaf=30,
+                l2_regularization=2.0,
+                random_state=random_state,
+            )),
+        ]),
     }
 
 

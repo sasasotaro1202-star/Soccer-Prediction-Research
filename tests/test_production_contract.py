@@ -35,6 +35,21 @@ def _minimal_passing_artifacts(tmp_path):
     _write(tmp_path / "score_locked_gate.json", {
         "selected_method": "primary",
         "status": "PASS",
+        "locked_oos_inspected": True,
+        "baseline_metrics": {
+            "score_logloss": 1.0,
+            "over_2_5_logloss": 0.7,
+            "over_2_5_brier": 0.2,
+            "btts_logloss": 0.68,
+            "btts_brier": 0.21,
+        },
+        "selected_metrics": {
+            "score_logloss": 1.0,
+            "over_2_5_logloss": 0.7,
+            "over_2_5_brier": 0.2,
+            "btts_logloss": 0.68,
+            "btts_brier": 0.21,
+        },
     })
     _write(tmp_path / "candidate_lock.json", {"locked_oos_untouched": True, "locked_oos_blocks": 2})
     _write(tmp_path / "adoption_decision.json", {

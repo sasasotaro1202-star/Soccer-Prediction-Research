@@ -59,3 +59,23 @@ def test_locked_oos_rejects_challenger_that_regresses():
     result = verify_selected_score_model(selection, locked)
     assert result["status"] == "REJECT"
     assert result["selected_method"] == "primary"
+
+
+def test_primary_locked_oos_requires_all_market_metrics():
+    development = _frame(True)
+    selection = select_score_model(development)
+    locked = development.drop(columns=["btts_brier"])
+    result = verify_selected_score_model(selection, locked)
+    assert result["status"] == "REJECT"
+    assert "btts_brier" in ",".join(result["missing_columns"])
+
+
+def test_primary_locked_oos_returns_explicit_market_evidence():
+    development = _frame(True)
+    selection = select_score_model(development)
+    locked = development.copy()
+    result = verify_selected_score_model(selection, locked)
+    assert result["status"] == "PASS"
+    assert result["selected_method"] == "primary"
+    assert result["locked_oos_inspected"] is True
+    assert result["checks"]["all_required_locked_metrics_finite"] is True
