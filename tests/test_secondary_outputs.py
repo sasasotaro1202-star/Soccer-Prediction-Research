@@ -4,7 +4,7 @@ import json
 import pandas as pd
 import pytest
 
-from src.prediction.secondary_outputs import fit_score_rate_model, predict_mom_candidates, predict_score_candidates, predict_score_distribution, predict_score_markets
+from src.prediction.secondary_outputs import fit_score_rate_model, predict_mom_candidates, predict_score_candidates, predict_score_distribution, predict_score_distribution, predict_score_markets
 
 
 def test_score_model_is_pit_only_and_returns_exactly_three():
@@ -133,3 +133,19 @@ def test_recency_score_model_is_order_sensitive_and_pit_only():
     recent_mean = model["home_mean"]
     assert recent_mean > 1.0
     assert recent_mean < 3.1
+
+
+def test_score_distribution_dispatches_dixon_coles_method():
+    history = pd.DataFrame(
+        [
+            {"home_team": "A", "away_team": "B", "home_goals": 1, "away_goals": 0, "kickoff_utc": "2025-01-01", "pit_verified": True},
+            {"home_team": "B", "away_team": "A", "home_goals": 0, "away_goals": 1, "kickoff_utc": "2025-01-02", "pit_verified": True},
+            {"home_team": "A", "away_team": "B", "home_goals": 1, "away_goals": 1, "kickoff_utc": "2025-01-03", "pit_verified": True},
+        ]
+    )
+    from src.models.dixon_coles import fit_dixon_coles_model
+    model = fit_dixon_coles_model(history)
+    dist = predict_score_distribution(model, "A", "B", "EPL", max_goals=5)
+    assert len(dist) == 36
+    assert abs(sum(p for _, _, p in dist) - 1.0) < 1e-9
+    assert all(np.isfinite(p) and p >= 0 for _, _, p in dist)
