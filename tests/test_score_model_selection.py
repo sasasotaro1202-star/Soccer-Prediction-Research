@@ -28,6 +28,19 @@ def test_selector_adopts_recency_from_development_oos():
     assert result["selected_method"]=="recency"
     assert result["selection_rule"]["locked_oos_inspected"] is False
 
+def test_selector_can_choose_time_decay_challenger():
+    frame = _frame(False).copy()
+    frame["time_decay_score_logloss"] = [0.96, 0.97, 0.95]
+    frame["time_decay_over_2_5_logloss"] = [0.699, 0.719, 0.709]
+    frame["time_decay_over_2_5_brier"] = [0.199, 0.209, 0.189]
+    frame["time_decay_btts_logloss"] = [0.679, 0.689, 0.669]
+    frame["time_decay_btts_brier"] = [0.209, 0.219, 0.199]
+    frame["time_decay_status"] = ["PASS"] * 3
+    result = select_score_model(frame)
+    assert result["selected_method"] == "time_decay"
+    assert result["candidate_records"]["time_decay"]["status"] == "ACCEPT"
+
+
 def test_selector_keeps_primary_when_challenger_is_worse():
     result=select_score_model(_frame(False))
     assert result["selected_method"]=="primary"
