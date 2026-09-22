@@ -51,6 +51,11 @@ jobs:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
         run: python -m pytest -q
+      - name: Verify 9H continuity contract
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: python -m pytest -q tests/test_9h_continuity_contract.py
       - name: Run structural audit
         env:
           PYTHONPATH: .
