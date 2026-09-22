@@ -52,3 +52,26 @@ def test_alias_reconciliation_does_not_change_pit_time_rule():
         aliases=aliases,
     )
     assert source_key == snapshot_key
+
+
+from src.data.pit_engsoccerdata import SNAPSHOTS
+
+
+def test_snapshot_catalog_is_time_orderable_and_uses_unique_immutable_blobs():
+    observed = [x["observed_at_utc"] for x in SNAPSHOTS]
+    assert observed == sorted(observed)
+    assert all(len(x["commit_sha"]) == 40 for x in SNAPSHOTS)
+    assert all(len(x["blob_sha"]) == 40 for x in SNAPSHOTS)
+    assert all(len(x["teamnames_blob_sha"]) == 40 for x in SNAPSHOTS)
+
+
+def test_snapshot_catalog_has_multiple_historical_versions_for_major_leagues():
+    counts = {}
+    for row in SNAPSHOTS:
+        counts[row["competition"]] = counts.get(row["competition"], 0) + 1
+    assert counts["EPL"] >= 2
+    assert counts["BL1"] >= 2
+    assert counts["FL1"] >= 2
+    assert counts["LL"] >= 2
+    assert counts["SA"] >= 2
+    assert counts["ERE"] >= 2
