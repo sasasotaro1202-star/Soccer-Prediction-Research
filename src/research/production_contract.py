@@ -9,6 +9,8 @@ import os
 import json
 from typing import Any
 
+import numpy as np
+
 REQUIRED_GATES = ("data", "schema", "leakage", "features", "training", "backtest", "oos", "prediction", "sanity", "artifact")
 REQUIRED_ARTIFACTS = (
     "oos_metrics.csv",
@@ -192,8 +194,15 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             selected_params = score_selection.get("selected_parameters") or {}
             verified_params = score_locked_gate.get("selected_parameters") or {}
             try:
-                selected_half = float(selected_params.get("half_life_days", 365.0))
-                verified_half = float(verified_params.get("half_life_days", 365.0))
+                if "half_life_days" not in selected_params or "half_life_days" not in verified_params:
+                    failures.append("score_locked_parameter_missing")
+                    raise ValueError("missing explicit recency half-life provenance")
+                selected_half = float(selected_params["half_life_days"])
+                verified_half = float(verified_params["half_life_days"])
+                if not (np.isfinite(selected_half) and np.isfinite(verified_half)):
+                    raise ValueError("non-finite recency half-life provenance")
+                if selected_half <= 0 or verified_half <= 0:
+                    raise ValueError("non-positive recency half-life provenance")
                 if abs(selected_half - verified_half) > 1e-9:
                     failures.append("score_locked_parameter_mismatch")
             except (TypeError, ValueError):
