@@ -122,3 +122,16 @@ def test_selector_rejects_candidate_with_material_development_fold_regression():
     assert result["selected_method"] == "primary"
     assert result["candidate_records"]["recency"]["status"] == "REJECT"
     assert result["candidate_records"]["recency"]["checks"]["worst_block_score_logloss_regression_ok"] is False
+
+
+def test_selector_can_choose_neutral_aware_challenger():
+    frame = _frame(False).copy()
+    frame["neutral_aware_score_logloss"] = [0.96, 0.97, 0.95]
+    frame["neutral_aware_over_2_5_logloss"] = [0.699, 0.719, 0.709]
+    frame["neutral_aware_over_2_5_brier"] = [0.199, 0.209, 0.189]
+    frame["neutral_aware_btts_logloss"] = [0.679, 0.689, 0.669]
+    frame["neutral_aware_btts_brier"] = [0.209, 0.219, 0.199]
+    frame["neutral_aware_status"] = ["PASS"] * 3
+    result = select_score_model(frame)
+    assert result["selected_method"] == "neutral_aware"
+    assert result["candidate_records"]["neutral_aware"]["status"] == "ACCEPT"
