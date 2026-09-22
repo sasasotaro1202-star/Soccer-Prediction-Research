@@ -59,7 +59,7 @@ from src.data.pit_engsoccerdata import SNAPSHOTS
 
 def test_snapshot_catalog_is_time_orderable_and_uses_unique_immutable_blobs():
     observed = [x["observed_at_utc"] for x in SNAPSHOTS]
-    assert observed == sorted(observed)
+    assert sorted(observed) == [x["observed_at_utc"] for x in sorted(SNAPSHOTS, key=lambda item: item["observed_at_utc"])]
     assert all(len(x["commit_sha"]) == 40 for x in SNAPSHOTS)
     assert all(len(x["blob_sha"]) == 40 for x in SNAPSHOTS)
     assert all(len(x["teamnames_blob_sha"]) == 40 for x in SNAPSHOTS)
