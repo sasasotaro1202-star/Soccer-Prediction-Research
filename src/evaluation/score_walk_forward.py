@@ -7,6 +7,7 @@ import pandas as pd
 
 from src.models.dixon_coles import fit_dixon_coles_model, predict_dixon_coles_distribution
 from src.prediction.secondary_outputs import (
+    fit_recency_score_rate_model,
     fit_score_rate_model,
     predict_score_distribution,
 )
@@ -129,6 +130,30 @@ def run_score_walk_forward(
         oos = d.iloc[start:end]
         model = fit_score_rate_model(train)
         metrics = _score_block_metrics(oos, model)
+
+        # Challenger: recency-weighted venue/team rates. Never alters primary metrics.
+        try:
+            recency_model = fit_recency_score_rate_model(train)
+            recency_metrics = _score_block_metrics(oos, recency_model)
+            metrics.update({f"recency_{k}": v for k, v in recency_metrics.items() if k != "n"})
+            metrics["recency_status"] = "PASS"
+            metrics["recency_error"] = ""
+        except Exception as exc:
+            metrics.update({
+                "recency_score_logloss": float("nan"),
+                "recency_exact_score_hit_rate": float("nan"),
+                "recency_top3_score_hit_rate": float("nan"),
+                "recency_top4_score_hit_rate": float("nan"),
+                "recency_home_goals_mae": float("nan"),
+                "recency_away_goals_mae": float("nan"),
+                "recency_total_goals_mae": float("nan"),
+                "recency_over_2_5_logloss": float("nan"),
+                "recency_over_2_5_brier": float("nan"),
+                "recency_btts_logloss": float("nan"),
+                "recency_btts_brier": float("nan"),
+                "recency_status": "ERROR",
+                "recency_error": f"{type(exc).__name__}: {exc}",
+            })
 
         # Challenger: Dixon-Coles low-score dependence correction. A challenger
         # error is recorded, not allowed to contaminate primary Poisson metrics.
