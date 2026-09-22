@@ -21,7 +21,7 @@ def test_autonomous_workflow_has_continuous_9h_cycle_and_strict_concurrency():
 
 def test_recovery_workflow_has_watchdog_and_self_chaining_dispatch():
     text = RECOVERY.read_text(encoding="utf-8")
-    assert 'cron: "*/5 * * * *"' in text
+    assert 'cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"' in text
     assert "types: [completed]" in text
     assert "actions: write" in text
     assert "contents: read" in text
