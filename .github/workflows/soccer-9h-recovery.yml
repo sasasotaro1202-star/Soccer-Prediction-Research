@@ -1,5 +1,7 @@
 name: Soccer 9H Recovery Controller
 
+# The controller is intentionally re-run on repository updates so stale 9H runs are moved to current main.
+
 on:
   push:
     branches: [main]
