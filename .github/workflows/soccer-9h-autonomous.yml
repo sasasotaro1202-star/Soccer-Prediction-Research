@@ -298,4 +298,5 @@ jobs:
 
 # This workflow intentionally lives on main so the schedule is active.
 # Operational note: a workflow-file commit intentionally starts a fresh 9H cycle on the latest main SHA.
+# Fresh-cycle marker kept intentionally lightweight so code changes can be verified on the current main SHA.
 # Latest-main handoff remains non-cancelling so an older research cycle can finish safely.
