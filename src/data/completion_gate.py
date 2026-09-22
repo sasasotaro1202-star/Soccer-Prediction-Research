@@ -20,6 +20,7 @@ from src.data.pit_openfootball_github import apply_bulk as apply_openfootball_pi
 from src.data.pit_openfootball_history import apply_openfootball_history
 from src.data.pit_engsoccerdata import apply_snapshot_pit
 from src.data.pit_openfootball_country import apply_country_openfootball_pit
+from src.data.pit_jleague_2020_github import apply_jleague_2020_github_pit
 
 SEASONS = [f"{y}/{str(y + 1)[-2:]}" for y in range(2010, 2026)]
 CANONICAL_SOURCES = {
@@ -141,7 +142,6 @@ def _pit_preflight(root: Path) -> dict:
         openfootball_verified = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
 
     snapshot_before = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
-    country_openfootball_before = snapshot_before
     try:
         history = _merge_pit_evidence(
             history,
@@ -152,6 +152,31 @@ def _pit_preflight(root: Path) -> dict:
     except Exception as exc:
         country_openfootball_after = country_openfootball_before
         country_openfootball_error = f"{type(exc).__name__}: {exc}"
+
+    country_openfootball_before = snapshot_before
+    country_openfootball_after = country_openfootball_before
+    try:
+        history = _merge_pit_evidence(
+            history,
+            apply_country_openfootball_pit(history, cache_dir=str(root / "pit_evidence")),
+        )
+        country_openfootball_after = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+        country_openfootball_error = None
+    except Exception as exc:
+        country_openfootball_after = country_openfootball_before
+        country_openfootball_error = f"{type(exc).__name__}: {exc}"
+
+    jleague_2020_before = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+    try:
+        history = _merge_pit_evidence(
+            history,
+            apply_jleague_2020_github_pit(history, cache_dir=str(root / "pit_evidence")),
+        )
+        jleague_2020_after = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+        jleague_2020_error = None
+    except Exception as exc:
+        jleague_2020_after = jleague_2020_before
+        jleague_2020_error = f"{type(exc).__name__}: {exc}"
 
     try:
         history = _merge_pit_evidence(
@@ -222,6 +247,8 @@ def _pit_preflight(root: Path) -> dict:
         "engsoccerdata_snapshot_verified_rows": max(0, snapshot_after - snapshot_before),
         "country_openfootball_verified_rows": max(0, country_openfootball_after - country_openfootball_before),
         "country_openfootball_error": country_openfootball_error,
+        "jleague_2020_github_verified_rows": max(0, jleague_2020_after - jleague_2020_before),
+        "jleague_2020_github_error": jleague_2020_error,
         "engsoccerdata_snapshot_error": snapshot_error,
         "openfootball_verified_rows": openfootball_verified,
         "versioned_openfootball_verified_rows": max(0, after_versioned - before_versioned),
@@ -337,6 +364,7 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
         "pit_archive_enriched_rows": pit.get("archive_enriched_rows", 0),
         "pit_arquivo_fallback_enriched_rows": pit.get("arquivo_fallback_enriched_rows", 0),
         "versioned_openfootball_verified_rows": pit.get("versioned_openfootball_verified_rows", 0),
+        "jleague_2020_github_verified_rows": pit.get("jleague_2020_github_verified_rows", 0),
         "pit_competition_breakdown": pit.get("pit_competition_breakdown", {}),
         "pit_evidence_status_breakdown": pit.get("pit_evidence_status_breakdown", {}),
         "pit_publication_time_gate": pit_gate,
