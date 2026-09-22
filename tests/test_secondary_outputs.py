@@ -103,3 +103,33 @@ def test_score_markets_are_coherent_probabilities():
         assert 0.0 <= markets[f"over_{line}"] <= 1.0
         assert 0.0 <= markets[f"under_{line}"] <= 1.0
     assert markets["btts_yes"] + markets["btts_no"] == pytest.approx(1.0, abs=1e-9)
+
+
+def test_recency_score_model_is_order_sensitive_and_pit_only():
+    rows = []
+    base = pd.Timestamp("2025-01-01", tz="UTC")
+    for i in range(12):
+        rows.append({
+            "kickoff_utc": base + pd.Timedelta(days=i),
+            "home_team": "A",
+            "away_team": "B",
+            "home_goals": 0 if i < 6 else 3,
+            "away_goals": 0 if i < 6 else 0,
+            "pit_verified": True,
+            "competition": "EPL",
+        })
+    rows.append({
+        "kickoff_utc": base + pd.Timedelta(days=30),
+        "home_team": "A",
+        "away_team": "B",
+        "home_goals": 9,
+        "away_goals": 9,
+        "pit_verified": False,
+        "competition": "EPL",
+    })
+    from src.prediction.secondary_outputs import fit_recency_score_rate_model
+    model = fit_recency_score_rate_model(pd.DataFrame(rows), half_life_rows=2.0)
+    assert model["training_rows"] == 12
+    recent_mean = model["home_mean"]
+    assert recent_mean > 1.0
+    assert recent_mean < 3.1
