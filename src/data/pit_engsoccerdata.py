@@ -27,6 +27,15 @@ SNAPSHOTS = [
     {
         "competition": "EPL",
         "path": "data-raw/england.csv",
+        "commit_sha": "69b6f0eee32fcd9fc6c41d6bcf9959851d56100a",
+        "blob_sha": "679d8e8093c98a156fcf2ec762a16df4a82065d0",
+        "teamnames_blob_sha": "4528990fcdf5a39248961c474629ade444b40604",
+        "country": "England",
+        "observed_at_utc": "2017-01-14T04:13:26+00:00",
+    },
+    {
+        "competition": "EPL",
+        "path": "data-raw/england.csv",
         "commit_sha": "86c2a8df92e8f3bf76680b0dbfc97834d20f1f87",
         "blob_sha": "6377f7d0bd5aaf34c484be2cdb72d11a1483f77e",
         "teamnames_blob_sha": "572cceeb121a574768db0dda9833c40fd18ea794",
@@ -63,6 +72,15 @@ SNAPSHOTS = [
     {
         "competition": "BL1",
         "path": "data-raw/germany.csv",
+        "commit_sha": "a899960664a127af2aa3f2858b2b28cc0f0e4317",
+        "blob_sha": "4bfd9101a05c72b57b77b44d1b3e7801e4509214",
+        "teamnames_blob_sha": "956f215c7deab5125864df843b66e1caca7764d6",
+        "country": "Germany",
+        "observed_at_utc": "2017-05-15T16:30:20+00:00",
+    },
+    {
+        "competition": "BL1",
+        "path": "data-raw/germany.csv",
         "commit_sha": "257a3ec253badbce350dc7a72710574200ca0d42",
         "blob_sha": "67befb4f1194b2a93f21b8325e50e2a82ec80516",
         "teamnames_blob_sha": "eae2d295f89bcebd01cf16ee6cab4d7dc3783e02",
@@ -95,6 +113,15 @@ SNAPSHOTS = [
         "teamnames_blob_sha": "78a1a9c663b738d1af20e6a99d9a31aab684abdb",
         "country": "Italy",
         "observed_at_utc": "2022-11-04T04:42:23+00:00",
+    },
+    {
+        "competition": "FL1",
+        "path": "data-raw/france.csv",
+        "commit_sha": "9012bf9f0f2fd59c1d0b977f90be7b9d92c5cfd4",
+        "blob_sha": "6701c14212e57795a8b0890450e750a5d6f142d4",
+        "teamnames_blob_sha": "4528990fcdf5a39248961c474629ade444b40604",
+        "country": "France",
+        "observed_at_utc": "2017-01-14T03:52:17+00:00",
     },
     {
         "competition": "FL1",
