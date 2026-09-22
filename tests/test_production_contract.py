@@ -130,3 +130,15 @@ def test_stale_git_commit_provenance_cannot_pass(tmp_path, monkeypatch):
     result = evaluate_production_contract(str(tmp_path))
     assert result.passed is False
     assert "git_commit_provenance_mismatch" in result.failures
+
+
+def test_contract_rejects_tampered_production_artifact_after_provenance(tmp_path):
+    _minimal_passing_artifacts(tmp_path)
+    write_contract_result(str(tmp_path))
+    (tmp_path / "production_model.json").write_text(
+        json.dumps({"adoption_status": "ADOPT", "tampered": True}),
+        encoding="utf-8",
+    )
+    result = evaluate_production_contract(str(tmp_path))
+    assert result.passed is False
+    assert "provenance_hash_mismatch:production_model.json" in result.failures
