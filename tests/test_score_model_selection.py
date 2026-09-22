@@ -84,7 +84,7 @@ def test_primary_locked_oos_requires_all_market_metrics():
 
 
 def test_primary_locked_oos_returns_explicit_market_evidence():
-    development = _frame(True)
+    development = _frame(False)
     selection = select_score_model(development)
     locked = development.copy()
     result = verify_selected_score_model(selection, locked)
