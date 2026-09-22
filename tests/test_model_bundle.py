@@ -67,7 +67,7 @@ def test_bundle_uses_locked_oos_verified_recency_score_method(tmp_path):
     )
     bundle = load_bundle(str(path))
     assert bundle["score_method"] == "recency"
-    assert bundle["score_parameters"]["half_life_days"] == 365.0
+    assert bundle["score_parameters"]["half_life_days"] == 400.0
     assert bundle["score_model"]["method"] == "pit_recency_weighted_venue_split_team_goal_rates"
 
 
@@ -87,14 +87,14 @@ def test_bundle_persists_selected_recency_half_life(tmp_path):
         "snapshot-1",
         score_selection={
             "selected_method": "recency",
-            "selected_parameters": {"half_life_rows": 400.0},
+            "selected_parameters": {"half_life_days": 400.0},
         },
         score_locked_gate={"selected_method": "recency", "status": "PASS"},
     )
     bundle = load_bundle(str(path))
     assert bundle["score_method"] == "recency"
-    assert bundle["score_parameters"]["half_life_rows"] == 400.0
-    assert bundle["score_model"]["half_life_rows"] == 400.0
+    assert bundle["score_parameters"]["half_life_days"] == 400.0
+    assert bundle["score_model"]["half_life_days"] == 400.0
 
 
 def test_bundle_does_not_promote_unverified_score_selection(tmp_path):
