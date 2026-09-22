@@ -151,7 +151,7 @@ def test_snapshot_retries_exact_capture_original_url_fallback(tmp_path, monkeypa
         return Response()
 
     adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path), snapshot_retries=1)
-    monkeypatch.setattr("src.data.pit_source_adapter_fast.requests.get", fake_get)
+    monkeypatch.setattr("src.data.pit_source_adapter.requests.get", fake_get)
     capture = {
         "timestamp": "20250902200000",
         "digest": "digest-a",
