@@ -32,3 +32,5 @@ def test_recovery_workflow_has_watchdog_and_self_chaining_dispatch():
     assert "/actions/workflows/soccer-9h-autonomous.yml/dispatches" in text
     assert "case" in text
     assert "DISPATCH)" in text
+    assert "cancel_duplicate_current_main_runs" in text
+    assert "one canonical run retained" in text
