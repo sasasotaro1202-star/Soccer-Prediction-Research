@@ -224,6 +224,22 @@ def _context_keys(frame: pd.DataFrame) -> list[tuple[str, pd.Series]]:
     levels: list[tuple[str, pd.Series]] = []
     if "routing_context" in d.columns:
         levels.append(("FULL", d["routing_context"].astype("string")))
+    if {"competition", "routing_strength_gap", "routing_draw_environment"}.issubset(d.columns):
+        levels.append((
+            "COMP_STRENGTH_DRAW",
+            d["competition"].astype("string").fillna("__MISSING__")
+            + "|"
+            + d["routing_strength_gap"].astype("string").fillna("MISSING")
+            + "|"
+            + d["routing_draw_environment"].astype("string").fillna("MISSING"),
+        ))
+    if {"competition", "routing_draw_environment"}.issubset(d.columns):
+        levels.append((
+            "COMP_DRAW",
+            d["competition"].astype("string").fillna("__MISSING__")
+            + "|"
+            + d["routing_draw_environment"].astype("string").fillna("MISSING"),
+        ))
     if {"competition", "routing_strength_gap"}.issubset(d.columns):
         levels.append((
             "COMP_STRENGTH",
@@ -246,13 +262,17 @@ def _lookup_context_weights(
         full = str(row.get("routing_context", ""))
         comp = str(row.get("competition", "__MISSING__"))
         strength = str(row.get("routing_strength_gap", "MISSING"))
+        draw_env = str(row.get("routing_draw_environment", "MISSING"))
     else:
         routed = _routing_context(pd.DataFrame([row])).iloc[0]
         full = str(routed.get("routing_context", ""))
         comp = str(routed.get("competition", "__MISSING__"))
         strength = str(routed.get("routing_strength_gap", "MISSING"))
+        draw_env = str(routed.get("routing_draw_environment", "MISSING"))
     keys = [
         ("FULL", full),
+        ("COMP_STRENGTH_DRAW", f"{comp}|{strength}|{draw_env}"),
+        ("COMP_DRAW", f"{comp}|{draw_env}"),
         ("COMP_STRENGTH", f"{comp}|{strength}"),
         ("COMP", comp),
     ]
@@ -335,8 +355,11 @@ def _routed_ensemble_proba(
         comp = str(routed.loc[i, "competition"]) if "competition" in routed.columns else "__MISSING__"
         strength = str(routed.loc[i, "routing_strength_gap"])
         full = str(routed.loc[i, "routing_context"])
+        draw_env = str(routed.loc[i, "routing_draw_environment"])
         candidates_for_row = (
             ("FULL", full),
+            ("COMP_STRENGTH_DRAW", f"{comp}|{strength}|{draw_env}"),
+            ("COMP_DRAW", f"{comp}|{draw_env}"),
             ("COMP_STRENGTH", f"{comp}|{strength}"),
             ("COMP", comp),
         )
