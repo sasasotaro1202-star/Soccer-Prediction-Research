@@ -97,7 +97,7 @@ jobs:
           if-no-files-found: warn
 
   phase2_research:
-    if: needs.phase1_gate.result == 'success'
+    if: always()
     name: Phase 2 - PIT-safe OOS research
     needs: phase1_gate
     runs-on: ubuntu-latest
@@ -202,7 +202,7 @@ jobs:
           if-no-files-found: warn
 
   phase3_verification:
-    if: needs.phase2_research.result == 'success'
+    if: always()
     name: Phase 3 - independent verification and robustness
     needs: phase2_research
     runs-on: ubuntu-latest
