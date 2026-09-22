@@ -150,7 +150,7 @@ jobs:
           ACTION="${DECISION%% *}"
           RUN_ID="${DECISION#* }"
 
-          cancel_obsolete_queued_runs() {
+          cancel_obsolete_runs() {
             python - "/tmp/9h-runs.json" "${MAIN_SHA}" <<'PY'
           import json
           import sys
@@ -163,7 +163,7 @@ jobs:
                   continue
               if run.get("head_sha") == main_sha:
                   continue
-              if run.get("status") not in {"pending", "queued", "waiting"}:
+              if run.get("status") not in {"pending", "queued", "waiting", "in_progress"}:
                   continue
               print(run.get("id"))
           PY
@@ -214,15 +214,15 @@ jobs:
                   "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs/${STALE_RUN_ID}/cancel")"
                 case "${CANCEL_CODE}" in
                   202|409)
-                    echo "RECOVERY: obsolete queued run ${STALE_RUN_ID} cancel request accepted/conflicted safely."
+                    echo "RECOVERY: obsolete run ${STALE_RUN_ID} cancel request accepted/conflicted safely."
                     ;;
                   *)
-                    echo "RECOVERY: failed to cancel obsolete queued run ${STALE_RUN_ID} (HTTP ${CANCEL_CODE})."
+                    echo "RECOVERY: failed to cancel obsolete run ${STALE_RUN_ID} (HTTP ${CANCEL_CODE})."
                     if [ -f /tmp/cancel.json ]; then cat /tmp/cancel.json; fi
                     exit 1
                     ;;
                 esac
-              done < <(cancel_obsolete_queued_runs)
+              done < <(cancel_obsolete_runs)
 
               CODE="$(curl -sS -o /tmp/dispatch.json -w "%{http_code}" -X POST \
                 -H "Authorization: Bearer ${GH_TOKEN}" \
