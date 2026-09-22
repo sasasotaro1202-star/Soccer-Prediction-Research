@@ -186,6 +186,16 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             failures.append("score_chronological_split")
         if score_locked_gate.get("status") != "PASS":
             failures.append("score_locked_gate")
+        locked_checks = score_locked_gate.get("checks", {})
+        for key in (
+            "finite_score_logloss",
+            "finite_over_2_5_logloss",
+            "finite_over_2_5_brier",
+            "finite_btts_logloss",
+            "finite_btts_brier",
+        ):
+            if key in locked_checks and locked_checks.get(key) is not True:
+                failures.append(f"score_locked_check:{key}")
         if verified_score_method != selected_score_method:
             failures.append("score_locked_method_mismatch")
 
