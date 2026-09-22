@@ -252,6 +252,37 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             except (TypeError, ValueError):
                 failures.append("score_locked_metrics_non_finite")
 
+    # For an adopted production model, provenance is mandatory and must match
+    # the exact bytes/configuration of the deployable artifacts in this run.
+    if str(adoption.get("status", "")).upper() in {"ADOPT", "CHAMPION", "ADOPTED"}:
+        provenance = _read_json(root / "production_provenance.json")
+        if not provenance:
+            failures.append("production_provenance_missing")
+        else:
+            files = provenance.get("files")
+            if not isinstance(files, dict) or not files:
+                failures.append("production_provenance_files_missing")
+            else:
+                for name in ("production_model.pkl", "production_model.json", "model_registry.json"):
+                    path = root / name
+                    recorded = files.get(name, {})
+                    if not path.is_file() or path.stat().st_size <= 0:
+                        failures.append(f"provenance_artifact:{name}")
+                        continue
+                    expected_hash = recorded.get("sha256") if isinstance(recorded, dict) else None
+                    if not isinstance(expected_hash, str) or len(expected_hash) != 64:
+                        failures.append(f"provenance_hash_missing:{name}")
+                    elif _sha256(path) != expected_hash:
+                        failures.append(f"provenance_hash_mismatch:{name}")
+            registry = _read_json(root / "model_registry.json")
+            model_json = _read_json(root / "production_model.json")
+            recorded_registry_version = provenance.get("registry_model_version")
+            recorded_model_version = provenance.get("production_model_json_version")
+            if recorded_registry_version is not None and str(recorded_registry_version) != str(registry.get("model_version")):
+                failures.append("provenance_registry_version_mismatch")
+            if recorded_model_version is not None and str(recorded_model_version) != str(model_json.get("model_version")):
+                failures.append("provenance_model_version_mismatch")
+
     candidate_lock = _read_json(root / "candidate_lock.json")
     if candidate_lock:
         if candidate_lock.get("locked_oos_untouched") is not True: failures.append("candidate_lock_integrity")
@@ -263,8 +294,10 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
 
 def write_contract_result(artifacts_dir: str = "artifacts") -> GateResult:
     root = Path(artifacts_dir); root.mkdir(parents=True, exist_ok=True)
-    result = evaluate_production_contract(artifacts_dir)
+    # Generate provenance before evaluating the contract so a fresh production
+    # artifact set is validated in the same run rather than one cycle later.
     _write_provenance(root)
+    result = evaluate_production_contract(artifacts_dir)
     (root / "production_contract.json").write_text(
         json.dumps({
             "production_contract_passed": result.passed,
