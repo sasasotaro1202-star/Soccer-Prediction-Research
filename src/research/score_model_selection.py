@@ -125,7 +125,7 @@ def verify_selected_score_model(
             "locked_oos_inspected": True,
         }
 
-    required = {"n", "score_logloss", *_col(selected, metric) for metric in METRICS}
+    required = {"n"} | {_col(selected, metric) for metric in METRICS}
     if not required.issubset(locked_oos.columns):
         return {
             "selected_method": "primary",
