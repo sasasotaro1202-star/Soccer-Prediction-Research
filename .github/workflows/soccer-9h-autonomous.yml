@@ -315,6 +315,8 @@ jobs:
               "max_planned_runtime_minutes": 540,
               "note": "No gate is relaxed for the purpose of producing a green workflow."
           }
+          if Path("artifacts/production_provenance.json").exists():
+              Path("artifacts/9h/production_provenance.json").write_bytes(Path("artifacts/production_provenance.json").read_bytes())
           Path("artifacts/9h/health.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
           PY
       - name: Upload phase 3 evidence
