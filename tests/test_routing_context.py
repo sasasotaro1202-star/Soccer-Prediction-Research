@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from src.evaluation.walk_forward import _lookup_context_weights, _routed_ensemble_proba, _routing_context
+from src.evaluation.walk_forward import _contextual_temperatures, _apply_contextual_temperatures, _lookup_context_weights, _routed_ensemble_proba, _routing_context
 
 
 def test_routing_context_is_prediction_time_only_and_deterministic():
@@ -103,3 +103,36 @@ def test_routing_fallback_preserves_draw_environment_before_competition():
     batch, routes = _routed_ensemble_proba(frame, models, ["f1"], context_weights, {"a": 0.5, "b": 0.5})
     assert routes[0] == "COMP_DRAW:EPL|HIGH"
     assert np.argmax(batch[0]) == 1
+
+
+def test_contextual_temperature_uses_global_fallback_for_sparse_routes():
+    proba = np.tile(np.array([0.70, 0.20, 0.10]), (10, 1))
+    y = pd.Series([0, 1, 0, 2, 0, 1, 0, 2, 1, 0])
+    temps, reasons = _contextual_temperatures(
+        y,
+        proba,
+        ["GLOBAL"] * 10,
+        1.0,
+        min_rows=6,
+    )
+    assert temps["GLOBAL"] == 1.0
+    assert reasons["GLOBAL"] == "global_fallback"
+    assert np.allclose(_apply_contextual_temperatures(proba, ["GLOBAL"] * 10, temps, 1.0), proba)
+
+
+def test_contextual_temperature_is_shrunk_and_applies_by_route():
+    rng = np.random.default_rng(42)
+    raw = np.tile(np.array([0.85, 0.10, 0.05]), (80, 1))
+    raw = raw + rng.normal(0.0, 0.002, raw.shape)
+    raw = np.clip(raw, 1e-6, 1.0)
+    raw /= raw.sum(axis=1, keepdims=True)
+    y = pd.Series([0, 1, 2, 0] * 20)
+    routes = ["COMP:EPL"] * 80
+    temps, reasons = _contextual_temperatures(y, raw, routes, 1.0, min_rows=30, prior_strength=60)
+    assert "COMP:EPL" in temps
+    assert 0.70 <= temps["COMP:EPL"] <= 1.60
+    assert reasons["COMP:EPL"] == "context_temperature_shrunk_from_calibration"
+    calibrated = _apply_contextual_temperatures(raw, routes, temps, 1.0)
+    assert calibrated.shape == raw.shape
+    assert np.isfinite(calibrated).all()
+    assert np.allclose(calibrated.sum(axis=1), 1.0, atol=1e-12)
