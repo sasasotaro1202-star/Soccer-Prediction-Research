@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
+import os
 
 import numpy as np
 import pandas as pd
@@ -134,7 +135,11 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     avail_ptr = 0
     processed_event_max = pd.NaT
     rows = []
-    required_window = min(windows) if windows else 0
+    # PIT validity requires only a small explicitly-available history prefix.
+    # Longer 3/5/10/20-game summaries remain sparse when fewer games exist; those
+    # values stay missing and are handled by the model's fitted imputer.
+    configured_min_history = int(os.getenv("SOCCER_MIN_PIT_HISTORY_GAMES", "2"))
+    required_window = max(1, min(configured_min_history, min(windows) if windows else configured_min_history))
 
     # PIT state contains only observations with explicit availability by the
     # prediction cutoff. Unknown-publication rows are excluded rather than
