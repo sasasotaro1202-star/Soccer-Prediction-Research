@@ -1,6 +1,10 @@
 name: Soccer 9H Recovery Controller
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/soccer-9h-recovery.yml"
   workflow_dispatch:
   schedule:
     - cron: "*/15 * * * *"
