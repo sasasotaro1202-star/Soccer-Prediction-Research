@@ -67,10 +67,10 @@ jobs:
           print(json.dumps(summary, indent=2, ensure_ascii=False))
           print(json.dumps(gate, indent=2, ensure_ascii=False))
           failures = []
-          if summary.get('target_competition_count') != 14: failures.append('Target competition count is not 14')
+          if summary.get('target_competition_count') != 15: failures.append('Target competition count is not 15')
           if summary.get('no_missing_to_zero') is not True: failures.append('Missing-to-zero invariant failed')
           if summary.get('search_engines_are_not_dataset_sources') is not True: failures.append('Search-source invariant failed')
-          if gate.get('requested_competition_season_cells') != 220: failures.append(f"Expected 220 applicable competition-season cells, got {gate.get('requested_competition_season_cells')}")
+          if gate.get('requested_competition_season_cells') != 236: failures.append(f"Expected 236 applicable competition-season cells, got {gate.get('requested_competition_season_cells')}")
           if gate.get('historically_not_applicable_cells') != 4: failures.append('Expected four historically non-applicable J3 cells')
           if not gate.get('technical_audit_ok', False): failures.append('Technical audit matrix is incomplete')
           if not gate.get('coverage_scope_complete', False): failures.append('One or more competition-season cells lack explicit acquisition status')
