@@ -180,9 +180,10 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                         results[i] = SourceEvidence(ts.isoformat(), "VERIFIED", self._snapshot_url(capture, url), capture.get("digest"), f"archived_completed_result_first_observed_after_{accepted_reason}")
                         del unresolved[key]
 
+        # PIT is fail-closed: a capture before the conservative publication lower
+        # bound cannot be accepted merely because it already contains the final score.
+        # Precise kickoff timing may narrow search, but never relaxes the acceptance bound.
         scan(False)
-        if unresolved:
-            scan(True)
         snapshot_errors = sorted({d.status for _, d in keysets if d.keys is None and d.status})
         for i, value in enumerate(results):
             if value is not None:
