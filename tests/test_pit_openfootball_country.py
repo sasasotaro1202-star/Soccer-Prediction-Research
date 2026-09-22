@@ -4,7 +4,7 @@ from src.data.pit_openfootball_country import SOURCE_CONFIG, _norm, _row_key
 
 
 def test_country_source_config_is_scope_limited():
-    assert set(SOURCE_CONFIG) == {"EPL", "BL1", "LL", "SA"}
+    assert set(SOURCE_CONFIG) == {"EPL", "BL1", "LL", "SA", "ERE", "FL1"}
     assert all("{season}" in item["file"] for item in SOURCE_CONFIG.values())
 
 
