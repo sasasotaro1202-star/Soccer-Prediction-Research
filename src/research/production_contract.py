@@ -192,8 +192,8 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             selected_params = score_selection.get("selected_parameters") or {}
             verified_params = score_locked_gate.get("selected_parameters") or {}
             try:
-                selected_half = float(selected_params.get("half_life_rows", 800.0))
-                verified_half = float(verified_params.get("half_life_rows", 800.0))
+                selected_half = float(selected_params.get("half_life_days", 365.0))
+                verified_half = float(verified_params.get("half_life_days", 365.0))
                 if abs(selected_half - verified_half) > 1e-9:
                     failures.append("score_locked_parameter_mismatch")
             except (TypeError, ValueError):
