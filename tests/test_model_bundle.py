@@ -61,7 +61,7 @@ def test_bundle_preserves_and_applies_contextual_weights(tmp_path):
         "weights": {"logistic": 0.5, "hist_gb": 0.5},
         "temperature": 1.0,
         "context_weights": {
-            "EPL|EVEN|MID_LOW|MID_LOW|EVEN|HOME_AWAY": {
+            "FULL:EPL|EVEN|MID_LOW|MID_LOW|EVEN|HOME_AWAY": {
                 "logistic": 1.0,
                 "hist_gb": 0.0,
             }
