@@ -27,11 +27,29 @@ def select_score_model(
     min_relative_improvement: float = 0.005,
     max_metric_regression: float = 0.01,
     min_improvement_share: float = 2.0 / 3.0,
+    min_rows_per_block: int = 500,
 ) -> dict[str, Any]:
     """Select a score method from development OOS only; locked OOS is never inspected."""
     if development_oos.empty:
         return {"selected_method": "primary", "status": "HOLD", "reason": "No development OOS rows available", "evaluated_blocks": 0}
     work = development_oos.copy()
+    if "n" not in work.columns:
+        return {
+            "selected_method": "primary",
+            "status": "HOLD",
+            "reason": "Development OOS block sample sizes are missing",
+            "evaluated_blocks": int(len(work)),
+        }
+    block_sizes = pd.to_numeric(work["n"], errors="coerce")
+    if not block_sizes.notna().all() or (block_sizes < int(min_rows_per_block)).any():
+        return {
+            "selected_method": "primary",
+            "status": "HOLD",
+            "reason": "One or more development OOS blocks are below the minimum sample size",
+            "evaluated_blocks": int(len(work)),
+            "development_block_rows": [int(x) if pd.notna(x) else None for x in block_sizes.tolist()],
+            "minimum_rows_per_block": int(min_rows_per_block),
+        }
     primary = _summary(work, "primary")
     if not np.isfinite(primary["score_logloss"]):
         return {"selected_method": "primary", "status": "HOLD", "reason": "Primary score LogLoss is non-finite", "evaluated_blocks": int(len(work))}
@@ -100,6 +118,8 @@ def select_score_model(
             "min_relative_improvement": min_relative_improvement,
             "max_metric_regression": max_metric_regression,
             "min_improvement_share": min_improvement_share,
+            "min_rows_per_block": int(min_rows_per_block),
+            "development_block_rows": [int(x) for x in block_sizes.tolist()],
         },
     }
 
