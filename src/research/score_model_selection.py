@@ -20,8 +20,12 @@ METRICS = (
 def _weighted_mean(values: pd.Series, weights: pd.Series) -> float:
     v = pd.to_numeric(values, errors="coerce").to_numpy(dtype=float)
     w = pd.to_numeric(weights, errors="coerce").to_numpy(dtype=float)
-    mask = np.isfinite(v) & np.isfinite(w) & (w > 0)
-    return float(np.average(v[mask], weights=w[mask])) if mask.any() else float("nan")
+    positive = w > 0
+    if not positive.any():
+        return float("nan")
+    if not np.isfinite(v[positive]).all() or not np.isfinite(w[positive]).all():
+        return float("nan")
+    return float(np.average(v[positive], weights=w[positive]))
 
 
 def _col(
@@ -78,15 +82,11 @@ def _summary(
 
 
 def _recency_specs(frame: pd.DataFrame) -> list[tuple[str, float]]:
-    specs: list[tuple[str, float]] = []
-    for half in RECENCY_HALF_LIVES_DAYS:
-        if f"recency_d{int(half)}_score_logloss" in frame.columns:
-            specs.append((f"recency_d{int(half)}", half))
-    if not specs and "recency_score_logloss" in frame.columns:
-        # Backward compatibility for older artifacts. The old default represented
-        # roughly a medium-term decay and is treated as a legacy-only candidate.
-        specs.append(("recency_legacy", 365.0))
-    return specs
+    return [
+        (f"recency_d{int(half)}", half)
+        for half in RECENCY_HALF_LIVES_DAYS
+        if f"recency_d{int(half)}_score_logloss" in frame.columns
+    ]
 
 
 def _check_challenger(
@@ -210,15 +210,13 @@ def select_score_model(
     selected_parameters: dict[str, Any] = {}
 
     for key, half_life_days in _recency_specs(work):
-        # Legacy untagged artifacts are still supported for read-only research.
-        use_legacy = key == "recency_legacy"
         try:
             record, accepted = _check_challenger(
                 work,
                 primary,
                 "recency",
-                half_life_days=None if use_legacy else half_life_days,
-                half_life_rows=800.0 if use_legacy else None,
+                half_life_days=half_life_days,
+                half_life_rows=None,
                 max_metric_regression=max_metric_regression,
                 min_relative_improvement=min_relative_improvement,
                 min_improvement_share=min_improvement_share,
