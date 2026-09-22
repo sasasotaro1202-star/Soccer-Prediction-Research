@@ -116,12 +116,7 @@ def fit_recency_score_rate_model(
     shrinkage: float = 20.0,
     half_life_rows: float = 800.0,
 ) -> dict[str, Any]:
-    """PIT-safe score-rate challenger with deterministic exponential row decay.
-
-    Newer historical matches receive more weight while shrinkage stabilizes sparse
-    venue/team/competition estimates. This challenger is evaluated separately and
-    never changes the production Champion by itself.
-    """
+    """PIT-safe score-rate challenger with deterministic exponential row decay."""
     required = {"kickoff_utc", "home_team", "away_team", "home_goals", "away_goals", "pit_verified"}
     missing = sorted(required - set(history.columns))
     if missing:
@@ -144,41 +139,41 @@ def fit_recency_score_rate_model(
 
     competition_rates: dict[str, dict[str, float]] = {}
     if "competition" in d.columns:
-        for name, g in d.assign(_competition=d["competition"].astype(str)).groupby("_competition", sort=True):
+        comp = d.assign(
+            _competition=d["competition"].astype(str),
+            _whg=d["home_goals"] * d["_weight"],
+            _wag=d["away_goals"] * d["_weight"],
+        )
+        for name, g in comp.groupby("_competition", sort=True):
             w = float(g["_weight"].sum())
             competition_rates[str(name)] = {
-                "home_mean": float(((g["home_goals"] * g["_weight"]).sum() + shrinkage * home_mean) / (w + shrinkage)),
-                "away_mean": float(((g["away_goals"] * g["_weight"]).sum() + shrinkage * away_mean) / (w + shrinkage)),
+                "home_mean": float((g["_whg"].sum() + shrinkage * home_mean) / (w + shrinkage)),
+                "away_mean": float((g["_wag"].sum() + shrinkage * away_mean) / (w + shrinkage)),
                 "matches": float(w),
             }
 
-    rows: dict[str, dict[str, float]] = {}
-    home_agg = d.assign(_team=d["home_team"].astype(str)).groupby("_team", sort=False).apply(
-        lambda g: pd.Series({
-            "home_matches": float(g["_weight"].sum()),
-            "home_scored": float((g["home_goals"] * g["_weight"]).sum()),
-            "home_conceded": float((g["away_goals"] * g["_weight"]).sum()),
-        }),
-        include_groups=False,
-    )
-    away_agg = d.assign(_team=d["away_team"].astype(str)).groupby("_team", sort=False).apply(
-        lambda g: pd.Series({
-            "away_matches": float(g["_weight"].sum()),
-            "away_scored": float((g["away_goals"] * g["_weight"]).sum()),
-            "away_conceded": float((g["home_goals"] * g["_weight"]).sum()),
-        }),
-        include_groups=False,
-    )
+    d["_home_team"] = d["home_team"].astype(str)
+    d["_away_team"] = d["away_team"].astype(str)
+    d["_home_scored"] = d["home_goals"] * d["_weight"]
+    d["_home_conceded"] = d["away_goals"] * d["_weight"]
+    d["_away_scored"] = d["away_goals"] * d["_weight"]
+    d["_away_conceded"] = d["home_goals"] * d["_weight"]
+    home_agg = d.groupby("_home_team", sort=False)[["_weight", "_home_scored", "_home_conceded"]].sum()
+    away_agg = d.groupby("_away_team", sort=False)[["_weight", "_away_scored", "_away_conceded"]].sum()
+    home_agg = home_agg.rename(columns={"_weight": "home_weight"})
+    away_agg = away_agg.rename(columns={"_weight": "away_weight"})
     teams = sorted(set(home_agg.index.astype(str)) | set(away_agg.index.astype(str)))
+
+    rows: dict[str, dict[str, float]] = {}
     for team in teams:
         h = home_agg.loc[team] if team in home_agg.index else None
         a = away_agg.loc[team] if team in away_agg.index else None
-        home_w = float(h["home_matches"]) if h is not None else 0.0
-        away_w = float(a["away_matches"]) if a is not None else 0.0
-        home_scored = float(h["home_scored"]) if h is not None else 0.0
-        home_conceded = float(h["home_conceded"]) if h is not None else 0.0
-        away_scored = float(a["away_scored"]) if a is not None else 0.0
-        away_conceded = float(a["away_conceded"]) if a is not None else 0.0
+        home_w = float(h["home_weight"]) if h is not None else 0.0
+        away_w = float(a["away_weight"]) if a is not None else 0.0
+        home_scored = float(h["_home_scored"]) if h is not None else 0.0
+        home_conceded = float(h["_home_conceded"]) if h is not None else 0.0
+        away_scored = float(a["_away_scored"]) if a is not None else 0.0
+        away_conceded = float(a["_away_conceded"]) if a is not None else 0.0
         home_scored_rate = (home_scored + shrinkage * home_mean) / (home_w + shrinkage)
         home_conceded_rate = (home_conceded + shrinkage * away_mean) / (home_w + shrinkage)
         away_scored_rate = (away_scored + shrinkage * away_mean) / (away_w + shrinkage)
@@ -205,7 +200,6 @@ def fit_recency_score_rate_model(
         "competition_rates": competition_rates,
         "teams": rows,
     }
-
 
 def _score_lambdas(
     score_model: dict[str, Any],
