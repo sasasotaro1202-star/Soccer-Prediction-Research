@@ -41,6 +41,7 @@ def _score_block_metrics(
             row.away_team,
             row.competition if hasattr(row, "competition") else None,
             max_goals=12,
+            neutral_venue=getattr(row, "neutral_venue", None),
         )
         lookup = {(int(h), int(a)): float(p) for h, a, p in dist}
         actual_prob = lookup.get((actual_h, actual_a), 0.0)
