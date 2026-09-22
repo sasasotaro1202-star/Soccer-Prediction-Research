@@ -76,3 +76,30 @@ def test_batch_routed_ensemble_matches_rowwise_routing():
     assert np.allclose(batch, expected, atol=1e-12)
     assert routes[0].startswith("FULL:")
     assert routes[1] == "GLOBAL"
+
+
+def test_routing_fallback_preserves_draw_environment_before_competition():
+    frame = pd.DataFrame([{
+        "competition": "EPL",
+        "elo_diff": 20.0,
+        "home_goal_total_avg_5": 2.0,
+        "away_goal_total_avg_5": 2.0,
+        "home_draw_rate_20": 0.38,
+        "away_draw_rate_20": 0.36,
+        "rest_diff_hours": 0.0,
+        "neutral_venue_known": True,
+        "neutral_venue": False,
+        "f1": 1.0,
+    }])
+    models = {
+        "a": _FixedModel([0.80, 0.10, 0.10]),
+        "b": _FixedModel([0.10, 0.80, 0.10]),
+    }
+    context_weights = {
+        "COMP_DRAW:EPL|HIGH": {"a": 0.1, "b": 0.9},
+        "COMP:EPL": {"a": 0.9, "b": 0.1},
+        "GLOBAL": {"a": 0.5, "b": 0.5},
+    }
+    batch, routes = _routed_ensemble_proba(frame, models, ["f1"], context_weights, {"a": 0.5, "b": 0.5})
+    assert routes[0] == "COMP_DRAW:EPL|HIGH"
+    assert np.argmax(batch[0]) == 1
