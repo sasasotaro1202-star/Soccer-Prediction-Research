@@ -44,4 +44,5 @@ def test_recovery_workflow_has_watchdog_and_self_chaining_dispatch():
     assert "cancel_stale_current_main_runs" in text
     assert "before fresh dispatch" in text
     assert "verify_current_main_active" in text
+    assert '"requested"' in text
     assert "no active current-main run was observed" in text
