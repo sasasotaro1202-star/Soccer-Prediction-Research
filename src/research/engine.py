@@ -216,11 +216,21 @@ def run(out_dir: str = "artifacts") -> dict:
         score_oos.to_csv(out / "score_oos_metrics.csv", index=False)
         primary_finite = _primary_score_metrics_finite(score_oos)
         minimum_score_blocks = 5
+        minimum_score_rows_per_block = 500
         enough_score_blocks = len(score_oos) >= minimum_score_blocks
+        score_block_rows = pd.to_numeric(score_oos["n"], errors="coerce") if "n" in score_oos.columns else pd.Series(dtype=float)
+        score_block_rows_ok = bool(
+            len(score_block_rows) > 0
+            and score_block_rows.notna().all()
+            and (score_block_rows >= minimum_score_rows_per_block).all()
+        )
         score_oos_status = {
-            "status": "PASS" if primary_finite and enough_score_blocks else "ERROR",
+            "status": "PASS" if primary_finite and enough_score_blocks and score_block_rows_ok else "ERROR",
             "blocks": int(len(score_oos)),
             "minimum_total_blocks": minimum_score_blocks,
+            "minimum_rows_per_block": minimum_score_rows_per_block,
+            "block_rows": [int(x) if pd.notna(x) else None for x in score_block_rows.tolist()],
+            "block_rows_ok": score_block_rows_ok,
             "development_blocks_expected": 3,
             "locked_blocks": 2,
             "rows": int(score_oos["n"].sum()) if "n" in score_oos.columns else 0,
@@ -242,9 +252,9 @@ def run(out_dir: str = "artifacts") -> dict:
         json.dumps(score_oos_status, indent=2, ensure_ascii=False, default=str),
         encoding="utf-8",
     )
-    score_protocol_ready = len(score_oos) >= 5 and primary_finite
+    score_protocol_ready = len(score_oos) >= 5 and primary_finite and score_block_rows_ok
     score_development_oos = score_oos.iloc[:-2].copy() if score_protocol_ready else pd.DataFrame()
-    score_selection = select_score_model(score_development_oos)
+    score_selection = select_score_model(score_development_oos, min_rows_per_block=minimum_score_rows_per_block)
     score_locked_oos = score_oos.tail(2).copy() if score_protocol_ready else pd.DataFrame()
     score_selection["protocol"] = {
         "minimum_total_blocks": 5,
@@ -252,7 +262,7 @@ def run(out_dir: str = "artifacts") -> dict:
         "locked_blocks": int(len(score_locked_oos)),
         "locked_oos_untouched_for_selection": True,
     }
-    score_locked_gate = verify_selected_score_model(score_selection, score_locked_oos)
+    score_locked_gate = verify_selected_score_model(score_selection, score_locked_oos, min_rows_per_block=minimum_score_rows_per_block)
     (out / "score_model_selection.json").write_text(
         json.dumps(score_selection, indent=2, ensure_ascii=False, default=str),
         encoding="utf-8",
@@ -290,7 +300,7 @@ def run(out_dir: str = "artifacts") -> dict:
     candidate_cols = ["oos_start", "oos_end", "logloss", "accuracy", "brier", "rps", "ece", "n"]
     baseline = locked[baseline_cols].rename(columns={"baseline_logistic_logloss": "logloss", "baseline_logistic_accuracy": "accuracy", "baseline_logistic_brier": "brier", "baseline_logistic_rps": "rps", "baseline_logistic_ece": "ece"})
     candidate = locked[candidate_cols].copy()
-    adoption = adoption_decision(baseline, candidate, development_oos=development_oos, min_accuracy=TARGET_ACCURACY)
+    adoption = adoption_decision(baseline, candidate, development_oos=development_oos, min_accuracy=TARGET_ACCURACY, min_locked_rows_per_block=500)
     adoption["external_stability_gate"] = stability
     (out / "adoption_decision.json").write_text(json.dumps(adoption, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     model_bundle = None
