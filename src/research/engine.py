@@ -53,6 +53,73 @@ def _primary_score_metrics_finite(score_oos: pd.DataFrame, *, min_blocks: int = 
     return True
 
 
+def _oos_temporal_integrity(frame: pd.DataFrame, *, locked_blocks: int = 2) -> dict:
+    """Verify chronological OOS block ordering and development/locked separation.
+
+    This is deliberately fail-closed: missing or unparsable block boundaries are
+    a failure, because chronological ordering cannot be inferred from row order.
+    """
+    result = {
+        "status": "FAIL",
+        "fail_closed": True,
+        "blocks": int(len(frame)) if frame is not None else 0,
+        "locked_blocks": int(locked_blocks),
+        "has_boundaries": False,
+        "all_intervals_valid": False,
+        "chronological": False,
+        "non_overlapping": False,
+        "development_before_locked": False,
+        "reason": "",
+    }
+    if frame is None or frame.empty:
+        result["reason"] = "oos_frame_empty"
+        return result
+    required = {"oos_start", "oos_end"}
+    if not required.issubset(frame.columns):
+        result["reason"] = "missing_oos_boundaries"
+        return result
+    starts = pd.to_datetime(frame["oos_start"], utc=True, errors="coerce")
+    ends = pd.to_datetime(frame["oos_end"], utc=True, errors="coerce")
+    result["has_boundaries"] = bool(starts.notna().all() and ends.notna().all())
+    if not result["has_boundaries"]:
+        result["reason"] = "unparseable_oos_boundaries"
+        return result
+
+    intervals_valid = bool((starts <= ends).all())
+    result["all_intervals_valid"] = intervals_valid
+    if not intervals_valid:
+        result["reason"] = "oos_start_after_oos_end"
+        return result
+
+    chronological = bool(starts.iloc[1:].to_numpy(dtype="datetime64[ns]") > starts.iloc[:-1].to_numpy(dtype="datetime64[ns]")).all() if len(starts) > 1 else True
+    result["chronological"] = chronological
+    if not chronological:
+        result["reason"] = "oos_blocks_not_strictly_chronological"
+        return result
+
+    non_overlapping = bool(starts.iloc[1:].to_numpy(dtype="datetime64[ns]") > ends.iloc[:-1].to_numpy(dtype="datetime64[ns]")).all() if len(starts) > 1 else True
+    result["non_overlapping"] = non_overlapping
+    if not non_overlapping:
+        result["reason"] = "oos_blocks_overlap"
+        return result
+
+    if len(frame) < int(locked_blocks) + 1:
+        result["reason"] = "insufficient_blocks_for_development_and_locked_holdout"
+        return result
+
+    development_end = ends.iloc[: -int(locked_blocks)].max()
+    locked_start = starts.iloc[-int(locked_blocks):].min()
+    development_before_locked = bool(development_end < locked_start)
+    result["development_before_locked"] = development_before_locked
+    if not development_before_locked:
+        result["reason"] = "development_overlaps_locked_holdout"
+        return result
+
+    result["status"] = "PASS"
+    result["reason"] = "strict_chronological_non_overlapping_oos"
+    return result
+
+
 def snapshot_id(df: pd.DataFrame) -> str:
     excluded = {"retrieved_at_utc", "source_available_at_utc", "pit_evidence_url", "capture_digest"}
     stable = df[[c for c in df.columns if c not in excluded]].copy()
@@ -139,6 +206,8 @@ def _build_research_gates(
         "score_locked_gate.json",
         "candidate_lock.json",
         "adoption_decision.json",
+        "oos_temporal_integrity.json",
+        "score_oos_temporal_integrity.json",
     )
     artifacts_present = all((out / name).is_file() and (out / name).stat().st_size > 0 for name in required_artifacts)
 
@@ -154,6 +223,8 @@ def _build_research_gates(
     backtest_ok = bool(not wf.empty)
     score_oos_gate = json.loads((out / "score_oos_gate.json").read_text(encoding="utf-8")) if (out / "score_oos_gate.json").exists() else {}
     score_locked_gate = json.loads((out / "score_locked_gate.json").read_text(encoding="utf-8")) if (out / "score_locked_gate.json").exists() else {}
+    oos_temporal = json.loads((out / "oos_temporal_integrity.json").read_text(encoding="utf-8")) if (out / "oos_temporal_integrity.json").exists() else {}
+    score_temporal = json.loads((out / "score_oos_temporal_integrity.json").read_text(encoding="utf-8")) if (out / "score_oos_temporal_integrity.json").exists() else {}
     oos_ok = bool(
         len(wf) >= 3
         and len(development_oos) >= 1
@@ -163,6 +234,8 @@ def _build_research_gates(
         and score_oos_gate.get("block_rows_ok") is True
         and score_oos_gate.get("finite_metrics") is True
         and score_locked_gate.get("status") == "PASS"
+        and oos_temporal.get("status") == "PASS"
+        and score_temporal.get("status") == "PASS"
     )
     prediction_ok = bool(
         str(adoption.get("status", "")).upper() == "ADOPT"
@@ -276,6 +349,11 @@ def run(out_dir: str = "artifacts") -> dict:
         "locked_oos_untouched_for_selection": True,
     }
     score_locked_gate = verify_selected_score_model(score_selection, score_locked_oos, min_rows_per_block=minimum_score_rows_per_block)
+    score_temporal = _oos_temporal_integrity(score_oos, locked_blocks=2)
+    (out / "score_oos_temporal_integrity.json").write_text(
+        json.dumps(score_temporal, indent=2, ensure_ascii=False, default=str),
+        encoding="utf-8",
+    )
     (out / "score_model_selection.json").write_text(
         json.dumps(score_selection, indent=2, ensure_ascii=False, default=str),
         encoding="utf-8",
@@ -285,8 +363,15 @@ def run(out_dir: str = "artifacts") -> dict:
         encoding="utf-8",
     )
 
-    wf, selections = run_walk_forward(feats, _model_features(feats)); wf.to_csv(out / "oos_metrics.csv", index=False); selections.to_csv(out / "model_selection.csv", index=False)
-    if len(wf) < 3:
+    wf, selections = run_walk_forward(feats, _model_features(feats))
+    oos_temporal = _oos_temporal_integrity(wf, locked_blocks=2)
+    (out / "oos_temporal_integrity.json").write_text(
+        json.dumps(oos_temporal, indent=2, ensure_ascii=False, default=str),
+        encoding="utf-8",
+    )
+    wf.to_csv(out / "oos_metrics.csv", index=False)
+    selections.to_csv(out / "model_selection.csv", index=False)
+    if len(wf) < 3 or oos_temporal.get("status") != "PASS":
         report = {"status": "BLOCKED", "reason": "At least three chronological OOS blocks are required: development plus two locked holdout blocks.", "snapshot_id": snapshot_id(history), "pit_policy": PIT_POLICY, "pit_verified_rows": pit_verified, "pit_total_rows": pit_total, "archive_audit": archive_audit, "audit": audit_report, "oos_claimed": False}; _write_status(out, report); return report
     development_oos = wf.iloc[:-2].copy(); locked = wf.tail(2).copy(); development_oos.to_csv(out / "development_oos_metrics.csv", index=False); locked.to_csv(out / "locked_oos_metrics.csv", index=False)
     stability_folds = []
@@ -400,6 +485,8 @@ def run(out_dir: str = "artifacts") -> dict:
             "locked_blocks": 2,
             "locked_oos_untouched": True,
             "selection_source": "historical_validation_only",
+            "temporal_integrity": oos_temporal,
+            "score_temporal_integrity": score_temporal,
         },
         "stability_gate": stability,
         "accuracy_target": {
