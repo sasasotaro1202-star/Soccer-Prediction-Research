@@ -87,17 +87,17 @@ def train_and_save_bundle(
     score_parameters = {}
     if has_score_columns:
         if selected_score_method == "recency":
-            requested_half_life = float(
+            requested_days = float(
                 (score_selection.get("selected_parameters") or {}).get(
-                    "half_life_rows", 800.0
+                    "half_life_days", 365.0
                 )
             )
-            if not np.isfinite(requested_half_life) or requested_half_life <= 0:
-                raise ValueError("Invalid locked score recency half-life")
-            score_parameters = {"half_life_rows": requested_half_life}
+            if not np.isfinite(requested_days) or requested_days <= 0:
+                raise ValueError("Invalid locked Score recency half-life")
+            score_parameters = {"half_life_days": requested_days}
             score_model = fit_recency_score_rate_model(
                 d,
-                half_life_rows=requested_half_life,
+                half_life_days=requested_days,
             )
         elif selected_score_method == "dixon_coles":
             score_model = fit_dixon_coles_model(d)
@@ -202,13 +202,20 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
                 f"Production score method/model mismatch: score_method={score_method!r}, model_method={method!r}"
             )
         if score_method == "recency":
-            half_life = float(score_parameters.get("half_life_rows", score_model.get("half_life_rows", 800.0)))
-            model_half_life = float(score_model.get("half_life_rows", half_life))
+            half_life_days = float(
+                score_parameters.get(
+                    "half_life_days",
+                    score_model.get("half_life_days", 365.0),
+                )
+            )
+            model_half_life_days = float(
+                score_model.get("half_life_days", half_life_days)
+            )
             if (
-                not np.isfinite(half_life)
-                or half_life <= 0
-                or not np.isfinite(model_half_life)
-                or abs(half_life - model_half_life) > 1e-9
+                not np.isfinite(half_life_days)
+                or half_life_days <= 0
+                or not np.isfinite(model_half_life_days)
+                or abs(half_life_days - model_half_life_days) > 1e-9
             ):
                 raise RuntimeError("Production recency score parameter provenance mismatch")
         if score_method != "primary":
