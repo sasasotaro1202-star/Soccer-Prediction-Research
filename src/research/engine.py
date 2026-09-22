@@ -160,6 +160,7 @@ def _build_research_gates(
         and len(locked_oos) == 2
         and score_oos_gate.get("status") == "PASS"
         and int(score_oos_gate.get("blocks", 0)) >= 5
+        and score_oos_gate.get("block_rows_ok") is True
         and score_oos_gate.get("finite_metrics") is True
         and score_locked_gate.get("status") == "PASS"
     )
