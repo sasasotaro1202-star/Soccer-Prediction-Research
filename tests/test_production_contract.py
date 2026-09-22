@@ -27,7 +27,7 @@ def _minimal_passing_artifacts(tmp_path):
         "score_model_selection.json", "score_locked_gate.json",
     ):
         (tmp_path / name).write_text("metric,value\nplaceholder,1\n", encoding="utf-8")
-    _write(tmp_path / "score_oos_gate.json", {"status": "PASS", "blocks": 5, "minimum_total_blocks": 5, "rows": 10, "finite_metrics": True})
+    _write(tmp_path / "score_oos_gate.json", {"status": "PASS", "blocks": 5, "minimum_total_blocks": 5, "minimum_rows_per_block": 500, "block_rows": [500, 500, 500, 500, 500], "block_rows_ok": True, "rows": 2500, "finite_metrics": True})
     _write(tmp_path / "score_model_selection.json", {
         "selected_method": "primary",
         "selection_rule": {"locked_oos_inspected": False},
@@ -43,6 +43,8 @@ def _minimal_passing_artifacts(tmp_path):
             "btts_logloss": 0.68,
             "btts_brier": 0.21,
         },
+        "locked_block_rows": [500, 500],
+        "minimum_rows_per_block": 500,
         "selected_metrics": {
             "score_logloss": 1.0,
             "over_2_5_logloss": 0.7,
@@ -57,6 +59,8 @@ def _minimal_passing_artifacts(tmp_path):
         "oos_claimed": True,
         "stability": {"status": "PASS"},
         "external_stability_gate": {"status": "PASS"},
+        "locked_block_rows": [500, 500],
+        "minimum_locked_rows_per_block": 500,
     })
     # The contract only needs a non-empty bundle in the unit fixture; runtime
     # integration tests validate that the real pickle is loadable elsewhere.
