@@ -131,3 +131,20 @@ def test_missing_match_outcome_does_not_become_away_win():
     out = add_target(features, matches)
     assert out.loc[0, "target"] == 0
     assert pd.isna(out.loc[1, "target"])
+
+
+def test_venue_specific_form_is_prior_pit_history_only():
+    history = _history()
+    match = pd.DataFrame([{
+        "match_id": "m7", "competition": "EPL", "season": "2024/25",
+        "kickoff_utc": pd.Timestamp("2025-01-08", tz="UTC"),
+        "home_team": "A", "away_team": "B",
+    }])
+    features = build_match_features(history, match, windows=(3,))
+    row = features.iloc[0]
+    assert row["home_home_venue_games_3"] == 3.0
+    assert row["home_home_venue_gf_3"] == 2.0
+    assert row["home_home_venue_win_rate_3"] == 1.0
+    assert row["away_away_venue_games_3"] == 3.0
+    assert row["away_away_venue_gf_3"] == 0.0
+    assert row["away_away_venue_win_rate_3"] == 0.0
