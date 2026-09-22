@@ -12,6 +12,11 @@ on:
 permissions:
   contents: read
 
+# Explicit research knob: the Score walk-forward uses 1000-row chronological blocks.
+# This workflow-file change also causes the next main push to start a fresh 9H cycle.
+env:
+  SOCCER_SCORE_OOS_BLOCK: "1000"
+
 concurrency:
   group: soccer-9h-autonomous-main
   cancel-in-progress: false
