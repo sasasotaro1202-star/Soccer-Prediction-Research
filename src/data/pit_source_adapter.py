@@ -84,12 +84,26 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
         ts = str(capture.get("timestamp", "")).strip()
         if not ts:
             return ()
-        return (
-            f"https://web.archive.org/web/{ts}id_/{original_url}",
-            f"https://web.archive.org/web/{ts}if_/{original_url}",
-            f"https://web.archive.org/web/{ts}/{original_url}",
-            f"http://web.archive.org/web/{ts}id_/{original_url}",
-        )
+        capture_original = str(capture.get("original", "")).strip()
+        targets = []
+        if capture_original:
+            targets.append(capture_original)
+        requested = str(original_url or "").strip()
+        if requested and requested != capture_original:
+            targets.append(requested)
+        if not targets:
+            return ()
+        urls = []
+        for target in targets:
+            urls.extend(
+                (
+                    f"https://web.archive.org/web/{ts}id_/{target}",
+                    f"https://web.archive.org/web/{ts}if_/{target}",
+                    f"https://web.archive.org/web/{ts}/{target}",
+                    f"http://web.archive.org/web/{ts}id_/{target}",
+                )
+            )
+        return tuple(dict.fromkeys(urls))
 
     @staticmethod
     def _response_final_url(response, fallback_url):
