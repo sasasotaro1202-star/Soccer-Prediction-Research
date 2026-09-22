@@ -27,6 +27,7 @@ def test_selector_adopts_recency_from_development_oos():
     result=select_score_model(_frame(True))
     assert result["selected_method"]=="recency"
     assert result["selection_rule"]["locked_oos_inspected"] is False
+    assert result["evaluated_blocks"] == 3
 
 def test_selector_keeps_primary_when_challenger_is_worse():
     result=select_score_model(_frame(False))
@@ -59,3 +60,29 @@ def test_locked_oos_rejects_challenger_that_regresses():
     result = verify_selected_score_model(selection, locked)
     assert result["status"] == "REJECT"
     assert result["selected_method"] == "primary"
+
+
+def test_primary_locked_oos_requires_finite_score_market_metrics():
+    development = _frame(False)
+    selection = select_score_model(development)
+    locked = development.copy()
+    result = verify_selected_score_model(selection, locked)
+    assert result["status"] == "PASS"
+    assert result["selected_method"] == "primary"
+    assert result["checks"]["all_primary_score_and_market_metrics_finite"] is True
+
+
+def test_selector_holds_with_too_few_development_blocks():
+    frame = _frame(True).iloc[:2].copy()
+    result = select_score_model(frame)
+    assert result["status"] == "HOLD"
+    assert result["evaluated_blocks"] == 2
+
+
+def test_primary_locked_oos_holds_with_fewer_than_two_blocks():
+    development = _frame(False)
+    selection = select_score_model(development)
+    locked = development.iloc[:1].copy()
+    result = verify_selected_score_model(selection, locked)
+    assert result["status"] == "HOLD"
+    assert result["locked_oos_blocks"] == 1
