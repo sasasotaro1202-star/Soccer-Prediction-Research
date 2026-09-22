@@ -30,6 +30,13 @@ def test_lookup_and_names_are_stable():
     assert "Understat" in source_names()
 
 
+def test_versioned_la_liga_source_is_explicitly_pit_capable():
+    source = get_source("footballcsv/espana (versioned 2019-20/2020-21 snapshots)")
+    assert source.pit_capable is True
+    assert source.auth_required is False
+    assert "LL" in source.primary_for
+
+
 def test_versioned_j1_2020_source_is_explicitly_pit_capable():
     source = get_source(
         "ewalldo/Japan-J1-League-Data-and-Data-Analysis (versioned J1 2020 snapshot)"
