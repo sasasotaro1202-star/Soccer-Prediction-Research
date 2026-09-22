@@ -10,6 +10,10 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/soccer-9h-recovery.yml"
+      - ".github/workflows/soccer-9h-autonomous.yml"
+      - "src/**"
+      - "tests/**"
+      - "requirements.txt"
   workflow_dispatch:
   schedule:
     - cron: "*/15 * * * *"
