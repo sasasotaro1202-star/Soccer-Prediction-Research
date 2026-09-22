@@ -146,21 +146,21 @@ def run_score_walk_forward(
 
         # Challenger family: time-decay half-life is tuned on development OOS only.
         # Each half-life is evaluated independently; no locked OOS row is used here.
-        for half_life in (400.0, 800.0, 1200.0, 1600.0):
-            tag = int(half_life)
+        for half_life_days in (180.0, 365.0, 730.0, 1095.0):
+            tag = int(half_life_days)
             try:
                 recency_model = fit_recency_score_rate_model(
                     train,
-                    half_life_rows=half_life,
+                    half_life_days=half_life_days,
                 )
                 recency_metrics = _score_block_metrics(oos, recency_model)
                 metrics.update({
-                    f"recency_h{tag}_{k}": v
+                    f"recency_d{tag}_{k}": v
                     for k, v in recency_metrics.items()
                     if k != "n"
                 })
-                metrics[f"recency_h{tag}_status"] = "PASS"
-                metrics[f"recency_h{tag}_error"] = ""
+                metrics[f"recency_d{tag}_status"] = "PASS"
+                metrics[f"recency_d{tag}_error"] = ""
             except Exception as exc:
                 for metric in (
                     "score_logloss",
@@ -175,9 +175,9 @@ def run_score_walk_forward(
                     "btts_logloss",
                     "btts_brier",
                 ):
-                    metrics[f"recency_h{tag}_{metric}"] = float("nan")
-                metrics[f"recency_h{tag}_status"] = "ERROR"
-                metrics[f"recency_h{tag}_error"] = f"{type(exc).__name__}: {exc}"
+                    metrics[f"recency_d{tag}_{metric}"] = float("nan")
+                metrics[f"recency_d{tag}_status"] = "ERROR"
+                metrics[f"recency_d{tag}_error"] = f"{type(exc).__name__}: {exc}"
 
         # Challenger: Dixon-Coles low-score dependence correction. A challenger
         # error is recorded, not allowed to contaminate primary Poisson metrics.
