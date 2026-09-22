@@ -138,6 +138,9 @@ def train_and_save_bundle(
         "weights": weights,
         "temperature": temperature,
         "score_method": selected_score_method,
+        "score_parameters": score_parameters,
+        "score_selection": score_selection,
+        "score_locked_verification": score_locked_gate,
     }
 
 
