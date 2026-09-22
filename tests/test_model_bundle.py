@@ -63,7 +63,11 @@ def test_bundle_uses_locked_oos_verified_recency_score_method(tmp_path):
             "status": "ADOPT_CANDIDATE",
             "selected_parameters": {"half_life_days": 400.0},
         },
-        score_locked_gate={"selected_method": "recency", "status": "PASS"},
+        score_locked_gate={
+            "selected_method": "recency",
+            "status": "PASS",
+            "selected_parameters": {"half_life_days": 400.0},
+        },
     )
     bundle = load_bundle(str(path))
     assert bundle["score_method"] == "recency"
