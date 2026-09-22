@@ -138,7 +138,7 @@ def test_recency_score_model_is_order_sensitive_and_pit_only():
 def test_time_decay_score_model_uses_elapsed_time_and_is_pit_only():
     rows = []
     base = pd.Timestamp("2025-01-01", tz="UTC")
-    for days, goals in [(0, 0), (10, 1), (20, 3), (365, 9)]:
+    for days, goals in [(0, 9), (10, 3), (20, 1), (365, 0)]:
         rows.append({
             "kickoff_utc": base + pd.Timedelta(days=days),
             "home_team": "A",
