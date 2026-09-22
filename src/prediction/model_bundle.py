@@ -95,6 +95,11 @@ def train_and_save_bundle(
     temperature = float(selection.get("temperature", 1.0) or 1.0)
     if not np.isfinite(temperature) or temperature <= 0:
         raise ValueError("Invalid calibration temperature")
+    context_weights = _normalize_context_weights(selection.get("context_weights"), weights)
+    contextual_temperatures = _normalize_context_temperatures(
+        selection.get("contextual_temperatures"),
+        temperature,
+    )
 
     fitted = {}
     available = candidates(random_state=42)
@@ -114,6 +119,8 @@ def train_and_save_bundle(
         "feature_cols": list(feature_cols),
         "weights": weights,
         "temperature": temperature,
+        "context_weights": context_weights,
+        "contextual_temperatures": contextual_temperatures,
         "models": fitted,
         "fit_rows": int(len(d)),
         "fit_end": str(d["kickoff_utc"].max()),
@@ -136,6 +143,8 @@ def train_and_save_bundle(
         "feature_count": len(feature_cols),
         "weights": weights,
         "temperature": temperature,
+        "context_weights": context_weights,
+        "contextual_temperatures": contextual_temperatures,
     }
 
 
@@ -179,6 +188,8 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
     temperature = float(bundle["temperature"])
     if not np.isfinite(temperature) or temperature <= 0:
         raise RuntimeError("Production model bundle temperature is invalid")
+    context_weights = _normalize_context_weights(bundle.get("context_weights"), weights)
+    _normalize_context_temperatures(bundle.get("contextual_temperatures"), temperature)
     if not isinstance(bundle.get("fit_rows"), (int, np.integer)) or int(bundle["fit_rows"]) <= 0:
         raise RuntimeError("Production model bundle fit_rows is invalid")
     return bundle
@@ -190,8 +201,23 @@ def predict_bundle(bundle: dict[str, Any], X: pd.DataFrame) -> np.ndarray:
     if missing:
         raise RuntimeError(f"Prediction input missing model features: {missing[:10]}")
     probs = np.zeros((len(X), 3), dtype=float)
-    for name, model in bundle["models"].items():
-        probs += float(bundle["weights"][name]) * model.predict_proba(X[feature_cols])
+    routed = routing_context(X)
+    context_weights = bundle.get("context_weights") or {"GLOBAL": dict(bundle["weights"])}
+    for i, (_, row) in enumerate(routed.iterrows()):
+        local_weights, _route = lookup_context_weights(
+            row,
+            context_weights,
+            bundle["weights"],
+        )
+        for name, model in bundle["models"].items():
+            probs[i] += float(local_weights.get(name, 0.0)) * model.predict_proba(
+                X.iloc[i:i + 1][feature_cols]
+            )[0]
     probs = np.clip(probs, 1e-9, 1.0)
     probs /= probs.sum(axis=1, keepdims=True)
-    return _temperature_transform(probs, float(bundle["temperature"]))
+    return apply_contextual_temperatures(
+        probs,
+        X,
+        bundle.get("contextual_temperatures"),
+        float(bundle["temperature"]),
+    )
