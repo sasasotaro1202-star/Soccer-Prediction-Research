@@ -113,3 +113,12 @@ def test_score_selection_can_explicitly_fail_closed_on_small_blocks():
     assert result["status"] == "HOLD"
     assert result["selected_method"] == "primary"
     assert result["minimum_rows_per_block"] == 500
+
+
+def test_selector_rejects_candidate_with_material_development_fold_regression():
+    frame = _frame(False).copy()
+    frame["recency_score_logloss"] = [0.80, 1.05, 0.80]
+    result = select_score_model(frame)
+    assert result["selected_method"] == "primary"
+    assert result["candidate_records"]["recency"]["status"] == "REJECT"
+    assert result["candidate_records"]["recency"]["checks"]["worst_block_score_logloss_regression_ok"] is False
