@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
+import pytest
 
-from src.evaluation.walk_forward import _contextual_temperatures, _apply_contextual_temperatures, _lookup_context_weights, _routed_ensemble_proba, _routing_context
+from src.evaluation.walk_forward import _contextual_temperatures, _apply_contextual_temperatures, _lookup_context_weights, _routed_ensemble_proba, _routing_context, _contextual_blend_weights
 
 
 def test_routing_context_is_prediction_time_only_and_deterministic():
@@ -136,3 +137,48 @@ def test_contextual_temperature_is_shrunk_and_applies_by_route():
     assert calibrated.shape == raw.shape
     assert np.isfinite(calibrated).all()
     assert np.allclose(calibrated.sum(axis=1), 1.0, atol=1e-12)
+
+
+def test_contextual_blend_weights_are_shrunk_toward_global(monkeypatch):
+    import src.evaluation.walk_forward as wf
+
+    frame = pd.DataFrame(
+        {
+            "competition": ["EPL"] * 60,
+            "elo_diff": [0.0] * 60,
+            "home_goal_total_avg_5": [2.0] * 60,
+            "away_goal_total_avg_5": [2.0] * 60,
+            "home_draw_rate_20": [0.3] * 60,
+            "away_draw_rate_20": [0.3] * 60,
+            "rest_diff_hours": [0.0] * 60,
+            "neutral_venue_known": [True] * 60,
+            "neutral_venue": [False] * 60,
+            "target": [0, 1, 2, 0, 1, 2] * 10,
+            "f1": np.arange(60, dtype=float),
+        }
+    )
+
+    class FixedModel:
+        def predict_proba(self, X):
+            return np.tile(np.array([[0.34, 0.33, 0.33]]), (len(X), 1))
+
+    models = {"a": FixedModel(), "b": FixedModel()}
+
+    monkeypatch.setattr(
+        wf,
+        "_optimize_blend_weights",
+        lambda y, probs, anchor: ({"a": 1.0, "b": 0.0}, True),
+    )
+
+    routed, reasons = _contextual_blend_weights(
+        frame,
+        models,
+        ["f1"],
+        {"a": 0.5, "b": 0.5},
+        min_rows=60,
+        prior_strength=240,
+    )
+    full_key = next(k for k in routed if k.startswith("FULL:"))
+    assert routed[full_key]["a"] == pytest.approx(0.6, abs=1e-12)
+    assert routed[full_key]["b"] == pytest.approx(0.4, abs=1e-12)
+    assert reasons[full_key] == "context_specific_optimized_validation_shrunk"
