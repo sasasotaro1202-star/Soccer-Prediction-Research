@@ -30,6 +30,11 @@ SOURCE_CONFIG = {
     "BL1": {"repo": "openfootball/deutschland", "file": "{season}/1-bundesliga.txt"},
     "LL": {"repo": "openfootball/espana", "file": "{season}/1-liga.txt"},
     "SA": {"repo": "openfootball/italy", "file": "{season}/1-seriea.txt"},
+    # OpenFootball Europe stores these two in a shared public-domain repository.
+    # The provider remains audit-only and fail-closed: missing/insufficient
+    # immutable history leaves the row UNKNOWN rather than inventing timing.
+    "ERE": {"repo": "openfootball/europe", "file": "netherlands/{season}_nl1.txt"},
+    "FL1": {"repo": "openfootball/europe", "file": "france/{season}_fr1.txt"},
 }
 
 def _utc(value: Any):
