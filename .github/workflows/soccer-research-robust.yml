@@ -2,6 +2,12 @@ name: Soccer Research Robust
 
 on:
   workflow_dispatch:
+    inputs:
+      run_prediction:
+        description: "Explicitly enable production prediction for this manual run only"
+        required: false
+        default: false
+        type: boolean
   schedule:
     - cron: "45 3 * * *"
 
@@ -142,18 +148,25 @@ jobs:
             exit 0
           fi
           python -m src.prediction.prepare_fixtures --fixtures data/future_fixtures.csv --output artifacts/future_fixtures.csv | tee artifacts/future_fixture_prepare_stdout.json
-      - name: Run production prediction when eligible fixtures exist
+      - name: Run production prediction only after explicit manual request
         id: prediction
+        if: github.event_name == 'workflow_dispatch' && inputs.run_prediction == true
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
         run: |
           mkdir -p artifacts
           if [ ! -f artifacts/future_fixtures.csv ]; then
-            printf '{"status":"NO_ELIGIBLE_FIXTURES","oos_claimed":false,"reason":"No prepared future fixtures exist"}\n' > artifacts/prediction_status.json
+            printf '{"status":"NO_FIXTURE_INPUT","oos_claimed":false,"reason":"Explicit prediction was requested, but no prepared future fixtures exist"}\n' > artifacts/prediction_status.json
             exit 0
           fi
           python -m src.prediction.runner --fixtures artifacts/future_fixtures.csv --bundle artifacts/production_model.pkl --output artifacts/predictions.csv --status artifacts/prediction_status.json
+
+      - name: Record prediction deferral when not explicitly requested
+        if: github.event_name != 'workflow_dispatch' || inputs.run_prediction != true
+        run: |
+          mkdir -p artifacts
+          printf '{"status":"PREDICTION_DEFERRED","prediction_enabled":false,"reason":"No explicit user prediction request was supplied"}\n' > artifacts/prediction_status.json
       - name: Evaluate production contract
         id: production_contract
         env:
