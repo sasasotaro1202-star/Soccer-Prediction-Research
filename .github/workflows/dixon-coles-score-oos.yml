@@ -1,0 +1,115 @@
+name: Soccer Dixon-Coles Score Challenger OOS
+
+on:
+  push:
+    branches:
+      - feature/dixon-coles-score-challenger
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soccer-dixon-coles-score-oos
+  cancel-in-progress: false
+
+jobs:
+  score-oos:
+    name: PIT-safe Score OOS challenger
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Cache raw and PIT evidence
+        uses: actions/cache@v5
+        with:
+          path: |
+            data/raw
+            data/raw/pit_evidence
+          key: soccer-dixon-coles-data-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/data/**/*.py', 'src/data/*.py') }}
+          restore-keys: soccer-dixon-coles-data-${{ runner.os }}-
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+      - name: Deterministic tests
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: python -m pytest -q
+      - name: Structural audit
+        env:
+          PYTHONPATH: .
+        run: python -m src.data.fixture_field_audit
+      - name: Build strict PIT replay features
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+          PIT_ENABLE_ARCHIVE_AUDIT: "1"
+          PIT_ENABLE_SECONDARY_ARCHIVE: "1"
+        run: python -m src.data.completion_gate
+      - name: Run score walk-forward comparison
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+          SOCCER_SCORE_MIN_TRAIN: "1000"
+          SOCCER_SCORE_OOS_BLOCK: "2000"
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+          from src.evaluation.score_walk_forward import run_score_walk_forward
+
+          path = Path("artifacts/pit_replay_features.csv")
+          if not path.exists():
+              raise SystemExit("PIT replay feature artifact missing")
+          df = pd.read_csv(path, low_memory=False)
+          result = run_score_walk_forward(
+              df,
+              min_train=1000,
+              oos_block=2000,
+          )
+          if result.empty or len(result) < 2:
+              raise SystemExit("Need at least two chronological score OOS blocks")
+          result.to_csv("artifacts/dixon_coles_score_oos.csv", index=False)
+
+          numeric = result.select_dtypes(include=["number"])
+          summary = {
+              "blocks": int(len(result)),
+              "rows": int(result["n"].sum()),
+              "poisson_score_logloss": float((result["score_logloss"] * result["n"]).sum() / result["n"].sum()),
+              "dixon_coles_score_logloss": float((result["dc_score_logloss"] * result["n"]).sum() / result["n"].sum()),
+              "poisson_over25_logloss": float((result["over_2_5_logloss"] * result["n"]).sum() / result["n"].sum()),
+              "dixon_coles_over25_logloss": float((result["dc_over_2_5_logloss"] * result["n"]).sum() / result["n"].sum()),
+              "poisson_btts_logloss": float((result["btts_logloss"] * result["n"]).sum() / result["n"].sum()),
+              "dixon_coles_btts_logloss": float((result["dc_btts_logloss"] * result["n"]).sum() / result["n"].sum()),
+              "dixon_coles_blocks_with_fit": int((result["dc_rho_fit_used"] == True).sum()),
+              "finite_metrics": bool(numeric.notna().all().all()),
+          }
+          Path("artifacts/dixon_coles_score_summary.json").write_text(
+              json.dumps(summary, indent=2, ensure_ascii=False),
+              encoding="utf-8",
+          )
+          print(json.dumps(summary, indent=2, ensure_ascii=False))
+          PY
+      - name: Upload OOS evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: soccer-dixon-coles-score-oos-${{ github.run_id }}
+          path: |
+            artifacts/dixon_coles_score_oos.csv
+            artifacts/dixon_coles_score_summary.json
+          retention-days: 30
+          if-no-files-found: error
