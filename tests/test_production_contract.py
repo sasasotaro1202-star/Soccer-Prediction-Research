@@ -35,6 +35,8 @@ def _minimal_passing_artifacts(tmp_path):
     _write(tmp_path / "score_locked_gate.json", {
         "selected_method": "primary",
         "status": "PASS",
+        "locked_oos_blocks": 2,
+        "checks": {"all_primary_score_and_market_metrics_finite": True},
     })
     _write(tmp_path / "candidate_lock.json", {"locked_oos_untouched": True, "locked_oos_blocks": 2})
     _write(tmp_path / "adoption_decision.json", {
