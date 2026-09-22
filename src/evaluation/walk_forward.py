@@ -274,7 +274,13 @@ def _contextual_blend_weights(
     """Learn context-specific mixtures with hierarchical sparse-data fallback."""
     routed: dict[str, dict[str, float]] = {}
     reasons: dict[str, str] = {}
-    context_data = _routing_context(validation)
+    context_data = _routing_context(validation.reset_index(drop=True)).reset_index(drop=True)
+    # Each candidate is predicted once over the entire selection slice. Context
+    # optimization then reuses those predictions instead of re-scoring every group.
+    all_probs = {
+        name: np.asarray(model.predict_proba(context_data[feature_cols]), dtype=float)
+        for name, model in validation_models.items()
+    }
 
     levels = _context_keys(context_data)
     for level, keys in levels:
@@ -286,10 +292,8 @@ def _contextual_blend_weights(
                 routed[context_name] = dict(global_weights)
                 reasons[context_name] = "fallback_global_insufficient_validation_rows"
                 continue
-            probs = {
-                name: model.predict_proba(sl[feature_cols])
-                for name, model in validation_models.items()
-            }
+            positions = sl.index.to_numpy(dtype=int)
+            probs = {name: values[positions] for name, values in all_probs.items()}
             optimized, used = _optimize_blend_weights(
                 sl.target.astype(int),
                 probs,
@@ -305,6 +309,63 @@ def _contextual_blend_weights(
     routed["GLOBAL"] = dict(global_weights)
     reasons["GLOBAL"] = "global_fallback"
     return routed, reasons
+
+
+def _routed_ensemble_proba(
+    frame: pd.DataFrame,
+    fitted_models: dict,
+    feature_cols: list[str],
+    context_weights: dict[str, dict[str, float]],
+    fallback: dict[str, float],
+) -> tuple[np.ndarray, list[str]]:
+    """Batch-predict every model once, then apply hierarchical routing row-wise."""
+    if frame.empty:
+        return np.empty((0, 3), dtype=float), []
+
+    routed = _routing_context(frame.reset_index(drop=True)).reset_index(drop=True)
+    names = list(fitted_models)
+    n = len(routed)
+    weight_matrix = np.tile(
+        np.asarray([float(fallback.get(name, 0.0)) for name in names], dtype=float),
+        (n, 1),
+    )
+    routes = ["GLOBAL"] * n
+
+    for i in range(n):
+        comp = str(routed.loc[i, "competition"]) if "competition" in routed.columns else "__MISSING__"
+        strength = str(routed.loc[i, "routing_strength_gap"])
+        full = str(routed.loc[i, "routing_context"])
+        candidates_for_row = (
+            ("FULL", full),
+            ("COMP_STRENGTH", f"{comp}|{strength}"),
+            ("COMP", comp),
+        )
+        for level, key in candidates_for_row:
+            learned = context_weights.get(f"{level}:{key}")
+            if learned is not None:
+                weight_matrix[i] = np.asarray(
+                    [float(learned.get(name, 0.0)) for name in names],
+                    dtype=float,
+                )
+                routes[i] = f"{level}:{key}"
+                break
+
+    probs = np.zeros((n, 3), dtype=float)
+    for j, name in enumerate(names):
+        pred = np.asarray(fitted_models[name].predict_proba(routed[feature_cols]), dtype=float)
+        if pred.shape != (n, 3) or not np.isfinite(pred).all():
+            raise ValueError(f"Model {name!r} produced invalid routed probabilities")
+        pred_sum = pred.sum(axis=1, keepdims=True)
+        if np.any(pred_sum <= 0):
+            raise ValueError(f"Model {name!r} produced a zero probability row")
+        pred = pred / pred_sum
+        probs += weight_matrix[:, [j]] * pred
+
+    row_sum = probs.sum(axis=1, keepdims=True)
+    if np.any(row_sum <= 0) or not np.isfinite(row_sum).all():
+        raise ValueError("Routed ensemble produced invalid probability rows")
+    probs /= row_sum
+    return probs, routes
 
 
 def run_walk_forward(
@@ -364,12 +425,13 @@ def run_walk_forward(
         )
 
         # Probability calibration is fitted only on the second validation half.
-        val_probs = np.zeros((len(val_calib), 3), dtype=float)
-        routed_calib = _routing_context(val_calib)
-        for pos, (_, row) in enumerate(routed_calib.iterrows()):
-            local, _route = _lookup_context_weights(row, context_weights, weights)
-            for name, model in validation_models.items():
-                val_probs[pos] += local[name] * model.predict_proba(row[feature_cols].to_frame().T)[0]
+        val_probs, _calibration_routes = _routed_ensemble_proba(
+            val_calib,
+            validation_models,
+            feature_cols,
+            context_weights,
+            weights,
+        )
         val_probs = np.clip(val_probs, 1e-9, 1.0)
         val_probs /= val_probs.sum(axis=1, keepdims=True)
         calibration_temperature, calibration_used = _fit_temperature(val_calib.target.astype(int), val_probs)
@@ -398,12 +460,13 @@ def run_walk_forward(
             name: _fit_predict(model, train[feature_cols], train.target.astype(int))
             for name, model in candidates(random_state).items()
         }
-        probs = np.zeros((len(oos), 3), dtype=float)
-        routed_oos = _routing_context(oos)
-        for pos, (_, row) in enumerate(routed_oos.iterrows()):
-            local, _route = _lookup_context_weights(row, context_weights, weights)
-            for name, model in fitted.items():
-                probs[pos] += local[name] * model.predict_proba(row[feature_cols].to_frame().T)[0]
+        probs, _oos_routes = _routed_ensemble_proba(
+            oos,
+            fitted,
+            feature_cols,
+            context_weights,
+            weights,
+        )
         probs = np.clip(probs, 1e-9, 1.0)
         probs /= probs.sum(axis=1, keepdims=True)
         probs = _temperature_transform(probs, calibration_temperature)
