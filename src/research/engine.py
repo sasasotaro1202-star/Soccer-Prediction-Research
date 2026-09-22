@@ -91,13 +91,13 @@ def _oos_temporal_integrity(frame: pd.DataFrame, *, locked_blocks: int = 2) -> d
         result["reason"] = "oos_start_after_oos_end"
         return result
 
-    chronological = bool(starts.iloc[1:].to_numpy(dtype="datetime64[ns]") > starts.iloc[:-1].to_numpy(dtype="datetime64[ns]")).all() if len(starts) > 1 else True
+    chronological = bool((starts.iloc[1:].to_numpy(dtype="datetime64[ns]") > starts.iloc[:-1].to_numpy(dtype="datetime64[ns]")).all()) if len(starts) > 1 else True
     result["chronological"] = chronological
     if not chronological:
         result["reason"] = "oos_blocks_not_strictly_chronological"
         return result
 
-    non_overlapping = bool(starts.iloc[1:].to_numpy(dtype="datetime64[ns]") > ends.iloc[:-1].to_numpy(dtype="datetime64[ns]")).all() if len(starts) > 1 else True
+    non_overlapping = bool((starts.iloc[1:].to_numpy(dtype="datetime64[ns]") > ends.iloc[:-1].to_numpy(dtype="datetime64[ns]")).all()) if len(starts) > 1 else True
     result["non_overlapping"] = non_overlapping
     if not non_overlapping:
         result["reason"] = "oos_blocks_overlap"
