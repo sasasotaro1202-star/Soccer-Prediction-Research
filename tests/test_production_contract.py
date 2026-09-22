@@ -74,6 +74,14 @@ def test_contract_fails_closed_when_evidence_is_missing(tmp_path):
     assert "audit_gate" in result.failures
 
 
+def test_contract_rejects_insufficient_score_oos_depth(tmp_path):
+    _minimal_passing_artifacts(tmp_path)
+    _write(tmp_path / "score_oos_gate.json", {"status": "PASS", "blocks": 4, "minimum_total_blocks": 5, "rows": 100, "finite_metrics": True})
+    result = evaluate_production_contract(str(tmp_path))
+    assert result.passed is False
+    assert "score_oos_blocks" in result.failures
+
+
 def test_contract_passes_only_with_explicit_success(tmp_path):
     _minimal_passing_artifacts(tmp_path)
     result = write_contract_result(str(tmp_path))
