@@ -84,9 +84,21 @@ def train_and_save_bundle(
         selected_score_method = requested_score_method
 
     score_model = None
+    score_parameters = {}
     if has_score_columns:
         if selected_score_method == "recency":
-            score_model = fit_recency_score_rate_model(d)
+            requested_half_life = float(
+                (score_selection.get("selected_parameters") or {}).get(
+                    "half_life_rows", 800.0
+                )
+            )
+            if not np.isfinite(requested_half_life) or requested_half_life <= 0:
+                raise ValueError("Invalid locked score recency half-life")
+            score_parameters = {"half_life_rows": requested_half_life}
+            score_model = fit_recency_score_rate_model(
+                d,
+                half_life_rows=requested_half_life,
+            )
         elif selected_score_method == "dixon_coles":
             score_model = fit_dixon_coles_model(d)
         else:
@@ -104,6 +116,7 @@ def train_and_save_bundle(
         "fit_end": str(d["kickoff_utc"].max()),
         "selection_source": "chronological_validation_locked_before_final_fit",
         "score_method": selected_score_method,
+        "score_parameters": score_parameters,
         "score_selection": score_selection,
         "score_locked_verification": score_locked_gate,
         **({"score_model": score_model} if score_model is not None else {}),
