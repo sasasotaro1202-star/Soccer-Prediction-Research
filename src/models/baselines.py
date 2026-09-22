@@ -53,6 +53,42 @@ class EloLogisticClassifier:
             raise ValueError("Elo candidate produced an invalid probability row")
         return out / row_sum
 
+
+class RecencyLogisticClassifier:
+    """Logistic candidate with monotone recency weighting inside each fit slice."""
+
+    def __init__(self, random_state: int = 42, half_life_rows: float = 600.0):
+        self.random_state = random_state
+        self.half_life_rows = max(float(half_life_rows), 1.0)
+        self.model = Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scale", StandardScaler()),
+            ("model", LogisticRegression(max_iter=2000, C=0.75, random_state=random_state)),
+        ])
+        self.classes_ = np.array([0, 1, 2], dtype=int)
+
+    def fit(self, X, y):
+        yv = np.asarray(y, dtype=int)
+        n = len(yv)
+        positions = np.arange(n, dtype=float)
+        weights = np.exp((positions - max(0, n - 1)) / self.half_life_rows)
+        weights = weights / max(float(weights.mean()), 1e-12)
+        self.model.fit(X, yv, model__sample_weight=weights)
+        self._fitted_classes = np.asarray(getattr(self.model, "classes_", self.classes_), dtype=int)
+        return self
+
+    def predict_proba(self, X):
+        raw = np.asarray(self.model.predict_proba(X), dtype=float)
+        out = np.zeros((len(X), 3), dtype=float)
+        for j, cls in enumerate(self._fitted_classes):
+            cls = int(cls)
+            if cls in (0, 1, 2):
+                out[:, cls] = raw[:, j]
+        row_sum = out.sum(axis=1, keepdims=True)
+        if np.any(row_sum <= 0):
+            raise ValueError("Recency logistic produced an invalid probability row")
+        return out / row_sum
+
 def candidates(random_state: int = 42):
     """Return a compact, diverse and leakage-safe candidate set.
 
@@ -64,6 +100,7 @@ def candidates(random_state: int = 42):
     """
     return {
         "elo_logistic": EloLogisticClassifier(random_state=random_state),
+        "recency_logistic": RecencyLogisticClassifier(random_state=random_state),
         "logistic": Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
             ("scale", StandardScaler()),
