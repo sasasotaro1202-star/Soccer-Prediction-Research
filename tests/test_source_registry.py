@@ -30,6 +30,15 @@ def test_lookup_and_names_are_stable():
     assert "Understat" in source_names()
 
 
+def test_weekly_versioned_footballcsv_source_is_explicitly_pit_capable():
+    source = get_source(
+        "footballcsv/cache.footballdata (weekly versioned Big-5 + Eredivisie 2019-20/2020-21 snapshots)"
+    )
+    assert source.pit_capable is True
+    assert source.auth_required is False
+    assert set(("EPL", "BL1", "LL", "FL1", "SA", "ERE")) <= set(source.primary_for)
+
+
 def test_versioned_serie_a_source_is_explicitly_pit_capable():
     source = get_source("footballcsv/cache.footballdata (versioned Italy 2019-20/2020-21 snapshots)")
     assert source.pit_capable is True
