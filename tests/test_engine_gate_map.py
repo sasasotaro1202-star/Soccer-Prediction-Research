@@ -17,6 +17,7 @@ def _make_artifacts(tmp_path):
     )
     _write_json(tmp_path / "audit_gate.json", {"full_gate_passed": True})
     (tmp_path / "pit_replay_features.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+    (tmp_path / "production_model.pkl").write_bytes(b"bundle")
     (tmp_path / "score_oos_gate.json").write_text(
         json.dumps({"status": "PASS", "blocks": 3, "rows": 6000, "finite_metrics": True}),
         encoding="utf-8",
