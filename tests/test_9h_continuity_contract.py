@@ -16,6 +16,7 @@ def test_autonomous_workflow_has_continuous_9h_cycle_and_strict_concurrency():
     for phase in ("phase1_gate:", "phase2_research:", "phase3_verification:"):
         assert phase in text
     assert "production_provenance.json" in text
+    assert "pit_preflight_manifest.json" in text
     assert 'PIT_OPENFOOTBALL_COUNTRY_MAX_COMMIT_PAGES: "12"' in text
 
 
