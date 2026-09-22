@@ -174,8 +174,11 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
                     failures.append("feature_schema_provenance_mismatch")
             expected_sha = os.getenv("GITHUB_SHA", "").strip()
             recorded_sha = str(registry.get("git_commit_sha", "")).strip()
-            if expected_sha and recorded_sha and recorded_sha != "unknown" and recorded_sha != expected_sha:
-                failures.append("git_commit_provenance_mismatch")
+            if expected_sha:
+                if not recorded_sha or recorded_sha == "unknown":
+                    failures.append("git_commit_provenance_missing")
+                elif recorded_sha != expected_sha:
+                    failures.append("git_commit_provenance_mismatch")
     if str(adoption.get("status", "")).upper() in {"ADOPT", "CHAMPION", "ADOPTED"}:
         score_gate = _read_json(root / "score_oos_gate.json")
         if score_gate.get("status") != "PASS":
