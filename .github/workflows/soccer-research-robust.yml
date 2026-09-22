@@ -33,14 +33,12 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Cache raw soccer data
-        continue-on-error: true
         uses: actions/cache@v5
         with:
           path: data/raw
           key: soccer-raw-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/data/**/*.py', 'src/data/*.py') }}
           restore-keys: soccer-raw-${{ runner.os }}-
       - name: Cache PIT archive evidence
-        continue-on-error: true
         uses: actions/cache@v5
         with:
           path: data/raw/pit_evidence
@@ -174,7 +172,6 @@ jobs:
         run: python -m src.research.production_contract
       - name: Build final health record
         if: always()
-        continue-on-error: true
         run: |
           mkdir -p artifacts
           python - <<'PY'
@@ -187,7 +184,6 @@ jobs:
           PY
       - name: Upload research artifacts
         if: always()
-        continue-on-error: true
         uses: actions/upload-artifact@v6
         with:
           name: soccer-research-robust-${{ github.run_id }}
