@@ -163,6 +163,21 @@ def _routing_context(frame: pd.DataFrame) -> pd.DataFrame:
         labels=["LOW", "MID_LOW", "MID_HIGH", "HIGH"],
     ).astype("string").fillna("MISSING")
 
+    home_draw = pd.to_numeric(
+        d["home_draw_rate_20"] if "home_draw_rate_20" in d.columns else pd.Series(np.nan, index=d.index),
+        errors="coerce",
+    )
+    away_draw = pd.to_numeric(
+        d["away_draw_rate_20"] if "away_draw_rate_20" in d.columns else pd.Series(np.nan, index=d.index),
+        errors="coerce",
+    )
+    draw_env = (home_draw + away_draw) / 2.0
+    d["routing_draw_environment"] = pd.cut(
+        draw_env,
+        bins=[-np.inf, 0.22, 0.28, 0.34, np.inf],
+        labels=["LOW", "MID_LOW", "MID_HIGH", "HIGH"],
+    ).astype("string").fillna("MISSING")
+
     rest_source = (
         d["rest_diff_hours"]
         if "rest_diff_hours" in d.columns
@@ -192,6 +207,8 @@ def _routing_context(frame: pd.DataFrame) -> pd.DataFrame:
         + d["routing_strength_gap"].fillna("MISSING")
         + "|"
         + d["routing_scoring_environment"].fillna("MISSING")
+        + "|"
+        + d["routing_draw_environment"].fillna("MISSING")
         + "|"
         + d["routing_rest"].fillna("MISSING")
         + "|"
