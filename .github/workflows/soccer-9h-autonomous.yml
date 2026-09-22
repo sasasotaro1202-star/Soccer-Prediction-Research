@@ -75,6 +75,7 @@ jobs:
           if [ -f artifacts/completion_gate.json ]; then cp artifacts/completion_gate.json artifacts/9h/phase1/completion_gate.json; fi
           if [ -f artifacts/audit_summary.json ]; then cp artifacts/audit_summary.json artifacts/9h/phase1/audit_summary.json; fi
           if [ -f artifacts/pit_competition_breakdown.json ]; then cp artifacts/pit_competition_breakdown.json artifacts/9h/phase1/pit_competition_breakdown.json; fi
+          if [ -f artifacts/pit_preflight_manifest.json ]; then cp artifacts/pit_preflight_manifest.json artifacts/9h/phase1/pit_preflight_manifest.json; fi
           TARGET_SHA="$(git rev-parse HEAD)"
           printf '{"phase":"phase1_gate","head_sha":"%s","workflow_sha":"%s","completion_step":"${{ steps.completion.outcome }}"}\n' "$TARGET_SHA" "$GITHUB_SHA" > artifacts/9h/phase1/phase_status.json
       - name: Enforce strict completion gate before expensive research
