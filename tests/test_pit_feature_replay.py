@@ -140,11 +140,11 @@ def test_venue_specific_form_is_prior_pit_history_only():
         "kickoff_utc": pd.Timestamp("2025-01-08", tz="UTC"),
         "home_team": "A", "away_team": "B",
     }])
-    features = build_match_features(history, match, windows=(3,))
+    features = build_match_features(history, match, windows=(6,))
     row = features.iloc[0]
-    assert row["home_home_venue_games_3"] == 3.0
-    assert row["home_home_venue_gf_3"] == 2.0
-    assert row["home_home_venue_win_rate_3"] == 1.0
-    assert row["away_away_venue_games_3"] == 3.0
-    assert row["away_away_venue_gf_3"] == 0.0
-    assert row["away_away_venue_win_rate_3"] == 0.0
+    assert row["home_home_venue_games_6"] == 3.0
+    assert row["home_home_venue_gf_6"] == 2.0
+    assert row["home_home_venue_win_rate_6"] == 1.0
+    assert row["away_away_venue_games_6"] == 3.0
+    assert row["away_away_venue_gf_6"] == 0.0
+    assert row["away_away_venue_win_rate_6"] == 0.0
