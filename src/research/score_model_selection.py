@@ -130,6 +130,7 @@ def verify_selected_score_model(
     locked_oos: pd.DataFrame,
     *,
     max_metric_regression: float = 0.02,
+    min_rows_per_block: int = 500,
 ) -> dict[str, Any]:
     """Evaluate the development-selected score method on untouched locked OOS."""
 
@@ -140,6 +141,24 @@ def verify_selected_score_model(
             "status": "HOLD",
             "reason": "Locked OOS is empty",
             "locked_oos_inspected": True,
+        }
+
+    if "n" not in locked_oos.columns:
+        return {
+            "selected_method": "primary",
+            "status": "HOLD",
+            "reason": "Locked OOS block sample sizes are missing",
+            "locked_oos_inspected": True,
+        }
+    locked_block_sizes = pd.to_numeric(locked_oos["n"], errors="coerce")
+    if not locked_block_sizes.notna().all() or (locked_block_sizes < int(min_rows_per_block)).any():
+        return {
+            "selected_method": "primary" if selected != "primary" else selected,
+            "status": "HOLD",
+            "reason": "One or more locked OOS blocks are below the minimum sample size",
+            "locked_oos_inspected": True,
+            "locked_block_rows": [int(x) if pd.notna(x) else None for x in locked_block_sizes.tolist()],
+            "minimum_rows_per_block": int(min_rows_per_block),
         }
 
     required_all = {"n"} | {_col("primary", metric) for metric in METRICS}
@@ -169,6 +188,8 @@ def verify_selected_score_model(
             "reason": "Primary retained with finite untouched locked OOS evidence for score/O-U/BTTS metrics",
             "locked_oos_inspected": True,
             "locked_oos_blocks": int(len(locked_oos)),
+            "locked_block_rows": [int(x) for x in locked_block_sizes.tolist()],
+            "minimum_rows_per_block": int(min_rows_per_block),
             "baseline_metrics": base,
             "selected_metrics": base,
             "relative_deltas": {metric: 0.0 for metric in METRICS},
@@ -253,6 +274,8 @@ def verify_selected_score_model(
         "reason": "Selected challenger survived untouched locked OOS" if passed else "Selected challenger failed locked OOS verification",
         "locked_oos_inspected": True,
         "locked_oos_blocks": int(len(locked_oos)),
+        "locked_block_rows": [int(x) for x in locked_block_sizes.tolist()],
+        "minimum_rows_per_block": int(min_rows_per_block),
         "baseline_metrics": base,
         "selected_metrics": cand,
         "relative_deltas": relative_deltas,
