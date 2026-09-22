@@ -39,8 +39,8 @@ def run_with_retries() -> int:
 
     A green GitHub job is not equivalent to a valid research run. In particular,
     a completion-gate artifact cannot override a failed publication-time audit.
-    Operational failures are recorded explicitly while the workflow itself can
-    remain green for reliable scheduled automation.
+    Operational failures are recorded explicitly, and an exhausted engine retry
+    returns a non-zero exit code so GitHub Actions can recover the failed run.
     """
     attempts = max(1, int(os.getenv("RESEARCH_ATTEMPTS", "2")))
     backoff = max(0.0, float(os.getenv("RESEARCH_RETRY_BACKOFF", "15")))
