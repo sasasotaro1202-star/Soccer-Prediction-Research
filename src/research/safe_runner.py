@@ -84,10 +84,10 @@ def run_with_retries() -> int:
                 "completion_gate_passed": bool(gate and gate.get("full_gate_passed", False)),
                 "audit_gate_passed": bool(audit_gate and audit_gate.get("full_gate_passed", False)),
             },
-            "runner": {"status": "SKIPPED_AFTER_PREFLIGHT_FAILURE"},
+            "runner": {"status": "SKIPPED_AFTER_PREFLIGHT_FAILURE", "exit_code": 1},
             "oos_claimed": False,
         })
-        return 0
+        return 1
 
     errors: list[str] = []
     from src.research.engine import run
