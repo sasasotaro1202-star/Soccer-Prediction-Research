@@ -27,6 +27,7 @@ def test_selector_adopts_recency_from_development_oos():
     result=select_score_model(_frame(True))
     assert result["selected_method"]=="recency"
     assert result["selection_rule"]["locked_oos_inspected"] is False
+    assert result["selection_rule"]["min_development_blocks"] == 3
 
 def test_selector_keeps_primary_when_challenger_is_worse():
     result=select_score_model(_frame(False))
@@ -39,6 +40,36 @@ def test_unavailable_challenger_does_not_block_primary():
     result=select_score_model(frame)
     assert result["selected_method"]=="recency"
     assert result["candidate_records"]["dixon_coles"]["status"]=="UNAVAILABLE"
+
+
+def test_primary_locked_oos_emits_explicit_market_evidence():
+    selection = select_score_model(_frame(True))
+    locked = _frame(True)
+    result = verify_selected_score_model(selection={"selected_method": "primary"}, locked_oos=locked)
+    assert result["status"] == "PASS"
+    assert result["market_metrics_finite"] is True
+    assert result["locked_oos_blocks"] == 3
+    assert result["locked_oos_rows"] == 300
+
+
+def test_primary_locked_oos_rejects_non_finite_btts_evidence():
+    locked = _frame(True)
+    locked.loc[0, "btts_brier"] = float("nan")
+    result = verify_selected_score_model(selection={"selected_method": "primary"}, locked_oos=locked)
+    assert result["status"] == "REJECT"
+    assert result["market_metrics_finite"] is False
+
+
+def test_recency_half_life_is_selected_from_development_oos():
+    frame = _frame(True).copy()
+    for half in (400, 800, 1200, 1600):
+        for metric in ("score_logloss", "over_2_5_logloss", "over_2_5_brier", "btts_logloss", "btts_brier"):
+            frame[f"recency_h{half}_{metric}"] = frame[f"recency_{metric}"]
+        frame[f"recency_h{half}_status"] = ["PASS"] * len(frame)
+    frame["recency_h400_score_logloss"] = [0.90, 0.91, 0.89]
+    result = select_score_model(frame)
+    assert result["selected_method"] == "recency"
+    assert result["selected_parameters"]["half_life_rows"] == 400.0
 
 
 def test_locked_oos_can_confirm_development_selected_recency():
