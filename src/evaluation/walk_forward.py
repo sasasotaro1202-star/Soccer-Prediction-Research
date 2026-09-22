@@ -477,6 +477,17 @@ def _routed_ensemble_proba(
     return probs, routes
 
 
+def _advance_past_same_kickoff(df: pd.DataFrame, index: int) -> int:
+    """Move a row-count boundary past all rows sharing the same kickoff time."""
+    boundary = int(index)
+    if boundary <= 0 or boundary >= len(df):
+        return boundary
+    kickoff = df.iloc[boundary - 1]["kickoff_utc"]
+    while boundary < len(df) and df.iloc[boundary]["kickoff_utc"] == kickoff:
+        boundary += 1
+    return boundary
+
+
 def run_walk_forward(
     df: pd.DataFrame,
     feature_cols: list[str],
@@ -495,9 +506,9 @@ def run_walk_forward(
         raise ValueError(f"Not enough PIT-verified rows: {len(d)}; need at least {min_train + oos_block}")
 
     results, selected = [], []
-    start = min_train
+    start = _advance_past_same_kickoff(d, min_train)
     while start < len(d):
-        oos_end = min(start + oos_block, len(d))
+        oos_end = _advance_past_same_kickoff(d, min(start + oos_block, len(d)))
         train, oos = d.iloc[:start], d.iloc[start:oos_end]
         val_n = min(max(120, int(len(train) * validation_frac)), validation_max, max(120, len(train) - 300))
         fit, validation = train.iloc[:-val_n], train.iloc[-val_n:]
