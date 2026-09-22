@@ -22,6 +22,23 @@ def test_score_model_is_pit_only_and_returns_exactly_three():
     assert len(predict_score_candidates(model, "A", "B")) == 3
     assert all(0 <= x["probability"] <= 1 for x in predict_score_candidates(model, "A", "B"))
 
+def test_neutral_score_path_removes_home_venue_rate_split():
+    history = pd.DataFrame(
+        [
+            {"home_team": "A", "away_team": "B", "home_goals": 4, "away_goals": 0, "pit_verified": True},
+            {"home_team": "B", "away_team": "A", "home_goals": 0, "away_goals": 1, "pit_verified": True},
+            {"home_team": "A", "away_team": "C", "home_goals": 3, "away_goals": 0, "pit_verified": True},
+            {"home_team": "C", "away_team": "B", "home_goals": 0, "away_goals": 2, "pit_verified": True},
+        ]
+    )
+    model = fit_score_rate_model(history)
+    from src.prediction.secondary_outputs import _score_lambdas
+    normal = _score_lambdas(model, "A", "B", "AG_M", neutral_venue=False)
+    neutral = _score_lambdas(model, "A", "B", "AG_M", neutral_venue=True)
+    assert normal != neutral
+    assert all(np.isfinite(x) and x > 0 for x in neutral)
+
+
 def test_score_distribution_retains_low_tail_without_excessive_truncation():
     history = pd.DataFrame(
         [
