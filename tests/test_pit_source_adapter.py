@@ -133,3 +133,31 @@ def test_arquivo_cdx_mapping_error_is_treated_as_no_capture(monkeypatch):
         def json(self): return {"message":"temporarily unavailable"}
     monkeypatch.setattr("src.data.pit_archive_fallback.requests.get", lambda *a, **k: Response())
     assert _captures("https://example.invalid/test.csv", retries=1, timeout=1) == []
+
+
+def test_snapshot_retries_exact_capture_original_url_fallback(tmp_path, monkeypatch):
+    csv = b"Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\n01/09/25,Team A,Team B,2,1,H\n"
+    calls = []
+
+    class Response:
+        content = csv
+        def raise_for_status(self):
+            return None
+
+    def fake_get(url, *args, **kwargs):
+        calls.append(url)
+        if len(calls) == 1:
+            raise __import__("requests").RequestException("primary replay unavailable")
+        return Response()
+
+    adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path), snapshot_retries=1)
+    monkeypatch.setattr("src.data.pit_source_adapter_fast.requests.get", fake_get)
+    capture = {
+        "timestamp": "20250902200000",
+        "digest": "digest-a",
+        "original": "https://example.invalid/canonical.csv",
+    }
+    diag = adapter._load_snapshot_keys(capture, "https://example.invalid/test.csv")
+    assert diag.status == "SNAPSHOT_PARSED"
+    assert len(calls) == 2
+    assert "canonical.csv" in calls[1]
