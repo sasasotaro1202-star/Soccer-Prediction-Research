@@ -8,6 +8,7 @@ from scipy.optimize import minimize, minimize_scalar
 
 from src.evaluation.metrics import classification_metrics
 from src.models.baselines import candidates
+from src.prediction.context_router import lookup_context_weights as _lookup_context_weights, routing_context as _routing_context, temperature_transform as _temperature_transform
 
 TARGET_ACCURACY = 0.80
 
@@ -104,14 +105,6 @@ def _weighted_metric(parts: list[tuple[dict, int]], key: str) -> float:
     return float(sum(float(metric[key]) * n for metric, n in parts) / total)
 
 
-def _temperature_transform(proba: np.ndarray, temperature: float) -> np.ndarray:
-    p = np.clip(np.asarray(proba, dtype=float), 1e-9, 1.0)
-    logits = np.log(p) / float(temperature)
-    logits -= logits.max(axis=1, keepdims=True)
-    out = np.exp(logits)
-    return out / out.sum(axis=1, keepdims=True)
-
-
 def _fit_temperature(y: pd.Series, proba: np.ndarray) -> tuple[float, bool]:
     """Fit one bounded temperature using strictly out-of-fit validation predictions."""
     yv = np.asarray(y, dtype=int)
@@ -200,89 +193,6 @@ def _validation_score(model, val: pd.DataFrame, feature_cols: list[str]) -> dict
     metrics = classification_metrics(val.target.astype(int), model.predict_proba(val[feature_cols]))
     return {k: metrics[k] for k in ("logloss", "accuracy", "brier", "rps", "ece")}
 
-def _routing_context(frame: pd.DataFrame) -> pd.DataFrame:
-    """Derive low-cardinality prediction-time context bins without using outcomes."""
-    d = frame.copy()
-
-    if "elo_diff" in d.columns:
-        elo = pd.to_numeric(d["elo_diff"], errors="coerce")
-        d["routing_strength_gap"] = pd.cut(
-            elo,
-            bins=[-np.inf, -200.0, -75.0, 75.0, 200.0, np.inf],
-            labels=["LARGE_AWAY", "AWAY", "EVEN", "HOME", "LARGE_HOME"],
-        ).astype("string")
-    else:
-        d["routing_strength_gap"] = "MISSING"
-
-    home_goal = pd.to_numeric(
-        d["home_goal_total_avg_5"] if "home_goal_total_avg_5" in d.columns else pd.Series(np.nan, index=d.index),
-        errors="coerce",
-    )
-    away_goal = pd.to_numeric(
-        d["away_goal_total_avg_5"] if "away_goal_total_avg_5" in d.columns else pd.Series(np.nan, index=d.index),
-        errors="coerce",
-    )
-    goal_env = (home_goal + away_goal) / 2.0
-    d["routing_scoring_environment"] = pd.cut(
-        goal_env,
-        bins=[-np.inf, 1.8, 2.3, 2.8, np.inf],
-        labels=["LOW", "MID_LOW", "MID_HIGH", "HIGH"],
-    ).astype("string").fillna("MISSING")
-
-    home_draw = pd.to_numeric(
-        d["home_draw_rate_20"] if "home_draw_rate_20" in d.columns else pd.Series(np.nan, index=d.index),
-        errors="coerce",
-    )
-    away_draw = pd.to_numeric(
-        d["away_draw_rate_20"] if "away_draw_rate_20" in d.columns else pd.Series(np.nan, index=d.index),
-        errors="coerce",
-    )
-    draw_env = (home_draw + away_draw) / 2.0
-    d["routing_draw_environment"] = pd.cut(
-        draw_env,
-        bins=[-np.inf, 0.22, 0.28, 0.34, np.inf],
-        labels=["LOW", "MID_LOW", "MID_HIGH", "HIGH"],
-    ).astype("string").fillna("MISSING")
-
-    rest_source = (
-        d["rest_diff_hours"]
-        if "rest_diff_hours" in d.columns
-        else pd.Series(np.nan, index=d.index, dtype=float)
-    )
-    rest = pd.to_numeric(rest_source, errors="coerce")
-    d["routing_rest"] = pd.cut(
-        rest,
-        bins=[-np.inf, -24.0, -6.0, 6.0, 24.0, np.inf],
-        labels=["AWAY_MAJOR", "AWAY_SMALL", "EVEN", "HOME_SMALL", "HOME_MAJOR"],
-    ).astype("string").fillna("MISSING")
-
-    if "neutral_venue_known" in d.columns:
-        known = d["neutral_venue_known"].astype("boolean")
-        neutral = d.get("neutral_venue", pd.Series(False, index=d.index)).astype("boolean")
-        d["routing_venue"] = np.where(
-            known.fillna(False),
-            np.where(neutral.fillna(False), "NEUTRAL", "HOME_AWAY"),
-            "UNKNOWN",
-        )
-    else:
-        d["routing_venue"] = "UNKNOWN"
-
-    d["routing_context"] = (
-        d.get("competition", pd.Series("__MISSING__", index=d.index)).astype("string").fillna("__MISSING__")
-        + "|"
-        + d["routing_strength_gap"].fillna("MISSING")
-        + "|"
-        + d["routing_scoring_environment"].fillna("MISSING")
-        + "|"
-        + d["routing_draw_environment"].fillna("MISSING")
-        + "|"
-        + d["routing_rest"].fillna("MISSING")
-        + "|"
-        + d["routing_venue"].astype("string")
-    )
-    return d
-
-
 
 def _context_keys(frame: pd.DataFrame) -> list[tuple[str, pd.Series]]:
     """Return routing keys from most specific to broadest granularity."""
@@ -316,37 +226,6 @@ def _context_keys(frame: pd.DataFrame) -> list[tuple[str, pd.Series]]:
     if "competition" in d.columns:
         levels.append(("COMP", d["competition"].astype("string").fillna("__MISSING__")))
     return levels
-
-
-def _lookup_context_weights(
-    row: pd.Series,
-    context_weights: dict[str, dict[str, float]],
-    fallback: dict[str, float],
-) -> tuple[dict[str, float], str]:
-    """Resolve the most specific learned context, then safely fall back."""
-    if "routing_context" in row.index:
-        full = str(row.get("routing_context", ""))
-        comp = str(row.get("competition", "__MISSING__"))
-        strength = str(row.get("routing_strength_gap", "MISSING"))
-        draw_env = str(row.get("routing_draw_environment", "MISSING"))
-    else:
-        routed = _routing_context(pd.DataFrame([row])).iloc[0]
-        full = str(routed.get("routing_context", ""))
-        comp = str(routed.get("competition", "__MISSING__"))
-        strength = str(routed.get("routing_strength_gap", "MISSING"))
-        draw_env = str(routed.get("routing_draw_environment", "MISSING"))
-    keys = [
-        ("FULL", full),
-        ("COMP_STRENGTH_DRAW", f"{comp}|{strength}|{draw_env}"),
-        ("COMP_DRAW", f"{comp}|{draw_env}"),
-        ("COMP_STRENGTH", f"{comp}|{strength}"),
-        ("COMP", comp),
-    ]
-    for level, key in keys:
-        learned = context_weights.get(f"{level}:{key}")
-        if learned is not None:
-            return learned, f"{level}:{key}"
-    return fallback, "GLOBAL"
 
 
 def _contextual_blend_weights(
