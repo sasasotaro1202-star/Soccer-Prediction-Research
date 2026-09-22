@@ -171,6 +171,18 @@ SOCCER_SOURCES: Final[tuple[SourceSpec, ...]] = (
         notes="Official Page/Graph access only. Treat post publication/backdating/editing and historical retrieval as PIT-critical; no production use until verified.",
     ),
     SourceSpec(
+        name="ewalldo/Japan-J1-League-Data-and-Data-Analysis (versioned J1 2020 snapshot)",
+        kind="github_versioned_dataset",
+        role="j1_2020_historical_pit_evidence",
+        fields=("fixtures", "results", "scores"),
+        historical=True,
+        pit_capable=True,
+        live_capable=False,
+        auth_required=False,
+        primary_for=("J1",),
+        notes="Audit-only third-party dataset. PIT is accepted only from an immutable commit timestamp at/after the conservative result lower bound with unique exact result identity; no current HEAD inference.",
+    ),
+    SourceSpec(
         name="J.League Data Site",
         kind="official_web",
         role="j1_j2_j3_fixtures_results_tables_players",
