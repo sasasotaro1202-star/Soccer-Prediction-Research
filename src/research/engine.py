@@ -105,6 +105,94 @@ def _write_status(out: Path, report: dict) -> None:
     (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
 
 
+def _build_research_gates(
+    out: Path,
+    *,
+    history_nonempty: bool,
+    pit_verified: int,
+    wf: pd.DataFrame,
+    development_oos: pd.DataFrame,
+    locked_oos: pd.DataFrame,
+    selections: pd.DataFrame,
+    stability: dict,
+    adoption: dict,
+    model_bundle: dict | None,
+    audit_report: dict,
+) -> dict[str, bool]:
+    """Build the exact gate map consumed by the fail-closed production contract."""
+    completion = {}
+    audit_gate = {}
+    try:
+        completion = json.loads((out / "completion_gate.json").read_text(encoding="utf-8"))
+    except Exception:
+        completion = {}
+    try:
+        audit_gate = json.loads((out / "audit_gate.json").read_text(encoding="utf-8"))
+    except Exception:
+        audit_gate = {}
+
+    required_artifacts = (
+        "oos_metrics.csv",
+        "model_selection.csv",
+        "development_oos_metrics.csv",
+        "locked_oos_metrics.csv",
+        "score_oos_metrics.csv",
+        "score_oos_gate.json",
+        "score_model_selection.json",
+        "score_locked_gate.json",
+        "candidate_lock.json",
+        "adoption_decision.json",
+    )
+    artifacts_present = all((out / name).is_file() and (out / name).stat().st_size > 0 for name in required_artifacts)
+
+    data_ok = bool(history_nonempty and pit_verified > 0)
+    schema_ok = bool(audit_report.get("audit_execution_ok") is True and audit_gate.get("full_gate_passed") is True)
+    leakage_ok = bool(
+        completion.get("full_gate_passed") is True
+        and completion.get("pit_publication_time_gate") is True
+        and pit_verified > 0
+    )
+    features_ok = bool((out / "pit_replay_features.csv").is_file() and (out / "pit_replay_features.csv").stat().st_size > 0)
+    training_ok = bool(not selections.empty and all(isinstance(x, dict) for x in selections.to_dict(orient="records")))
+    backtest_ok = bool(not wf.empty)
+    score_oos_gate = json.loads((out / "score_oos_gate.json").read_text(encoding="utf-8")) if (out / "score_oos_gate.json").exists() else {}
+    score_locked_gate = json.loads((out / "score_locked_gate.json").read_text(encoding="utf-8")) if (out / "score_locked_gate.json").exists() else {}
+    oos_ok = bool(
+        len(wf) >= 3
+        and len(development_oos) >= 1
+        and len(locked_oos) == 2
+        and score_oos_gate.get("status") == "PASS"
+        and int(score_oos_gate.get("blocks", 0)) >= 3
+        and score_oos_gate.get("finite_metrics") is True
+        and score_locked_gate.get("status") == "PASS"
+    )
+    prediction_ok = bool(
+        str(adoption.get("status", "")).upper() == "ADOPT"
+        and isinstance(model_bundle, dict)
+        and model_bundle.get("status") != "ERROR"
+        and (out / "production_model.pkl").is_file()
+        and (out / "production_model.pkl").stat().st_size > 0
+    )
+    sanity_ok = bool(
+        stability.get("status") == "PASS"
+        and np.isfinite(pd.to_numeric(wf.get("logloss"), errors="coerce")).all()
+        and np.isfinite(pd.to_numeric(wf.get("brier"), errors="coerce")).all()
+    )
+
+    return {
+        "data": data_ok,
+        "schema": schema_ok,
+        "leakage": leakage_ok,
+        "features": features_ok,
+        "training": training_ok,
+        "backtest": backtest_ok,
+        "oos": oos_ok,
+        "prediction": prediction_ok,
+        "sanity": sanity_ok,
+        "artifact": artifacts_present,
+    }
+
+
 def run(out_dir: str = "artifacts") -> dict:
     out = Path(out_dir); out.mkdir(parents=True, exist_ok=True); _write_source_registry(out)
     try:
@@ -256,7 +344,56 @@ def run(out_dir: str = "artifacts") -> dict:
             (out / "production_model.json").write_text(json.dumps(model_bundle, indent=2, ensure_ascii=False), encoding="utf-8")
     oos_n = int(wf["n"].sum()) if "n" in wf.columns else 0; oos_acc = float(np.average(wf["accuracy"], weights=wf["n"])) if oos_n else float("nan")
     locked_n = int(locked["n"].sum()); locked_acc = float(np.average(locked["accuracy"], weights=locked["n"])) if locked_n else float("nan")
-    report = {"status": "OK", "snapshot_id": snapshot_id(history), "oos": wf.mean(numeric_only=True).to_dict(), "score_oos": score_oos.mean(numeric_only=True).to_dict() if not score_oos.empty else {}, "score_oos_status": score_oos_status, "coverage": coverage.to_dict(orient="records"), "archive_audit": archive_audit, "pit_policy": PIT_POLICY, "pit_verified_rows": pit_verified, "pit_total_rows": pit_total, "pit_verified_rate": float(pit_verified / pit_total) if pit_total else 0.0, "oos_protocol": {"development_blocks": int(len(development_oos)), "locked_blocks": 2, "locked_oos_untouched": True, "selection_source": "historical_validation_only"}, "stability_gate": stability, "accuracy_target": {"target_accuracy": TARGET_ACCURACY, "locked_oos_accuracy": locked_acc, "weighted_oos_accuracy": oos_acc, "target_met": bool(locked_acc >= TARGET_ACCURACY) if locked_n else False, "target_gap": float(locked_acc - TARGET_ACCURACY) if locked_n else float("nan"), "oos_sample_size": oos_n, "locked_oos_sample_size": locked_n}, "adoption": adoption, "production_model": "calibrated_ensemble" if adoption.get("status") == "ADOPT" else "baseline_logistic", "production_model_bundle": model_bundle, "audit": audit_report, "ai_research": weakness_advice(wf.mean(numeric_only=True).to_dict())}
+    gates = _build_research_gates(
+        out,
+        history_nonempty=not history.empty,
+        pit_verified=pit_verified,
+        wf=wf,
+        development_oos=development_oos,
+        locked_oos=locked,
+        selections=selections,
+        stability=stability,
+        adoption=adoption,
+        model_bundle=model_bundle,
+        audit_report=audit_report,
+    )
+    oos_claimed = bool(gates["oos"])
+    report = {
+        "status": "OK" if oos_claimed else "DEGRADED",
+        "snapshot_id": snapshot_id(history),
+        "oos": wf.mean(numeric_only=True).to_dict(),
+        "score_oos": score_oos.mean(numeric_only=True).to_dict() if not score_oos.empty else {},
+        "score_oos_status": score_oos_status,
+        "coverage": coverage.to_dict(orient="records"),
+        "archive_audit": archive_audit,
+        "pit_policy": PIT_POLICY,
+        "pit_verified_rows": pit_verified,
+        "pit_total_rows": pit_total,
+        "pit_verified_rate": float(pit_verified / pit_total) if pit_total else 0.0,
+        "oos_protocol": {
+            "development_blocks": int(len(development_oos)),
+            "locked_blocks": 2,
+            "locked_oos_untouched": True,
+            "selection_source": "historical_validation_only",
+        },
+        "stability_gate": stability,
+        "accuracy_target": {
+            "target_accuracy": TARGET_ACCURACY,
+            "locked_oos_accuracy": locked_acc,
+            "weighted_oos_accuracy": oos_acc,
+            "target_met": bool(locked_acc >= TARGET_ACCURACY) if locked_n else False,
+            "target_gap": float(locked_acc - TARGET_ACCURACY) if locked_n else float("nan"),
+            "oos_sample_size": oos_n,
+            "locked_oos_sample_size": locked_n,
+        },
+        "adoption": adoption,
+        "production_model": "calibrated_ensemble" if adoption.get("status") == "ADOPT" else "baseline_logistic",
+        "production_model_bundle": model_bundle,
+        "audit": audit_report,
+        "gates": gates,
+        "oos_claimed": oos_claimed,
+        "ai_research": weakness_advice(wf.mean(numeric_only=True).to_dict()),
+    }
     _write_status(out, report); return report
 
 
