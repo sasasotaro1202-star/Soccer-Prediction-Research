@@ -1,10 +1,6 @@
 name: Soccer 9H Autonomous Research
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/soccer-9h-autonomous.yml"
   workflow_dispatch:
   schedule:
     - cron: "15 0,8,16 * * *"
