@@ -152,6 +152,27 @@ def test_recency_score_model_is_order_sensitive_and_pit_only():
     assert recent_mean < 3.1
 
 
+def test_dixon_coles_dispatch_respects_neutral_venue():
+    history = pd.DataFrame(
+        [
+            {"home_team": "A", "away_team": "B", "home_goals": 4, "away_goals": 0, "kickoff_utc": "2025-01-01", "pit_verified": True},
+            {"home_team": "B", "away_team": "A", "home_goals": 0, "away_goals": 1, "kickoff_utc": "2025-01-02", "pit_verified": True},
+            {"home_team": "A", "away_team": "C", "home_goals": 3, "away_goals": 0, "kickoff_utc": "2025-01-03", "pit_verified": True},
+            {"home_team": "C", "away_team": "B", "home_goals": 0, "away_goals": 2, "kickoff_utc": "2025-01-04", "pit_verified": True},
+        ]
+    )
+    from src.models.dixon_coles import fit_dixon_coles_model
+    from src.prediction.secondary_outputs import _score_lambdas
+    model = fit_dixon_coles_model(history)
+    base = model["base_model"]
+    normal = _score_lambdas(base, "A", "B", "AG_M", neutral_venue=False)
+    neutral = _score_lambdas(base, "A", "B", "AG_M", neutral_venue=True)
+    assert normal != neutral
+    dist = predict_score_distribution(model, "A", "B", "AG_M", max_goals=5, neutral_venue=True)
+    assert len(dist) == 36
+    assert abs(sum(p for _, _, p in dist) - 1.0) < 1e-9
+
+
 def test_score_distribution_dispatches_dixon_coles_method():
     history = pd.DataFrame(
         [
