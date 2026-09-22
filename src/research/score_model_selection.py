@@ -107,22 +107,59 @@ def verify_selected_score_model(
     max_metric_regression: float = 0.02,
 ) -> dict[str, Any]:
     """Evaluate the development-selected score method on untouched locked OOS."""
+
     selected = str(selection.get("selected_method", "primary"))
     if locked_oos.empty:
-        return {"selected_method": selected, "status": "HOLD", "reason": "Locked OOS is empty", "locked_oos_inspected": True}
+        return {
+            "selected_method": selected,
+            "status": "HOLD",
+            "reason": "Locked OOS is empty",
+            "locked_oos_inspected": True,
+        }
+
+    required_all = {"n"} | {_col("primary", metric) for metric in METRICS}
+    if not required_all.issubset(locked_oos.columns):
+        return {
+            "selected_method": "primary" if selected != "primary" else selected,
+            "status": "REJECT",
+            "reason": "Locked OOS score metrics are incomplete",
+            "locked_oos_inspected": True,
+            "missing_columns": sorted(required_all - set(locked_oos.columns)),
+        }
+
+    base = _summary(locked_oos, "primary")
+    if not all(np.isfinite(base[m]) for m in METRICS):
+        return {
+            "selected_method": "primary",
+            "status": "REJECT",
+            "reason": "Primary locked OOS metric is non-finite",
+            "locked_oos_inspected": True,
+            "baseline_metrics": base,
+        }
+
     if selected == "primary":
         return {
             "selected_method": "primary",
             "status": "PASS",
-            "reason": "Primary score method retained; no challenger promotion required",
+            "reason": "Primary retained with finite untouched locked OOS evidence for score/O-U/BTTS metrics",
             "locked_oos_inspected": True,
+            "locked_oos_blocks": int(len(locked_oos)),
+            "baseline_metrics": base,
+            "selected_metrics": base,
+            "relative_deltas": {metric: 0.0 for metric in METRICS},
+            "checks": {
+                "all_required_locked_metrics_finite": True,
+                "primary_self_consistent": True,
+            },
         }
+
     if selected not in METHODS[1:]:
         return {
             "selected_method": "primary",
             "status": "REJECT",
             "reason": f"Unknown selected score method: {selected}",
             "locked_oos_inspected": True,
+            "baseline_metrics": base,
         }
 
     required = {"n"} | {_col(selected, metric) for metric in METRICS}
@@ -130,8 +167,9 @@ def verify_selected_score_model(
         return {
             "selected_method": "primary",
             "status": "REJECT",
-            "reason": "Locked OOS score metrics are incomplete",
+            "reason": "Selected challenger locked OOS metrics are incomplete",
             "locked_oos_inspected": True,
+            "missing_columns": sorted(required - set(locked_oos.columns)),
         }
 
     status_col = "recency_status" if selected == "recency" else "dc_status"
@@ -141,9 +179,9 @@ def verify_selected_score_model(
             "status": "REJECT",
             "reason": f"{selected} is unavailable on locked OOS",
             "locked_oos_inspected": True,
+            "baseline_metrics": base,
         }
 
-    base = _summary(locked_oos, "primary")
     cand = _summary(locked_oos, selected)
     if not all(np.isfinite(base[m]) and np.isfinite(cand[m]) for m in METRICS):
         return {
@@ -151,6 +189,8 @@ def verify_selected_score_model(
             "status": "REJECT",
             "reason": "Non-finite locked OOS metric",
             "locked_oos_inspected": True,
+            "baseline_metrics": base,
+            "selected_metrics": cand,
         }
 
     relative_deltas = {
@@ -187,6 +227,7 @@ def verify_selected_score_model(
         "selected_metrics": cand,
         "relative_deltas": relative_deltas,
         "checks": {
+            "all_required_locked_metrics_finite": True,
             "overall_score_logloss_not_worse": overall_score_ok,
             "secondary_metrics_not_materially_worse": secondary_ok,
             "block_level_score_logloss_not_materially_worse": blocks_ok,
