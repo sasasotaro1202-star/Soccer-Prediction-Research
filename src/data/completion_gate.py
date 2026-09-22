@@ -317,6 +317,47 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
         and pit["verified_competitions"] >= 5
     )
 
+    # Keep PIT provenance separate from the completion decision so a blocked run
+    # still leaves a machine-readable explanation of which evidence paths ran,
+    # what they contributed, and where they failed. This artifact is diagnostic;
+    # it never relaxes the strict gate.
+    pit_manifest = {
+        "schema_version": 1,
+        "fail_closed": True,
+        "gate": {
+            "verified_rows_min": 7000,
+            "verified_rate_min": 0.25,
+            "verified_competitions_min": 5,
+            "passed": bool(pit_gate),
+        },
+        "execution": {
+            "preflight_error": pit_preflight_error,
+            "rows": int(pit.get("rows", 0)),
+            "pit_verified_rows": int(pit.get("pit_verified_rows", 0)),
+            "pit_verified_rate": float(pit.get("pit_verified_rate", 0.0)),
+            "verified_competitions": int(pit.get("verified_competitions", 0)),
+        },
+        "providers": {
+            "football_data_wayback_verified_or_enriched": int(pit.get("archive_enriched_rows", 0)),
+            "arquivo_fallback_verified_or_enriched": int(pit.get("arquivo_fallback_enriched_rows", 0)),
+            "engsoccerdata_snapshot_verified": int(pit.get("engsoccerdata_snapshot_verified_rows", 0)),
+            "country_openfootball_verified": int(pit.get("country_openfootball_verified_rows", 0)),
+            "jleague_2020_github_verified": int(pit.get("jleague_2020_github_verified_rows", 0)),
+            "openfootball_verified": int(pit.get("openfootball_verified_rows", 0)),
+            "versioned_openfootball_verified": int(pit.get("versioned_openfootball_verified_rows", 0)),
+        },
+        "errors": {
+            "country_openfootball": pit.get("country_openfootball_error"),
+            "jleague_2020_github": pit.get("jleague_2020_github_error"),
+            "engsoccerdata_snapshot": pit.get("engsoccerdata_snapshot_error"),
+        },
+        "competition_breakdown": pit.get("pit_competition_breakdown", {}),
+    }
+    (root / "pit_preflight_manifest.json").write_text(
+        json.dumps(pit_manifest, indent=2, ensure_ascii=False, default=str),
+        encoding="utf-8",
+    )
+
     technical_audit_ok = not acquisition.empty and len(matrix) == len(expected) + len(NON_APPLICABLE_CELLS)
     accounting_ok = accounted_cells == len(matrix)
     full_gate_passed = bool(
@@ -357,6 +398,11 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
         "pit_competition_breakdown": pit.get("pit_competition_breakdown", {}),
         "pit_evidence_status_breakdown": pit.get("pit_evidence_status_breakdown", {}),
         "pit_publication_time_gate": pit_gate,
+        "pit_preflight_error": pit_preflight_error,
+        "jleague_2020_github_error": pit.get("jleague_2020_github_error"),
+        "country_openfootball_error": pit.get("country_openfootball_error"),
+        "engsoccerdata_snapshot_error": pit.get("engsoccerdata_snapshot_error"),
+        "pit_manifest_artifact": "pit_preflight_manifest.json",
         "no_missing_to_zero": True,
         "full_gate_passed": full_gate_passed,
         "blocking_reasons": [],
