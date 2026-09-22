@@ -120,7 +120,7 @@ def fit_time_decay_score_rate_model(
     required = {"kickoff_utc", "home_team", "away_team", "home_goals", "away_goals", "pit_verified"}
     missing = sorted(required - set(history.columns))
     if missing:
-        raise ValueError(f"Recency score training data missing columns: {missing}")
+        raise ValueError(f"Time-decay score training data missing columns: {missing}")
     d = history.loc[history["pit_verified"] == True].copy()
     d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
     d["home_goals"] = pd.to_numeric(d["home_goals"], errors="coerce")
