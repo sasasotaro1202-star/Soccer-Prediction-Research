@@ -93,7 +93,11 @@ def test_bundle_persists_selected_recency_half_life(tmp_path):
             "selected_method": "recency",
             "selected_parameters": {"half_life_days": 400.0},
         },
-        score_locked_gate={"selected_method": "recency", "status": "PASS"},
+        score_locked_gate={
+            "selected_method": "recency",
+            "status": "PASS",
+            "selected_parameters": {"half_life_days": 400.0},
+        },
     )
     bundle = load_bundle(str(path))
     assert bundle["score_method"] == "recency"
