@@ -11,6 +11,7 @@ def _rows(n=24):
             {
                 "match_id": f"m{i}",
                 "kickoff_utc": kickoff,
+                "source_available_at_utc": kickoff + pd.Timedelta(hours=2),
                 "home_team": "A" if i % 2 == 0 else "B",
                 "away_team": "B" if i % 2 == 0 else "A",
                 "home_goals": 1 if i % 3 else 2,
@@ -40,3 +41,13 @@ def test_score_walk_forward_produces_multiple_pit_safe_blocks():
         "btts_brier",
     ):
         assert result[col].notna().all()
+
+
+def test_score_walk_forward_requires_result_publication_time():
+    frame = _rows(24).drop(columns=["source_available_at_utc"])
+    try:
+        run_score_walk_forward(frame, min_train=10, oos_block=5)
+    except ValueError as exc:
+        assert "source_available_at_utc" in str(exc)
+    else:
+        raise AssertionError("score OOS must fail closed without publication-time evidence")
