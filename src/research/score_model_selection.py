@@ -97,3 +97,98 @@ def select_score_model(
             "min_improvement_share": min_improvement_share,
         },
     }
+
+
+
+def verify_selected_score_model(
+    selection: dict[str, Any],
+    locked_oos: pd.DataFrame,
+    *,
+    max_metric_regression: float = 0.02,
+) -> dict[str, Any]:
+    """Evaluate the development-selected score method on untouched locked OOS."""
+    selected = str(selection.get("selected_method", "primary"))
+    if locked_oos.empty:
+        return {"selected_method": selected, "status": "HOLD", "reason": "Locked OOS is empty", "locked_oos_inspected": True}
+    if selected == "primary":
+        return {
+            "selected_method": "primary",
+            "status": "PASS",
+            "reason": "Primary score method retained; no challenger promotion required",
+            "locked_oos_inspected": True,
+        }
+    if selected not in METHODS[1:]:
+        return {
+            "selected_method": "primary",
+            "status": "REJECT",
+            "reason": f"Unknown selected score method: {selected}",
+            "locked_oos_inspected": True,
+        }
+
+    required = {"n", "score_logloss", *_col(selected, metric) for metric in METRICS}
+    if not required.issubset(locked_oos.columns):
+        return {
+            "selected_method": "primary",
+            "status": "REJECT",
+            "reason": "Locked OOS score metrics are incomplete",
+            "locked_oos_inspected": True,
+        }
+
+    status_col = "recency_status" if selected == "recency" else "dc_status"
+    if status_col in locked_oos.columns and not locked_oos[status_col].astype(str).eq("PASS").all():
+        return {
+            "selected_method": "primary",
+            "status": "REJECT",
+            "reason": f"{selected} is unavailable on locked OOS",
+            "locked_oos_inspected": True,
+        }
+
+    base = _summary(locked_oos, "primary")
+    cand = _summary(locked_oos, selected)
+    if not all(np.isfinite(base[m]) and np.isfinite(cand[m]) for m in METRICS):
+        return {
+            "selected_method": "primary",
+            "status": "REJECT",
+            "reason": "Non-finite locked OOS metric",
+            "locked_oos_inspected": True,
+        }
+
+    relative_deltas = {
+        m: float((cand[m] - base[m]) / max(abs(base[m]), 1e-9))
+        for m in METRICS
+    }
+    block_ok = []
+    for _, row in locked_oos.iterrows():
+        bp = pd.to_numeric(row["score_logloss"], errors="coerce")
+        cp = pd.to_numeric(row[_col(selected, "score_logloss")], errors="coerce")
+        block_ok.append(
+            bool(
+                np.isfinite(bp)
+                and np.isfinite(cp)
+                and cp <= bp * (1.0 + float(max_metric_regression))
+            )
+        )
+    overall_score_ok = relative_deltas["score_logloss"] <= 0.0
+    secondary_ok = all(
+        relative_deltas[m] <= float(max_metric_regression)
+        for m in METRICS
+        if m != "score_logloss"
+    )
+    blocks_ok = bool(block_ok) and all(block_ok)
+    passed = bool(overall_score_ok and secondary_ok and blocks_ok)
+
+    return {
+        "selected_method": selected if passed else "primary",
+        "status": "PASS" if passed else "REJECT",
+        "reason": "Selected challenger survived untouched locked OOS" if passed else "Selected challenger failed locked OOS verification",
+        "locked_oos_inspected": True,
+        "locked_oos_blocks": int(len(locked_oos)),
+        "baseline_metrics": base,
+        "selected_metrics": cand,
+        "relative_deltas": relative_deltas,
+        "checks": {
+            "overall_score_logloss_not_worse": overall_score_ok,
+            "secondary_metrics_not_materially_worse": secondary_ok,
+            "block_level_score_logloss_not_materially_worse": blocks_ok,
+        },
+    }
