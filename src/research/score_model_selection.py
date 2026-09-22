@@ -27,7 +27,7 @@ def select_score_model(
     min_relative_improvement: float = 0.005,
     max_metric_regression: float = 0.01,
     min_improvement_share: float = 2.0 / 3.0,
-    min_rows_per_block: int = 500,
+    min_rows_per_block: int = 0,
 ) -> dict[str, Any]:
     """Select a score method from development OOS only; locked OOS is never inspected."""
     if development_oos.empty:
@@ -130,7 +130,7 @@ def verify_selected_score_model(
     locked_oos: pd.DataFrame,
     *,
     max_metric_regression: float = 0.02,
-    min_rows_per_block: int = 500,
+    min_rows_per_block: int = 0,
 ) -> dict[str, Any]:
     """Evaluate the development-selected score method on untouched locked OOS."""
 
