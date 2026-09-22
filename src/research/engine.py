@@ -200,9 +200,14 @@ def run(out_dir: str = "artifacts") -> dict:
     adoption = adoption_decision(baseline, candidate, development_oos=development_oos, min_accuracy=TARGET_ACCURACY)
     adoption["external_stability_gate"] = stability
     adoption["score_locked_gate"] = score_locked_gate
-    if adoption.get("status") == "ADOPT" and score_locked_gate.get("status") != "PASS":
+    score_selection_valid = score_selection.get("status") in {"KEEP_PRIMARY", "ADOPT_CANDIDATE"}
+    if adoption.get("status") == "ADOPT" and (
+        score_oos_status.get("status") != "PASS"
+        or not score_selection_valid
+        or score_locked_gate.get("status") != "PASS"
+    ):
         adoption["status"] = "REJECT"
-        adoption["reason"] = "1X2 adoption passed, but Score/O-U/BTTS locked evidence did not pass"
+        adoption["reason"] = "1X2 adoption passed, but Score development/locked evidence did not pass"
     (out / "adoption_decision.json").write_text(json.dumps(adoption, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     model_bundle = None
     if adoption.get("status") == "ADOPT" and score_locked_gate.get("status") == "PASS" and not selections.empty:
