@@ -192,6 +192,7 @@ def fit_recency_score_rate_model(
     return {
         "schema_version": 1,
         "method": "pit_recency_weighted_venue_split_team_goal_rates",
+        "training_rows": int(len(d)),
         "shrinkage": float(shrinkage),
         "half_life_rows": float(half),
         "home_mean": home_mean,
