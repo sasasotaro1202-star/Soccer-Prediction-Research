@@ -121,7 +121,9 @@ def _commits(
     if cache_fresh:
         try:
             payload = json.loads(cache_path.read_text(encoding="utf-8"))
-            if isinstance(payload, list):
+            # Empty cache state may be a transient rate-limit/network result.
+            # Never preserve an empty commit list as valid evidence for the TTL.
+            if isinstance(payload, list) and payload:
                 return payload
         except Exception:
             pass
