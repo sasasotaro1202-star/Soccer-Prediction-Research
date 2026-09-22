@@ -113,3 +113,22 @@ def test_stale_git_commit_provenance_cannot_pass(tmp_path, monkeypatch):
     result = evaluate_production_contract(str(tmp_path))
     assert result.passed is False
     assert "git_commit_provenance_mismatch" in result.failures
+
+
+def test_contract_rejects_incomplete_score_development_split(tmp_path):
+    _minimal_passing_artifacts(tmp_path)
+    _write(tmp_path / "score_oos_gate.json", {
+        "status": "PASS",
+        "blocks": 3,
+        "development_blocks": 1,
+        "locked_blocks": 2,
+        "minimum_development_blocks": 2,
+        "minimum_locked_blocks": 2,
+        "chronological_split_valid": False,
+        "rows": 10,
+        "finite_metrics": True,
+    })
+    result = evaluate_production_contract(str(tmp_path))
+    assert result.passed is False
+    assert "score_development_blocks" in result.failures
+    assert "score_chronological_split" in result.failures
