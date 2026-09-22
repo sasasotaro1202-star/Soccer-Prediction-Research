@@ -105,3 +105,11 @@ def test_selector_can_choose_negative_binomial_challenger():
     result = select_score_model(frame)
     assert result["selected_method"] == "negative_binomial"
     assert result["candidate_records"]["negative_binomial"]["status"] == "ACCEPT"
+
+
+def test_score_selection_can_explicitly_fail_closed_on_small_blocks():
+    frame = _frame(False)
+    result = select_score_model(frame, min_rows_per_block=500)
+    assert result["status"] == "HOLD"
+    assert result["selected_method"] == "primary"
+    assert result["minimum_rows_per_block"] == 500
