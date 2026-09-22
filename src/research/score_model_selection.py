@@ -24,39 +24,68 @@ def _weighted_mean(values: pd.Series, weights: pd.Series) -> float:
     return float(np.average(v[mask], weights=w[mask])) if mask.any() else float("nan")
 
 
-def _col(method: str, metric: str, *, half_life_rows: float | None = None) -> str:
+def _col(
+    method: str,
+    metric: str,
+    *,
+    half_life_days: float | None = None,
+    half_life_rows: float | None = None,
+) -> str:
     if method == "primary":
         return metric
+    if method == "recency" and half_life_days is not None:
+        return f"recency_d{int(half_life_days)}_{metric}"
     if method == "recency" and half_life_rows is not None:
-        tag = str(int(half_life_rows))
-        return f"recency_h{tag}_{metric}"
+        return f"recency_h{int(half_life_rows)}_{metric}"
     return f"{method}_{metric}"
 
 
-def _summary(frame: pd.DataFrame, method: str, *, half_life_rows: float | None = None) -> dict[str, float]:
+def _summary(
+    frame: pd.DataFrame,
+    method: str,
+    *,
+    half_life_days: float | None = None,
+    half_life_rows: float | None = None,
+) -> dict[str, float]:
     weights = pd.to_numeric(
         frame.get("n", pd.Series(1.0, index=frame.index)), errors="coerce"
     ).fillna(0.0)
-    cols = {_col(method, metric, half_life_rows=half_life_rows) for metric in METRICS}
+    cols = {
+        _col(
+            method,
+            metric,
+            half_life_days=half_life_days,
+            half_life_rows=half_life_rows,
+        )
+        for metric in METRICS
+    }
     if not cols.issubset(frame.columns):
         raise KeyError(f"Missing score metrics: {sorted(cols - set(frame.columns))}")
     return {
         metric: _weighted_mean(
-            frame[_col(method, metric, half_life_rows=half_life_rows)], weights
+            frame[
+                _col(
+                    method,
+                    metric,
+                    half_life_days=half_life_days,
+                    half_life_rows=half_life_rows,
+                )
+            ],
+            weights,
         )
         for metric in METRICS
     }
 
 
-def _recency_specs(frame: pd.DataFrame) -> list[tuple[str, float | None]]:
-    specs: list[tuple[str, float | None]] = []
+def _recency_specs(frame: pd.DataFrame) -> list[tuple[str, float]]:
+    specs: list[tuple[str, float]] = []
     for half in RECENCY_HALF_LIVES_DAYS:
-        prefix = f"recency_d{int(half)}_score_logloss"
-        if prefix in frame.columns:
+        if f"recency_d{int(half)}_score_logloss" in frame.columns:
             specs.append((f"recency_d{int(half)}", half))
     if not specs and "recency_score_logloss" in frame.columns:
-        # Backward compatibility for older artifacts; this is the historical 800-row default.
-        specs.append(("recency", 365.0))
+        # Backward compatibility for older artifacts. The old default represented
+        # roughly a medium-term decay and is treated as a legacy-only candidate.
+        specs.append(("recency_legacy", 365.0))
     return specs
 
 
@@ -65,12 +94,18 @@ def _check_challenger(
     primary: dict[str, float],
     method: str,
     *,
+    half_life_days: float | None = None,
     half_life_rows: float | None = None,
     max_metric_regression: float,
     min_relative_improvement: float,
     min_improvement_share: float,
 ) -> tuple[dict[str, Any], bool]:
-    summary = _summary(work, method, half_life_rows=half_life_rows)
+    summary = _summary(
+        work,
+        method,
+        half_life_days=half_life_days,
+        half_life_rows=half_life_rows,
+    )
     if not all(np.isfinite(summary[m]) for m in METRICS):
         return {
             "status": "REJECT",
@@ -80,9 +115,16 @@ def _check_challenger(
 
     gains = []
     for _, row in work.iterrows():
-        base = pd.to_numeric(row[_col("primary", "score_logloss")], errors="coerce")
+        base = pd.to_numeric(row["score_logloss"], errors="coerce")
         cand = pd.to_numeric(
-            row[_col(method, "score_logloss", half_life_rows=half_life_rows)],
+            row[
+                _col(
+                    method,
+                    "score_logloss",
+                    half_life_days=half_life_days,
+                    half_life_rows=half_life_rows,
+                )
+            ],
             errors="coerce",
         )
         gains.append(bool(np.isfinite(base) and np.isfinite(cand) and cand < base))
@@ -114,9 +156,13 @@ def _check_challenger(
         "secondary_relative_regressions": regressions,
         "checks": checks,
         "parameters": (
-            {"half_life_rows": float(half_life_rows)}
-            if method == "recency" and half_life_rows is not None
-            else {}
+            {"half_life_days": float(half_life_days)}
+            if method == "recency" and half_life_days is not None
+            else (
+                {"half_life_rows": float(half_life_rows)}
+                if method == "recency" and half_life_rows is not None
+                else {}
+            )
         ),
     }, accepted
 
@@ -164,13 +210,15 @@ def select_score_model(
     selected_parameters: dict[str, Any] = {}
 
     for key, half_life_days in _recency_specs(work):
+        # Legacy untagged artifacts are still supported for read-only research.
+        use_legacy = key == "recency_legacy"
         try:
             record, accepted = _check_challenger(
                 work,
                 primary,
                 "recency",
-                half_life_rows=None,
-                half_life_days=half_life_days,
+                half_life_days=None if use_legacy else half_life_days,
+                half_life_rows=800.0 if use_legacy else None,
                 max_metric_regression=max_metric_regression,
                 min_relative_improvement=min_relative_improvement,
                 min_improvement_share=min_improvement_share,
@@ -190,23 +238,22 @@ def select_score_model(
         records["dixon_coles"] = {"status": "UNAVAILABLE", "metrics": {}}
     else:
         try:
-            required = {_col("dixon_coles", metric) for metric in METRICS}
-            if not required.issubset(work.columns):
-                records["dixon_coles"] = {"status": "UNAVAILABLE", "metrics": {}}
-            else:
-                record, accepted = _check_challenger(
-                    work,
-                    primary,
-                    "dixon_coles",
-                    max_metric_regression=max_metric_regression,
-                    min_relative_improvement=min_relative_improvement,
-                    min_improvement_share=min_improvement_share,
-                )
-                records["dixon_coles"] = record
-                if accepted and record["metrics"]["score_logloss"] < selected_loss:
-                    selected = "dixon_coles"
-                    selected_loss = record["metrics"]["score_logloss"]
-                    selected_parameters = {}
+            record, accepted = _check_challenger(
+                work,
+                primary,
+                "dixon_coles",
+                max_metric_regression=max_metric_regression,
+                min_relative_improvement=min_relative_improvement,
+                min_improvement_share=min_improvement_share,
+            ) if {_col("dixon_coles", metric) for metric in METRICS}.issubset(work.columns) else (
+                {"status": "UNAVAILABLE", "reason": "Missing Dixon-Coles development metrics", "metrics": {}},
+                False,
+            )
+            records["dixon_coles"] = record
+            if accepted and record["metrics"]["score_logloss"] < selected_loss:
+                selected = "dixon_coles"
+                selected_loss = record["metrics"]["score_logloss"]
+                selected_parameters = {}
         except (KeyError, ValueError) as exc:
             records["dixon_coles"] = {
                 "status": "UNAVAILABLE",
@@ -232,6 +279,7 @@ def select_score_model(
             "min_relative_improvement": min_relative_improvement,
             "max_metric_regression": max_metric_regression,
             "min_improvement_share": min_improvement_share,
+            "recency_half_lives_days": [float(x) for x in RECENCY_HALF_LIVES_DAYS],
         },
     }
 
@@ -243,11 +291,7 @@ def verify_selected_score_model(
     max_metric_regression: float = 0.02,
     min_locked_blocks: int = 2,
 ) -> dict[str, Any]:
-    """Evaluate the development-selected score method on untouched locked OOS.
-
-    The primary method now receives the same explicit market-evidence treatment as
-    challengers, so O/U and BTTS cannot be marked PASS without finite locked evidence.
-    """
+    """Evaluate the development-selected score method on untouched locked OOS."""
     selected = str(selection.get("selected_method", "primary"))
     if locked_oos.empty:
         return {
@@ -267,7 +311,9 @@ def verify_selected_score_model(
 
     base = _summary(locked_oos, "primary")
     required_finite = all(np.isfinite(base[m]) for m in METRICS)
-    rows = int(pd.to_numeric(locked_oos["n"], errors="coerce").fillna(0).sum()) if "n" in locked_oos.columns else 0
+    rows = int(
+        pd.to_numeric(locked_oos["n"], errors="coerce").fillna(0).sum()
+    ) if "n" in locked_oos.columns else 0
     market_evidence = {
         "score_logloss_finite": bool(np.isfinite(base["score_logloss"])),
         "over_2_5_logloss_finite": bool(np.isfinite(base["over_2_5_logloss"])),
@@ -308,32 +354,52 @@ def verify_selected_score_model(
             "locked_oos_inspected": True,
         }
 
-    half_life = None
+    half_life_days = None
+    half_life_rows = None
     if selected == "recency":
-        half_life_days = float(
-            (selection.get("selected_parameters") or {}).get("half_life_days", 365.0)
+        params = selection.get("selected_parameters") or {}
+        if "half_life_days" in params:
+            half_life_days = float(params["half_life_days"])
+        elif "half_life_rows" in params:
+            half_life_rows = float(params["half_life_rows"])
+        else:
+            half_life_days = 365.0
+
+    candidate_col_missing = {
+        _col(
+            selected,
+            metric,
+            half_life_days=half_life_days,
+            half_life_rows=half_life_rows,
         )
+        for metric in METRICS
+    }.difference(locked_oos.columns)
+    if candidate_col_missing and selected == "recency" and half_life_rows is None:
+        # Read-only compatibility with old 800-row artifacts.
+        legacy = {
+            _col("recency", metric, half_life_rows=800.0)
+            for metric in METRICS
+        }
+        if legacy.issubset(locked_oos.columns):
+            half_life_rows = 800.0
+            candidate_col_missing = set()
 
-    required = {"n"} | {
-        _col(selected, metric, half_life_rows=None) for metric in METRICS
-    }
-    # Backward-compatible 800-row artifacts use the untagged names.
-    if selected == "recency" and all(
-        f"recency_h{int(half_life)}_{metric}" not in locked_oos.columns for metric in METRICS
-    ):
-        required = {"n"} | {_col("recency", metric) for metric in METRICS}
-
-    if not required.issubset(locked_oos.columns):
+    if candidate_col_missing:
         return {
             "selected_method": "primary",
             "status": "REJECT",
             "reason": "Locked OOS score metrics are incomplete",
             "locked_oos_inspected": True,
             "locked_oos_blocks": int(len(locked_oos)),
+            "locked_oos_rows": rows,
         }
 
     if selected == "recency":
-        status_col = "recency_d%d_status" % int(half_life_days)
+        status_col = (
+            f"recency_d{int(half_life_days)}_status"
+            if half_life_days is not None
+            else "recency_h800_status"
+        )
         if status_col not in locked_oos.columns:
             status_col = "recency_status"
     else:
@@ -346,23 +412,25 @@ def verify_selected_score_model(
             "reason": f"{selected} is unavailable on locked OOS",
             "locked_oos_inspected": True,
             "locked_oos_blocks": int(len(locked_oos)),
+            "locked_oos_rows": rows,
         }
 
-    # Use a clean metric view with selected columns and preserve explicit market evidence.
-    if selected == "recency":
-        selected_metrics = {
-            m: _weighted_mean(
-                locked_oos[
-                    f"recency_d{int(half_life_days)}_{m}"
-                    if f"recency_h{int(half_life)}_{m}" in locked_oos.columns
-                    else f"recency_{m}"
-                ],
-                pd.to_numeric(locked_oos["n"], errors="coerce").fillna(0.0),
-            )
-            for m in METRICS
+    try:
+        selected_metrics = _summary(
+            locked_oos,
+            selected,
+            half_life_days=half_life_days,
+            half_life_rows=half_life_rows,
+        )
+    except KeyError:
+        return {
+            "selected_method": "primary",
+            "status": "REJECT",
+            "reason": "Locked OOS selected-model metrics are incomplete",
+            "locked_oos_inspected": True,
+            "locked_oos_blocks": int(len(locked_oos)),
+            "locked_oos_rows": rows,
         }
-    else:
-        selected_metrics = _summary(locked_oos, selected)
 
     if not all(np.isfinite(base[m]) and np.isfinite(selected_metrics[m]) for m in METRICS):
         return {
@@ -380,14 +448,13 @@ def verify_selected_score_model(
         m: float((selected_metrics[m] - base[m]) / max(abs(base[m]), 1e-9))
         for m in METRICS
     }
-    block_ok = []
-    selected_ll_col = (
-        f"recency_d{int(half_life_days)}_score_logloss"
-        if selected == "recency" and f"recency_h{int(half_life)}_score_logloss" in locked_oos.columns
-        else _col(selected, "score_logloss", half_life_rows=half_life)
+    selected_ll_col = _col(
+        selected,
+        "score_logloss",
+        half_life_days=half_life_days,
+        half_life_rows=half_life_rows,
     )
-    if selected == "recency" and selected_ll_col not in locked_oos.columns:
-        selected_ll_col = "recency_score_logloss"
+    block_ok = []
     for _, row in locked_oos.iterrows():
         bp = pd.to_numeric(row["score_logloss"], errors="coerce")
         cp = pd.to_numeric(row[selected_ll_col], errors="coerce")
@@ -398,6 +465,7 @@ def verify_selected_score_model(
                 and cp <= bp * (1.0 + float(max_metric_regression))
             )
         )
+
     overall_score_ok = relative_deltas["score_logloss"] <= 0.0
     secondary_ok = all(
         relative_deltas[m] <= float(max_metric_regression)
@@ -405,7 +473,12 @@ def verify_selected_score_model(
         if m != "score_logloss"
     )
     blocks_ok = bool(block_ok) and all(block_ok)
-    passed = bool(overall_score_ok and secondary_ok and blocks_ok and market_metrics_finite)
+    passed = bool(
+        overall_score_ok
+        and secondary_ok
+        and blocks_ok
+        and market_metrics_finite
+    )
 
     return {
         "selected_method": selected if passed else "primary",
@@ -430,7 +503,13 @@ def verify_selected_score_model(
             "market_metrics_finite": market_metrics_finite,
         },
         **(
-            {"selected_parameters": {"half_life_days": half_life_days}}
+            {
+                "selected_parameters": (
+                    {"half_life_days": half_life_days}
+                    if half_life_days is not None
+                    else {"half_life_rows": half_life_rows}
+                )
+            }
             if selected == "recency"
             else {}
         ),
