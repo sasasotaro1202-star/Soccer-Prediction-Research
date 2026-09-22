@@ -19,13 +19,24 @@ def _mean_metrics(df: pd.DataFrame) -> pd.Series:
     return df.mean(numeric_only=True)
 
 
-def adoption_decision(baseline: pd.DataFrame, candidate: pd.DataFrame, *, development_oos: pd.DataFrame | None = None, min_accuracy: float = 0.80, max_ece_regression: float = 0.02, max_regression_blocks: int = 0) -> dict:
+def adoption_decision(baseline: pd.DataFrame, candidate: pd.DataFrame, *, development_oos: pd.DataFrame | None = None, min_accuracy: float = 0.80, max_ece_regression: float = 0.02, max_regression_blocks: int = 0, min_locked_rows_per_block: int = 500) -> dict:
     """Strict adoption gate using untouched locked OOS plus development stability."""
     required = {"logloss", "accuracy", "brier", "rps", "ece"}
     if baseline.empty or candidate.empty:
         return {"status": "HOLD", "reason": "Missing locked OOS comparison", "oos_claimed": False}
     if not required.issubset(baseline.columns) or not required.issubset(candidate.columns):
         return {"status": "HOLD", "reason": "Locked OOS metrics are incomplete", "oos_claimed": False}
+    if "n" not in candidate.columns:
+        return {"status": "HOLD", "reason": "Locked OOS block sample sizes are missing", "oos_claimed": False}
+    block_sizes = pd.to_numeric(candidate["n"], errors="coerce")
+    if not block_sizes.notna().all() or (block_sizes < int(min_locked_rows_per_block)).any():
+        return {
+            "status": "HOLD",
+            "reason": "One or more locked OOS blocks are below the minimum sample size",
+            "oos_claimed": False,
+            "locked_block_rows": [int(x) if pd.notna(x) else None for x in block_sizes.tolist()],
+            "minimum_locked_rows_per_block": int(min_locked_rows_per_block),
+        }
     b = _mean_metrics(baseline); c = _mean_metrics(candidate)
     n = int(candidate["n"].sum()) if "n" in candidate.columns else 0
     if n <= 0:
@@ -45,4 +56,4 @@ def adoption_decision(baseline: pd.DataFrame, candidate: pd.DataFrame, *, develo
                 if not (float(row["logloss"]) < float(row["baseline_logistic_logloss"]) and float(row["brier"]) <= float(row["baseline_logistic_brier"]) and float(row["rps"]) <= float(row["baseline_logistic_rps"]) and float(row["ece"]) - float(row["baseline_logistic_ece"]) <= max_ece_regression and float(row["accuracy"]) >= float(row["baseline_logistic_accuracy"])): regression_blocks += 1
             stability = {"status": "PASS" if regression_blocks <= max_regression_blocks else "FAIL", "development_blocks": int(len(development_oos)), "regression_blocks": int(regression_blocks), "required_max_regression_blocks": int(max_regression_blocks)}
     status = "ADOPT" if (logloss_improved and brier_not_worse and rps_not_worse and calibration_ok and accuracy_not_worse and stability["status"] == "PASS") else "REJECT"
-    return {"status": status, "reason": "Candidate improved the untouched locked OOS and passed development stability checks." if status == "ADOPT" else "Candidate did not satisfy the locked OOS and stability adoption gate.", "oos_claimed": True, "sample_size": n, "baseline": b.to_dict(), "candidate": c.to_dict(), "delta": {"logloss": float(c["logloss"] - b["logloss"]), "accuracy": float(c["accuracy"] - b["accuracy"]), "brier": float(c["brier"] - b["brier"]), "rps": float(c["rps"] - b["rps"]), "ece": ece_delta}, "checks": {"logloss_improved": logloss_improved, "brier_not_worse": brier_not_worse, "rps_not_worse": rps_not_worse, "calibration_ok": calibration_ok, "accuracy_not_worse": accuracy_not_worse, "accuracy_target": min_accuracy, "accuracy_target_met": bool(float(c["accuracy"]) >= min_accuracy)}, "stability": stability, "selection_rule": "validation-only selection; locked OOS untouched"}
+    return {"status": status, "reason": "Candidate improved the untouched locked OOS and passed development stability checks." if status == "ADOPT" else "Candidate did not satisfy the locked OOS and stability adoption gate.", "oos_claimed": True, "sample_size": n, "baseline": b.to_dict(), "candidate": c.to_dict(), "delta": {"logloss": float(c["logloss"] - b["logloss"]), "accuracy": float(c["accuracy"] - b["accuracy"]), "brier": float(c["brier"] - b["brier"]), "rps": float(c["rps"] - b["rps"]), "ece": ece_delta}, "checks": {"logloss_improved": logloss_improved, "brier_not_worse": brier_not_worse, "rps_not_worse": rps_not_worse, "calibration_ok": calibration_ok, "accuracy_not_worse": accuracy_not_worse, "accuracy_target": min_accuracy, "accuracy_target_met": bool(float(c["accuracy"]) >= min_accuracy)}, "stability": stability, "selection_rule": "validation-only selection; locked OOS untouched", "minimum_locked_rows_per_block": int(min_locked_rows_per_block), "locked_block_rows": [int(x) for x in block_sizes.tolist()]}
