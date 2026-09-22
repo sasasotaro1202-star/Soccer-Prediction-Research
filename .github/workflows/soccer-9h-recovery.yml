@@ -166,12 +166,14 @@ jobs:
                 -H "Accept: application/vnd.github+json" \
                 -H "X-GitHub-Api-Version: 2022-11-28" \
                 "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/soccer-9h-autonomous.yml/runs?per_page=20")"
-              if VERIFY_MAIN_SHA="${MAIN_SHA}" python - "${VERIFY_JSON}" <<'PY'
+              printf '%s' "${VERIFY_JSON}" > /tmp/verify-9h-runs.json
+              if VERIFY_MAIN_SHA="${MAIN_SHA}" python - /tmp/verify-9h-runs.json <<'PY'
           import json
           import os
           import sys
+          from pathlib import Path
 
-          payload = json.loads(sys.argv[1])
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
           main_sha = os.environ["VERIFY_MAIN_SHA"]
           active = {
               "pending", "queued", "waiting", "requested", "in_progress"
