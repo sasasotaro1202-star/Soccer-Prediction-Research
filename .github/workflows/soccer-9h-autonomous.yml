@@ -182,6 +182,7 @@ jobs:
           RESEARCH_RETRY_BACKOFF: "10"
           PIT_ENABLE_ARCHIVE_AUDIT: "1"
           PIT_ENABLE_SECONDARY_ARCHIVE: "1"
+          PIT_OPENFOOTBALL_COUNTRY_MAX_COMMIT_PAGES: "12"
           PIT_REPLAY_ROWS_PER_GROUP: "1"
         run: python -m src.research.safe_runner
       - name: Evaluate production contract without weakening gates
@@ -254,6 +255,7 @@ jobs:
           PYTHONHASHSEED: "0"
           PIT_ENABLE_ARCHIVE_AUDIT: "1"
           PIT_ENABLE_SECONDARY_ARCHIVE: "1"
+          PIT_OPENFOOTBALL_COUNTRY_MAX_COMMIT_PAGES: "12"
         run: python -m src.data.completion_gate
       - name: Re-run research engine for reproducibility
         env:
@@ -265,6 +267,7 @@ jobs:
           RESEARCH_RETRY_BACKOFF: "10"
           PIT_ENABLE_ARCHIVE_AUDIT: "1"
           PIT_ENABLE_SECONDARY_ARCHIVE: "1"
+          PIT_OPENFOOTBALL_COUNTRY_MAX_COMMIT_PAGES: "12"
           PIT_REPLAY_ROWS_PER_GROUP: "1"
         run: python -m src.research.safe_runner
       - name: Strict production contract verification
