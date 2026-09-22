@@ -39,6 +39,11 @@ def test_score_walk_forward_produces_multiple_pit_safe_blocks():
         "over_2_5_brier",
         "btts_logloss",
         "btts_brier",
+        "time_decay_score_logloss",
+        "time_decay_over_2_5_logloss",
+        "time_decay_over_2_5_brier",
+        "time_decay_btts_logloss",
+        "time_decay_btts_brier",
     ):
         assert result[col].notna().all()
 
