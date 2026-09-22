@@ -29,11 +29,11 @@ jobs:
     timeout-minutes: 180
     steps:
       - name: Checkout exact workflow-trigger commit
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           ref: ${{ github.sha }}
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.12"
           cache: pip
@@ -92,7 +92,7 @@ jobs:
           PY
       - name: Upload phase 1 evidence
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: soccer-9h-phase1-${{ github.run_id }}
           path: artifacts/9h/phase1
@@ -109,16 +109,16 @@ jobs:
     timeout-minutes: 180
     steps:
       - name: Checkout exact workflow-trigger commit
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           ref: ${{ github.sha }}
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.12"
           cache: pip
       - name: Cache raw and PIT evidence
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: |
             data/raw
@@ -200,7 +200,7 @@ jobs:
         run: python -m src.research.production_contract
       - name: Upload phase 2 evidence
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: soccer-9h-phase2-${{ github.run_id }}
           path: artifacts/
@@ -217,16 +217,16 @@ jobs:
     timeout-minutes: 180
     steps:
       - name: Checkout exact workflow-trigger commit
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           ref: ${{ github.sha }}
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.12"
           cache: pip
       - name: Cache raw and PIT evidence
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: |
             data/raw
@@ -319,7 +319,7 @@ jobs:
           PY
       - name: Upload phase 3 evidence
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: soccer-9h-phase3-${{ github.run_id }}
           path: artifacts/
