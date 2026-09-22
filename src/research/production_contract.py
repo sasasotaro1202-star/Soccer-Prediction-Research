@@ -182,6 +182,15 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             failures.append("score_locked_gate")
         if verified_score_method != selected_score_method:
             failures.append("score_locked_method_mismatch")
+        if int(score_locked_gate.get("locked_oos_blocks", 0)) < 2:
+            failures.append("score_locked_blocks")
+        checks = score_locked_gate.get("checks", {})
+        if selected_score_method == "primary":
+            if checks.get("all_primary_score_and_market_metrics_finite") is not True:
+                failures.append("score_primary_locked_market_evidence")
+        else:
+            if checks.get("secondary_metrics_not_materially_worse") is not True:
+                failures.append("score_challenger_locked_market_evidence")
 
     candidate_lock = _read_json(root / "candidate_lock.json")
     if candidate_lock:
