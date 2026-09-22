@@ -17,6 +17,8 @@ REQUIRED_ARTIFACTS = (
     "locked_oos_metrics.csv",
     "score_oos_metrics.csv",
     "score_oos_gate.json",
+    "score_model_selection.json",
+    "score_locked_gate.json",
     "candidate_lock.json",
     "adoption_decision.json",
 )
@@ -169,6 +171,17 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             failures.append("score_oos_rows")
         if score_gate.get("finite_metrics") is not True:
             failures.append("score_oos_finite_metrics")
+
+        score_selection = _read_json(root / "score_model_selection.json")
+        score_locked_gate = _read_json(root / "score_locked_gate.json")
+        selected_score_method = str(score_selection.get("selected_method", "primary"))
+        verified_score_method = str(score_locked_gate.get("selected_method", "primary"))
+        if score_selection.get("selection_rule", {}).get("locked_oos_inspected") is not False:
+            failures.append("score_selection_locked_oos_separation")
+        if score_locked_gate.get("status") != "PASS":
+            failures.append("score_locked_gate")
+        if verified_score_method != selected_score_method:
+            failures.append("score_locked_method_mismatch")
 
     candidate_lock = _read_json(root / "candidate_lock.json")
     if candidate_lock:
