@@ -3,14 +3,17 @@ from __future__ import annotations
 """PIT evidence for openfootball's versioned Champions/Europa League text files."""
 
 import base64
+import hashlib
 import json
 import os
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
-import requests
 import pandas as pd
+import requests
 
 from src.data.openfootball_adapter import parse_football_txt
 
@@ -45,9 +48,24 @@ def _headers() -> dict[str, str]:
     return h
 
 def _request(url: str, timeout: int = 30) -> requests.Response:
-    r = requests.get(url, headers=_headers(), timeout=timeout)
-    r.raise_for_status()
-    return r
+    last_status = None
+    for attempt in range(1, 4):
+        r = requests.get(url, headers=_headers(), timeout=timeout)
+        last_status = r.status_code
+        remaining = r.headers.get("X-RateLimit-Remaining")
+        if r.status_code == 403 and remaining == "0":
+            raise RuntimeError("github_api_rate_limit_exhausted")
+        if r.status_code in {429, 500, 502, 503, 504} and attempt < 3:
+            retry_after = r.headers.get("Retry-After")
+            try:
+                delay = min(30.0, max(1.0, float(retry_after))) if retry_after else float(attempt * 2)
+            except ValueError:
+                delay = float(attempt * 2)
+            time.sleep(delay)
+            continue
+        r.raise_for_status()
+        return r
+    raise RuntimeError(f"github_request_failed_after_retries:last_status={last_status}")
 
 def _season(start_year: int) -> str:
     return f"{start_year}-{str(start_year + 1)[-2:]}"
@@ -77,19 +95,59 @@ def _snapshot_keys(text: str, competition: str, season_start: int) -> set[tuple]
         return set()
     return {_row_key(r) for _, r in frame.iterrows()}
 
-def _commits(path: str, timeout: int) -> list[dict]:
+def _cache_file(cache_dir: str, prefix: str, *parts: str) -> Path:
+    key = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:24]
+    suffix = ".json" if prefix == "commits" else ".txt"
+    path = Path(cache_dir) / f"{prefix}-{key}{suffix}"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+def _commits(
+    path: str,
+    timeout: int,
+    cache_dir: str = "data/raw/pit_evidence",
+) -> list[dict]:
+    cache_path = _cache_file(cache_dir, "commits", REPOSITORY, path)
+    if cache_path.exists():
+        try:
+            payload = json.loads(cache_path.read_text(encoding="utf-8"))
+            if isinstance(payload, list):
+                return payload
+        except Exception:
+            pass
     url = f"{GITHUB_API}/repos/{REPOSITORY}/commits?path={path}&per_page=100"
     payload = _request(url, timeout).json()
-    return payload if isinstance(payload, list) else []
+    if isinstance(payload, list):
+        cache_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        return payload
+    return []
 
-def _file_at_commit(path: str, sha: str, timeout: int) -> str:
+def _file_at_commit(
+    path: str,
+    sha: str,
+    timeout: int,
+    cache_dir: str = "data/raw/pit_evidence",
+) -> str:
+    cache_path = _cache_file(cache_dir, "snapshot", REPOSITORY, path, sha)
+    if cache_path.exists():
+        return cache_path.read_text(encoding="utf-8")
     url = f"{GITHUB_API}/repos/{REPOSITORY}/contents/{path}?ref={sha}"
     payload = _request(url, timeout).json()
     if payload.get("encoding") != "base64":
         raise ValueError("unexpected GitHub contents response")
-    return base64.b64decode(payload.get("content", "")).decode("utf-8", errors="replace")
+    text = base64.b64decode(payload.get("content", "")).decode("utf-8", errors="replace")
+    if text.lstrip().lower().startswith("<!doctype html") or text.lstrip().lower().startswith("<html"):
+        raise ValueError("unexpected HTML GitHub snapshot response")
+    cache_path.write_text(text, encoding="utf-8")
+    return text
 
-def evidence_for_row(competition: str, season_start: int, row: pd.Series, timeout: int = 30) -> OpenFootballEvidence:
+def evidence_for_row(
+    competition: str,
+    season_start: int,
+    row: pd.Series,
+    timeout: int = 30,
+    cache_dir: str = "data/raw/pit_evidence",
+) -> OpenFootballEvidence:
     if competition not in PATHS:
         return OpenFootballEvidence("UNVERIFIABLE", reason="unsupported_competition")
     event = _utc(row.get("kickoff_utc"))
@@ -97,7 +155,7 @@ def evidence_for_row(competition: str, season_start: int, row: pd.Series, timeou
         return OpenFootballEvidence("UNVERIFIABLE", reason="missing_event_time")
     path = f"{_season(int(season_start))}/{PATHS[competition]}"
     try:
-        commits = _commits(path, timeout)
+        commits = _commits(path, timeout, cache_dir)
     except Exception as exc:
         return OpenFootballEvidence("UNVERIFIABLE", reason=f"github_commit_request:{type(exc).__name__}:{exc}")
     # Publication evidence must be observed after the completed result could exist.
@@ -114,7 +172,7 @@ def evidence_for_row(competition: str, season_start: int, row: pd.Series, timeou
     wanted = _row_key(row)
     for dt, sha in ordered:
         try:
-            if wanted in _snapshot_keys(_file_at_commit(path, sha, timeout), competition, int(season_start)):
+            if wanted in _snapshot_keys(_file_at_commit(path, sha, timeout, cache_dir), competition, int(season_start)):
                 # The commit timestamp is the observed source-publication proxy.
                 # Downstream PIT gates still require this timestamp to be <= the
                 # prediction cutoff before the row can influence a future prediction.
@@ -129,7 +187,11 @@ def evidence_for_row(competition: str, season_start: int, row: pd.Series, timeou
             continue
     return OpenFootballEvidence("UNVERIFIABLE", reason="no_versioned_snapshot_contains_completed_result")
 
-def apply_bulk(history: pd.DataFrame, timeout: int = 30) -> pd.DataFrame:
+def apply_bulk(
+    history: pd.DataFrame,
+    timeout: int = 30,
+    cache_dir: str = "data/raw/pit_evidence",
+) -> pd.DataFrame:
     """Verify openfootball rows with shared versioned-snapshot caches.
 
     The evidence rule is unchanged: the first repository snapshot observed at or
@@ -175,7 +237,7 @@ def apply_bulk(history: pd.DataFrame, timeout: int = 30) -> pd.DataFrame:
                 continue
             if sha not in parsed_cache:
                 try:
-                    parsed_cache[sha] = _snapshot_keys(_file_at_commit(path, sha, timeout), str(competition), int(season_start))
+                    parsed_cache[sha] = _snapshot_keys(_file_at_commit(path, sha, timeout, cache_dir), str(competition), int(season_start))
                 except Exception:
                     parsed_cache[sha] = None
             keys = parsed_cache[sha]

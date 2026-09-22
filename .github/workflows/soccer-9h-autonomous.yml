@@ -23,6 +23,8 @@ concurrency:
 jobs:
   phase1_gate:
     name: Phase 1 - strict data/PIT gate
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -93,6 +95,8 @@ jobs:
   phase2_research:
     if: needs.phase1_gate.result == 'success'
     name: Phase 2 - PIT-safe OOS research
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
     needs: phase1_gate
     runs-on: ubuntu-latest
     timeout-minutes: 180
@@ -198,6 +202,8 @@ jobs:
   phase3_verification:
     if: needs.phase2_research.result == 'success'
     name: Phase 3 - independent verification and robustness
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
     needs: phase2_research
     runs-on: ubuntu-latest
     timeout-minutes: 180

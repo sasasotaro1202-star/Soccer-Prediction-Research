@@ -15,6 +15,8 @@ concurrency:
 jobs:
   audit:
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
     timeout-minutes: 120
     steps:
       - name: Checkout
