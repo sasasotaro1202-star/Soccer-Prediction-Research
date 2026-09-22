@@ -27,6 +27,7 @@ def select_score_model(
     min_relative_improvement: float = 0.005,
     max_metric_regression: float = 0.01,
     min_improvement_share: float = 2.0 / 3.0,
+    max_block_score_logloss_regression: float = 0.02,
     min_rows_per_block: int = 0,
 ) -> dict[str, Any]:
     """Select a score method from development OOS only; locked OOS is never inspected."""
@@ -83,6 +84,15 @@ def select_score_model(
             cand = pd.to_numeric(row[_col(method, "score_logloss")], errors="coerce")
             gains.append(bool(np.isfinite(base) and np.isfinite(cand) and cand < base))
         share = float(np.mean(gains)) if gains else 0.0
+        block_relative_regressions = []
+        for _, row in work.iterrows():
+            base_block = pd.to_numeric(row[_col("primary", "score_logloss")], errors="coerce")
+            cand_block = pd.to_numeric(row[_col(method, "score_logloss")], errors="coerce")
+            if np.isfinite(base_block) and np.isfinite(cand_block):
+                block_relative_regressions.append(
+                    float((cand_block - base_block) / max(abs(base_block), 1e-9))
+                )
+        worst_block_regression = max(block_relative_regressions) if block_relative_regressions else float("inf")
         relative_gain = float((primary["score_logloss"] - summary["score_logloss"]) / max(abs(primary["score_logloss"]), 1e-9))
         regressions = {
             m: float((summary[m] - primary[m]) / max(abs(primary[m]), 1e-9))
@@ -92,6 +102,7 @@ def select_score_model(
             "score_logloss_gain_ok": relative_gain >= min_relative_improvement,
             "secondary_regression_ok": all(regressions[m] <= max_metric_regression for m in METRICS if m != "score_logloss"),
             "block_improvement_share_ok": share >= min_improvement_share,
+            "worst_block_score_logloss_regression_ok": worst_block_regression <= max_block_score_logloss_regression,
         }
         accepted = all(checks.values())
         records[method] = {
@@ -99,6 +110,7 @@ def select_score_model(
             "metrics": summary,
             "relative_score_logloss_gain": relative_gain,
             "improvement_share": share,
+            "worst_block_score_logloss_regression": worst_block_regression,
             "secondary_relative_regressions": regressions,
             "checks": checks,
         }
@@ -118,6 +130,7 @@ def select_score_model(
             "min_relative_improvement": min_relative_improvement,
             "max_metric_regression": max_metric_regression,
             "min_improvement_share": min_improvement_share,
+            "max_block_score_logloss_regression": max_block_score_logloss_regression,
             "min_rows_per_block": int(min_rows_per_block),
             "development_block_rows": [int(x) for x in block_sizes.tolist()],
         },
