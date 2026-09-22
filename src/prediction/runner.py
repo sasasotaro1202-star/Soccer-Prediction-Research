@@ -192,8 +192,29 @@ def run(
     score_market_rows = []
     mom_rows = []
     for row in eligible.itertuples(index=False):
-        score_rows.append(predict_score_candidates(bundle["score_model"], row.home_team, row.away_team, row.competition))
-        score_market_rows.append(predict_score_markets(bundle["score_model"], row.home_team, row.away_team, row.competition))
+        neutral_venue = getattr(row, "neutral_venue", None)
+        if pd.notna(neutral_venue):
+            neutral_venue = bool(neutral_venue)
+        else:
+            neutral_venue = None
+        score_rows.append(
+            predict_score_candidates(
+                bundle["score_model"],
+                row.home_team,
+                row.away_team,
+                row.competition,
+                neutral_venue=neutral_venue,
+            )
+        )
+        score_market_rows.append(
+            predict_score_markets(
+                bundle["score_model"],
+                row.home_team,
+                row.away_team,
+                row.competition,
+                neutral_venue=neutral_venue,
+            )
+        )
         try:
             mom_rows.append(predict_mom_candidates(row.mom_candidates_json))
         except Exception as exc:
