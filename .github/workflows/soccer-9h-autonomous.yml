@@ -324,5 +324,5 @@ jobs:
 # Operational note: a workflow-file commit intentionally starts a fresh 9H cycle on the latest main SHA.
 # Keep the long research cycle pinned to the newest main commit and strict gates.
 # The recovery controller prefers runs whose head_sha matches current main.
-# Fresh-cycle marker kept intentionally lightweight so code changes can be verified on the current main SHA.
+# Fresh-cycle marker kept intentionally lightweight so code changes and provenance gates are verified on the current main SHA.
 # Latest-main handoff remains non-cancelling so an older research cycle can finish safely.
