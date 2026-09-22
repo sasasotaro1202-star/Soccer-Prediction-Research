@@ -160,4 +160,4 @@ def test_snapshot_retries_exact_capture_original_url_fallback(tmp_path, monkeypa
     diag = adapter._load_snapshot_keys(capture, "https://example.invalid/test.csv")
     assert diag.status == "SNAPSHOT_PARSED"
     assert len(calls) == 2
-    assert "canonical.csv" in calls[1]
+    assert any("canonical.csv" in url for url in calls[1:])
