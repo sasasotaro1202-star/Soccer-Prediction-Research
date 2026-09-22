@@ -188,6 +188,16 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             failures.append("score_locked_market_evidence")
         if verified_score_method != selected_score_method:
             failures.append("score_locked_method_mismatch")
+        if selected_score_method == "recency":
+            selected_params = score_selection.get("selected_parameters") or {}
+            verified_params = score_locked_gate.get("selected_parameters") or {}
+            try:
+                selected_half = float(selected_params.get("half_life_rows", 800.0))
+                verified_half = float(verified_params.get("half_life_rows", 800.0))
+                if abs(selected_half - verified_half) > 1e-9:
+                    failures.append("score_locked_parameter_mismatch")
+            except (TypeError, ValueError):
+                failures.append("score_locked_parameter_invalid")
 
     candidate_lock = _read_json(root / "candidate_lock.json")
     if candidate_lock:
