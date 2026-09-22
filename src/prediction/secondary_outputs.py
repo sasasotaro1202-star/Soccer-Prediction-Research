@@ -110,6 +110,100 @@ def fit_score_rate_model(history: pd.DataFrame, *, shrinkage: float = 20.0) -> d
 
 
 
+def fit_recency_score_rate_model(
+    history: pd.DataFrame,
+    *,
+    shrinkage: float = 20.0,
+    half_life_rows: float = 800.0,
+) -> dict[str, Any]:
+    """PIT-safe score-rate challenger with deterministic exponential row decay."""
+    required = {"kickoff_utc", "home_team", "away_team", "home_goals", "away_goals", "pit_verified"}
+    missing = sorted(required - set(history.columns))
+    if missing:
+        raise ValueError(f"Recency score training data missing columns: {missing}")
+    d = history.loc[history["pit_verified"] == True].copy()
+    d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
+    d["home_goals"] = pd.to_numeric(d["home_goals"], errors="coerce")
+    d["away_goals"] = pd.to_numeric(d["away_goals"], errors="coerce")
+    d = d.dropna(subset=["kickoff_utc", "home_goals", "away_goals", "home_team", "away_team"])
+    d = d.sort_values("kickoff_utc", kind="mergesort").reset_index(drop=True)
+    if d.empty:
+        raise ValueError("No PIT-verified score rows available")
+    half = max(float(half_life_rows), 1.0)
+    pos = np.arange(len(d), dtype=float)
+    d["_weight"] = np.exp((pos - float(len(d) - 1)) / half)
+    weight_sum = max(float(d["_weight"].sum()), 1e-12)
+    home_mean = float((d["home_goals"] * d["_weight"]).sum() / weight_sum)
+    away_mean = float((d["away_goals"] * d["_weight"]).sum() / weight_sum)
+    overall_mean = float(((d["home_goals"] + d["away_goals"]) * d["_weight"]).sum() / (2.0 * weight_sum))
+
+    competition_rates: dict[str, dict[str, float]] = {}
+    if "competition" in d.columns:
+        comp = d.assign(
+            _competition=d["competition"].astype(str),
+            _whg=d["home_goals"] * d["_weight"],
+            _wag=d["away_goals"] * d["_weight"],
+        )
+        for name, g in comp.groupby("_competition", sort=True):
+            w = float(g["_weight"].sum())
+            competition_rates[str(name)] = {
+                "home_mean": float((g["_whg"].sum() + shrinkage * home_mean) / (w + shrinkage)),
+                "away_mean": float((g["_wag"].sum() + shrinkage * away_mean) / (w + shrinkage)),
+                "matches": float(w),
+            }
+
+    d["_home_team"] = d["home_team"].astype(str)
+    d["_away_team"] = d["away_team"].astype(str)
+    d["_home_scored"] = d["home_goals"] * d["_weight"]
+    d["_home_conceded"] = d["away_goals"] * d["_weight"]
+    d["_away_scored"] = d["away_goals"] * d["_weight"]
+    d["_away_conceded"] = d["home_goals"] * d["_weight"]
+    home_agg = d.groupby("_home_team", sort=False)[["_weight", "_home_scored", "_home_conceded"]].sum()
+    away_agg = d.groupby("_away_team", sort=False)[["_weight", "_away_scored", "_away_conceded"]].sum()
+    home_agg = home_agg.rename(columns={"_weight": "home_weight"})
+    away_agg = away_agg.rename(columns={"_weight": "away_weight"})
+    teams = sorted(set(home_agg.index.astype(str)) | set(away_agg.index.astype(str)))
+
+    rows: dict[str, dict[str, float]] = {}
+    for team in teams:
+        h = home_agg.loc[team] if team in home_agg.index else None
+        a = away_agg.loc[team] if team in away_agg.index else None
+        home_w = float(h["home_weight"]) if h is not None else 0.0
+        away_w = float(a["away_weight"]) if a is not None else 0.0
+        home_scored = float(h["_home_scored"]) if h is not None else 0.0
+        home_conceded = float(h["_home_conceded"]) if h is not None else 0.0
+        away_scored = float(a["_away_scored"]) if a is not None else 0.0
+        away_conceded = float(a["_away_conceded"]) if a is not None else 0.0
+        home_scored_rate = (home_scored + shrinkage * home_mean) / (home_w + shrinkage)
+        home_conceded_rate = (home_conceded + shrinkage * away_mean) / (home_w + shrinkage)
+        away_scored_rate = (away_scored + shrinkage * away_mean) / (away_w + shrinkage)
+        away_conceded_rate = (away_conceded + shrinkage * home_mean) / (away_w + shrinkage)
+        all_w = home_w + away_w
+        rows[team] = {
+            "home_scored_rate": home_scored_rate,
+            "home_conceded_rate": home_conceded_rate,
+            "away_scored_rate": away_scored_rate,
+            "away_conceded_rate": away_conceded_rate,
+            "scored_rate": (home_scored + away_scored + shrinkage * overall_mean) / (all_w + shrinkage),
+            "conceded_rate": (home_conceded + away_conceded + shrinkage * overall_mean) / (all_w + shrinkage),
+            "home_matches": home_w,
+            "away_matches": away_w,
+        }
+    return {
+        "schema_version": 1,
+        "method": "pit_recency_weighted_venue_split_team_goal_rates",
+        "training_rows": int(len(d)),
+        "shrinkage": float(shrinkage),
+        "half_life_rows": float(half),
+        "effective_weight_sum": float(weight_sum),
+        "home_mean": home_mean,
+        "away_mean": away_mean,
+        "overall_mean": overall_mean,
+        "competition_rates": competition_rates,
+        "teams": rows,
+    }
+
+
 def fit_time_decay_score_rate_model(
     history: pd.DataFrame,
     *,
