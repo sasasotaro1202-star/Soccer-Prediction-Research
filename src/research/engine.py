@@ -99,11 +99,33 @@ def run(out_dir: str = "artifacts") -> dict:
             oos_block=max(500, int(os.getenv("SOCCER_SCORE_OOS_BLOCK", "2000"))),
         )
         score_oos.to_csv(out / "score_oos_metrics.csv", index=False)
+        primary_score_metric_cols = [
+            "score_logloss",
+            "exact_score_hit_rate",
+            "top3_score_hit_rate",
+            "top4_score_hit_rate",
+            "home_goals_mae",
+            "away_goals_mae",
+            "total_goals_mae",
+            "over_2_5_logloss",
+            "over_2_5_brier",
+            "btts_logloss",
+            "btts_brier",
+        ]
+        primary_finite = (
+            set(primary_score_metric_cols).issubset(score_oos.columns)
+            and bool(np.isfinite(score_oos[primary_score_metric_cols].to_numpy(dtype=float)).all())
+        )
         score_oos_status = {
             "status": "PASS",
             "blocks": int(len(score_oos)),
             "rows": int(score_oos["n"].sum()) if "n" in score_oos.columns else 0,
-            "finite_metrics": bool(np.isfinite(score_oos.select_dtypes(include=[np.number]).to_numpy()).all()),
+            "finite_metrics": primary_finite,
+            "finite_metric_scope": "primary_score_metrics_only",
+            "challenger_status": {
+                "recency": sorted(set(score_oos.get("recency_status", pd.Series(dtype=str)).astype(str))),
+                "dixon_coles": sorted(set(score_oos.get("dc_status", pd.Series(dtype=str)).astype(str))),
+            },
         }
     except Exception as exc:
         score_oos = pd.DataFrame()
