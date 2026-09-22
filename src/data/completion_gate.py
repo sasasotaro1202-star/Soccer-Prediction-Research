@@ -19,6 +19,7 @@ from src.features.soccer_features import build_match_features
 from src.data.pit_openfootball_github import apply_bulk as apply_openfootball_pit
 from src.data.pit_openfootball_history import apply_openfootball_history
 from src.data.pit_engsoccerdata import apply_snapshot_pit
+from src.data.pit_openfootball_country import apply_country_openfootball_pit
 
 SEASONS = [f"{y}/{str(y + 1)[-2:]}" for y in range(2010, 2026)]
 CANONICAL_SOURCES = {
@@ -140,6 +141,18 @@ def _pit_preflight(root: Path) -> dict:
         openfootball_verified = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
 
     snapshot_before = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+    country_openfootball_before = snapshot_before
+    try:
+        history = _merge_pit_evidence(
+            history,
+            apply_country_openfootball_pit(history, cache_dir=str(root / "pit_evidence")),
+        )
+        country_openfootball_after = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
+        country_openfootball_error = None
+    except Exception as exc:
+        country_openfootball_after = country_openfootball_before
+        country_openfootball_error = f"{type(exc).__name__}: {exc}"
+
     try:
         history = _merge_pit_evidence(
             history,
@@ -168,6 +181,8 @@ def _pit_preflight(root: Path) -> dict:
         "archive_enriched_rows": before_fallback,
         "arquivo_fallback_enriched_rows": max(0, after_fallback - before_fallback),
         "engsoccerdata_snapshot_verified_rows": max(0, snapshot_after - snapshot_before),
+        "country_openfootball_verified_rows": max(0, country_openfootball_after - country_openfootball_before),
+        "country_openfootball_error": country_openfootball_error,
         "engsoccerdata_snapshot_error": snapshot_error,
         "openfootball_verified_rows": openfootball_verified,
         "versioned_openfootball_verified_rows": max(0, after_versioned - before_versioned),
