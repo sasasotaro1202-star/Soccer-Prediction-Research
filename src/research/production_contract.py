@@ -165,7 +165,7 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
         score_gate = _read_json(root / "score_oos_gate.json")
         if score_gate.get("status") != "PASS":
             failures.append("score_oos_gate")
-        if int(score_gate.get("blocks", 0)) < 2:
+        if int(score_gate.get("blocks", 0)) < 3:
             failures.append("score_oos_blocks")
         if int(score_gate.get("rows", 0)) <= 0:
             failures.append("score_oos_rows")
@@ -180,6 +180,12 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             failures.append("score_selection_locked_oos_separation")
         if score_locked_gate.get("status") != "PASS":
             failures.append("score_locked_gate")
+        if int(score_locked_gate.get("locked_oos_blocks", 0)) < 2:
+            failures.append("score_locked_blocks")
+        if int(score_locked_gate.get("locked_oos_rows", 0)) <= 0:
+            failures.append("score_locked_rows")
+        if score_locked_gate.get("market_metrics_finite") is not True:
+            failures.append("score_locked_market_evidence")
         if verified_score_method != selected_score_method:
             failures.append("score_locked_method_mismatch")
 
