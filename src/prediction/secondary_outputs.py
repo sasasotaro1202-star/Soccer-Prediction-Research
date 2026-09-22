@@ -195,6 +195,8 @@ def fit_recency_score_rate_model(
         "training_rows": int(len(d)),
         "shrinkage": float(shrinkage),
         "half_life_rows": float(half),
+        "training_rows": int(len(d)),
+        "effective_weight_sum": float(weight_sum),
         "home_mean": home_mean,
         "away_mean": away_mean,
         "overall_mean": overall_mean,
