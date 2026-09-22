@@ -298,11 +298,25 @@ def fit_time_decay_score_rate_model(
         "teams": rows,
     }
 
+def fit_neutral_aware_score_rate_model(
+    history: pd.DataFrame,
+    *,
+    shrinkage: float = 20.0,
+) -> dict[str, Any]:
+    """Score-rate challenger that removes home-venue asymmetry for neutral fixtures."""
+    model = fit_score_rate_model(history, shrinkage=shrinkage)
+    model["schema_version"] = 3
+    model["method"] = "neutral_aware_pit_smoothed_venue_split_team_goal_rates"
+    return model
+
+
 def _score_lambdas(
     score_model: dict[str, Any],
     home_team: str,
     away_team: str,
     competition: str | None = None,
+    *,
+    neutral_venue: bool = False,
 ) -> tuple[float, float]:
     teams = score_model.get("teams", {})
     home = teams.get(str(home_team))
@@ -317,16 +331,26 @@ def _score_lambdas(
     if home is None or away is None:
         raise RuntimeError("Score model has no PIT-trained rate for one or both fixture teams")
 
-    # Venue-split formulation: attack rate and opponent defensive concession rate
-    # are combined around their matching global venue mean.
-    home_attack = float(home.get("home_scored_rate", home["scored_rate"]))
-    home_defense = float(home.get("home_conceded_rate", home["conceded_rate"]))
-    away_attack = float(away.get("away_scored_rate", away["scored_rate"]))
-    away_defense = float(away.get("away_conceded_rate", away["conceded_rate"]))
-    league_home = max(base_home, 1e-6)
-    league_away = max(base_away, 1e-6)
-    home_lambda = league_home * (home_attack / league_home) * (away_defense / league_home)
-    away_lambda = league_away * (away_attack / league_away) * (home_defense / league_away)
+    # Venue-split formulation for standard fixtures. For neutral fixtures on the
+    # neutral-aware challenger, use role-symmetric team rates and a neutral league mean.
+    neutral_mode = bool(neutral_venue) and str(score_model.get("method", "")).startswith("neutral_aware_")
+    if neutral_mode:
+        neutral_mean = max((base_home + base_away) / 2.0, 1e-6)
+        home_attack = float(home.get("scored_rate", neutral_mean))
+        home_defense = float(home.get("conceded_rate", neutral_mean))
+        away_attack = float(away.get("scored_rate", neutral_mean))
+        away_defense = float(away.get("conceded_rate", neutral_mean))
+        home_lambda = neutral_mean * (home_attack / neutral_mean) * (away_defense / neutral_mean)
+        away_lambda = neutral_mean * (away_attack / neutral_mean) * (home_defense / neutral_mean)
+    else:
+        home_attack = float(home.get("home_scored_rate", home["scored_rate"]))
+        home_defense = float(home.get("home_conceded_rate", home["conceded_rate"]))
+        away_attack = float(away.get("away_scored_rate", away["scored_rate"]))
+        away_defense = float(away.get("away_conceded_rate", away["conceded_rate"]))
+        league_home = max(base_home, 1e-6)
+        league_away = max(base_away, 1e-6)
+        home_lambda = league_home * (home_attack / league_home) * (away_defense / league_home)
+        away_lambda = league_away * (away_attack / league_away) * (home_defense / league_away)
     return float(np.clip(home_lambda, 0.05, 5.0)), float(np.clip(away_lambda, 0.05, 5.0))
 
 
@@ -337,6 +361,7 @@ def predict_score_distribution(
     competition: str | None = None,
     *,
     max_goals: int = 12,
+    neutral_venue: bool = False,
 ) -> list[tuple[int, int, float]]:
     """Return the full PIT-trained score distribution, dispatching by locked method."""
     if max_goals < 1:
@@ -360,7 +385,9 @@ def predict_score_distribution(
             competition,
             max_goals=max_goals,
         )
-    home_lambda, away_lambda = _score_lambdas(score_model, home_team, away_team, competition)
+    home_lambda, away_lambda = _score_lambdas(
+        score_model, home_team, away_team, competition, neutral_venue=neutral_venue
+    )
     return score_distribution(home_lambda, away_lambda, max_goals=max_goals)
 
 
@@ -369,8 +396,17 @@ def predict_score_candidates(
     home_team: str,
     away_team: str,
     competition: str | None = None,
+    *,
+    neutral_venue: bool = False,
 ) -> list[dict[str, Any]]:
-    candidates = predict_score_distribution(score_model, home_team, away_team, competition, max_goals=12)
+    candidates = predict_score_distribution(
+        score_model,
+        home_team,
+        away_team,
+        competition,
+        max_goals=12,
+        neutral_venue=neutral_venue,
+    )
     selected = select_score_candidates(candidates)
     return [
         {
@@ -389,9 +425,18 @@ def predict_score_markets(
     home_team: str,
     away_team: str,
     competition: str | None = None,
+    *,
+    neutral_venue: bool = False,
 ) -> dict[str, float]:
     """Return O/U and BTTS probabilities from the same full score distribution."""
-    distribution = predict_score_distribution(score_model, home_team, away_team, competition, max_goals=12)
+    distribution = predict_score_distribution(
+        score_model,
+        home_team,
+        away_team,
+        competition,
+        max_goals=12,
+        neutral_venue=neutral_venue,
+    )
     total = np.asarray([h + a for h, a, _ in distribution], dtype=float)
     home_goals = np.asarray([h for h, _, _ in distribution], dtype=int)
     away_goals = np.asarray([a for _, a, _ in distribution], dtype=int)
