@@ -356,6 +356,7 @@ def _contextual_blend_weights(
     global_weights: dict[str, float],
     *,
     min_rows: int = 60,
+    prior_strength: int = 240,
 ) -> tuple[dict[str, dict[str, float]], dict[str, str]]:
     """Learn context-specific mixtures with hierarchical sparse-data fallback."""
     routed: dict[str, dict[str, float]] = {}
@@ -385,12 +386,31 @@ def _contextual_blend_weights(
                 probs,
                 global_weights,
             )
-            routed[context_name] = optimized if used else dict(global_weights)
-            reasons[context_name] = (
-                "context_specific_optimized_validation"
-                if used
-                else "fallback_global_optimizer_failed"
-            )
+            if not used:
+                routed[context_name] = dict(global_weights)
+                reasons[context_name] = "fallback_global_optimizer_failed"
+                continue
+
+            # Empirical-Bayes-style shrinkage keeps sparse context weights close
+            # to the globally validated mixture.
+            alpha = float(len(sl) / (len(sl) + max(int(prior_strength), 1)))
+            names = list(global_weights)
+            local = np.asarray([float(optimized.get(name, 0.0)) for name in names], dtype=float)
+            anchor = np.asarray([float(global_weights.get(name, 0.0)) for name in names], dtype=float)
+            if not np.isfinite(local).all() or not np.isfinite(anchor).all():
+                routed[context_name] = dict(global_weights)
+                reasons[context_name] = "fallback_global_invalid_optimized_weights"
+                continue
+            shrunk = anchor + alpha * (local - anchor)
+            shrunk = np.clip(shrunk, 0.0, None)
+            total = float(shrunk.sum())
+            if total <= 0.0 or not np.isfinite(total):
+                routed[context_name] = dict(global_weights)
+                reasons[context_name] = "fallback_global_invalid_shrunk_weights"
+                continue
+            shrunk /= total
+            routed[context_name] = {name: float(value) for name, value in zip(names, shrunk)}
+            reasons[context_name] = "context_specific_optimized_validation_shrunk"
 
     routed["GLOBAL"] = dict(global_weights)
     reasons["GLOBAL"] = "global_fallback"
