@@ -178,7 +178,7 @@ class FootballDataWaybackAdapter(_BaseAdapter):
         # PIT is fail-closed: a capture before the conservative publication lower
         # bound cannot be accepted merely because it already contains the final score.
         # Precise kickoff timing may narrow search, but never relaxes the acceptance bound.
-        scan(False)
+        scan()
         snapshot_errors = sorted({d.status for _, d in keysets if d.keys is None and d.status})
         for i, value in enumerate(results):
             if value is not None:
