@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from src.models.baselines import candidates
+from src.prediction.context_router import apply_contextual_temperatures, lookup_context_weights, routing_context
 from src.prediction.secondary_outputs import fit_score_rate_model
 
 
@@ -18,6 +19,43 @@ def _temperature_transform(proba: np.ndarray, temperature: float) -> np.ndarray:
     out = np.exp(logits)
     return out / out.sum(axis=1, keepdims=True)
 
+
+
+def _normalize_context_weights(value: Any, global_weights: dict[str, float]) -> dict[str, dict[str, float]]:
+    if value is None:
+        return {"GLOBAL": dict(global_weights)}
+    if not isinstance(value, dict):
+        raise ValueError("Contextual ensemble weights must be a dictionary")
+    out: dict[str, dict[str, float]] = {"GLOBAL": dict(global_weights)}
+    for route, raw_weights in value.items():
+        if not isinstance(route, str) or not route:
+            raise ValueError("Contextual ensemble route keys must be non-empty strings")
+        if not isinstance(raw_weights, dict) or set(raw_weights) != set(global_weights):
+            raise ValueError("Contextual weights must match production model set")
+        numeric = {str(k): float(v) for k, v in raw_weights.items()}
+        if any(not np.isfinite(v) or v < 0 for v in numeric.values()):
+            raise ValueError("Contextual weights contain invalid values")
+        total = float(sum(numeric.values()))
+        if not np.isfinite(total) or total <= 0:
+            raise ValueError("Contextual weights must sum to a positive value")
+        out[route] = {k: v / total for k, v in numeric.items()}
+    return out
+
+
+def _normalize_context_temperatures(value: Any, global_temperature: float) -> dict[str, float]:
+    if value is None:
+        return {"GLOBAL": float(global_temperature)}
+    if not isinstance(value, dict):
+        raise ValueError("Contextual temperatures must be a dictionary")
+    out: dict[str, float] = {"GLOBAL": float(global_temperature)}
+    for route, raw_t in value.items():
+        if not isinstance(route, str) or not route:
+            raise ValueError("Contextual temperature route keys must be non-empty strings")
+        t = float(raw_t)
+        if not np.isfinite(t) or t <= 0:
+            raise ValueError("Contextual temperature contains an invalid value")
+        out[route] = float(np.clip(t, 0.70, 1.60))
+    return out
 
 def train_and_save_bundle(
     feats: pd.DataFrame,
