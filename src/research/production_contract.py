@@ -23,6 +23,8 @@ REQUIRED_ARTIFACTS = (
     "score_locked_gate.json",
     "candidate_lock.json",
     "adoption_decision.json",
+    "oos_temporal_integrity.json",
+    "score_oos_temporal_integrity.json",
 )
 PROVENANCE_ARTIFACTS = (
     "production_model.pkl",
@@ -282,6 +284,13 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
                 failures.append("provenance_registry_version_mismatch")
             if recorded_model_version is not None and str(recorded_model_version) != str(model_json.get("model_version")):
                 failures.append("provenance_model_version_mismatch")
+
+    oos_temporal = _read_json(root / "oos_temporal_integrity.json")
+    score_temporal = _read_json(root / "score_oos_temporal_integrity.json")
+    if oos_temporal.get("status") != "PASS":
+        failures.append("oos_temporal_integrity")
+    if score_temporal.get("status") != "PASS":
+        failures.append("score_oos_temporal_integrity")
 
     candidate_lock = _read_json(root / "candidate_lock.json")
     if candidate_lock:
