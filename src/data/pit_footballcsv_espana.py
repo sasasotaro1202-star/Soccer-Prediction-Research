@@ -168,12 +168,12 @@ def _source_rows(text: str) -> dict[tuple, int]:
             f"footballcsv Spain snapshot missing columns: {sorted(required - set(frame.columns))}"
         )
     counts: dict[tuple, int] = {}
-    for row in frame.itertuples(index=False):
+    for _, row in frame.iterrows():
         try:
-            date = pd.Timestamp(getattr(row, "Date")).date().isoformat()
-            home = _norm(getattr(row, "Team_1"))
-            away = _norm(getattr(row, "Team_2"))
-            ft = str(getattr(row, "FT") or "").strip()
+            date = pd.Timestamp(row["Date"]).date().isoformat()
+            home = _norm(row["Team 1"])
+            away = _norm(row["Team 2"])
+            ft = str(row["FT"] or "").strip()
             if "-" not in ft:
                 continue
             left, right = ft.split("-", 1)
