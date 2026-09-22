@@ -70,6 +70,13 @@ def test_primary_locked_oos_requires_all_market_metrics():
     assert "btts_brier" in ",".join(result["missing_columns"])
 
 
+def test_selector_requires_three_development_blocks():
+    frame = _frame(True).iloc[:2].copy()
+    result = select_score_model(frame)
+    assert result["status"] == "HOLD"
+    assert result["evaluated_blocks"] == 2
+
+
 def test_primary_locked_oos_returns_explicit_market_evidence():
     development = _frame(True)
     selection = select_score_model(development)
