@@ -75,6 +75,27 @@ def _write_status(out: Path, report: dict) -> None:
     (out / "run_status.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
 
 
+def _primary_score_metrics_finite(score_oos: pd.DataFrame) -> bool:
+    """Validate only primary score/O-U/BTTS metrics; challengers may be unavailable."""
+    cols = [
+        "score_logloss",
+        "exact_score_hit_rate",
+        "top3_score_hit_rate",
+        "top4_score_hit_rate",
+        "home_goals_mae",
+        "away_goals_mae",
+        "total_goals_mae",
+        "over_2_5_logloss",
+        "over_2_5_brier",
+        "btts_logloss",
+        "btts_brier",
+    ]
+    return (
+        set(cols).issubset(score_oos.columns)
+        and bool(np.isfinite(score_oos[cols].to_numpy(dtype=float)).all())
+    )
+
+
 def run(out_dir: str = "artifacts") -> dict:
     out = Path(out_dir); out.mkdir(parents=True, exist_ok=True); _write_source_registry(out)
     try:
@@ -99,23 +120,7 @@ def run(out_dir: str = "artifacts") -> dict:
             oos_block=max(500, int(os.getenv("SOCCER_SCORE_OOS_BLOCK", "2000"))),
         )
         score_oos.to_csv(out / "score_oos_metrics.csv", index=False)
-        primary_score_metric_cols = [
-            "score_logloss",
-            "exact_score_hit_rate",
-            "top3_score_hit_rate",
-            "top4_score_hit_rate",
-            "home_goals_mae",
-            "away_goals_mae",
-            "total_goals_mae",
-            "over_2_5_logloss",
-            "over_2_5_brier",
-            "btts_logloss",
-            "btts_brier",
-        ]
-        primary_finite = (
-            set(primary_score_metric_cols).issubset(score_oos.columns)
-            and bool(np.isfinite(score_oos[primary_score_metric_cols].to_numpy(dtype=float)).all())
-        )
+        primary_finite = _primary_score_metrics_finite(score_oos)
         score_oos_status = {
             "status": "PASS",
             "blocks": int(len(score_oos)),
