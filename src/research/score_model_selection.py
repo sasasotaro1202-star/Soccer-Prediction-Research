@@ -4,7 +4,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-METHODS = ("primary", "recency", "dixon_coles")
+METHODS = ("primary", "recency", "time_decay", "dixon_coles")
 METRICS = ("score_logloss", "over_2_5_logloss", "over_2_5_brier", "btts_logloss", "btts_brier")
 
 def _weighted_mean(values: pd.Series, weights: pd.Series) -> float:
@@ -23,7 +23,7 @@ def _summary(frame: pd.DataFrame, method: str) -> dict[str, float]:
 def select_score_model(
     development_oos: pd.DataFrame,
     *,
-    min_blocks: int = 2,
+    min_blocks: int = 3,
     min_relative_improvement: float = 0.005,
     max_metric_regression: float = 0.01,
     min_improvement_share: float = 2.0 / 3.0,
@@ -41,7 +41,7 @@ def select_score_model(
     selected_loss = primary["score_logloss"]
 
     for method in METHODS[1:]:
-        status_col = "recency_status" if method == "recency" else "dc_status"
+        status_col = {"recency": "recency_status", "time_decay": "time_decay_status", "dixon_coles": "dc_status"}[method]
         if status_col not in work.columns or not work[status_col].astype(str).eq("PASS").all():
             records[method] = {"status": "UNAVAILABLE", "metrics": {}}
             continue
@@ -172,7 +172,7 @@ def verify_selected_score_model(
             "missing_columns": sorted(required - set(locked_oos.columns)),
         }
 
-    status_col = "recency_status" if selected == "recency" else "dc_status"
+    status_col = {"recency": "recency_status", "time_decay": "time_decay_status", "dixon_coles": "dc_status"}.get(selected)
     if status_col in locked_oos.columns and not locked_oos[status_col].astype(str).eq("PASS").all():
         return {
             "selected_method": "primary",

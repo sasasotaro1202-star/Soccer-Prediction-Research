@@ -27,7 +27,7 @@ def _minimal_passing_artifacts(tmp_path):
         "score_model_selection.json", "score_locked_gate.json",
     ):
         (tmp_path / name).write_text("metric,value\nplaceholder,1\n", encoding="utf-8")
-    _write(tmp_path / "score_oos_gate.json", {"status": "PASS", "blocks": 2, "rows": 10, "finite_metrics": True})
+    _write(tmp_path / "score_oos_gate.json", {"status": "PASS", "blocks": 5, "minimum_total_blocks": 5, "rows": 10, "finite_metrics": True})
     _write(tmp_path / "score_model_selection.json", {
         "selected_method": "primary",
         "selection_rule": {"locked_oos_inspected": False},
@@ -72,6 +72,14 @@ def test_contract_fails_closed_when_evidence_is_missing(tmp_path):
     assert "oos_claim" in result.failures
     assert "tests" in result.failures
     assert "audit_gate" in result.failures
+
+
+def test_contract_rejects_insufficient_score_oos_depth(tmp_path):
+    _minimal_passing_artifacts(tmp_path)
+    _write(tmp_path / "score_oos_gate.json", {"status": "PASS", "blocks": 4, "minimum_total_blocks": 5, "rows": 100, "finite_metrics": True})
+    result = evaluate_production_contract(str(tmp_path))
+    assert result.passed is False
+    assert "score_oos_blocks" in result.failures
 
 
 def test_contract_passes_only_with_explicit_success(tmp_path):

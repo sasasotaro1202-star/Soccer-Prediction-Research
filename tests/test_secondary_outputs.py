@@ -135,6 +135,50 @@ def test_recency_score_model_is_order_sensitive_and_pit_only():
     assert recent_mean < 3.1
 
 
+def test_time_decay_score_model_uses_elapsed_time_and_is_pit_only():
+    rows = []
+    base = pd.Timestamp("2025-01-01", tz="UTC")
+    for days, goals in [(0, 9), (10, 3), (20, 1), (365, 0)]:
+        rows.append({
+            "kickoff_utc": base + pd.Timedelta(days=days),
+            "home_team": "A",
+            "away_team": "B",
+            "home_goals": goals,
+            "away_goals": 0,
+            "pit_verified": True,
+            "competition": "EPL",
+        })
+    rows.append({
+        "kickoff_utc": base + pd.Timedelta(days=400),
+        "home_team": "A",
+        "away_team": "B",
+        "home_goals": 50,
+        "away_goals": 50,
+        "pit_verified": False,
+        "competition": "EPL",
+    })
+    from src.prediction.secondary_outputs import fit_time_decay_score_rate_model
+    model = fit_time_decay_score_rate_model(pd.DataFrame(rows), half_life_days=20.0)
+    assert model["training_rows"] == 4
+    assert model["half_life_days"] == 20.0
+    assert model["home_mean"] < 3.0
+
+
+def test_time_decay_dispatch_metadata_is_distinct():
+    rows = [{
+        "kickoff_utc": pd.Timestamp("2025-01-01", tz="UTC"),
+        "home_team": "A",
+        "away_team": "B",
+        "home_goals": 1,
+        "away_goals": 0,
+        "pit_verified": True,
+        "competition": "EPL",
+    }]
+    from src.prediction.secondary_outputs import fit_time_decay_score_rate_model
+    model = fit_time_decay_score_rate_model(pd.DataFrame(rows))
+    assert model["method"] == "pit_time_decay_weighted_venue_split_team_goal_rates"
+
+
 def test_score_distribution_dispatches_dixon_coles_method():
     history = pd.DataFrame(
         [
