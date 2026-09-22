@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from src.data.pit_engsoccerdata import _identity_key, _snapshot_keys
+from src.data.pit_engsoccerdata import SNAPSHOTS, _identity_key, _snapshot_keys
 
 
 def test_engsoccerdata_identity_is_strict_about_score_and_result():
@@ -28,3 +28,15 @@ def test_snapshot_observation_time_is_utc():
     observed = datetime.fromisoformat("2022-11-05T19:16:32+00:00").astimezone(timezone.utc)
     lower = datetime.fromisoformat("2022-11-04T00:00:00+00:00")
     assert observed >= lower
+
+
+def test_snapshot_ladders_are_immutable_and_chronological():
+    assert SNAPSHOTS
+    for competition, snapshots in SNAPSHOTS.items():
+        observed = [datetime.fromisoformat(x["observed_at_utc"]).astimezone(timezone.utc) for x in snapshots]
+        assert observed == sorted(observed)
+        for snapshot in snapshots:
+            assert len(snapshot["commit_sha"]) == 40
+            assert len(snapshot["blob_sha"]) == 40
+            assert snapshot["path"].startswith("data-raw/")
+            assert "T" in snapshot["observed_at_utc"]
