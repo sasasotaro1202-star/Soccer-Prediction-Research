@@ -234,7 +234,6 @@ def run(
         result[f"score_{rank}_probability"] = [x[rank-1]["probability"] for x in score_rows]
     for key in ("over_0_5", "under_0_5", "over_1_5", "under_1_5", "over_2_5", "under_2_5", "over_3_5", "under_3_5", "over_4_5", "under_4_5", "btts_yes", "btts_no"):
         result[f"market_{key}"] = [float(x[key]) for x in score_market_rows]
-    mom_ready = []
     for rank in range(1, 5):
         ids = []
         probs_mom = []
@@ -247,7 +246,6 @@ def run(
                 probs_mom.append(np.nan)
         result[f"mom_{rank}_player_id"] = ids
         result[f"mom_{rank}_probability"] = probs_mom
-        mom_ready.append(all(pd.notna(x) for x in probs_mom))
     result["score_top3_probability_mass"] = sum(result[f"score_{rank}_probability"] for rank in range(1, 4))
     result["mom_top4_probability_mass"] = result[
         [f"mom_{rank}_probability" for rank in range(1, 5)]
