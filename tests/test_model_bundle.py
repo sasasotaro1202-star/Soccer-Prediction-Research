@@ -58,12 +58,16 @@ def test_bundle_uses_locked_oos_verified_recency_score_method(tmp_path):
         str(path),
         "test-version",
         "snapshot-1",
-        score_selection={"selected_method": "recency", "status": "ADOPT_CANDIDATE"},
+        score_selection={
+            "selected_method": "recency",
+            "status": "ADOPT_CANDIDATE",
+            "selected_parameters": {"half_life_days": 400.0},
+        },
         score_locked_gate={"selected_method": "recency", "status": "PASS"},
     )
     bundle = load_bundle(str(path))
     assert bundle["score_method"] == "recency"
-    assert bundle["score_parameters"]["half_life_rows"] == 800.0
+    assert bundle["score_parameters"]["half_life_days"] == 365.0
     assert bundle["score_model"]["method"] == "pit_recency_weighted_venue_split_team_goal_rates"
 
 
