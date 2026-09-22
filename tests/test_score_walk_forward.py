@@ -27,6 +27,7 @@ def test_score_walk_forward_produces_multiple_pit_safe_blocks():
     result = run_score_walk_forward(_rows(), min_train=10, oos_block=5)
     assert len(result) == 3
     assert int(result["n"].sum()) == 14
+    assert result["negative_binomial_status"].eq("PASS").all()
     for col in (
         "score_logloss",
         "exact_score_hit_rate",
@@ -44,6 +45,11 @@ def test_score_walk_forward_produces_multiple_pit_safe_blocks():
         "time_decay_over_2_5_brier",
         "time_decay_btts_logloss",
         "time_decay_btts_brier",
+        "negative_binomial_score_logloss",
+        "negative_binomial_over_2_5_logloss",
+        "negative_binomial_over_2_5_brier",
+        "negative_binomial_btts_logloss",
+        "negative_binomial_btts_brier",
     ):
         assert result[col].notna().all()
 
