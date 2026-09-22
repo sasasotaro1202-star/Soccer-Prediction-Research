@@ -72,7 +72,7 @@ jobs:
               if r.get("head_branch") != "main":
                   continue
               status = r.get("status")
-              if status not in {"pending", "queued", "waiting", "in_progress"}:
+              if status not in {"pending", "queued", "waiting", "requested", "in_progress"}:
                   continue
               active.append(r)
 
@@ -207,7 +207,7 @@ jobs:
                   continue
               if run.get("head_sha") == main_sha:
                   continue
-              if run.get("status") not in {"pending", "queued", "waiting", "in_progress"}:
+              if run.get("status") not in {"pending", "queued", "waiting", "requested", "in_progress"}:
                   continue
               print(run.get("id"))
           PY
@@ -230,7 +230,7 @@ jobs:
                   continue
               if run.get("head_sha") != main_sha:
                   continue
-              if run.get("status") not in {"pending", "queued", "waiting", "in_progress"}:
+              if run.get("status") not in {"pending", "queued", "waiting", "requested", "in_progress"}:
                   continue
               started = run.get("run_started_at") or run.get("created_at")
               if not started:
@@ -256,7 +256,7 @@ jobs:
               run for run in payload.get("workflow_runs", [])
               if run.get("head_branch") == "main"
               and run.get("head_sha") == main_sha
-              and run.get("status") in {"pending", "queued", "waiting", "in_progress"}
+              and run.get("status") in {"pending", "queued", "waiting", "requested", "in_progress"}
           ]
           if len(active) <= 1:
               raise SystemExit(0)
