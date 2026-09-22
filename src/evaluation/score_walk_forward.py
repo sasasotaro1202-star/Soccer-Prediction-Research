@@ -115,12 +115,15 @@ def run_score_walk_forward(
         d["source_available_at_utc"], utc=True, errors="coerce"
     )
     d["pit_verified"] = d["pit_verified"].astype("boolean")
+    # PIT applies to prediction inputs. The OOS target/result label is evaluated
+    # after the fact and does not need its publication timestamp to be known at the
+    # prediction cutoff. Training rows remain strictly constrained by
+    # source_available_at_utc <= prediction_cutoff below.
     d = d[
         d["pit_verified"].eq(True)
         & d["kickoff_utc"].notna()
         & d["home_goals"].notna()
         & d["away_goals"].notna()
-        & d["source_available_at_utc"].notna()
     ].sort_values("kickoff_utc", kind="mergesort").reset_index(drop=True)
 
     if len(d) < min_train + oos_block:
