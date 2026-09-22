@@ -121,7 +121,9 @@ def run(out_dir: str = "artifacts") -> dict:
         score_oos = run_score_walk_forward(
             feats,
             min_train=max(500, int(os.getenv("SOCCER_SCORE_MIN_TRAIN", "1000"))),
-            oos_block=max(500, int(os.getenv("SOCCER_SCORE_OOS_BLOCK", "2000"))),
+            # Smaller chronological blocks create more independent development
+            # folds while reserving the final two blocks as untouched locked OOS.
+            oos_block=max(500, int(os.getenv("SOCCER_SCORE_OOS_BLOCK", "1000"))),
         )
         score_oos.to_csv(out / "score_oos_metrics.csv", index=False)
         primary_finite = _primary_score_metrics_finite(score_oos)
@@ -231,6 +233,7 @@ def run(out_dir: str = "artifacts") -> dict:
                     "feature_count": model_bundle.get("feature_count"),
                     "fit_rows": model_bundle.get("fit_rows"),
                     "score_method": model_bundle.get("score_method", "primary"),
+                    "score_parameters": model_bundle.get("score_parameters", {}),
                 },
                 training_end=model_bundle.get("fit_end"),
                 calibration={

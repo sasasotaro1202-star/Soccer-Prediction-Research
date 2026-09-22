@@ -22,6 +22,23 @@ def test_score_model_is_pit_only_and_returns_exactly_three():
     assert len(predict_score_candidates(model, "A", "B")) == 3
     assert all(0 <= x["probability"] <= 1 for x in predict_score_candidates(model, "A", "B"))
 
+def test_neutral_score_path_removes_home_venue_rate_split():
+    history = pd.DataFrame(
+        [
+            {"home_team": "A", "away_team": "B", "home_goals": 4, "away_goals": 0, "pit_verified": True},
+            {"home_team": "B", "away_team": "A", "home_goals": 0, "away_goals": 1, "pit_verified": True},
+            {"home_team": "A", "away_team": "C", "home_goals": 3, "away_goals": 0, "pit_verified": True},
+            {"home_team": "C", "away_team": "B", "home_goals": 0, "away_goals": 2, "pit_verified": True},
+        ]
+    )
+    model = fit_score_rate_model(history)
+    from src.prediction.secondary_outputs import _score_lambdas
+    normal = _score_lambdas(model, "A", "B", "AG_M", neutral_venue=False)
+    neutral = _score_lambdas(model, "A", "B", "AG_M", neutral_venue=True)
+    assert normal != neutral
+    assert all(np.isfinite(x) and x > 0 for x in neutral)
+
+
 def test_score_distribution_retains_low_tail_without_excessive_truncation():
     history = pd.DataFrame(
         [
@@ -133,6 +150,27 @@ def test_recency_score_model_is_order_sensitive_and_pit_only():
     recent_mean = model["home_mean"]
     assert recent_mean > 1.0
     assert recent_mean < 3.1
+
+
+def test_dixon_coles_dispatch_respects_neutral_venue():
+    history = pd.DataFrame(
+        [
+            {"home_team": "A", "away_team": "B", "home_goals": 4, "away_goals": 0, "kickoff_utc": "2025-01-01", "pit_verified": True},
+            {"home_team": "B", "away_team": "A", "home_goals": 0, "away_goals": 1, "kickoff_utc": "2025-01-02", "pit_verified": True},
+            {"home_team": "A", "away_team": "C", "home_goals": 3, "away_goals": 0, "kickoff_utc": "2025-01-03", "pit_verified": True},
+            {"home_team": "C", "away_team": "B", "home_goals": 0, "away_goals": 2, "kickoff_utc": "2025-01-04", "pit_verified": True},
+        ]
+    )
+    from src.models.dixon_coles import fit_dixon_coles_model
+    from src.prediction.secondary_outputs import _score_lambdas
+    model = fit_dixon_coles_model(history)
+    base = model["base_model"]
+    normal = _score_lambdas(base, "A", "B", "AG_M", neutral_venue=False)
+    neutral = _score_lambdas(base, "A", "B", "AG_M", neutral_venue=True)
+    assert normal != neutral
+    dist = predict_score_distribution(model, "A", "B", "AG_M", max_goals=5, neutral_venue=True)
+    assert len(dist) == 36
+    assert abs(sum(p for _, _, p in dist) - 1.0) < 1e-9
 
 
 def test_score_distribution_dispatches_dixon_coles_method():

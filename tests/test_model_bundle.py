@@ -58,12 +58,51 @@ def test_bundle_uses_locked_oos_verified_recency_score_method(tmp_path):
         str(path),
         "test-version",
         "snapshot-1",
-        score_selection={"selected_method": "recency", "status": "ADOPT_CANDIDATE"},
-        score_locked_gate={"selected_method": "recency", "status": "PASS"},
+        score_selection={
+            "selected_method": "recency",
+            "status": "ADOPT_CANDIDATE",
+            "selected_parameters": {"half_life_days": 400.0},
+        },
+        score_locked_gate={
+            "selected_method": "recency",
+            "status": "PASS",
+            "selected_parameters": {"half_life_days": 400.0},
+        },
     )
     bundle = load_bundle(str(path))
     assert bundle["score_method"] == "recency"
+    assert bundle["score_parameters"]["half_life_days"] == 400.0
     assert bundle["score_model"]["method"] == "pit_recency_weighted_venue_split_team_goal_rates"
+
+
+def test_bundle_persists_selected_recency_half_life(tmp_path):
+    df = _fixture().copy()
+    df["home_team"] = np.where(np.arange(len(df)) % 2 == 0, "A", "B")
+    df["away_team"] = np.where(np.arange(len(df)) % 2 == 0, "B", "A")
+    df["home_goals"] = np.where(df["target"] == 0, 2, np.where(df["target"] == 1, 1, 0))
+    df["away_goals"] = np.where(df["target"] == 2, 2, np.where(df["target"] == 1, 1, 0))
+    path = tmp_path / "production_model.pkl"
+    train_and_save_bundle(
+        df,
+        ["f1", "f2"],
+        {"weights": {"logistic": 1.0}, "temperature": 1.0},
+        str(path),
+        "test-version",
+        "snapshot-1",
+        score_selection={
+            "selected_method": "recency",
+            "selected_parameters": {"half_life_days": 400.0},
+        },
+        score_locked_gate={
+            "selected_method": "recency",
+            "status": "PASS",
+            "selected_parameters": {"half_life_days": 400.0},
+        },
+    )
+    bundle = load_bundle(str(path))
+    assert bundle["score_method"] == "recency"
+    assert bundle["score_parameters"]["half_life_days"] == 400.0
+    assert bundle["score_model"]["half_life_days"] == 400.0
 
 
 def test_bundle_does_not_promote_unverified_score_selection(tmp_path):

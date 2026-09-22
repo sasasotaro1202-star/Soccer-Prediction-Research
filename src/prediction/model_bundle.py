@@ -84,9 +84,20 @@ def train_and_save_bundle(
         selected_score_method = requested_score_method
 
     score_model = None
+    score_parameters = {}
     if has_score_columns:
         if selected_score_method == "recency":
-            score_model = fit_recency_score_rate_model(d)
+            score_params = score_selection.get("selected_parameters") or {}
+            if "half_life_days" not in score_params:
+                raise ValueError("Locked Score recency selection missing explicit half_life_days")
+            requested_days = float(score_params["half_life_days"])
+            if not np.isfinite(requested_days) or requested_days <= 0:
+                raise ValueError("Invalid locked Score recency half-life")
+            score_parameters = {"half_life_days": requested_days}
+            score_model = fit_recency_score_rate_model(
+                d,
+                half_life_days=requested_days,
+            )
         elif selected_score_method == "dixon_coles":
             score_model = fit_dixon_coles_model(d)
         else:
@@ -104,6 +115,7 @@ def train_and_save_bundle(
         "fit_end": str(d["kickoff_utc"].max()),
         "selection_source": "chronological_validation_locked_before_final_fit",
         "score_method": selected_score_method,
+        "score_parameters": score_parameters,
         "score_selection": score_selection,
         "score_locked_verification": score_locked_gate,
         **({"score_model": score_model} if score_model is not None else {}),
@@ -125,6 +137,9 @@ def train_and_save_bundle(
         "weights": weights,
         "temperature": temperature,
         "score_method": selected_score_method,
+        "score_parameters": score_parameters,
+        "score_selection": score_selection,
+        "score_locked_verification": score_locked_gate,
     }
 
 
@@ -168,10 +183,30 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
     score_method = str(bundle.get("score_method", "primary"))
     if score_method not in {"primary", "recency", "dixon_coles"}:
         raise RuntimeError(f"Unsupported production score method: {score_method}")
+    if score_method == "recency":
+        score_parameters = bundle.get("score_parameters")
+        if not isinstance(score_parameters, dict) or "half_life_days" not in score_parameters:
+            raise RuntimeError("Production recency Score bundle requires explicit half_life_days provenance")
+        try:
+            half_life_days = float(score_parameters["half_life_days"])
+            model_half_life_days = float(bundle["score_model"].get("half_life_days"))
+        except (TypeError, ValueError):
+            raise RuntimeError("Production recency Score bundle has invalid half_life_days provenance")
+        if (
+            not np.isfinite(half_life_days)
+            or not np.isfinite(model_half_life_days)
+            or half_life_days <= 0
+            or model_half_life_days <= 0
+            or abs(half_life_days - model_half_life_days) > 1e-9
+        ):
+            raise RuntimeError("Production recency Score parameter provenance mismatch")
     if bundle["schema_version"] >= 2:
         score_model = bundle.get("score_model")
         if not isinstance(score_model, dict):
             raise RuntimeError("Production model bundle score_model must be an object")
+        score_parameters = bundle.get("score_parameters")
+        if not isinstance(score_parameters, dict):
+            score_parameters = {}
         method = str(score_model.get("method", ""))
         expected_prefix = {
             "primary": "pit_smoothed_",
@@ -182,6 +217,23 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
             raise RuntimeError(
                 f"Production score method/model mismatch: score_method={score_method!r}, model_method={method!r}"
             )
+        if score_method == "recency":
+            half_life_days = float(
+                score_parameters.get(
+                    "half_life_days",
+                    score_model.get("half_life_days", 365.0),
+                )
+            )
+            model_half_life_days = float(
+                score_model.get("half_life_days", half_life_days)
+            )
+            if (
+                not np.isfinite(half_life_days)
+                or half_life_days <= 0
+                or not np.isfinite(model_half_life_days)
+                or abs(half_life_days - model_half_life_days) > 1e-9
+            ):
+                raise RuntimeError("Production recency score parameter provenance mismatch")
         if score_method != "primary":
             gate = bundle.get("score_locked_verification")
             if not isinstance(gate, dict) or gate.get("status") != "PASS" or str(gate.get("selected_method")) != score_method:

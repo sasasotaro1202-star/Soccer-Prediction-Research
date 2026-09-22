@@ -9,6 +9,8 @@ import os
 import json
 from typing import Any
 
+import numpy as np
+
 REQUIRED_GATES = ("data", "schema", "leakage", "features", "training", "backtest", "oos", "prediction", "sanity", "artifact")
 REQUIRED_ARTIFACTS = (
     "oos_metrics.csv",
@@ -165,9 +167,9 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
         score_gate = _read_json(root / "score_oos_gate.json")
         if score_gate.get("status") != "PASS":
             failures.append("score_oos_gate")
-        if int(score_gate.get("blocks", 0)) < 2:
+        if int(score_gate.get("blocks", 0)) < 3:
             failures.append("score_oos_blocks")
-        if int(score_gate.get("rows", 0)) <= 0:
+        if int(score_gate.get("rows", 0)) < 3000:
             failures.append("score_oos_rows")
         if score_gate.get("finite_metrics") is not True:
             failures.append("score_oos_finite_metrics")
@@ -180,8 +182,31 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             failures.append("score_selection_locked_oos_separation")
         if score_locked_gate.get("status") != "PASS":
             failures.append("score_locked_gate")
+        if int(score_locked_gate.get("locked_oos_blocks", 0)) < 2:
+            failures.append("score_locked_blocks")
+        if int(score_locked_gate.get("locked_oos_rows", 0)) <= 0:
+            failures.append("score_locked_rows")
+        if score_locked_gate.get("market_metrics_finite") is not True:
+            failures.append("score_locked_market_evidence")
         if verified_score_method != selected_score_method:
             failures.append("score_locked_method_mismatch")
+        if selected_score_method == "recency":
+            selected_params = score_selection.get("selected_parameters") or {}
+            verified_params = score_locked_gate.get("selected_parameters") or {}
+            try:
+                if "half_life_days" not in selected_params or "half_life_days" not in verified_params:
+                    failures.append("score_locked_parameter_missing")
+                    raise ValueError("missing explicit recency half-life provenance")
+                selected_half = float(selected_params["half_life_days"])
+                verified_half = float(verified_params["half_life_days"])
+                if not (np.isfinite(selected_half) and np.isfinite(verified_half)):
+                    raise ValueError("non-finite recency half-life provenance")
+                if selected_half <= 0 or verified_half <= 0:
+                    raise ValueError("non-positive recency half-life provenance")
+                if abs(selected_half - verified_half) > 1e-9:
+                    failures.append("score_locked_parameter_mismatch")
+            except (TypeError, ValueError):
+                failures.append("score_locked_parameter_invalid")
 
     candidate_lock = _read_json(root / "candidate_lock.json")
     if candidate_lock:

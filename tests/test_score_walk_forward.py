@@ -27,6 +27,11 @@ def test_score_walk_forward_produces_multiple_pit_safe_blocks():
     result = run_score_walk_forward(_rows(), min_train=10, oos_block=5)
     assert len(result) == 3
     assert int(result["n"].sum()) == 14
+    for half in (180, 365, 730, 1095):
+        for suffix in ("score_logloss", "over_2_5_logloss", "over_2_5_brier", "btts_logloss", "btts_brier"):
+            assert f"recency_d{half}_{suffix}" in result.columns
+        assert f"recency_d{half}_status" in result.columns
+
     for col in (
         "score_logloss",
         "exact_score_hit_rate",
@@ -51,3 +56,9 @@ def test_score_walk_forward_requires_result_publication_time():
         assert "source_available_at_utc" in str(exc)
     else:
         raise AssertionError("score OOS must fail closed without publication-time evidence")
+
+def test_score_walk_forward_does_not_require_oos_label_publication_timestamp():
+    frame = _rows(24)
+    frame.loc[frame.index[-2:], "source_available_at_utc"] = pd.NaT
+    result = run_score_walk_forward(frame, min_train=10, oos_block=5)
+    assert not result.empty

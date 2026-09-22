@@ -114,9 +114,14 @@ def fit_recency_score_rate_model(
     history: pd.DataFrame,
     *,
     shrinkage: float = 20.0,
-    half_life_rows: float = 800.0,
+    half_life_days: float | None = 365.0,
+    half_life_rows: float | None = None,
 ) -> dict[str, Any]:
-    """PIT-safe score-rate challenger with deterministic exponential row decay."""
+    """PIT-safe score-rate challenger with deterministic exponential time decay.
+
+    The preferred parameter is half_life_days because row density differs by
+    competition. half_life_rows is retained only for backward-compatible tests/artifacts.
+    """
     required = {"kickoff_utc", "home_team", "away_team", "home_goals", "away_goals", "pit_verified"}
     missing = sorted(required - set(history.columns))
     if missing:
@@ -129,9 +134,19 @@ def fit_recency_score_rate_model(
     d = d.sort_values("kickoff_utc", kind="mergesort").reset_index(drop=True)
     if d.empty:
         raise ValueError("No PIT-verified score rows available")
-    half = max(float(half_life_rows), 1.0)
-    pos = np.arange(len(d), dtype=float)
-    d["_weight"] = np.exp((pos - float(len(d) - 1)) / half)
+    latest_time = d["kickoff_utc"].max()
+    if half_life_rows is not None:
+        half_rows = max(float(half_life_rows), 1.0)
+        pos = np.arange(len(d), dtype=float)
+        d["_weight"] = np.exp((pos - float(len(d) - 1)) / half_rows)
+        decay_unit = "rows"
+        decay_value = float(half_rows)
+    else:
+        half_days = max(float(half_life_days if half_life_days is not None else 365.0), 1.0)
+        days_ago = (latest_time - d["kickoff_utc"]).dt.total_seconds().to_numpy(dtype=float) / 86400.0
+        d["_weight"] = np.exp(-np.log(2.0) * np.maximum(days_ago, 0.0) / half_days)
+        decay_unit = "days"
+        decay_value = float(half_days)
     weight_sum = max(float(d["_weight"].sum()), 1e-12)
     home_mean = float((d["home_goals"] * d["_weight"]).sum() / weight_sum)
     away_mean = float((d["away_goals"] * d["_weight"]).sum() / weight_sum)
@@ -194,7 +209,10 @@ def fit_recency_score_rate_model(
         "method": "pit_recency_weighted_venue_split_team_goal_rates",
         "training_rows": int(len(d)),
         "shrinkage": float(shrinkage),
-        "half_life_rows": float(half),
+        "half_life_rows": float(half_life_rows) if half_life_rows is not None else None,
+        "half_life_days": float(half_life_days) if half_life_rows is None else None,
+        "decay_unit": decay_unit,
+        "decay_value": decay_value,
         "training_rows": int(len(d)),
         "effective_weight_sum": float(weight_sum),
         "home_mean": home_mean,
@@ -209,6 +227,7 @@ def _score_lambdas(
     home_team: str,
     away_team: str,
     competition: str | None = None,
+    neutral_venue: bool | None = None,
 ) -> tuple[float, float]:
     teams = score_model.get("teams", {})
     home = teams.get(str(home_team))
@@ -223,16 +242,27 @@ def _score_lambdas(
     if home is None or away is None:
         raise RuntimeError("Score model has no PIT-trained rate for one or both fixture teams")
 
-    # Venue-split formulation: attack rate and opponent defensive concession rate
-    # are combined around their matching global venue mean.
-    home_attack = float(home.get("home_scored_rate", home["scored_rate"]))
-    home_defense = float(home.get("home_conceded_rate", home["conceded_rate"]))
-    away_attack = float(away.get("away_scored_rate", away["scored_rate"]))
-    away_defense = float(away.get("away_conceded_rate", away["conceded_rate"]))
-    league_home = max(base_home, 1e-6)
-    league_away = max(base_away, 1e-6)
-    home_lambda = league_home * (home_attack / league_home) * (away_defense / league_home)
-    away_lambda = league_away * (away_attack / league_away) * (home_defense / league_away)
+    if neutral_venue is True:
+        # Neutral fixtures must not inherit the home/away venue edge. Use each
+        # team's all-venue PIT rate around the competition's neutral scoring mean.
+        neutral_mean = max((base_home + base_away) / 2.0, 1e-6)
+        overall_mean = max(float(score_model.get("overall_mean", neutral_mean)), 1e-6)
+        home_attack = float(home.get("scored_rate", overall_mean))
+        home_defense = float(home.get("conceded_rate", overall_mean))
+        away_attack = float(away.get("scored_rate", overall_mean))
+        away_defense = float(away.get("conceded_rate", overall_mean))
+        home_lambda = neutral_mean * (home_attack / overall_mean) * (away_defense / overall_mean)
+        away_lambda = neutral_mean * (away_attack / overall_mean) * (home_defense / overall_mean)
+    else:
+        # Non-neutral or legacy-unknown fixtures retain the venue-split formulation.
+        home_attack = float(home.get("home_scored_rate", home["scored_rate"]))
+        home_defense = float(home.get("home_conceded_rate", home["conceded_rate"]))
+        away_attack = float(away.get("away_scored_rate", away["scored_rate"]))
+        away_defense = float(away.get("away_conceded_rate", away["conceded_rate"]))
+        league_home = max(base_home, 1e-6)
+        league_away = max(base_away, 1e-6)
+        home_lambda = league_home * (home_attack / league_home) * (away_defense / league_home)
+        away_lambda = league_away * (away_attack / league_away) * (home_defense / league_away)
     return float(np.clip(home_lambda, 0.05, 5.0)), float(np.clip(away_lambda, 0.05, 5.0))
 
 
@@ -243,6 +273,7 @@ def predict_score_distribution(
     competition: str | None = None,
     *,
     max_goals: int = 12,
+    neutral_venue: bool | None = None,
 ) -> list[tuple[int, int, float]]:
     """Return the full PIT-trained score distribution, dispatching by locked method."""
     if max_goals < 1:
@@ -256,8 +287,15 @@ def predict_score_distribution(
             away_team,
             competition,
             max_goals=max_goals,
+            neutral_venue=neutral_venue,
         )
-    home_lambda, away_lambda = _score_lambdas(score_model, home_team, away_team, competition)
+    home_lambda, away_lambda = _score_lambdas(
+        score_model,
+        home_team,
+        away_team,
+        competition,
+        neutral_venue=neutral_venue,
+    )
     return score_distribution(home_lambda, away_lambda, max_goals=max_goals)
 
 
@@ -266,8 +304,17 @@ def predict_score_candidates(
     home_team: str,
     away_team: str,
     competition: str | None = None,
+    *,
+    neutral_venue: bool | None = None,
 ) -> list[dict[str, Any]]:
-    candidates = predict_score_distribution(score_model, home_team, away_team, competition, max_goals=12)
+    candidates = predict_score_distribution(
+        score_model,
+        home_team,
+        away_team,
+        competition,
+        max_goals=12,
+        neutral_venue=neutral_venue,
+    )
     selected = select_score_candidates(candidates)
     return [
         {
@@ -286,9 +333,18 @@ def predict_score_markets(
     home_team: str,
     away_team: str,
     competition: str | None = None,
+    *,
+    neutral_venue: bool | None = None,
 ) -> dict[str, float]:
     """Return O/U and BTTS probabilities from the same full score distribution."""
-    distribution = predict_score_distribution(score_model, home_team, away_team, competition, max_goals=12)
+    distribution = predict_score_distribution(
+        score_model,
+        home_team,
+        away_team,
+        competition,
+        max_goals=12,
+        neutral_venue=neutral_venue,
+    )
     total = np.asarray([h + a for h, a, _ in distribution], dtype=float)
     home_goals = np.asarray([h for h, _, _ in distribution], dtype=int)
     away_goals = np.asarray([a for _, a, _ in distribution], dtype=int)

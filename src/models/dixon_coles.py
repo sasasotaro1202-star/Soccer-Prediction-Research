@@ -179,11 +179,18 @@ def predict_dixon_coles_distribution(
     competition: str | None = None,
     *,
     max_goals: int = 12,
+    neutral_venue: bool | None = None,
 ) -> list[tuple[int, int, float]]:
     base = model.get("base_model")
     if not isinstance(base, dict):
         raise ValueError("Dixon-Coles model missing base_model")
-    lh, la = _score_lambdas(base, home_team, away_team, competition)
+    lh, la = _score_lambdas(
+        base,
+        home_team,
+        away_team,
+        competition,
+        neutral_venue=neutral_venue,
+    )
     return dixon_coles_distribution(
         lh,
         la,

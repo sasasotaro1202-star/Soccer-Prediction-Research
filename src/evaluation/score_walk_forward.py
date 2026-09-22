@@ -41,6 +41,7 @@ def _score_block_metrics(
             row.away_team,
             row.competition if hasattr(row, "competition") else None,
             max_goals=12,
+            neutral_venue=getattr(row, "neutral_venue", None),
         )
         lookup = {(int(h), int(a)): float(p) for h, a, p in dist}
         actual_prob = lookup.get((actual_h, actual_a), 0.0)
@@ -114,12 +115,15 @@ def run_score_walk_forward(
         d["source_available_at_utc"], utc=True, errors="coerce"
     )
     d["pit_verified"] = d["pit_verified"].astype("boolean")
+    # PIT applies to prediction inputs. The OOS target/result label is evaluated
+    # after the fact and does not need its publication timestamp to be known at the
+    # prediction cutoff. Training rows remain strictly constrained by
+    # source_available_at_utc <= prediction_cutoff below.
     d = d[
         d["pit_verified"].eq(True)
         & d["kickoff_utc"].notna()
         & d["home_goals"].notna()
         & d["away_goals"].notna()
-        & d["source_available_at_utc"].notna()
     ].sort_values("kickoff_utc", kind="mergesort").reset_index(drop=True)
 
     if len(d) < min_train + oos_block:
@@ -143,29 +147,40 @@ def run_score_walk_forward(
         model = fit_score_rate_model(train)
         metrics = _score_block_metrics(oos, model)
 
-        # Challenger: recency-weighted venue/team rates. Never alters primary metrics.
-        try:
-            recency_model = fit_recency_score_rate_model(train)
-            recency_metrics = _score_block_metrics(oos, recency_model)
-            metrics.update({f"recency_{k}": v for k, v in recency_metrics.items() if k != "n"})
-            metrics["recency_status"] = "PASS"
-            metrics["recency_error"] = ""
-        except Exception as exc:
-            metrics.update({
-                "recency_score_logloss": float("nan"),
-                "recency_exact_score_hit_rate": float("nan"),
-                "recency_top3_score_hit_rate": float("nan"),
-                "recency_top4_score_hit_rate": float("nan"),
-                "recency_home_goals_mae": float("nan"),
-                "recency_away_goals_mae": float("nan"),
-                "recency_total_goals_mae": float("nan"),
-                "recency_over_2_5_logloss": float("nan"),
-                "recency_over_2_5_brier": float("nan"),
-                "recency_btts_logloss": float("nan"),
-                "recency_btts_brier": float("nan"),
-                "recency_status": "ERROR",
-                "recency_error": f"{type(exc).__name__}: {exc}",
-            })
+        # Challenger family: time-decay half-life is tuned on development OOS only.
+        # Each half-life is evaluated independently; no locked OOS row is used here.
+        for half_life_days in (180.0, 365.0, 730.0, 1095.0):
+            tag = int(half_life_days)
+            try:
+                recency_model = fit_recency_score_rate_model(
+                    train,
+                    half_life_days=half_life_days,
+                )
+                recency_metrics = _score_block_metrics(oos, recency_model)
+                metrics.update({
+                    f"recency_d{tag}_{k}": v
+                    for k, v in recency_metrics.items()
+                    if k != "n"
+                })
+                metrics[f"recency_d{tag}_status"] = "PASS"
+                metrics[f"recency_d{tag}_error"] = ""
+            except Exception as exc:
+                for metric in (
+                    "score_logloss",
+                    "exact_score_hit_rate",
+                    "top3_score_hit_rate",
+                    "top4_score_hit_rate",
+                    "home_goals_mae",
+                    "away_goals_mae",
+                    "total_goals_mae",
+                    "over_2_5_logloss",
+                    "over_2_5_brier",
+                    "btts_logloss",
+                    "btts_brier",
+                ):
+                    metrics[f"recency_d{tag}_{metric}"] = float("nan")
+                metrics[f"recency_d{tag}_status"] = "ERROR"
+                metrics[f"recency_d{tag}_error"] = f"{type(exc).__name__}: {exc}"
 
         # Challenger: Dixon-Coles low-score dependence correction. A challenger
         # error is recorded, not allowed to contaminate primary Poisson metrics.

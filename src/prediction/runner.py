@@ -178,8 +178,6 @@ def run(
     if bundle.get("schema_version", 1) >= 2:
         if "score_model" not in bundle:
             raise RuntimeError("Production bundle lacks the locked Score model")
-        if "mom_candidates_json" not in eligible.columns:
-            raise RuntimeError("MOM prediction unavailable: future fixture input lacks mom_candidates_json")
     else:
         result["model_version"] = str(bundle["model_version"])
         output_file = Path(output_path)
@@ -191,23 +189,75 @@ def run(
     score_rows = []
     score_market_rows = []
     mom_rows = []
+    mom_blocked_reason = None
     for row in eligible.itertuples(index=False):
-        score_rows.append(predict_score_candidates(bundle["score_model"], row.home_team, row.away_team, row.competition))
-        score_market_rows.append(predict_score_markets(bundle["score_model"], row.home_team, row.away_team, row.competition))
-        try:
-            mom_rows.append(predict_mom_candidates(row.mom_candidates_json))
-        except Exception as exc:
-            raise RuntimeError(f"MOM prediction is unavailable for match {row.match_id}: {type(exc).__name__}: {exc}") from exc
+        neutral_venue = getattr(row, "neutral_venue", None)
+        if pd.notna(neutral_venue):
+            neutral_venue = bool(neutral_venue)
+        else:
+            neutral_venue = None
+        score_rows.append(
+            predict_score_candidates(
+                bundle["score_model"],
+                row.home_team,
+                row.away_team,
+                row.competition,
+                neutral_venue=neutral_venue,
+            )
+        )
+        score_market_rows.append(
+            predict_score_markets(
+                bundle["score_model"],
+                row.home_team,
+                row.away_team,
+                row.competition,
+                neutral_venue=neutral_venue,
+            )
+        )
+        if hasattr(row, "mom_candidates_json") and pd.notna(getattr(row, "mom_candidates_json")):
+            try:
+                mom_rows.append(("READY", predict_mom_candidates(getattr(row, "mom_candidates_json"))))
+            except Exception as exc:
+                mom_rows.append((
+                    "BLOCKED",
+                    str(exc),
+                ))
+                mom_blocked_reason = f"{type(exc).__name__}: {exc}"
+        else:
+            mom_rows.append((
+                "BLOCKED",
+                "UPSTREAM_PLAYER_MODEL_REQUIRED",
+            ))
+            mom_blocked_reason = "UPSTREAM_PLAYER_MODEL_REQUIRED"
     for rank in range(1, 4):
         result[f"score_{rank}"] = [f"{x[rank-1]['home_goals']}-{x[rank-1]['away_goals']}" for x in score_rows]
         result[f"score_{rank}_probability"] = [x[rank-1]["probability"] for x in score_rows]
     for key in ("over_0_5", "under_0_5", "over_1_5", "under_1_5", "over_2_5", "under_2_5", "over_3_5", "under_3_5", "over_4_5", "under_4_5", "btts_yes", "btts_no"):
         result[f"market_{key}"] = [float(x[key]) for x in score_market_rows]
     for rank in range(1, 5):
-        result[f"mom_{rank}_player_id"] = [x[rank-1]["player_id"] for x in mom_rows]
-        result[f"mom_{rank}_probability"] = [x[rank-1]["probability"] for x in mom_rows]
+        ids = []
+        probs_mom = []
+        for state, payload in mom_rows:
+            if state == "READY":
+                ids.append(payload[rank - 1]["player_id"])
+                probs_mom.append(payload[rank - 1]["probability"])
+            else:
+                ids.append(pd.NA)
+                probs_mom.append(np.nan)
+        result[f"mom_{rank}_player_id"] = ids
+        result[f"mom_{rank}_probability"] = probs_mom
     result["score_top3_probability_mass"] = sum(result[f"score_{rank}_probability"] for rank in range(1, 4))
-    result["mom_top4_probability_mass"] = sum(result[f"mom_{rank}_probability"] for rank in range(1, 5))
+    result["mom_top4_probability_mass"] = result[
+        [f"mom_{rank}_probability" for rank in range(1, 5)]
+    ].sum(axis=1, min_count=4)
+    result["mom_status"] = [
+        "READY" if state == "READY" else "BLOCKED_UPSTREAM"
+        for state, _ in mom_rows
+    ]
+    result["mom_block_reason"] = [
+        "" if state == "READY" else str(payload)
+        for state, payload in mom_rows
+    ]
     result["model_version"] = str(bundle["model_version"])
     if len(result) != len(eligible) or result["match_id"].duplicated().any():
         raise RuntimeError("Production prediction output failed fixture identity invariants")
@@ -229,6 +279,9 @@ def run(
         output_path=str(output_file),
         model_version=str(bundle["model_version"]),
         oos_claimed=bool(registry.get("oos_verified", False)),
+        mom_ready_rows=int(sum(state == "READY" for state, _ in mom_rows)),
+        mom_blocked_rows=int(sum(state != "READY" for state, _ in mom_rows)),
+        mom_block_reason=mom_blocked_reason,
     )
 
 
