@@ -183,6 +183,18 @@ SOCCER_SOURCES: Final[tuple[SourceSpec, ...]] = (
         notes="Audit-only third-party dataset. PIT is accepted only from an immutable commit timestamp at/after the conservative result lower bound with unique exact result identity; no current HEAD inference.",
     ),
     SourceSpec(
+        name="footballcsv/espana (versioned 2019-20/2020-21 snapshots)",
+        kind="github_versioned_dataset",
+        role="ll_historical_pit_evidence",
+        fields=("fixtures", "results", "scores"),
+        historical=True,
+        pit_capable=True,
+        live_capable=False,
+        auth_required=False,
+        primary_for=("LL",),
+        notes="Audit-only independent Git snapshots. Accept only immutable commit timestamps at/after the conservative result lower bound with unique exact date/team/score identity.",
+    ),
+    SourceSpec(
         name="J.League Data Site",
         kind="official_web",
         role="j1_j2_j3_fixtures_results_tables_players",
