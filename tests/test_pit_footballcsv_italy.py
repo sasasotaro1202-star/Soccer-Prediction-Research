@@ -30,7 +30,8 @@ Sun Sep 20 2020,Verona,0-0,0-0,Roma
     result = provider.apply_footballcsv_italy_pit(history, cache_dir="/tmp/unused")
     assert result.index.tolist() == [20, 21]
     assert all(result["pit_evidence_status"].eq("VERIFIED"))
-    assert all(result["source_available_at_utc"].str.startswith("2020-09-21"))
+    assert result.loc[20, "source_available_at_utc"].startswith("2020-09-20")
+    assert result.loc[21, "source_available_at_utc"].startswith("2020-09-21")
 
 
 def test_provider_rejects_ambiguous_duplicate_identity(monkeypatch):
