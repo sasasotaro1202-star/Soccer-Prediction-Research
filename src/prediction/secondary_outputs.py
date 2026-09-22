@@ -287,6 +287,7 @@ def predict_score_distribution(
             away_team,
             competition,
             max_goals=max_goals,
+            neutral_venue=neutral_venue,
         )
     home_lambda, away_lambda = _score_lambdas(
         score_model,
