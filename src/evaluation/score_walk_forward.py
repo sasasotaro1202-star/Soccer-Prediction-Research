@@ -5,6 +5,7 @@ import math
 import numpy as np
 import pandas as pd
 
+from src.models.dixon_coles import fit_dixon_coles_model, predict_dixon_coles_distribution
 from src.prediction.secondary_outputs import (
     fit_score_rate_model,
     predict_score_distribution,
@@ -123,6 +124,41 @@ def run_score_walk_forward(
         oos = d.iloc[start:end]
         model = fit_score_rate_model(train)
         metrics = _score_block_metrics(oos, model)
+
+        # Challenger: Dixon-Coles low-score dependence correction. A challenger
+        # error is recorded, not allowed to contaminate primary Poisson metrics.
+        try:
+            dc_model = fit_dixon_coles_model(train)
+            dc_metrics = _score_block_metrics(
+                oos,
+                dc_model,
+                distribution_fn=predict_dixon_coles_distribution,
+            )
+            metrics.update({f"dc_{k}": v for k, v in dc_metrics.items() if k != "n"})
+            metrics["dc_rho"] = float(dc_model.get("rho", 0.0))
+            metrics["dc_rho_fit_used"] = bool(dc_model.get("rho_fit_used", False))
+            metrics["dc_status"] = "PASS"
+            metrics["dc_error"] = ""
+        except Exception as exc:
+            metrics.update(
+                {
+                    "dc_score_logloss": float(metrics["score_logloss"]),
+                    "dc_exact_score_hit_rate": float(metrics["exact_score_hit_rate"]),
+                    "dc_top3_score_hit_rate": float(metrics["top3_score_hit_rate"]),
+                    "dc_top4_score_hit_rate": float(metrics["top4_score_hit_rate"]),
+                    "dc_home_goals_mae": float(metrics["home_goals_mae"]),
+                    "dc_away_goals_mae": float(metrics["away_goals_mae"]),
+                    "dc_total_goals_mae": float(metrics["total_goals_mae"]),
+                    "dc_over_2_5_logloss": float(metrics["over_2_5_logloss"]),
+                    "dc_over_2_5_brier": float(metrics["over_2_5_brier"]),
+                    "dc_btts_logloss": float(metrics["btts_logloss"]),
+                    "dc_btts_brier": float(metrics["btts_brier"]),
+                    "dc_rho": 0.0,
+                    "dc_rho_fit_used": False,
+                    "dc_status": "ERROR",
+                    "dc_error": f"{type(exc).__name__}: {exc}",
+                }
+            )
         metrics.update(
             {
                 "oos_start": str(oos["kickoff_utc"].min()),
