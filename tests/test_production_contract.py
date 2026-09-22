@@ -1,4 +1,5 @@
 import json
+import os
 
 from src.research.production_contract import evaluate_production_contract, write_contract_result
 
@@ -32,6 +33,8 @@ def _minimal_passing_artifacts(tmp_path):
         "selected_method": "primary",
         "selection_rule": {"locked_oos_inspected": False},
     })
+    _write(tmp_path / "oos_temporal_integrity.json", {"status": "PASS", "fail_closed": True})
+    _write(tmp_path / "score_oos_temporal_integrity.json", {"status": "PASS", "fail_closed": True})
     _write(tmp_path / "score_locked_gate.json", {
         "selected_method": "primary",
         "status": "PASS",
@@ -65,7 +68,10 @@ def _minimal_passing_artifacts(tmp_path):
     # The contract only needs a non-empty bundle in the unit fixture; runtime
     # integration tests validate that the real pickle is loadable elsewhere.
     (tmp_path / "production_model.pkl").write_bytes(b"test-bundle")
-    _write(tmp_path / "model_registry.json", {"adoption_status": "ADOPT"})
+    _write(tmp_path / "model_registry.json", {
+        "adoption_status": "ADOPT",
+        "git_commit_sha": os.getenv("GITHUB_SHA", ""),
+    })
     _write(tmp_path / "production_model.json", {"adoption_status": "ADOPT"})
 
 
