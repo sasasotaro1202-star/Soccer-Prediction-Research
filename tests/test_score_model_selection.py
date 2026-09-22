@@ -59,3 +59,19 @@ def test_locked_oos_rejects_challenger_that_regresses():
     result = verify_selected_score_model(selection, locked)
     assert result["status"] == "REJECT"
     assert result["selected_method"] == "primary"
+
+
+def test_selector_holds_with_insufficient_development_blocks():
+    frame = _frame(True).iloc[:1].copy()
+    result = select_score_model(frame)
+    assert result["status"] == "HOLD"
+    assert result["selected_method"] == "primary"
+
+
+def test_locked_primary_requires_explicit_market_metrics():
+    development = _frame(True)
+    selection = select_score_model(development)
+    locked = development.drop(columns=["btts_brier"])
+    result = verify_selected_score_model(selection, locked)
+    assert result["status"] == "HOLD"
+    assert "metrics are incomplete" in result["reason"]
