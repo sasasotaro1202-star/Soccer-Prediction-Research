@@ -108,7 +108,17 @@ def _commits(
     cache_dir: str = "data/raw/pit_evidence",
 ) -> list[dict]:
     cache_path = _cache_file(cache_dir, "commits", REPOSITORY, path)
-    if cache_path.exists():
+    refresh_hours = float(os.getenv("PIT_OPENFOOTBALL_COMMIT_CACHE_REFRESH_HOURS", "6"))
+    cache_fresh = False
+    try:
+        cache_fresh = (
+            cache_path.exists()
+            and refresh_hours > 0
+            and (time.time() - cache_path.stat().st_mtime) <= refresh_hours * 3600.0
+        )
+    except OSError:
+        cache_fresh = False
+    if cache_fresh:
         try:
             payload = json.loads(cache_path.read_text(encoding="utf-8"))
             if isinstance(payload, list):
