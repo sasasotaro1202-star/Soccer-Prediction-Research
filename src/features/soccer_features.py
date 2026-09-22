@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 from collections import defaultdict, deque
-import os
 
 import numpy as np
 import pandas as pd
@@ -10,9 +7,6 @@ from src.data.pit_policy import is_available_by_cutoff
 
 ELO_K = 20.0
 ELO_HOME_ADV = 55.0
-# Explicitly require venue classification for competitions where fixtures are
-# commonly played at neutral venues. Unknown venue state must not silently
-# receive normal home advantage.
 NEUTRAL_VENUE_REQUIRED_COMPETITIONS = {"AG_M", "AG_W"}
 STAT_KEYS = ("shots", "shots_on_target", "corners", "fouls", "yellow_cards", "red_cards")
 
@@ -135,15 +129,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     avail_ptr = 0
     processed_event_max = pd.NaT
     rows = []
-    # PIT validity requires only a small explicitly-available history prefix.
-    # Longer 3/5/10/20-game summaries remain sparse when fewer games exist; those
-    # values stay missing and are handled by the model's fitted imputer.
-    configured_min_history = int(os.getenv("SOCCER_MIN_PIT_HISTORY_GAMES", "2"))
-    required_window = max(1, min(configured_min_history, min(windows) if windows else configured_min_history))
-
-    # PIT state contains only observations with explicit availability by the
-    # prediction cutoff. Unknown-publication rows are excluded rather than
-    # treated as safe or used to invalidate otherwise valid sparse windows.
+    required_window = min(windows) if windows else 0
 
     def reset_state() -> None:
         nonlocal team_games, team_last, team_last_available, h2h, elo, processed_event_max
@@ -266,12 +252,8 @@ def add_target(features: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
         cols.append("source_available_at_utc")
     actual = matches[cols].copy()
     if "source_available_at_utc" in actual.columns:
-        actual["source_available_at_utc"] = pd.to_datetime(
-            actual["source_available_at_utc"], utc=True, errors="coerce"
-        )
+        actual["source_available_at_utc"] = pd.to_datetime(actual["source_available_at_utc"], utc=True, errors="coerce")
     out = features.merge(actual, on="match_id", how="left", validate="one_to_one")
-    # Missing outcomes must remain missing. Treating NaN comparisons as an away win
-    # would create synthetic labels and contaminate chronological OOS training.
     home_goals = pd.to_numeric(out["home_goals"], errors="coerce")
     away_goals = pd.to_numeric(out["away_goals"], errors="coerce")
     out["target"] = np.select(
@@ -280,11 +262,7 @@ def add_target(features: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
             home_goals > away_goals,
             home_goals == away_goals,
         ],
-        [
-            np.nan,
-            0,
-            1,
-        ],
+        [np.nan, 0, 1],
         default=2,
     )
     return out
