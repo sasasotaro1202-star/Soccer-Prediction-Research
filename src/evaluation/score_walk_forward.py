@@ -17,7 +17,12 @@ def _binary_logloss(y: int, p: float) -> float:
     return float(-(y * math.log(p) + (1 - y) * math.log(1 - p)))
 
 
-def _score_block_metrics(block: pd.DataFrame, model: dict) -> dict[str, float]:
+def _score_block_metrics(
+    block: pd.DataFrame,
+    model: dict,
+    *,
+    distribution_fn=predict_score_distribution,
+) -> dict[str, float]:
     exact_hits = top3_hits = top4_hits = 0
     exact_losses = []
     home_abs = away_abs = total_abs = 0.0
@@ -29,7 +34,7 @@ def _score_block_metrics(block: pd.DataFrame, model: dict) -> dict[str, float]:
     for row in block.itertuples(index=False):
         actual_h = int(row.home_goals)
         actual_a = int(row.away_goals)
-        dist = predict_score_distribution(
+        dist = distribution_fn(
             model,
             row.home_team,
             row.away_team,
