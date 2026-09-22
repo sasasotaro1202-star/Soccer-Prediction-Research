@@ -13,6 +13,7 @@ from src.models.negative_binomial import (
 from src.prediction.secondary_outputs import (
     fit_recency_score_rate_model,
     fit_time_decay_score_rate_model,
+    fit_neutral_aware_score_rate_model,
     fit_score_rate_model,
     predict_score_distribution,
 )
@@ -40,12 +41,20 @@ def _score_block_metrics(
     for row in block.itertuples(index=False):
         actual_h = int(row.home_goals)
         actual_a = int(row.away_goals)
+        neutral_venue = bool(
+            getattr(row, "neutral_venue", False)
+        ) if hasattr(row, "neutral_venue") else False
+        if isinstance(neutral_venue, float) and np.isnan(neutral_venue):
+            neutral_venue = False
+        distribution_kwargs = {"max_goals": 12}
+        if str(model.get("method", "")).startswith("neutral_aware_"):
+            distribution_kwargs["neutral_venue"] = neutral_venue
         dist = distribution_fn(
             model,
             row.home_team,
             row.away_team,
             row.competition if hasattr(row, "competition") else None,
-            max_goals=12,
+            **distribution_kwargs,
         )
         lookup = {(int(h), int(a)): float(p) for h, a, p in dist}
         actual_prob = lookup.get((actual_h, actual_a), 0.0)
@@ -147,6 +156,25 @@ def run_score_walk_forward(
             )
         model = fit_score_rate_model(train)
         metrics = _score_block_metrics(oos, model)
+
+        # Challenger: neutral-venue-aware rates. Standard fixtures match primary exactly;
+        # neutral fixtures avoid importing a home-field asymmetry that was not observed.
+        try:
+            neutral_model = fit_neutral_aware_score_rate_model(train)
+            neutral_metrics = _score_block_metrics(oos, neutral_model)
+            metrics.update({f"neutral_aware_{k}": v for k, v in neutral_metrics.items() if k != "n"})
+            metrics["neutral_aware_status"] = "PASS"
+            metrics["neutral_aware_error"] = ""
+        except Exception as exc:
+            for key in (
+                "score_logloss", "exact_score_hit_rate", "top3_score_hit_rate",
+                "top4_score_hit_rate", "home_goals_mae", "away_goals_mae",
+                "total_goals_mae", "over_2_5_logloss", "over_2_5_brier",
+                "btts_logloss", "btts_brier",
+            ):
+                metrics[f"neutral_aware_{key}"] = float("nan")
+            metrics["neutral_aware_status"] = "ERROR"
+            metrics["neutral_aware_error"] = f"{type(exc).__name__}: {exc}"
 
         # Challenger: recency-weighted venue/team rates. Never alters primary metrics.
         try:
