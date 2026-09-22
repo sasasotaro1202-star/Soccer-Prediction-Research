@@ -142,6 +142,17 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
         if not isinstance(external_stability, dict) or external_stability.get("status") not in {"PASS"}:
             failures.append("external_stability_gate")
         if adoption_status == "ADOPT":
+            locked_block_rows = adoption.get("locked_block_rows")
+            if not isinstance(locked_block_rows, list) or not locked_block_rows:
+                failures.append("adoption_locked_block_rows_missing")
+            else:
+                try:
+                    if not all(int(x) >= 500 for x in locked_block_rows):
+                        failures.append("adoption_locked_block_rows_insufficient")
+                except (TypeError, ValueError):
+                    failures.append("adoption_locked_block_rows_invalid")
+            if int(adoption.get("minimum_locked_rows_per_block", 0)) < 500:
+                failures.append("adoption_minimum_locked_rows_per_block")
             if not _file_nonempty(root, "production_model.pkl"):
                 failures.append("artifact:production_model.pkl")
             registry = _read_json(root / "model_registry.json")
@@ -173,6 +184,19 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             failures.append("score_oos_minimum_total_blocks")
         if int(score_gate.get("rows", 0)) <= 0:
             failures.append("score_oos_rows")
+        if int(score_gate.get("minimum_rows_per_block", 0)) < 500:
+            failures.append("score_oos_minimum_rows_per_block")
+        score_block_rows = score_gate.get("block_rows")
+        if not isinstance(score_block_rows, list) or not score_block_rows:
+            failures.append("score_oos_block_rows_missing")
+        else:
+            try:
+                if not all(int(x) >= 500 for x in score_block_rows):
+                    failures.append("score_oos_block_rows_insufficient")
+            except (TypeError, ValueError):
+                failures.append("score_oos_block_rows_invalid")
+        if score_gate.get("block_rows_ok") is not True:
+            failures.append("score_oos_block_rows_gate")
         if score_gate.get("finite_metrics") is not True:
             failures.append("score_oos_finite_metrics")
 
@@ -203,6 +227,17 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
         missing_locked_metrics = [
             metric for metric in required_locked_metrics if metric not in locked_metrics
         ]
+        locked_block_rows = score_locked_gate.get("locked_block_rows")
+        if not isinstance(locked_block_rows, list) or not locked_block_rows:
+            failures.append("score_locked_block_rows_missing")
+        else:
+            try:
+                if not all(int(x) >= 500 for x in locked_block_rows):
+                    failures.append("score_locked_block_rows_insufficient")
+            except (TypeError, ValueError):
+                failures.append("score_locked_block_rows_invalid")
+        if int(score_locked_gate.get("minimum_rows_per_block", 0)) < 500:
+            failures.append("score_locked_minimum_rows_per_block")
         if missing_locked_metrics:
             failures.append(
                 "score_locked_metrics_missing:" + ",".join(missing_locked_metrics)
