@@ -78,6 +78,13 @@ def test_provider_fails_closed_on_ambiguous_identity(tmp_path):
 
 
 def test_provider_supports_multiple_competitions_from_explicit_config(tmp_path):
-    assert set(__import__("src.data.pit_footballcsv_weekly", fromlist=["CONFIG"]).CONFIG) == {
-        "EPL", "BL1", "LL", "FL1", "SA", "ERE"
-    }
+    config = __import__("src.data.pit_footballcsv_weekly", fromlist=["CONFIG"]).CONFIG
+    assert set(config) == {"EPL", "BL1", "LL", "FL1", "SA", "ERE"}
+    assert all(set(seasons) >= {2017, 2018, 2019, 2020} for seasons in config.values())
+
+
+def test_extended_snapshots_are_immutable_2020_evidence():
+    module = __import__("src.data.pit_footballcsv_weekly", fromlist=["REPOSITORY", "CONFIG"])
+    assert module.REPOSITORY == "footballcsv/cache.footballdata"
+    assert module.CONFIG["EPL"][2017] == "2017-18/eng.1.csv"
+    assert module.CONFIG["EPL"][2018] == "2018-19/eng.1.csv"
