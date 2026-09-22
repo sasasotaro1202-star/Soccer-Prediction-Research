@@ -25,6 +25,14 @@ def _make_artifacts(tmp_path):
     (tmp_path / "score_locked_gate.json").write_text(
         json.dumps({"status": "PASS"}), encoding="utf-8"
     )
+    _write_json(
+        tmp_path / "oos_temporal_integrity.json",
+        {"status": "PASS", "fail_closed": True},
+    )
+    _write_json(
+        tmp_path / "score_oos_temporal_integrity.json",
+        {"status": "PASS", "fail_closed": True},
+    )
     for name in (
         "oos_metrics.csv",
         "model_selection.csv",
@@ -44,6 +52,8 @@ def _frames():
             "logloss": [0.9, 0.92, 0.91],
             "brier": [0.18, 0.19, 0.185],
             "n": [1000, 1000, 1000],
+            "oos_start": ["2020-01-01", "2020-06-01", "2021-01-01"],
+            "oos_end": ["2020-05-31", "2020-12-31", "2021-06-30"],
         }
     )
     development = wf.iloc[:1].copy()
