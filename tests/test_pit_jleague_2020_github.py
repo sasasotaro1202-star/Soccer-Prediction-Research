@@ -82,7 +82,7 @@ def test_provider_accepts_only_snapshot_after_conservative_lower_bound(monkeypat
     assert result.loc[10, "pit_evidence_status"] == "VERIFIED"
     assert result.loc[10, "source_available_at_utc"] == "2020-09-11T04:03:30+00:00"
     assert "immutable_jleague_2020_snapshot" in result.loc[10, "pit_evidence_reason"]
-    assert pd.isna(result.loc[11, "pit_evidence_status"]) is True
+    assert 11 not in result.index
 
 
 def test_provider_fails_closed_on_ambiguous_exact_identity(monkeypatch, tmp_path):
