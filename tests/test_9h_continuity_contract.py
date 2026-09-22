@@ -34,3 +34,7 @@ def test_recovery_workflow_has_watchdog_and_self_chaining_dispatch():
     assert "DISPATCH)" in text
     assert "cancel_duplicate_current_main_runs" in text
     assert "one canonical run retained" in text
+    assert "?per_page=100" in text
+    assert "max_active_age_hours = 10.5" in text
+    assert "cancel_stale_current_main_runs" in text
+    assert "before fresh dispatch" in text
