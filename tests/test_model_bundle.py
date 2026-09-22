@@ -103,6 +103,7 @@ def test_load_bundle_rejects_unverified_non_primary_score_method(tmp_path):
     with path.open("rb") as fh:
         bundle = __import__("pickle").load(fh)
     bundle["score_method"] = "recency"
+    bundle["score_model"]["method"] = "pit_recency_weighted_venue_split_team_goal_rates"
     bundle["score_locked_verification"] = {"selected_method": "recency", "status": "REJECT"}
     with path.open("wb") as fh:
         __import__("pickle").dump(bundle, fh)
