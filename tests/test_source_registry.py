@@ -28,3 +28,11 @@ def test_lookup_and_names_are_stable():
     assert get_source("Sofascore").kind == "public_api"
     assert "API-Football" in source_names()
     assert "Understat" in source_names()
+
+
+def test_versioned_j1_2020_source_is_explicitly_pit_capable():
+    source = get_source(
+        "ewalldo/Japan-J1-League-Data-and-Data-Analysis (versioned J1 2020 snapshot)"
+    )
+    assert source.pit_capable is True
+    assert source.auth_required is False
