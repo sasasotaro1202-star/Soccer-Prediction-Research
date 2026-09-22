@@ -8,7 +8,8 @@ import numpy as np
 import pandas as pd
 
 from src.models.baselines import candidates
-from src.prediction.secondary_outputs import fit_score_rate_model
+from src.models.dixon_coles import fit_dixon_coles_model
+from src.prediction.secondary_outputs import fit_recency_score_rate_model, fit_score_rate_model
 
 
 def _temperature_transform(proba: np.ndarray, temperature: float) -> np.ndarray:
@@ -26,6 +27,8 @@ def train_and_save_bundle(
     output_path: str,
     model_version: str,
     data_snapshot_id: str,
+    score_selection: dict[str, Any] | None = None,
+    score_locked_gate: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Train the already-locked production ensemble on all data available after evaluation.
 
@@ -68,7 +71,27 @@ def train_and_save_bundle(
         fitted[name] = model
 
     has_score_columns = {"home_team", "away_team", "home_goals", "away_goals"}.issubset(d.columns)
-    score_model = fit_score_rate_model(d) if has_score_columns else None
+    score_selection = score_selection if isinstance(score_selection, dict) else {}
+    score_locked_gate = score_locked_gate if isinstance(score_locked_gate, dict) else {}
+    selected_score_method = "primary"
+    requested_score_method = str(score_selection.get("selected_method", "primary"))
+    verified_score_method = str(score_locked_gate.get("selected_method", "primary"))
+    if (
+        score_locked_gate.get("status") == "PASS"
+        and requested_score_method in {"recency", "dixon_coles"}
+        and verified_score_method == requested_score_method
+    ):
+        selected_score_method = requested_score_method
+
+    score_model = None
+    if has_score_columns:
+        if selected_score_method == "recency":
+            score_model = fit_recency_score_rate_model(d)
+        elif selected_score_method == "dixon_coles":
+            score_model = fit_dixon_coles_model(d)
+        else:
+            score_model = fit_score_rate_model(d)
+
     bundle = {
         "schema_version": 2 if score_model is not None else 1,
         "model_version": model_version,
@@ -80,6 +103,9 @@ def train_and_save_bundle(
         "fit_rows": int(len(d)),
         "fit_end": str(d["kickoff_utc"].max()),
         "selection_source": "chronological_validation_locked_before_final_fit",
+        "score_method": selected_score_method,
+        "score_selection": score_selection,
+        "score_locked_verification": score_locked_gate,
         **({"score_model": score_model} if score_model is not None else {}),
         "mom_model": {"status": "UPSTREAM_PLAYER_MODEL_REQUIRED", "output_top_k": 4},
     }
@@ -98,6 +124,7 @@ def train_and_save_bundle(
         "feature_count": len(feature_cols),
         "weights": weights,
         "temperature": temperature,
+        "score_method": selected_score_method,
     }
 
 
@@ -138,6 +165,27 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
         raise RuntimeError("Production model bundle ensemble weights are not normalized")
     if bundle["schema_version"] >= 2 and "score_model" not in bundle:
         raise RuntimeError("Production model bundle schema 2 requires score_model")
+    score_method = str(bundle.get("score_method", "primary"))
+    if score_method not in {"primary", "recency", "dixon_coles"}:
+        raise RuntimeError(f"Unsupported production score method: {score_method}")
+    if bundle["schema_version"] >= 2:
+        score_model = bundle.get("score_model")
+        if not isinstance(score_model, dict):
+            raise RuntimeError("Production model bundle score_model must be an object")
+        method = str(score_model.get("method", ""))
+        expected_prefix = {
+            "primary": "pit_smoothed_",
+            "recency": "pit_recency_weighted_",
+            "dixon_coles": "dixon_coles_",
+        }[score_method]
+        if not method.startswith(expected_prefix):
+            raise RuntimeError(
+                f"Production score method/model mismatch: score_method={score_method!r}, model_method={method!r}"
+            )
+        if score_method != "primary":
+            gate = bundle.get("score_locked_verification")
+            if not isinstance(gate, dict) or gate.get("status") != "PASS" or str(gate.get("selected_method")) != score_method:
+                raise RuntimeError("Non-primary score method requires matching PASS locked-OOS verification")
     temperature = float(bundle["temperature"])
     if not np.isfinite(temperature) or temperature <= 0:
         raise RuntimeError("Production model bundle temperature is invalid")

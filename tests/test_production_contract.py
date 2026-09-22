@@ -24,9 +24,18 @@ def _minimal_passing_artifacts(tmp_path):
         "oos_metrics.csv", "model_selection.csv",
         "development_oos_metrics.csv", "locked_oos_metrics.csv",
         "score_oos_metrics.csv", "score_oos_gate.json",
+        "score_model_selection.json", "score_locked_gate.json",
     ):
         (tmp_path / name).write_text("metric,value\nplaceholder,1\n", encoding="utf-8")
     _write(tmp_path / "score_oos_gate.json", {"status": "PASS", "blocks": 2, "rows": 10, "finite_metrics": True})
+    _write(tmp_path / "score_model_selection.json", {
+        "selected_method": "primary",
+        "selection_rule": {"locked_oos_inspected": False},
+    })
+    _write(tmp_path / "score_locked_gate.json", {
+        "selected_method": "primary",
+        "status": "PASS",
+    })
     _write(tmp_path / "candidate_lock.json", {"locked_oos_untouched": True, "locked_oos_blocks": 2})
     _write(tmp_path / "adoption_decision.json", {
         "status": "ADOPT",

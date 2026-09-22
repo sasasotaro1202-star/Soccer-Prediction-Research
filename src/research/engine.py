@@ -20,6 +20,7 @@ from src.prediction.model_bundle import train_and_save_bundle
 from src.research.adoption import adoption_decision
 from src.research.llm import weakness_advice
 from src.research.registry import save_registry
+from src.research.score_model_selection import select_score_model, verify_selected_score_model
 from src.research.stability_gate import evaluate_stability
 
 EXCLUDED_MODEL_COLUMNS = {"match_id", "competition", "season", "season_start", "kickoff_utc", "home_team", "away_team", "prediction_cutoff_at_utc", "home_goals", "away_goals", "target", "pit_verified", "feature_source_max_available_at_utc"}
@@ -146,6 +147,18 @@ def run(out_dir: str = "artifacts") -> dict:
         json.dumps(score_oos_status, indent=2, ensure_ascii=False, default=str),
         encoding="utf-8",
     )
+    score_development_oos = score_oos.iloc[:-2].copy() if len(score_oos) >= 3 else score_oos.copy()
+    score_selection = select_score_model(score_development_oos)
+    score_locked_oos = score_oos.tail(2).copy() if len(score_oos) >= 2 else pd.DataFrame()
+    score_locked_gate = verify_selected_score_model(score_selection, score_locked_oos)
+    (out / "score_model_selection.json").write_text(
+        json.dumps(score_selection, indent=2, ensure_ascii=False, default=str),
+        encoding="utf-8",
+    )
+    (out / "score_locked_gate.json").write_text(
+        json.dumps(score_locked_gate, indent=2, ensure_ascii=False, default=str),
+        encoding="utf-8",
+    )
 
     wf, selections = run_walk_forward(feats, _model_features(feats)); wf.to_csv(out / "oos_metrics.csv", index=False); selections.to_csv(out / "model_selection.csv", index=False)
     if len(wf) < 3:
@@ -181,9 +194,29 @@ def run(out_dir: str = "artifacts") -> dict:
     model_bundle = None
     if adoption.get("status") == "ADOPT" and not selections.empty:
         selection = selections.iloc[-1].to_dict()
-        model_version = hashlib.sha256(json.dumps({"snapshot_id": snapshot_id(history), "selection": selection}, sort_keys=True, default=str).encode()).hexdigest()[:16]
+        model_version = hashlib.sha256(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_id(history),
+                    "selection": selection,
+                    "score_selection": score_selection,
+                    "score_locked_gate": score_locked_gate,
+                },
+                sort_keys=True,
+                default=str,
+            ).encode()
+        ).hexdigest()[:16]
         try:
-            model_bundle = train_and_save_bundle(feats, _model_features(feats), selection, str(out / "production_model.pkl"), model_version, snapshot_id(history))
+            model_bundle = train_and_save_bundle(
+                feats,
+                _model_features(feats),
+                selection,
+                str(out / "production_model.pkl"),
+                model_version,
+                snapshot_id(history),
+                score_selection=score_selection,
+                score_locked_gate=score_locked_gate,
+            )
             registry = save_registry(
                 str(out / "model_registry.json"),
                 model_version=model_version,
@@ -193,9 +226,17 @@ def run(out_dir: str = "artifacts") -> dict:
                 data_snapshot_id=snapshot_id(history),
                 metrics={"locked_oos": locked.to_dict(orient="records"), "development_oos": development_oos.to_dict(orient="records")},
                 adoption_status="ADOPT",
-                parameters={"weights": model_bundle.get("weights", {}), "feature_count": model_bundle.get("feature_count"), "fit_rows": model_bundle.get("fit_rows")},
+                parameters={
+                    "weights": model_bundle.get("weights", {}),
+                    "feature_count": model_bundle.get("feature_count"),
+                    "fit_rows": model_bundle.get("fit_rows"),
+                    "score_method": model_bundle.get("score_method", "primary"),
+                },
                 training_end=model_bundle.get("fit_end"),
-                calibration={"temperature": model_bundle.get("temperature")},
+                calibration={
+                    "temperature": model_bundle.get("temperature"),
+                    "score_method": model_bundle.get("score_method", "primary"),
+                },
             )
             (out / "production_model.json").write_text(json.dumps({**model_bundle, "adoption_status": "ADOPT", "registry": registry}, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
         except Exception as exc:

@@ -244,9 +244,19 @@ def predict_score_distribution(
     *,
     max_goals: int = 12,
 ) -> list[tuple[int, int, float]]:
-    """Return the full PIT-trained score distribution for evaluation/derivation."""
+    """Return the full PIT-trained score distribution, dispatching by locked method."""
     if max_goals < 1:
         raise ValueError("max_goals must be at least 1")
+    method = str(score_model.get("method", ""))
+    if method.startswith("dixon_coles_"):
+        from src.models.dixon_coles import predict_dixon_coles_distribution
+        return predict_dixon_coles_distribution(
+            score_model,
+            home_team,
+            away_team,
+            competition,
+            max_goals=max_goals,
+        )
     home_lambda, away_lambda = _score_lambdas(score_model, home_team, away_team, competition)
     return score_distribution(home_lambda, away_lambda, max_goals=max_goals)
 
