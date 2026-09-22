@@ -8,12 +8,12 @@ exact completed-result identity. Commit time is retained as the observed
 publication proxy; no timing is inferred earlier than the commit.
 """
 
-import base64
 import hashlib
 import json
 import os
 import time
 import unicodedata
+from datetime import timezone
 from pathlib import Path
 from typing import Any
 
@@ -45,9 +45,8 @@ def _utc(value: Any):
     except Exception:
         return None
     if dt.tzinfo is None:
-        from datetime import timezone
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(dt.tzinfo).astimezone(__import__("datetime").timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 def _headers() -> dict[str, str]:
     headers = {
@@ -206,8 +205,18 @@ def apply_country_openfootball_pit(
             continue
         try:
             commits = _commits(cfg["repo"], path, cache_dir)
-        except Exception:
+        except Exception as exc:
+            reason = f"immutable_openfootball_commit_history_unavailable:{type(exc).__name__}:{exc}"
+            for idx in pending:
+                out.at[idx, "pit_evidence_status"] = "UNVERIFIABLE"
+                out.at[idx, "pit_evidence_reason"] = reason
             continue
+        if not commits:
+            for idx in pending:
+                out.at[idx, "pit_evidence_status"] = "UNVERIFIABLE"
+                out.at[idx, "pit_evidence_reason"] = "immutable_openfootball_commit_history_empty"
+            continue
+
         ordered = []
         for commit in commits:
             dt = _commit_time(commit)
@@ -216,6 +225,8 @@ def apply_country_openfootball_pit(
                 ordered.append((dt, str(sha)))
         ordered.sort()
         parsed: dict[str, set[tuple] | None] = {}
+        snapshot_failures = 0
+        usable_snapshot_seen = False
         for dt, sha in ordered:
             eligible = [idx for idx, (_, bound) in pending.items() if dt >= bound]
             if not eligible:
@@ -227,8 +238,10 @@ def apply_country_openfootball_pit(
                         str(competition),
                         start_year,
                     )
+                    usable_snapshot_seen = True
             except Exception:
                 parsed[sha] = None
+                snapshot_failures += 1
             keys = parsed[sha]
             if keys is None:
                 continue
@@ -243,4 +256,13 @@ def apply_country_openfootball_pit(
                     del pending[idx]
             if not pending:
                 break
+
+        if pending:
+            if not usable_snapshot_seen and snapshot_failures:
+                reason = "immutable_openfootball_snapshot_fetch_or_parse_failed"
+            else:
+                reason = "immutable_openfootball_snapshot_contains_no_exact_result_after_result_lower_bound"
+            for idx in pending:
+                out.at[idx, "pit_evidence_status"] = "UNVERIFIABLE"
+                out.at[idx, "pit_evidence_reason"] = reason
     return out
