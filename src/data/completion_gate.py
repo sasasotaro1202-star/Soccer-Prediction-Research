@@ -142,17 +142,6 @@ def _pit_preflight(root: Path) -> dict:
         openfootball_verified = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
 
     snapshot_before = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
-    try:
-        history = _merge_pit_evidence(
-            history,
-            apply_country_openfootball_pit(history, cache_dir=str(root / "pit_evidence")),
-        )
-        country_openfootball_after = int((history.get("pit_evidence_status", pd.Series(dtype=str)) == "VERIFIED").sum())
-        country_openfootball_error = None
-    except Exception as exc:
-        country_openfootball_after = country_openfootball_before
-        country_openfootball_error = f"{type(exc).__name__}: {exc}"
-
     country_openfootball_before = snapshot_before
     country_openfootball_after = country_openfootball_before
     try:
