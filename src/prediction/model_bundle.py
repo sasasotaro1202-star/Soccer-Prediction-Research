@@ -165,6 +165,27 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
         raise RuntimeError("Production model bundle ensemble weights are not normalized")
     if bundle["schema_version"] >= 2 and "score_model" not in bundle:
         raise RuntimeError("Production model bundle schema 2 requires score_model")
+    score_method = str(bundle.get("score_method", "primary"))
+    if score_method not in {"primary", "recency", "dixon_coles"}:
+        raise RuntimeError(f"Unsupported production score method: {score_method}")
+    if bundle["schema_version"] >= 2:
+        score_model = bundle.get("score_model")
+        if not isinstance(score_model, dict):
+            raise RuntimeError("Production model bundle score_model must be an object")
+        method = str(score_model.get("method", ""))
+        expected_prefix = {
+            "primary": "pit_smoothed_",
+            "recency": "pit_recency_weighted_",
+            "dixon_coles": "dixon_coles_",
+        }[score_method]
+        if not method.startswith(expected_prefix):
+            raise RuntimeError(
+                f"Production score method/model mismatch: score_method={score_method!r}, model_method={method!r}"
+            )
+        if score_method != "primary":
+            gate = bundle.get("score_locked_verification")
+            if not isinstance(gate, dict) or gate.get("status") != "PASS" or str(gate.get("selected_method")) != score_method:
+                raise RuntimeError("Non-primary score method requires matching PASS locked-OOS verification")
     temperature = float(bundle["temperature"])
     if not np.isfinite(temperature) or temperature <= 0:
         raise RuntimeError("Production model bundle temperature is invalid")
