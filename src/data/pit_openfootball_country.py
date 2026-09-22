@@ -87,27 +87,67 @@ def _cache_file(cache_dir: str, prefix: str, *parts: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
-def _commits(repo: str, path: str, cache_dir: str) -> list[dict[str, Any]]:
+def _commits(
+    repo: str,
+    path: str,
+    cache_dir: str,
+    *,
+    min_commit_time: Any = None,
+) -> list[dict[str, Any]]:
+    """Fetch enough immutable commit history to cover the oldest required PIT bound."""
     cache = _cache_file(cache_dir, "commits", repo, path)
     try:
         refresh_hours = float(os.getenv("PIT_OPENFOOTBALL_COUNTRY_COMMIT_CACHE_REFRESH_HOURS", "6"))
     except ValueError:
         refresh_hours = 6.0
-    fresh = cache.exists() and refresh_hours > 0 and (time.time() - cache.stat().st_mtime) <= refresh_hours * 3600.0
-    if fresh:
+    min_time = _utc(min_commit_time)
+
+    if cache.exists() and refresh_hours > 0 and (time.time() - cache.stat().st_mtime) <= refresh_hours * 3600.0:
         try:
             payload = json.loads(cache.read_text(encoding="utf-8"))
             if isinstance(payload, list) and payload:
-                return payload
+                oldest = min((_commit_time(c) for c in payload if _commit_time(c) is not None), default=None)
+                if min_time is None or (oldest is not None and oldest <= min_time):
+                    return payload
         except Exception:
             pass
-    payload = _request_json(
-        f"{GITHUB_API}/repos/{repo}/commits?path={path}&per_page=100"
-    )
-    if not isinstance(payload, list):
-        return []
-    cache.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    return payload
+
+    try:
+        try:
+            max_pages = int(os.getenv("PIT_OPENFOOTBALL_COUNTRY_MAX_COMMIT_PAGES", "12"))
+        except ValueError:
+            max_pages = 12
+        max_pages = max(1, min(50, max_pages))
+        commits: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for page in range(1, max_pages + 1):
+            payload = _request_json(
+                f"{GITHUB_API}/repos/{repo}/commits?path={path}&per_page=100&page={page}"
+            )
+            if not isinstance(payload, list):
+                raise RuntimeError("immutable_openfootball_commit_history_invalid_response")
+            if not payload:
+                break
+            for item in payload:
+                sha = str(item.get("sha", "")).strip()
+                if sha and sha not in seen:
+                    seen.add(sha)
+                    commits.append(item)
+
+            if len(payload) < 100:
+                break
+            if min_time is not None:
+                times = [_commit_time(item) for item in payload]
+                dated = [dt for dt in times if dt is not None]
+                if dated and min(dated) <= min_time:
+                    break
+
+        if commits:
+            cache.write_text(json.dumps(commits, ensure_ascii=False), encoding="utf-8")
+        return commits
+    except Exception:
+        # Do not replace a previously good non-empty cache with an empty failure.
+        raise
 
 def _snapshot(repo: str, path: str, sha: str, cache_dir: str, timeout: int) -> str:
     cache = _cache_file(cache_dir, "snapshot", repo, path, sha)
@@ -204,7 +244,8 @@ def apply_country_openfootball_pit(
         if not pending:
             continue
         try:
-            commits = _commits(cfg["repo"], path, cache_dir)
+            min_bound = min((bound for _, bound in pending.values()), default=None)
+            commits = _commits(cfg["repo"], path, cache_dir, min_commit_time=min_bound)
         except Exception as exc:
             reason = f"immutable_openfootball_commit_history_unavailable:{type(exc).__name__}:{exc}"
             for idx in pending:
