@@ -42,3 +42,51 @@ def test_bundle_rejects_missing_features(tmp_path):
     bundle = load_bundle(str(path))
     with pytest.raises(RuntimeError, match="missing model features"):
         predict_bundle(bundle, df[["f1"]].iloc[:1])
+
+
+def test_bundle_preserves_and_applies_contextual_weights(tmp_path):
+    df = _fixture().copy()
+    df["competition"] = "EPL"
+    df["elo_diff"] = 0.0
+    df["home_goal_total_avg_5"] = 2.0
+    df["away_goal_total_avg_5"] = 2.0
+    df["home_draw_rate_20"] = 0.25
+    df["away_draw_rate_20"] = 0.25
+    df["rest_diff_hours"] = 0.0
+    df["neutral_venue_known"] = True
+    df["neutral_venue"] = False
+    feature_cols = ["f1", "f2"]
+    path = tmp_path / "production_model.pkl"
+    selection = {
+        "weights": {"logistic": 0.5, "hist_gb": 0.5},
+        "temperature": 1.0,
+        "context_weights": {
+            "EPL|EVEN|MID_LOW|MID_LOW|EVEN|HOME_AWAY": {
+                "logistic": 1.0,
+                "hist_gb": 0.0,
+            }
+        },
+        "contextual_temperatures": {
+            "EPL|EVEN|MID_LOW|MID_LOW|EVEN|HOME_AWAY": 1.0,
+        },
+    }
+    train_and_save_bundle(
+        df,
+        feature_cols,
+        selection,
+        str(path),
+        "test-context-version",
+        "snapshot-context",
+    )
+    bundle = load_bundle(str(path))
+    assert "context_weights" in bundle
+    assert "contextual_temperatures" in bundle
+
+    x = df[feature_cols + [
+        "competition", "elo_diff", "home_goal_total_avg_5",
+        "away_goal_total_avg_5", "home_draw_rate_20", "away_draw_rate_20",
+        "rest_diff_hours", "neutral_venue_known", "neutral_venue",
+    ]].iloc[:8]
+    predicted = predict_bundle(bundle, x)
+    logistic = bundle["models"]["logistic"].predict_proba(x[feature_cols])
+    assert np.allclose(predicted, logistic, atol=1e-7)
