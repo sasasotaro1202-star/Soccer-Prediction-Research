@@ -100,6 +100,7 @@ def run_score_walk_forward(
         "home_goals",
         "away_goals",
         "pit_verified",
+        "source_available_at_utc",
     }
     missing = sorted(required - set(df.columns))
     if missing:
@@ -109,12 +110,16 @@ def run_score_walk_forward(
     d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
     d["home_goals"] = pd.to_numeric(d["home_goals"], errors="coerce")
     d["away_goals"] = pd.to_numeric(d["away_goals"], errors="coerce")
+    d["source_available_at_utc"] = pd.to_datetime(
+        d["source_available_at_utc"], utc=True, errors="coerce"
+    )
     d["pit_verified"] = d["pit_verified"].astype("boolean")
     d = d[
         d["pit_verified"].eq(True)
         & d["kickoff_utc"].notna()
         & d["home_goals"].notna()
         & d["away_goals"].notna()
+        & d["source_available_at_utc"].notna()
     ].sort_values("kickoff_utc", kind="mergesort").reset_index(drop=True)
 
     if len(d) < min_train + oos_block:
@@ -128,6 +133,13 @@ def run_score_walk_forward(
         end = min(start + int(oos_block), len(d))
         train = d.iloc[:start]
         oos = d.iloc[start:end]
+        prediction_cutoff = oos["kickoff_utc"].min() - pd.Timedelta(minutes=60)
+        train = train[train["source_available_at_utc"] <= prediction_cutoff].copy()
+        if len(train) < int(min_train):
+            raise ValueError(
+                "Not enough PIT-available score training rows before OOS cutoff: "
+                f"{len(train)}; need at least {min_train}"
+            )
         model = fit_score_rate_model(train)
         metrics = _score_block_metrics(oos, model)
 
@@ -193,6 +205,8 @@ def run_score_walk_forward(
             {
                 "oos_start": str(oos["kickoff_utc"].min()),
                 "oos_end": str(oos["kickoff_utc"].max()),
+                "score_training_cutoff": str(prediction_cutoff),
+                "score_training_rows": int(len(train)),
                 "competitions": "|".join(sorted(oos["competition"].astype(str).unique()))
                 if "competition" in oos.columns
                 else "",
