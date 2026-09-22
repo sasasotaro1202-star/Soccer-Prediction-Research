@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""PIT evidence from versioned footballcsv/cache.footballdata season snapshots.
+"""PIT evidence from versioned footballcsv/cache.footballdata season snapshots. 2017-18 and 2018-19 paths are retained because their immutable 2020-06-11 snapshots were independently inspected; later prediction cutoffs can safely use that observed publication proxy.
 
 Audit-only. A match is VERIFIED only when a unique exact date/team/result
 identity appears in an immutable Git snapshot whose commit timestamp is at or
@@ -29,12 +29,42 @@ REPOSITORY = "footballcsv/cache.footballdata"
 # File names confirmed in the public repository. We intentionally restrict the
 # PIT provider to seasons with path-level commit histories examined in advance.
 CONFIG: dict[str, dict[int, str]] = {
-    "EPL": {2019: "2019-20/eng.1.csv", 2020: "2020-21/eng.1.csv"},
-    "BL1": {2019: "2019-20/de.1.csv", 2020: "2020-21/de.1.csv"},
-    "LL": {2019: "2019-20/es.1.csv", 2020: "2020-21/es.1.csv"},
-    "FL1": {2019: "2019-20/fr.1.csv", 2020: "2020-21/fr.1.csv"},
-    "SA": {2019: "2019-20/it.1.csv", 2020: "2020-21/it.1.csv"},
-    "ERE": {2019: "2019-20/nl.1.csv", 2020: "2020-21/nl.1.csv"},
+    "EPL": {
+        2017: "2017-18/eng.1.csv",
+        2018: "2018-19/eng.1.csv",
+        2019: "2019-20/eng.1.csv",
+        2020: "2020-21/eng.1.csv",
+    },
+    "BL1": {
+        2017: "2017-18/de.1.csv",
+        2018: "2018-19/de.1.csv",
+        2019: "2019-20/de.1.csv",
+        2020: "2020-21/de.1.csv",
+    },
+    "LL": {
+        2017: "2017-18/es.1.csv",
+        2018: "2018-19/es.1.csv",
+        2019: "2019-20/es.1.csv",
+        2020: "2020-21/es.1.csv",
+    },
+    "FL1": {
+        2017: "2017-18/fr.1.csv",
+        2018: "2018-19/fr.1.csv",
+        2019: "2019-20/fr.1.csv",
+        2020: "2020-21/fr.1.csv",
+    },
+    "SA": {
+        2017: "2017-18/it.1.csv",
+        2018: "2018-19/it.1.csv",
+        2019: "2019-20/it.1.csv",
+        2020: "2020-21/it.1.csv",
+    },
+    "ERE": {
+        2017: "2017-18/nl.1.csv",
+        2018: "2018-19/nl.1.csv",
+        2019: "2019-20/nl.1.csv",
+        2020: "2020-21/nl.1.csv",
+    },
 }
 
 
