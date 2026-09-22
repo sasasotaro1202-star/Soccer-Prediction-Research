@@ -82,8 +82,8 @@ jobs:
           result = {'validation_passed': not failures, 'blocking_invariants': failures, 'research_gate_remains_strict': True}
           Path('artifacts/coverage-pit-audit/validation_status.json').write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding='utf-8')
           print(json.dumps(result, indent=2, ensure_ascii=False))
-          # A blocked research gate is an expected research state, not an Actions failure.
-          # Never weaken the gate to make CI green; preserve the failure in the artifact.
+          if failures:
+              raise SystemExit("coverage/PIT audit gate failed: " + " | ".join(failures))
           PY
       - name: Upload audit artifacts
         if: always()
