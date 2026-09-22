@@ -125,9 +125,14 @@ def run(out_dir: str = "artifacts") -> dict:
         )
         score_oos.to_csv(out / "score_oos_metrics.csv", index=False)
         primary_finite = _primary_score_metrics_finite(score_oos)
+        minimum_score_blocks = 5
+        enough_score_blocks = len(score_oos) >= minimum_score_blocks
         score_oos_status = {
-            "status": "PASS" if primary_finite else "ERROR",
+            "status": "PASS" if primary_finite and enough_score_blocks else "ERROR",
             "blocks": int(len(score_oos)),
+            "minimum_total_blocks": minimum_score_blocks,
+            "development_blocks_expected": max(3, minimum_score_blocks - 2),
+            "locked_blocks": 2,
             "rows": int(score_oos["n"].sum()) if "n" in score_oos.columns else 0,
             "finite_metrics": primary_finite,
             "primary_metrics_finite": primary_finite,
