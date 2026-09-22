@@ -66,6 +66,28 @@ def test_bundle_uses_locked_oos_verified_recency_score_method(tmp_path):
     assert bundle["score_model"]["method"] == "pit_recency_weighted_venue_split_team_goal_rates"
 
 
+def test_bundle_uses_locked_oos_verified_time_decay_score_method(tmp_path):
+    df = _fixture().copy()
+    df["home_team"] = np.where(np.arange(len(df)) % 2 == 0, "A", "B")
+    df["away_team"] = np.where(np.arange(len(df)) % 2 == 0, "B", "A")
+    df["home_goals"] = np.where(df["target"] == 0, 2, np.where(df["target"] == 1, 1, 3))
+    df["away_goals"] = np.where(df["target"] == 2, 2, np.where(df["target"] == 1, 1, 0))
+    path = tmp_path / "production_model.pkl"
+    train_and_save_bundle(
+        df,
+        ["f1", "f2"],
+        {"weights": {"logistic": 1.0}, "temperature": 1.0},
+        str(path),
+        "test-version",
+        "snapshot-1",
+        score_selection={"selected_method": "time_decay", "status": "ADOPT_CANDIDATE"},
+        score_locked_gate={"selected_method": "time_decay", "status": "PASS"},
+    )
+    bundle = load_bundle(str(path))
+    assert bundle["score_method"] == "time_decay"
+    assert bundle["score_model"]["method"] == "pit_time_decay_weighted_venue_split_team_goal_rates"
+
+
 def test_bundle_does_not_promote_unverified_score_selection(tmp_path):
     df = _fixture().copy()
     df["home_team"] = np.where(np.arange(len(df)) % 2 == 0, "A", "B")
