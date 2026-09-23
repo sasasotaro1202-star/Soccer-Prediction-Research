@@ -89,9 +89,7 @@ def run_with_retries() -> int:
         })
         return 1
 
-    errors: list[str] = []
-    from src.research.engine import run
-
+    # Mark the research attempt as started before any expensive engine work.\n    # This prevents stale/missing run_status artifacts from being mistaken for a\n    # successful or preflight-blocked result if the runner is externally terminated.\n    _write_status(out, {\n        "status": "RUNNING",\n        "reason": "Research engine started after mandatory preflight gates passed.",\n        "gate_consistency": {\n            "completion_gate_passed": True,\n            "audit_gate_passed": True,\n        },\n        "runner": {"status": "STARTED"},\n        "oos_claimed": False,\n    })\n\n    errors: list[str] = []\n    from src.research.engine import run\n
     for attempt in range(1, attempts + 1):
         try:
             report = run(str(out))
