@@ -133,6 +133,43 @@ class QuantileLogisticClassifier:
         return out / row_sum
 
 
+class DynamicEloLogisticClassifier:
+    """Low-dimensional adaptive-strength candidate using PIT-safe dynamic-Elo state."""
+
+    _FEATURES = ("dynamic_elo_diff", "dynamic_home_elo_expected", "elo_diff", "home_elo_expected")
+
+    def __init__(self, random_state: int = 42):
+        self.random_state = random_state
+        self.model = Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scale", StandardScaler()),
+            ("model", LogisticRegression(max_iter=2200, C=0.45, random_state=random_state)),
+        ])
+        self.classes_ = np.array([0, 1, 2], dtype=int)
+
+    def _select(self, X):
+        missing = [c for c in self._FEATURES if c not in X.columns]
+        if missing:
+            raise ValueError(f"Dynamic Elo candidate missing required columns: {missing}")
+        return X[list(self._FEATURES)]
+
+    def fit(self, X, y):
+        self.model.fit(self._select(X), np.asarray(y, dtype=int))
+        self._fitted_classes = np.asarray(getattr(self.model, "classes_", self.classes_), dtype=int)
+        return self
+
+    def predict_proba(self, X):
+        raw = np.asarray(self.model.predict_proba(self._select(X)), dtype=float)
+        out = np.zeros((len(X), 3), dtype=float)
+        for j, cls in enumerate(self._fitted_classes):
+            if int(cls) in (0, 1, 2):
+                out[:, int(cls)] = raw[:, j]
+        row_sum = out.sum(axis=1, keepdims=True)
+        if np.any(row_sum <= 0) or not np.isfinite(out).all():
+            raise ValueError("Dynamic Elo candidate produced invalid probabilities")
+        return out / row_sum
+
+
 def candidates(random_state: int = 42):
     """Return a compact, diverse and leakage-safe candidate set.
 
