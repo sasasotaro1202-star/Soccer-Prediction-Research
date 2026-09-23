@@ -1,0 +1,40 @@
+name: Soccer 9H Watchdog
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: soccer-9h-watchdog
+  cancel-in-progress: false
+
+jobs:
+  ensure-research-cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ensure a 9H research cycle is active
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          active_count="$(
+            gh run list               --repo "$GH_REPO"               --workflow "soccer-9h-autonomous.yml"               --limit 20               --json status               --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length'
+          )"
+
+          echo "Active soccer-9h cycles: $active_count"
+
+          if [ "$active_count" -eq 0 ]; then
+            echo "No queued/in-progress cycle detected; dispatching a fresh main-branch cycle."
+            gh workflow run "soccer-9h-autonomous.yml" --repo "$GH_REPO" --ref main
+          else
+            echo "An existing cycle is active; no duplicate dispatch."
+          fi
