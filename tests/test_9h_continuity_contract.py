@@ -57,6 +57,7 @@ def test_recovery_workflow_has_watchdog_and_self_chaining_dispatch():
     assert 'python - "${VERIFY_JSON}"' not in text
     assert '"requested"' in text
     assert "no active current-main run was observed" in text
+    assert '{"pending", "queued", "waiting", "requested", "in_progress"}' in text
 
 
 def test_phase3_runs_for_independent_verification_after_phase2_failure():
