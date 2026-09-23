@@ -71,3 +71,12 @@ def test_unknown_publication_time_does_not_become_pit_verified():
     )
     row = build_match_features(history, target, windows=(1,)).iloc[0]
     assert bool(row["pit_verified"]) is False
+
+
+def test_pit_features_include_momentum_and_matchup_interactions():
+    history = _sample_history()
+    out = build_match_features(history, history)
+    assert "points_ewma_momentum_diff_3v10" in out.columns
+    assert "attack_defense_matchup_diff_5" in out.columns
+    assert "draw_tension_10" in out.columns
+    assert "strength_rest_interaction" in out.columns
