@@ -227,7 +227,7 @@ def run(
     status_path: str = "artifacts/prediction_status.json",
     prediction_time: str | None = None,
     registry_path: str = "artifacts/model_registry.json",
-    model_policy: str = "production",
+    model_policy: str = "best_available",
 ) -> dict:
     status_file = Path(status_path)
     now = _normalize_prediction_time(prediction_time)
@@ -412,7 +412,7 @@ def main() -> int:
     parser.add_argument("--status", default="artifacts/prediction_status.json")
     parser.add_argument("--prediction-time", default=None)
     parser.add_argument("--registry", default="artifacts/model_registry.json")
-    parser.add_argument("--model-policy", choices=["production", "best_available"], default="production")
+    parser.add_argument("--model-policy", choices=["production", "best_available"], default="best_available")
     args = parser.parse_args()
     result = run(args.fixtures, args.bundle, args.output, args.status, args.prediction_time, args.registry, args.model_policy)
     print(json.dumps(result, ensure_ascii=False, default=str))
