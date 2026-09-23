@@ -7,6 +7,8 @@ from src.data.pit_policy import is_available_by_cutoff
 
 ELO_K = 20.0
 ELO_HOME_ADV = 55.0
+DYNAMIC_ELO_K = 28.0
+DYNAMIC_ELO_MEAN_REVERSION_30D = 0.08
 NEUTRAL_VENUE_REQUIRED_COMPETITIONS = {"AG_M", "AG_W"}
 STAT_KEYS = ("shots", "shots_on_target", "corners", "fouls", "yellow_cards", "red_cards")
 
@@ -121,6 +123,8 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     team_last_available: dict[str, pd.Timestamp] = {}
     h2h: dict[tuple[str, str], deque] = defaultdict(lambda: deque(maxlen=10))
     elo = {"global": {}, "competition": {}}
+    dynamic_elo: dict[str, float] = {}
+    dynamic_elo_last: dict[str, pd.Timestamp] = {}
     eligible_indices: set[int] = set()
     availability_order = sorted(
         [i for i, r in enumerate(h_records) if pd.notna(r["source_available_at_utc"])],
@@ -132,12 +136,14 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     required_window = min(windows) if windows else 0
 
     def reset_state() -> None:
-        nonlocal team_games, team_last, team_last_available, h2h, elo, processed_event_max
+        nonlocal team_games, team_last, team_last_available, h2h, elo, dynamic_elo, dynamic_elo_last, processed_event_max
         team_games = defaultdict(lambda: deque(maxlen=40))
         team_last = {}
         team_last_available = {}
         h2h = defaultdict(lambda: deque(maxlen=10))
         elo = {"global": {}, "competition": {}}
+        dynamic_elo = {}
+        dynamic_elo_last = {}
         processed_event_max = pd.NaT
 
     def apply_row(r: dict) -> None:
@@ -150,6 +156,22 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         home, away = str(r["home_team"]), str(r["away_team"])
         result = 0 if hg > ag else 1 if hg == ag else 2
         neutral = bool(r.get("neutral_venue", False)) if pd.notna(r.get("neutral_venue", False)) else False
+        for team in (home, away):
+            current = float(dynamic_elo.get(team, 1500.0))
+            last = dynamic_elo_last.get(team)
+            if last is not None:
+                days = max(float((event - last).total_seconds() / 86400.0), 0.0)
+                decay = 1.0 - (1.0 - DYNAMIC_ELO_MEAN_REVERSION_30D) ** (days / 30.0)
+                current = 1500.0 + (current - 1500.0) * max(0.0, 1.0 - decay)
+            dynamic_elo[team] = current
+            dynamic_elo_last[team] = event
+        deh = float(dynamic_elo.get(home, 1500.0)); dea = float(dynamic_elo.get(away, 1500.0))
+        dynamic_home_adv = 0.0 if neutral else ELO_HOME_ADV
+        dynamic_expected = 1.0 / (1.0 + 10.0 ** (-((deh + dynamic_home_adv) - dea) / 400.0))
+        actual = 1.0 if result == 0 else 0.5 if result == 1 else 0.0
+        delta = DYNAMIC_ELO_K * (actual - dynamic_expected)
+        dynamic_elo[home] = deh + delta
+        dynamic_elo[away] = dea - delta
         _update_elo(elo, home, away, result, str(r["competition"]), neutral_venue=neutral)
         for team in (home, away):
             gf, ga, pts, venue, gd = _team_result(r, team)
@@ -205,6 +227,17 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
                     apply_row(rr)
 
         home, away, comp = str(r["home_team"]), str(r["away_team"]), str(r["competition"])
+        for team in (home, away):
+            if team in dynamic_elo:
+                last = dynamic_elo_last.get(team)
+                if last is not None:
+                    days = max(float((cutoff - last).total_seconds() / 86400.0), 0.0)
+                    decay = 1.0 - (1.0 - DYNAMIC_ELO_MEAN_REVERSION_30D) ** (days / 30.0)
+                    dynamic_elo[team] = 1500.0 + (float(dynamic_elo[team]) - 1500.0) * max(0.0, 1.0 - decay)
+                    dynamic_elo_last[team] = cutoff
+        deh = float(dynamic_elo.get(home, 1500.0)); dea = float(dynamic_elo.get(away, 1500.0))
+        de_home_adv = (0.0 if neutral else ELO_HOME_ADV) if neutral_known else np.nan
+        dynamic_home_expected = (1.0 / (1.0 + 10.0 ** (-((deh + de_home_adv) - dea) / 400.0))) if neutral_known else np.nan
         he = float(elo["global"].get(home, 1500.0)); ae = float(elo["global"].get(away, 1500.0))
         ce = elo["competition"].get(comp, {}); hce = float(ce.get(home, 1500.0)); cae = float(ce.get(away, 1500.0))
         neutral_value = r.get("neutral_venue", pd.NA) if neutral_field_present else pd.NA
@@ -215,7 +248,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         neutral = bool(neutral_value) if neutral_known and pd.notna(neutral_value) else False
         home_advantage = (0.0 if neutral else 1.0) if neutral_known else np.nan
         elo_home_adv = (0.0 if neutral else ELO_HOME_ADV) if neutral_known else np.nan
-        row = {"match_id": r["match_id"], "competition": comp, "season": r.get("season"), "season_start": r.get("season_start", np.nan), "kickoff_utc": kickoff, "home_team": home, "away_team": away, "prediction_cutoff_at_utc": cutoff, "neutral_venue": neutral, "neutral_venue_known": neutral_known, "home_advantage": home_advantage, "home_elo": he, "away_elo": ae, "elo_diff": he - ae, "home_comp_elo": hce, "away_comp_elo": cae, "comp_elo_diff": hce - cae, "home_elo_expected": (1.0 / (1.0 + 10.0 ** (-((he + elo_home_adv) - ae) / 400.0))) if neutral_known else np.nan, "home_rest_hours": (cutoff - team_last[home]).total_seconds() / 3600.0 if home in team_last else np.nan, "away_rest_hours": (cutoff - team_last[away]).total_seconds() / 3600.0 if away in team_last else np.nan}
+        row = {"match_id": r["match_id"], "competition": comp, "season": r.get("season"), "season_start": r.get("season_start", np.nan), "kickoff_utc": kickoff, "home_team": home, "away_team": away, "prediction_cutoff_at_utc": cutoff, "neutral_venue": neutral, "neutral_venue_known": neutral_known, "home_advantage": home_advantage, "home_elo": he, "away_elo": ae, "elo_diff": he - ae, "home_comp_elo": hce, "away_comp_elo": cae, "comp_elo_diff": hce - cae, "home_elo_expected": (1.0 / (1.0 + 10.0 ** (-((he + elo_home_adv) - ae) / 400.0))) if neutral_known else np.nan, "home_rest_hours": (cutoff - team_last[home]).total_seconds() / 3600.0 if home in team_last else np.nan, "away_rest_hours": (cutoff - team_last[away]).total_seconds() / 3600.0 if away in team_last else np.nan, "home_dynamic_elo": deh, "away_dynamic_elo": dea, "dynamic_elo_diff": deh - dea, "dynamic_home_elo_expected": dynamic_home_expected}
         row["rest_diff_hours"] = row["home_rest_hours"] - row["away_rest_hours"] if pd.notna(row["home_rest_hours"]) and pd.notna(row["away_rest_hours"]) else np.nan
         row["elo_gap_abs"] = abs(row["elo_diff"])
         pit_blocked = False
