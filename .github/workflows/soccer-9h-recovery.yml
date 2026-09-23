@@ -4,6 +4,8 @@ name: Soccer 9H Recovery Controller
 # create competing recovery runs. The controller always compares against the latest main SHA before dispatching.
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
   workflow_run:
     workflows: ["Soccer 9H Autonomous Research"]
@@ -36,7 +38,7 @@ jobs:
           set -euo pipefail
 
           API="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/soccer-9h-autonomous.yml/runs?per_page=100"
-          MAIN_SHA="$(curl -fsSL \
+          MAIN_SHA="$(curl --retry 3 --retry-delay 2 --retry-all-errors -fsSL \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
@@ -154,7 +156,7 @@ jobs:
           verify_current_main_active() {
             for ATTEMPT in 1 2 3 4 5; do
               sleep 3
-              VERIFY_JSON="$(curl -fsSL \
+              VERIFY_JSON="$(curl --retry 3 --retry-delay 2 --retry-all-errors -fsSL \
                 -H "Authorization: Bearer ${GH_TOKEN}" \
                 -H "Accept: application/vnd.github+json" \
                 -H "X-GitHub-Api-Version: 2022-11-28" \
