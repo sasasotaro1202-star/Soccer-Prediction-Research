@@ -17,6 +17,8 @@ import hashlib
 import io
 import json
 import os
+import shutil
+import subprocess
 import time
 import unicodedata
 from pathlib import Path
@@ -90,6 +92,75 @@ def _commit_time(commit: dict[str, Any]) -> pd.Timestamp | None:
     return _utc(((commit.get("commit") or {}).get("committer") or {}).get("date"))
 
 
+def _git_repo_dir(cache_dir: str) -> Path:
+    return Path(cache_dir) / "jleague2020-git-repository"
+
+
+def _ensure_git_repo(cache_dir: str, *, timeout: int = 120) -> Path:
+    if shutil.which("git") is None:
+        raise RuntimeError("git_binary_unavailable_for_jleague2020_pit_fallback")
+    repo_dir = _git_repo_dir(cache_dir)
+    repo_dir.parent.mkdir(parents=True, exist_ok=True)
+    if (repo_dir / ".git").is_dir():
+        subprocess.run(
+            ["git", "-C", str(repo_dir), "fetch", "--quiet", "--no-tags", "origin", BRANCH],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            text=True,
+        )
+        return repo_dir
+    if repo_dir.exists():
+        shutil.rmtree(repo_dir)
+    subprocess.run(
+        [
+            "git", "clone", "--filter=blob:none", "--no-checkout",
+            "--single-branch", "--branch", BRANCH,
+            f"https://github.com/{REPOSITORY}.git", str(repo_dir),
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+        text=True,
+    )
+    return repo_dir
+
+
+def _parse_git_log(output: str) -> list[dict[str, Any]]:
+    commits: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw in output.splitlines():
+        sha, sep, committed_at = raw.strip().partition("\t")
+        sha = sha.strip()
+        committed_at = committed_at.strip()
+        if not sep or len(sha) < 40 or not committed_at or sha in seen:
+            continue
+        seen.add(sha)
+        commits.append({
+            "sha": sha,
+            "commit": {"committer": {"date": committed_at}},
+        })
+    return commits
+
+
+def _git_commits(cache_dir: str, *, timeout: int = 120) -> list[dict[str, Any]]:
+    repo_dir = _ensure_git_repo(cache_dir, timeout=timeout)
+    completed = subprocess.run(
+        ["git", "-C", str(repo_dir), "log", "--format=%H%x09%cI", "--all", "--", PATH],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+        text=True,
+    )
+    commits = _parse_git_log(completed.stdout)
+    if not commits:
+        raise RuntimeError("jleague2020_git_history_empty")
+    return commits
+
+
 def _commits(cache_dir: str, *, timeout: int = 30) -> list[dict[str, Any]]:
     cache = _cache_path(cache_dir, "commits", REPOSITORY + "|" + PATH, ".json")
     if cache.exists():
@@ -100,17 +171,47 @@ def _commits(cache_dir: str, *, timeout: int = 30) -> list[dict[str, Any]]:
         except Exception:
             pass
 
-    payload = _request_json(
-        f"{GITHUB_API}/repos/{REPOSITORY}/commits"
-        f"?path={requests.utils.quote(PATH)}&per_page=100&page=1",
+    try:
+        payload = _request_json(
+            f"{GITHUB_API}/repos/{REPOSITORY}/commits"
+            f"?path={requests.utils.quote(PATH)}&per_page=100&page=1",
+            timeout=timeout,
+        )
+        if not isinstance(payload, list):
+            raise RuntimeError("jleague2020_commit_history_invalid_response")
+        commits = [x for x in payload if isinstance(x, dict) and x.get("sha")]
+        if commits:
+            cache.write_text(json.dumps(commits, ensure_ascii=False), encoding="utf-8")
+        return commits
+    except Exception as api_exc:
+        # Git transport is independent of the REST API quota. Prefer it as a
+        # free, immutable-history recovery path before declaring PIT evidence
+        # unavailable. The verification semantics are unchanged: commit SHA,
+        # committer timestamp and exact snapshot contents are still required.
+        try:
+            commits = _git_commits(cache_dir, timeout=max(60, timeout))
+            cache.write_text(json.dumps(commits, ensure_ascii=False), encoding="utf-8")
+            return commits
+        except Exception as git_exc:
+            raise RuntimeError(
+                f"jleague2020_commit_history_unavailable:api={type(api_exc).__name__}:{api_exc};"
+                f"git={type(git_exc).__name__}:{git_exc}"
+            ) from git_exc
+
+
+def _git_snapshot_text(sha: str, cache_dir: str, *, timeout: int = 120) -> str:
+    repo_dir = _ensure_git_repo(cache_dir, timeout=timeout)
+    completed = subprocess.run(
+        ["git", "-C", str(repo_dir), "show", f"{sha}:{PATH}"],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         timeout=timeout,
     )
-    if not isinstance(payload, list):
-        raise RuntimeError("jleague2020_commit_history_invalid_response")
-    commits = [x for x in payload if isinstance(x, dict) and x.get("sha")]
-    if commits:
-        cache.write_text(json.dumps(commits, ensure_ascii=False), encoding="utf-8")
-    return commits
+    text = completed.stdout.decode("utf-8-sig", errors="replace")
+    if text.lstrip().lower().startswith(("<!doctype html", "<html")):
+        raise ValueError("html_instead_of_jleague_snapshot")
+    return text
 
 
 def _snapshot_text(sha: str, cache_dir: str, *, timeout: int = 30) -> str:
@@ -122,6 +223,7 @@ def _snapshot_text(sha: str, cache_dir: str, *, timeout: int = 30) -> str:
         f"https://raw.githubusercontent.com/{REPOSITORY}/{sha}/"
         f"Match%20Data/JLeague-2020.csv"
     )
+    last_exc: Exception | None = None
     for attempt in range(1, 4):
         try:
             response = requests.get(
@@ -136,10 +238,23 @@ def _snapshot_text(sha: str, cache_dir: str, *, timeout: int = 30) -> str:
             cache.write_text(text, encoding="utf-8")
             return text
         except (requests.RequestException, OSError, ValueError) as exc:
-            if attempt >= 3:
-                raise RuntimeError(f"jleague2020_snapshot_fetch_failed:{type(exc).__name__}:{exc}") from exc
-            time.sleep(float(attempt * 2))
-    raise RuntimeError("jleague2020_snapshot_fetch_failed")
+            last_exc = exc
+            if attempt < 3:
+                time.sleep(float(attempt * 2))
+
+    # Raw GitHub is outside the REST API path, but a local immutable clone is
+    # the final free recovery path when raw serving itself is unavailable.
+    try:
+        text = _git_snapshot_text(sha, cache_dir, timeout=max(60, timeout))
+        cache.write_text(text, encoding="utf-8")
+        return text
+    except Exception as git_exc:
+        if last_exc is not None:
+            raise RuntimeError(
+                f"jleague2020_snapshot_fetch_failed:raw={type(last_exc).__name__}:{last_exc};"
+                f"git={type(git_exc).__name__}:{git_exc}"
+            ) from git_exc
+        raise RuntimeError(f"jleague2020_snapshot_fetch_failed:git={type(git_exc).__name__}:{git_exc}") from git_exc
 
 
 def _norm(value: object) -> str:
