@@ -142,6 +142,7 @@ class QuantileLogisticClassifier:
     """
     return {
         "elo_logistic": EloLogisticClassifier(random_state=random_state),
+        "dynamic_elo_logistic": DynamicEloLogisticClassifier(random_state=random_state),
         "recency_logistic": RecencyLogisticClassifier(random_state=random_state),\n        "quantile_logistic": QuantileLogisticClassifier(random_state=random_state),
         "logistic": Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
