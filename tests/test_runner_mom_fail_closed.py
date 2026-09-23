@@ -1,3 +1,4 @@
+import hashlib
 import json
 
 import numpy as np
@@ -24,6 +25,38 @@ def test_missing_mom_input_does_not_block_primary_outputs(tmp_path, monkeypatch)
     )
     fixtures_path = tmp_path / "future_fixtures.csv"
     fixtures.to_csv(fixtures_path, index=False)
+
+    # Schema>=2 production prediction now requires exact deployable-artifact
+    # provenance. This regression test supplies a minimal valid provenance set.
+    bundle_path = tmp_path / "bundle.pkl"
+    bundle_path.write_bytes(b"test-bundle")
+    production_model_path = tmp_path / "production_model.json"
+    production_model_path.write_text(
+        json.dumps({"model_version": "v1", "adoption_status": "ADOPT"}),
+        encoding="utf-8",
+    )
+    model_registry_path = tmp_path / "model_registry.json"
+    model_registry_path.write_text(
+        json.dumps({"model_version": "v1", "adoption_status": "ADOPT", "oos_verified": True}),
+        encoding="utf-8",
+    )
+
+    def _sha(path):
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    (tmp_path / "production_provenance.json").write_text(
+        json.dumps({
+            "provenance_schema_version": 1,
+            "production_model_json_version": "v1",
+            "registry_model_version": "v1",
+            "files": {
+                "production_model.pkl": {"sha256": _sha(bundle_path)},
+                "production_model.json": {"sha256": _sha(production_model_path)},
+                "model_registry.json": {"sha256": _sha(model_registry_path)},
+            },
+        }),
+        encoding="utf-8",
+    )
 
     monkeypatch.setattr(
         runner,
@@ -75,11 +108,11 @@ def test_missing_mom_input_does_not_block_primary_outputs(tmp_path, monkeypatch)
 
     status = runner.run(
         fixtures_path=str(fixtures_path),
-        bundle_path=str(tmp_path / "bundle.pkl"),
+        bundle_path=str(bundle_path),
         output_path=str(tmp_path / "predictions.csv"),
         status_path=str(tmp_path / "status.json"),
         prediction_time=now.isoformat(),
-        registry_path=str(tmp_path / "registry.json"),
+        registry_path=str(model_registry_path),
     )
 
     assert status["status"] == "PREDICTED"
