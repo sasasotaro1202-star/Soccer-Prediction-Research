@@ -99,8 +99,8 @@ jobs:
         with:
           name: soccer-9h-phase1-${{ github.run_id }}
           path: artifacts/9h/phase1
-          retention-days: 30
-          if-no-files-found: warn
+          retention-days: 3
+          if-no-files-found: error
 
   phase2_research:
     if: needs.phase1_gate.result == 'success'
@@ -207,11 +207,12 @@ jobs:
         with:
           name: soccer-9h-phase2-${{ github.run_id }}
           path: artifacts/
-          retention-days: 30
-          if-no-files-found: warn
+          retention-days: 3
+          if-no-files-found: error
 
   phase3_verification:
-    if: needs.phase2_research.result == 'success'
+    # Phase 3 is the independent recovery/verification lane. It must still run when Phase 2 research fails so a transient engine failure cannot consume the entire 9H cycle without an independent retry. Strict production gates remain authoritative.
+    if: always() && needs.phase2_research.result != 'cancelled'
     name: Phase 3 - independent verification and robustness
     env:
       GITHUB_TOKEN: ${{ github.token }}
@@ -328,8 +329,8 @@ jobs:
         with:
           name: soccer-9h-phase3-${{ github.run_id }}
           path: artifacts/
-          retention-days: 30
-          if-no-files-found: warn
+          retention-days: 3
+          if-no-files-found: error
 
 # This workflow intentionally lives on main so the schedule is active.
 # Operational note: a workflow-file commit intentionally starts a fresh 9H cycle on the latest main SHA.
