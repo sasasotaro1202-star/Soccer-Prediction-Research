@@ -61,6 +61,7 @@ def _minimal_passing_artifacts(tmp_path):
         },
     })
     _write(tmp_path / "candidate_lock.json", {"locked_oos_untouched": True, "locked_oos_blocks": 2})
+    _write(tmp_path / "calibration_gate.json", {"status": "PASS", "temperature": 1.0, "calibration_rows": 120, "locked_oos_used_for_calibration": False})
     _write(tmp_path / "adoption_decision.json", {
         "status": "ADOPT",
         "oos_claimed": True,
@@ -142,6 +143,13 @@ def test_contract_passes_only_with_explicit_success(tmp_path):
     assert payload["production_contract_passed"] is True
     assert payload["fail_closed"] is True
 
+
+def test_missing_calibration_gate_cannot_pass(tmp_path):
+    _minimal_passing_artifacts(tmp_path)
+    (tmp_path / "calibration_gate.json").unlink()
+    result = evaluate_production_contract(str(tmp_path))
+    assert result.passed is False
+    assert "artifact:calibration_gate.json" in result.failures
 
 def test_hold_adoption_cannot_pass(tmp_path):
     _minimal_passing_artifacts(tmp_path)

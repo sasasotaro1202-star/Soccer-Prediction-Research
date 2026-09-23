@@ -27,6 +27,7 @@ REQUIRED_ARTIFACTS = (
     "adoption_decision.json",
     "oos_temporal_integrity.json",
     "score_oos_temporal_integrity.json",
+    "calibration_gate.json",
 )
 PROVENANCE_ARTIFACTS = (
     "production_model.pkl",
@@ -131,6 +132,7 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
     if str(status.get("status", "")).upper() in {"BLOCKED", "FAIL", "FAILED", "DEGRADED"}: failures.append(f"run_status:{status.get('status')}")
     if completion.get("pit_publication_time_gate") is not True: failures.append("pit_publication_time_gate")
     adoption = _read_json(root / "adoption_decision.json")
+    calibration_gate = _read_json(root / "calibration_gate.json")
     if not adoption:
         failures.append("adoption_missing")
     else:
@@ -139,6 +141,20 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             failures.append(f"adoption:{adoption.get('status')}")
         if adoption.get("oos_claimed") is not True:
             failures.append("adoption_oos_claim")
+        if calibration_gate.get("status") != "PASS":
+            failures.append("calibration_gate")
+        else:
+            try:
+                calibration_temperature = float(calibration_gate.get("temperature"))
+                calibration_rows = int(calibration_gate.get("calibration_rows", 0))
+                if not np.isfinite(calibration_temperature) or not 0.70 <= calibration_temperature <= 1.60:
+                    failures.append("calibration_temperature_invalid")
+                if calibration_rows < 60:
+                    failures.append("calibration_rows_insufficient")
+                if calibration_gate.get("locked_oos_used_for_calibration") is not False:
+                    failures.append("calibration_locked_oos_contamination")
+            except (TypeError, ValueError):
+                failures.append("calibration_gate_invalid")
         stability = adoption.get("stability")
         if not isinstance(stability, dict) or stability.get("status") not in {"PASS"}:
             failures.append("adoption_stability")
@@ -224,6 +240,8 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
                         failures.append("production_bundle_temperature_metadata_mismatch")
                     if not np.isclose(bundle_temperature, registry_temperature, atol=1e-12, rtol=0.0):
                         failures.append("production_bundle_temperature_registry_mismatch")
+                    if calibration_gate.get("status") == "PASS" and not np.isclose(bundle_temperature, float(calibration_gate.get("temperature")), atol=1e-12, rtol=0.0):
+                        failures.append("production_bundle_temperature_calibration_gate_mismatch")
                 except (TypeError, ValueError):
                     failures.append("production_bundle_temperature_invalid")
 
