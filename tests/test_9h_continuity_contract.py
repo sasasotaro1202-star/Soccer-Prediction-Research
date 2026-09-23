@@ -15,7 +15,7 @@ def test_autonomous_workflow_has_continuous_9h_cycle_and_strict_concurrency():
     assert "workflow_dispatch:" in text
     assert "\n  push:\n" in text
     assert "Recovery controller" in text or "recovery controller" in text.lower()
-    assert "group: soccer-9h-autonomous-main" in text
+    assert "group: soccer-9h-autonomous-${{ github.sha }}" in text
     assert "cancel-in-progress: false" in text
     assert text.count("timeout-minutes: 180") >= 3
     for phase in ("phase1_gate:", "phase2_research:", "phase3_verification:"):
