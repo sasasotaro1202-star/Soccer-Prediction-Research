@@ -7,8 +7,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-  push:
-    branches: [main]
   workflow_run:
     workflows: ["Soccer 9H Autonomous Research"]
     types: [completed]
