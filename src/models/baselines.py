@@ -7,7 +7,7 @@ from sklearn.feature_selection import SelectPercentile, VarianceThreshold, f_cla
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import QuantileTransformer, StandardScaler
 
 
 
@@ -89,7 +89,49 @@ class RecencyLogisticClassifier:
             raise ValueError("Recency logistic produced an invalid probability row")
         return out / row_sum
 
-def candidates(random_state: int = 42):
+
+
+class QuantileLogisticClassifier:
+    """Rank-normalized logistic challenger for cross-competition scale robustness.
+
+    Quantile normalization is fitted inside each chronological training slice,
+    so it cannot learn the distribution of future/OOS observations. Mapping to a
+    normal reference reduces sensitivity to league-specific feature scale while
+    retaining a stable linear decision surface.
+    """
+
+    def __init__(self, random_state: int = 42, n_quantiles: int = 64):
+        self.random_state = random_state
+        self.n_quantiles = max(int(n_quantiles), 8)
+        self.model = Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("quantile", QuantileTransformer(
+                n_quantiles=self.n_quantiles,
+                output_distribution="normal",
+                random_state=random_state,
+            )),
+            ("scale", StandardScaler()),
+            ("model", LogisticRegression(max_iter=2500, C=0.35, random_state=random_state)),
+        ])
+        self.classes_ = np.array([0, 1, 2], dtype=int)
+
+    def fit(self, X, y):
+        self.model.fit(X, np.asarray(y, dtype=int))
+        self._fitted_classes = np.asarray(getattr(self.model, "classes_", self.classes_), dtype=int)
+        return self
+
+    def predict_proba(self, X):
+        raw = np.asarray(self.model.predict_proba(X), dtype=float)
+        out = np.zeros((len(X), 3), dtype=float)
+        for j, cls in enumerate(self._fitted_classes):
+            cls = int(cls)
+            if cls in (0, 1, 2):
+                out[:, cls] = raw[:, j]
+        row_sum = out.sum(axis=1, keepdims=True)
+        if np.any(row_sum <= 0) or not np.isfinite(out).all():
+            raise ValueError("Quantile logistic produced invalid probabilities")
+        return out / row_sum
+\ndef candidates(random_state: int = 42):
     """Return a compact, diverse and leakage-safe candidate set.
 
     Feature selection is fitted inside each temporal training slice. A variance
@@ -100,7 +142,7 @@ def candidates(random_state: int = 42):
     """
     return {
         "elo_logistic": EloLogisticClassifier(random_state=random_state),
-        "recency_logistic": RecencyLogisticClassifier(random_state=random_state),
+        "recency_logistic": RecencyLogisticClassifier(random_state=random_state),\n        "quantile_logistic": QuantileLogisticClassifier(random_state=random_state),
         "logistic": Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
             ("scale", StandardScaler()),
