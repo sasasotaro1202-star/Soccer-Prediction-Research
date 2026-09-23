@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from src.evaluation.walk_forward import _apply_contextual_temperatures, _routed_ensemble_proba
 from src.models.baselines import candidates
 from src.models.dixon_coles import fit_dixon_coles_model
 from src.models.negative_binomial import fit_negative_binomial_score_model
@@ -62,6 +63,45 @@ def train_and_save_bundle(
     if not np.isfinite(temperature) or temperature <= 0:
         raise ValueError("Invalid calibration temperature")
 
+    # Preserve the exact validation-learned routing policy used during OOS.
+    # Without this, production inference would silently collapse the tested
+    # contextual ensemble back to global weights/global temperature.
+    raw_context_weights = selection.get("context_weights") or {}
+    raw_context_temperatures = selection.get("contextual_temperatures") or {}
+    raw_context_temperature_reasons = selection.get("contextual_temperature_reasons") or {}
+    if not isinstance(raw_context_weights, dict):
+        raise ValueError("Locked selection context_weights must be an object")
+    if not isinstance(raw_context_temperatures, dict):
+        raise ValueError("Locked selection contextual_temperatures must be an object")
+    if not isinstance(raw_context_temperature_reasons, dict):
+        raise ValueError("Locked selection contextual_temperature_reasons must be an object")
+
+    context_weights: dict[str, dict[str, float]] = {}
+    for route_key, mapping in raw_context_weights.items():
+        if not isinstance(mapping, dict):
+            raise ValueError(f"Invalid context weight mapping for route {route_key!r}")
+        normalized = {}
+        for name, value in mapping.items():
+            value = float(value)
+            if not np.isfinite(value) or value < 0:
+                raise ValueError(f"Invalid context weight for route {route_key!r}, model {name!r}")
+            normalized[str(name)] = value
+        if set(normalized) != set(weights):
+            raise ValueError(f"Context route {route_key!r} does not match locked model set")
+        total_context = float(sum(normalized.values()))
+        if not np.isfinite(total_context) or total_context <= 0:
+            raise ValueError(f"Context route {route_key!r} has invalid weight total")
+        context_weights[str(route_key)] = {
+            name: float(value / total_context) for name, value in normalized.items()
+        }
+
+    contextual_temperatures: dict[str, float] = {}
+    for route_key, value in raw_context_temperatures.items():
+        value = float(value)
+        if not np.isfinite(value) or not 0.70 <= value <= 1.60:
+            raise ValueError(f"Invalid contextual temperature for route {route_key!r}")
+        contextual_temperatures[str(route_key)] = value
+
     fitted = {}
     available = candidates(random_state=42)
     for name, weight in weights.items():
@@ -99,8 +139,22 @@ def train_and_save_bundle(
         else:
             score_model = fit_score_rate_model(d)
 
+    routing_policy = None
+    if context_weights or contextual_temperatures:
+        routing_policy = {
+            "schema_version": 1,
+            "type": "hierarchical_validation_context",
+            "fallback_weights": dict(weights),
+            "fallback_temperature": float(temperature),
+            "context_weights": context_weights,
+            "contextual_temperatures": contextual_temperatures,
+            "contextual_temperature_reasons": {
+                str(k): str(v) for k, v in raw_context_temperature_reasons.items()
+            },
+        }
+
     bundle = {
-        "schema_version": 2 if score_model is not None else 1,
+        "schema_version": 3 if routing_policy is not None else (2 if score_model is not None else 1),
         "model_version": model_version,
         "data_snapshot_id": data_snapshot_id,
         "feature_cols": list(feature_cols),
@@ -114,6 +168,7 @@ def train_and_save_bundle(
         "score_selection": score_selection,
         "score_locked_verification": score_locked_gate,
         **({"score_model": score_model} if score_model is not None else {}),
+        **({"routing_policy": routing_policy} if routing_policy is not None else {}),
         "mom_model": {"status": "UPSTREAM_PLAYER_MODEL_REQUIRED", "output_top_k": 4},
     }
     p = Path(output_path)
@@ -150,7 +205,7 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
     missing = sorted(required - set(bundle))
     if missing:
         raise RuntimeError(f"Production model bundle missing fields: {missing}")
-    if bundle["schema_version"] not in {1, 2}:
+    if bundle["schema_version"] not in {1, 2, 3}:
         raise RuntimeError(f"Unsupported production model bundle schema: {bundle['schema_version']}")
     if not isinstance(bundle["model_version"], str) or not bundle["model_version"].strip():
         raise RuntimeError("Production model bundle model_version is empty")
@@ -171,7 +226,33 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
     if not np.isclose(float(numeric_weights.sum()), 1.0, atol=1e-8):
         raise RuntimeError("Production model bundle ensemble weights are not normalized")
     if bundle["schema_version"] >= 2 and "score_model" not in bundle:
-        raise RuntimeError("Production model bundle schema 2 requires score_model")
+        raise RuntimeError("Production model bundle schema 2+ requires score_model")
+
+    if bundle["schema_version"] >= 3:
+        routing = bundle.get("routing_policy")
+        if not isinstance(routing, dict):
+            raise RuntimeError("Production model bundle schema 3 requires routing_policy")
+        if routing.get("schema_version") != 1 or routing.get("type") != "hierarchical_validation_context":
+            raise RuntimeError("Production routing policy schema/type is invalid")
+        fallback_weights = routing.get("fallback_weights")
+        if not isinstance(fallback_weights, dict) or set(fallback_weights) != set(weights):
+            raise RuntimeError("Production routing fallback/model sets mismatch")
+        routing_weights = routing.get("context_weights")
+        if not isinstance(routing_weights, dict):
+            raise RuntimeError("Production routing context_weights are invalid")
+        for route_key, mapping in routing_weights.items():
+            if not isinstance(mapping, dict) or set(mapping) != set(weights):
+                raise RuntimeError(f"Production routing context model set is invalid for {route_key!r}")
+            values = np.asarray(list(mapping.values()), dtype=float)
+            if not np.all(np.isfinite(values)) or np.any(values < 0) or not np.isclose(values.sum(), 1.0, atol=1e-8):
+                raise RuntimeError(f"Production routing context weights are invalid for {route_key!r}")
+        routing_temps = routing.get("contextual_temperatures", {})
+        if not isinstance(routing_temps, dict):
+            raise RuntimeError("Production contextual temperatures are invalid")
+        for route_key, value in routing_temps.items():
+            value = float(value)
+            if not np.isfinite(value) or not 0.70 <= value <= 1.60:
+                raise RuntimeError(f"Production contextual temperature is invalid for {route_key!r}")
     score_method = str(bundle.get("score_method", "primary"))
     if score_method not in {"primary", "neutral_aware", "recency", "time_decay", "dixon_coles", "negative_binomial"}:
         raise RuntimeError(f"Unsupported production score method: {score_method}")
@@ -209,6 +290,30 @@ def predict_bundle(bundle: dict[str, Any], X: pd.DataFrame) -> np.ndarray:
     missing = [c for c in feature_cols if c not in X.columns]
     if missing:
         raise RuntimeError(f"Prediction input missing model features: {missing[:10]}")
+
+    routing = bundle.get("routing_policy")
+    if isinstance(routing, dict):
+        try:
+            probs, routes = _routed_ensemble_proba(
+                X,
+                bundle["models"],
+                feature_cols,
+                routing.get("context_weights", {}),
+                {str(k): float(v) for k, v in routing.get("fallback_weights", bundle["weights"]).items()},
+            )
+            probs = np.clip(probs, 1e-9, 1.0)
+            probs /= probs.sum(axis=1, keepdims=True)
+            return _apply_contextual_temperatures(
+                probs,
+                routes,
+                {str(k): float(v) for k, v in routing.get("contextual_temperatures", {}).items()},
+                float(routing.get("fallback_temperature", bundle["temperature"])),
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Production contextual routing failed closed: {type(exc).__name__}: {exc}"
+            ) from exc
+
     probs = np.zeros((len(X), 3), dtype=float)
     for name, model in bundle["models"].items():
         probs += float(bundle["weights"][name]) * model.predict_proba(X[feature_cols])
