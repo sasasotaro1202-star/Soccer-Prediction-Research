@@ -27,3 +27,13 @@ def test_resolver_uses_durable_current_bundle(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     resolved = resolve_active_production_paths("artifacts/production_model.pkl", "artifacts/model_registry.json")
     assert resolved == (str(bundle.resolve()), str(registry.resolve()))
+
+def test_remote_fallback_returns_safe_production_mode(monkeypatch):
+    from src.prediction import active_model
+
+    monkeypatch.setattr(
+        active_model,
+        "fetch_current_production",
+        lambda repository: __import__("pathlib").Path("artifacts/current_production"),
+        raising=False,
+    )
