@@ -337,36 +337,6 @@ jobs:
           test -s artifacts/production_model.json
           test -s artifacts/model_registry.json
           test -s artifacts/production_provenance.json
-          mkdir -p models/current
-          NEW_HASH="$(sha256sum artifacts/production_model.pkl | awk '{print $1}')"
-          OLD_HASH=""
-          if [ -f models/current/production_model.pkl ]; then
-            OLD_HASH="$(sha256sum models/current/production_model.pkl | awk '{print $1}')"
-          fi
-          if [ "${NEW_HASH}" = "${OLD_HASH}" ]; then
-            echo "Current production bundle is unchanged; no repository commit needed."
-            exit 0
-          fi
-          cp artifacts/production_model.pkl models/current/production_model.pkl
-          cp artifacts/production_model.json models/current/production_model.json
-          cp artifacts/model_registry.json models/current/model_registry.json
-          cp artifacts/production_provenance.json models/current/production_provenance.json
-          python - <<'PY'
-          import hashlib, json
-          from pathlib import Path
-          root=Path('models/current')
-          bundle=root/'production_model.pkl'
-          meta=json.loads((root/'production_model.json').read_text(encoding='utf-8'))
-          registry=json.loads((root/'model_registry.json').read_text(encoding='utf-8'))
-          manifest={
-              'status':'ACTIVE_ADOPTED',
-              'model_version':registry.get('model_version') or meta.get('model_version'),
-              'bundle_sha256':hashlib.sha256(bundle.read_bytes()).hexdigest(),
-              'research_git_sha':registry.get('git_commit_sha'),
-              'updated_from_validated_cycle':True,
-          }
-          (root/'ACTIVE_MODEL.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False),encoding='utf-8')
-          PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           for attempt in 1 2 3; do
@@ -377,7 +347,22 @@ jobs:
             cp artifacts/production_model.json models/current/production_model.json
             cp artifacts/model_registry.json models/current/model_registry.json
             cp artifacts/production_provenance.json models/current/production_provenance.json
-            cp artifacts/ACTIVE_MODEL.json models/current/ACTIVE_MODEL.json 2>/dev/null || true
+            python - <<'PY'
+            import hashlib, json
+            from pathlib import Path
+            root=Path('models/current')
+            bundle=root/'production_model.pkl'
+            meta=json.loads((root/'production_model.json').read_text(encoding='utf-8'))
+            registry=json.loads((root/'model_registry.json').read_text(encoding='utf-8'))
+            manifest={
+                'status':'ACTIVE_ADOPTED',
+                'model_version':registry.get('model_version') or meta.get('model_version'),
+                'bundle_sha256':hashlib.sha256(bundle.read_bytes()).hexdigest(),
+                'research_git_sha':registry.get('git_commit_sha'),
+                'updated_from_validated_cycle':True,
+            }
+            (root/'ACTIVE_MODEL.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False),encoding='utf-8')
+            PY
             git add models/current
             if git diff --cached --quiet; then
               exit 0
@@ -389,7 +374,6 @@ jobs:
             echo "Production persistence push attempt ${attempt} failed; retrying against latest main."
           done
           exit 1
-
       - name: Write 9-hour health record
         if: always()
         run: |
