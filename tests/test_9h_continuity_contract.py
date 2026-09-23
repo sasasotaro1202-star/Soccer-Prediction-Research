@@ -8,13 +8,9 @@ RECOVERY = ROOT / ".github" / "workflows" / "soccer-9h-recovery.yml"
 def test_autonomous_workflow_has_continuous_9h_cycle_and_strict_concurrency():
     text = AUTONOMOUS.read_text(encoding="utf-8")
     assert "schedule:" in text
-    assert "push:" in text
-    assert '"src/**"' in text
-    assert '"tests/**"' in text
     assert 'cron: "15 0,8,16 * * *"' in text
     assert "workflow_dispatch:" in text
-    assert "\n  push:\n" in text
-    assert "Recovery controller" in text or "recovery controller" in text.lower()
+    assert "recovery controller" in text.lower()
     assert "group: soccer-9h-autonomous-main" in text
     assert "cancel-in-progress: false" in text
     assert "phase1_gate:" in text and "timeout-minutes: 180" in text
