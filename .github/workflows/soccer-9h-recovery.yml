@@ -210,7 +210,10 @@ jobs:
                   continue
               if run.get("head_sha") == main_sha:
                   continue
-              if run.get("status") not in {"pending", "queued", "waiting", "requested", "in_progress"}:
+              # Never interrupt an actively executing obsolete research cycle merely
+              # because main advanced. Let running work finish under its own bounded
+              # phase/job timeouts; only discard queued/requested obsolete work here.
+              if run.get("status") not in {"pending", "queued", "waiting", "requested"}:
                   continue
               print(run.get("id"))
           PY
