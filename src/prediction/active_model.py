@@ -29,3 +29,27 @@ def resolve_active_production_paths(bundle_path: str, registry_path: str) -> tup
     # Preserve explicit paths so the normal loader can emit its own precise
     # fail-closed error (or a test can inject mocked loaders).
     return str(bundle), str(registry)
+
+
+def resolve_best_available_paths() -> tuple[str, str, str]:
+    """Resolve the safest currently available model: ADOPT first, then validated candidate."""
+    candidates = [
+        ("PRODUCTION_ADOPTED", Path("artifacts/production_model.pkl"), Path("artifacts/model_registry.json")),
+        ("PRODUCTION_ADOPTED", CURRENT_PRODUCTION_DIR / "production_model.pkl", CURRENT_PRODUCTION_DIR / "model_registry.json"),
+        ("VALIDATED_CANDIDATE", Path("artifacts/validated_candidate_model.pkl"), Path("artifacts/validated_candidate_registry.json")),
+        ("VALIDATED_CANDIDATE", CURRENT_PRODUCTION_DIR / "validated_candidate_model.pkl", CURRENT_PRODUCTION_DIR / "validated_candidate_registry.json"),
+    ]
+    for mode, bundle, registry in candidates:
+        if not bundle.is_file() or not registry.is_file():
+            continue
+        try:
+            import json
+            payload=json.loads(registry.read_text(encoding='utf-8'))
+        except Exception:
+            continue
+        status=str(payload.get('adoption_status','')).upper()
+        if mode == 'PRODUCTION_ADOPTED' and status == 'ADOPT':
+            return str(bundle), str(registry), mode
+        if mode == 'VALIDATED_CANDIDATE' and status == 'VALIDATED_CANDIDATE':
+            return str(bundle), str(registry), mode
+    raise RuntimeError("No safe production or validated-candidate model is currently available")
