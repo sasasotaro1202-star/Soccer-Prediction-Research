@@ -144,6 +144,13 @@ def test_contract_passes_only_with_explicit_success(tmp_path):
     assert payload["fail_closed"] is True
 
 
+def test_missing_calibration_gate_cannot_pass(tmp_path):
+    _minimal_passing_artifacts(tmp_path)
+    (tmp_path / "calibration_gate.json").unlink()
+    result = evaluate_production_contract(str(tmp_path))
+    assert result.passed is False
+    assert "artifact:calibration_gate.json" in result.failures
+
 def test_hold_adoption_cannot_pass(tmp_path):
     _minimal_passing_artifacts(tmp_path)
     _write(tmp_path / "adoption_decision.json", {"status": "HOLD", "oos_claimed": True, "stability": {"status": "PASS"}})
