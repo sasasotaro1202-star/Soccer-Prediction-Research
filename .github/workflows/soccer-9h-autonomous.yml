@@ -412,6 +412,14 @@ jobs:
             echo "Validated candidate persistence push attempt ${attempt} failed; retrying against latest main."
           done
           exit 1
+      - name: Upload current production bundle for publisher
+        if: success()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-production-bundle-${{ github.run_id }}
+          path: artifacts/production_release
+          retention-days: 90
+          if-no-files-found: error
       - name: Write 9-hour health record
         if: always()
         run: |
