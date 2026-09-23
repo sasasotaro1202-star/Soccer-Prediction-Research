@@ -226,8 +226,8 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
         raise RuntimeError("Production model bundle contains invalid ensemble weights")
     if not np.isclose(float(numeric_weights.sum()), 1.0, atol=1e-8):
         raise RuntimeError("Production model bundle ensemble weights are not normalized")
-    if bundle["schema_version"] >= 2 and "score_model" not in bundle:
-        raise RuntimeError("Production model bundle schema 2+ requires score_model")
+    if bundle["schema_version"] == 2 and "score_model" not in bundle:
+        raise RuntimeError("Production model bundle schema 2 requires score_model")
 
     if bundle["schema_version"] >= 3:
         routing = bundle.get("routing_policy")
@@ -257,7 +257,7 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
     score_method = str(bundle.get("score_method", "primary"))
     if score_method not in {"primary", "neutral_aware", "recency", "time_decay", "dixon_coles", "negative_binomial"}:
         raise RuntimeError(f"Unsupported production score method: {score_method}")
-    if bundle["schema_version"] >= 2:
+    if "score_model" in bundle:
         score_model = bundle.get("score_model")
         if not isinstance(score_model, dict):
             raise RuntimeError("Production model bundle score_model must be an object")
@@ -278,6 +278,8 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
             gate = bundle.get("score_locked_verification")
             if not isinstance(gate, dict) or gate.get("status") != "PASS" or str(gate.get("selected_method")) != score_method:
                 raise RuntimeError("Non-primary score method requires matching PASS locked-OOS verification")
+    elif score_method != "primary":
+        raise RuntimeError("Non-primary production score method requires score_model")
     temperature = float(bundle["temperature"])
     if not np.isfinite(temperature) or temperature <= 0:
         raise RuntimeError("Production model bundle temperature is invalid")
