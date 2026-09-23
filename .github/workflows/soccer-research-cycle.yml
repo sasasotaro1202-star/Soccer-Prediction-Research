@@ -44,7 +44,7 @@ jobs:
         with:
           name: soccer-research-artifacts-${{ github.run_id }}
           path: artifacts/
-          retention-days: 30
+          retention-days: 3
       - name: Commit research artifacts
         if: success()
         run: |

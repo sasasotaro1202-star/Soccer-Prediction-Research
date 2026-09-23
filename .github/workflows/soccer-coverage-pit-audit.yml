@@ -91,6 +91,6 @@ jobs:
         with:
           name: soccer-coverage-pit-audit-${{ github.run_id }}
           path: artifacts/coverage-pit-audit/
-          retention-days: 30
+          retention-days: 3
           if-no-files-found: error
           compression-level: 6
