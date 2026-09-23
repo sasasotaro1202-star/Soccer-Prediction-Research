@@ -27,6 +27,9 @@ concurrency:
 jobs:
   watchdog:
     name: Monitor and recover 9H research
+    # Controller-initiated cancellation also emits workflow_run(completed).
+    # Ignore that event to prevent a cancellation -> recovery -> redispatch loop.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'cancelled' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
