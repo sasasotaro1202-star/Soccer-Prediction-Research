@@ -131,7 +131,9 @@ class QuantileLogisticClassifier:
         if np.any(row_sum <= 0) or not np.isfinite(out).all():
             raise ValueError("Quantile logistic produced invalid probabilities")
         return out / row_sum
-\ndef candidates(random_state: int = 42):
+
+
+def candidates(random_state: int = 42):
     """Return a compact, diverse and leakage-safe candidate set.
 
     Feature selection is fitted inside each temporal training slice. A variance
@@ -143,7 +145,8 @@ class QuantileLogisticClassifier:
     return {
         "elo_logistic": EloLogisticClassifier(random_state=random_state),
         "dynamic_elo_logistic": DynamicEloLogisticClassifier(random_state=random_state),
-        "recency_logistic": RecencyLogisticClassifier(random_state=random_state),\n        "quantile_logistic": QuantileLogisticClassifier(random_state=random_state),
+        "recency_logistic": RecencyLogisticClassifier(random_state=random_state),
+        "quantile_logistic": QuantileLogisticClassifier(random_state=random_state),
         "logistic": Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
             ("scale", StandardScaler()),
