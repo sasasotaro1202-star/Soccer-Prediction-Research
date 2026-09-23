@@ -305,6 +305,35 @@ jobs:
           if payload.get("production_contract_passed") is not True:
               raise SystemExit("strict production contract did not pass")
           PY
+      - name: Export adopted production bundle
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/production_model.pkl
+          test -s artifacts/production_model.json
+          test -s artifacts/model_registry.json
+          test -s artifacts/production_provenance.json
+          test -s artifacts/calibration_gate.json
+          mkdir -p artifacts/production_release
+          cp artifacts/production_model.pkl artifacts/production_release/
+          cp artifacts/production_model.json artifacts/production_release/
+          cp artifacts/model_registry.json artifacts/production_release/
+          cp artifacts/production_provenance.json artifacts/production_release/
+          cp artifacts/calibration_gate.json artifacts/production_release/
+          cp artifacts/oos_metrics.csv artifacts/production_release/
+          cp artifacts/development_oos_metrics.csv artifacts/production_release/
+          cp artifacts/locked_oos_metrics.csv artifacts/production_release/
+          cp artifacts/model_selection.csv artifacts/production_release/
+          cp artifacts/adoption_decision.json artifacts/production_release/
+      - name: Upload adopted production bundle
+        if: success()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-production-bundle-${{ github.run_id }}
+          path: artifacts/production_release
+          retention-days: 3
+          if-no-files-found: error
       - name: Write 9-hour health record
         if: always()
         run: |
