@@ -197,6 +197,41 @@ jobs:
             return 1
           }
 
+          dispatch_fresh_9h() {
+            # A just-cancelled run can briefly keep the workflow concurrency group occupied.
+            # Retry only transient dispatch conflicts; never mask a genuine API error.
+            for ATTEMPT in 1 2 3 4; do
+              CODE="$(curl -sS -o /tmp/dispatch.json -w "%{http_code}" -X POST \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                -d '{"ref":"main"}' \
+                "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/soccer-9h-autonomous.yml/dispatches")"
+              case "${CODE}" in
+                204)
+                  echo "RECOVERY: fresh 9H workflow dispatch accepted (attempt ${ATTEMPT}/4)."
+                  verify_current_main_active
+                  return 0
+                  ;;
+                409)
+                  echo "RECOVERY: dispatch conflict on attempt ${ATTEMPT}/4; waiting for prior cancellation/concurrency reconciliation."
+                  sleep $((ATTEMPT * 5))
+                  ;;
+                429|500|502|503|504)
+                  echo "RECOVERY: transient GitHub API response HTTP ${CODE} on dispatch attempt ${ATTEMPT}/4; retrying."
+                  sleep $((ATTEMPT * 5))
+                  ;;
+                *)
+                  echo "RECOVERY: fresh dispatch failed with HTTP ${CODE}." >&2
+                  if [ -f /tmp/dispatch.json ]; then cat /tmp/dispatch.json >&2; fi
+                  return 1
+                  ;;
+              esac
+            done
+            echo "RECOVERY: fresh 9H dispatch did not become accepted after bounded retries." >&2
+            return 1
+          }
+
           cancel_obsolete_runs() {
             python - "/tmp/9h-runs.json" "${MAIN_SHA}" <<'PY'
           import json
@@ -384,19 +419,7 @@ jobs:
                 *)
                   echo "RECOVERY: rerun failed with HTTP ${CODE}; falling back to fresh dispatch."
                   if [ -f /tmp/rerun.json ]; then cat /tmp/rerun.json; fi
-                  DISPATCH_CODE="$(curl -sS -o /tmp/dispatch.json -w "%{http_code}" -X POST \
-                    -H "Authorization: Bearer ${GH_TOKEN}" \
-                    -H "Accept: application/vnd.github+json" \
-                    -H "X-GitHub-Api-Version: 2022-11-28" \
-                    -d '{"ref":"main"}' \
-                    "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/soccer-9h-autonomous.yml/dispatches")"
-                  if [ "${DISPATCH_CODE}" != "204" ]; then
-                    echo "RECOVERY: fresh dispatch failed with HTTP ${DISPATCH_CODE}."
-                    if [ -f /tmp/dispatch.json ]; then cat /tmp/dispatch.json; fi
-                    exit 1
-                  fi
-                  echo "RECOVERY: fresh 9H workflow dispatch accepted."
-                  verify_current_main_active
+                  dispatch_fresh_9h
                   ;;
               esac
               ;;
@@ -458,26 +481,7 @@ jobs:
                 esac
               done < <(cancel_obsolete_runs)
 
-              CODE="$(curl -sS -o /tmp/dispatch.json -w "%{http_code}" -X POST \
-                -H "Authorization: Bearer ${GH_TOKEN}" \
-                -H "Accept: application/vnd.github+json" \
-                -H "X-GitHub-Api-Version: 2022-11-28" \
-                -d '{"ref":"main"}' \
-                "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/soccer-9h-autonomous.yml/dispatches")"
-              case "${CODE}" in
-                204)
-                  echo "RECOVERY: fresh 9H workflow dispatch accepted."
-                  verify_current_main_active
-                  ;;
-                409)
-                  echo "RECOVERY: dispatch conflict; another controller/run likely won the race."
-                  ;;
-                *)
-                  echo "RECOVERY: dispatch failed with HTTP ${CODE}."
-                  if [ -f /tmp/dispatch.json ]; then cat /tmp/dispatch.json; fi
-                  exit 1
-                  ;;
-              esac
+              dispatch_fresh_9h
               ;;
             *)
               echo "RECOVERY: unknown controller state: ${DECISION}"
