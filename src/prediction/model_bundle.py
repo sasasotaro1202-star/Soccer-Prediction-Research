@@ -187,6 +187,7 @@ def train_and_save_bundle(
         "weights": weights,
         "temperature": temperature,
         "score_method": selected_score_method,
+        "routing_policy": routing_policy,
     }
 
 
