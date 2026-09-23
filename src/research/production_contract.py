@@ -187,7 +187,8 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
                     failures.append("production_bundle_routing_schema_missing")
                 bundle_routing = bundle.get("routing_policy")
                 json_routing = model_json.get("routing_policy")
-                registry_routing = (registry.get("parameters") or {}).get("routing_policy")
+                registry_params = registry.get("parameters") or {}
+                registry_routing = registry_params.get("routing_policy")
                 if not isinstance(bundle_routing, dict):
                     failures.append("production_bundle_routing_policy_missing")
                 if not isinstance(json_routing, dict):
@@ -200,6 +201,31 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
                 if isinstance(bundle_routing, dict) and isinstance(registry_routing, dict):
                     if _canonical_hash(bundle_routing) != _canonical_hash(registry_routing):
                         failures.append("production_routing_registry_mismatch")
+
+                bundle_features = bundle.get("feature_cols")
+                if _canonical_hash(bundle_features) != _canonical_hash(model_features):
+                    failures.append("production_bundle_feature_schema_mismatch")
+                if _canonical_hash(bundle_features) != _canonical_hash(registry_features):
+                    failures.append("production_bundle_registry_feature_schema_mismatch")
+
+                bundle_weights = bundle.get("weights")
+                json_weights = model_json.get("weights")
+                registry_weights = registry_params.get("weights")
+                if _canonical_hash(bundle_weights) != _canonical_hash(json_weights):
+                    failures.append("production_bundle_weights_metadata_mismatch")
+                if _canonical_hash(bundle_weights) != _canonical_hash(registry_weights):
+                    failures.append("production_bundle_weights_registry_mismatch")
+
+                try:
+                    bundle_temperature = float(bundle.get("temperature"))
+                    json_temperature = float(model_json.get("temperature"))
+                    registry_temperature = float((registry.get("calibration") or {}).get("temperature"))
+                    if not np.isclose(bundle_temperature, json_temperature, atol=1e-12, rtol=0.0):
+                        failures.append("production_bundle_temperature_metadata_mismatch")
+                    if not np.isclose(bundle_temperature, registry_temperature, atol=1e-12, rtol=0.0):
+                        failures.append("production_bundle_temperature_registry_mismatch")
+                except (TypeError, ValueError):
+                    failures.append("production_bundle_temperature_invalid")
 
             expected_sha = os.getenv("GITHUB_SHA", "").strip()
             recorded_sha = str(registry.get("git_commit_sha", "")).strip()
