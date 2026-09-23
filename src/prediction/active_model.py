@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-CURRENT_PRODUCTION_DIR = PROJECT_ROOT / "models" / "current"
+CURRENT_PRODUCTION_DIR = Path("models/current")
 
 
 def resolve_active_production_paths(bundle_path: str, registry_path: str) -> tuple[str, str]:
