@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows:
       - Soccer CI
+      - Legacy V9/V12 Bridge Check
     types: [completed]
 
 permissions:
