@@ -123,6 +123,45 @@ def _verify_production_provenance(bundle_path: str, registry: dict, bundle: dict
             raise RuntimeError(f"Production provenance hash mismatch: {name}")
 
 
+def _verify_validated_candidate_provenance(bundle_path: str, registry: dict, bundle: dict) -> None:
+    root = Path(bundle_path).parent
+    provenance_path = root / "validated_candidate_provenance.json"
+    if not provenance_path.exists():
+        raise RuntimeError("Validated candidate provenance is missing")
+    try:
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"Validated candidate provenance is unreadable: {type(exc).__name__}: {exc}") from exc
+    if provenance.get("status") != "VALIDATED_CANDIDATE":
+        raise RuntimeError("Validated candidate provenance status is invalid")
+    if provenance.get("locked_oos_used_for_training") is not False:
+        raise RuntimeError("Validated candidate provenance indicates locked-OOS training contamination")
+    if str(provenance.get("model_version")) != str(bundle.get("model_version")):
+        raise RuntimeError("Validated candidate model version mismatch")
+    if str(provenance.get("model_version")) != str(registry.get("model_version")):
+        raise RuntimeError("Validated candidate registry/model version mismatch")
+    gate = provenance.get("calibration_gate")
+    if not isinstance(gate, dict) or gate.get("status") != "PASS":
+        raise RuntimeError("Validated candidate calibration gate is not PASS")
+    files = provenance.get("files")
+    required = {
+        "validated_candidate_model.pkl": Path(bundle_path),
+        "validated_candidate_model.json": root / "validated_candidate_model.json",
+        "validated_candidate_registry.json": root / "validated_candidate_registry.json",
+    }
+    if not isinstance(files, dict):
+        raise RuntimeError("Validated candidate provenance hashes are missing")
+    for name, path in required.items():
+        entry = files.get(name)
+        expected = entry.get("sha256") if isinstance(entry, dict) else None
+        if not isinstance(expected, str) or len(expected) != 64:
+            raise RuntimeError(f"Validated candidate provenance hash missing for {name}")
+        if not path.is_file() or path.stat().st_size <= 0:
+            raise RuntimeError(f"Validated candidate artifact missing: {name}")
+        if _sha256(path) != expected:
+            raise RuntimeError(f"Validated candidate provenance hash mismatch: {name}")
+
+
 def _strict_bool(series: pd.Series, name: str) -> pd.Series:
     """Parse booleans without allowing strings/NaN to silently become True."""
     if pd.api.types.is_bool_dtype(series):
@@ -209,7 +248,10 @@ def run(
             f"Adopted registry/model bundle version mismatch: registry={registry_version!r}, bundle={bundle_version!r}"
         )
     if int(bundle.get("schema_version", 1)) >= 2:
-        _verify_production_provenance(bundle_path, registry, bundle)
+        if model_mode == "VALIDATED_CANDIDATE":
+            _verify_validated_candidate_provenance(bundle_path, registry, bundle)
+        else:
+            _verify_production_provenance(bundle_path, registry, bundle)
     p = Path(fixtures_path)
     if not p.exists():
         return _write_status(status_file, "NO_FIXTURE_INPUT", prediction_time_utc=now.isoformat(), oos_claimed=False)
@@ -266,7 +308,7 @@ def run(
         temp_output = output_file.with_suffix(output_file.suffix + ".tmp")
         result.to_csv(temp_output, index=False)
         temp_output.replace(output_file)
-        return _write_status(status_file, "PREDICTED", prediction_time_utc=now.isoformat(), source_rows=int(len(fixtures)), eligible_rows=int(len(eligible)), prediction_rows=int(len(result)), standard_rows=int((~result["low_confidence"]).sum()), low_confidence_rows=int(result["low_confidence"].sum()), abstained_rows=int(result["abstain"].sum()), output_path=str(output_file), model_version=str(bundle["model_version"]), oos_claimed=bool(registry.get("oos_verified", False)))
+        return _write_status(status_file, "PREDICTED", prediction_time_utc=now.isoformat(), source_rows=int(len(fixtures)), eligible_rows=int(len(eligible)), prediction_rows=int(len(result)), standard_rows=int((~result["low_confidence"]).sum()), low_confidence_rows=int(result["low_confidence"].sum()), abstained_rows=int(result["abstain"].sum()), output_path=str(output_file), model_version=str(bundle["model_version"]), oos_claimed=bool(registry.get("oos_verified", False)), model_mode=model_mode)
     selected_score_method = str(bundle.get("score_method", "primary"))
     if selected_score_method == "neutral_aware":
         if "neutral_venue" not in eligible.columns:
