@@ -448,6 +448,87 @@ def run(out_dir: str = "artifacts") -> dict:
     adoption["external_stability_gate"] = stability
     (out / "adoption_decision.json").write_text(json.dumps(adoption, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     model_bundle = None
+    validated_candidate_bundle = None
+    if not selections.empty and len(locked) == 2 and oos_temporal.get("status") == "PASS" and calibration_gate.get("status") == "PASS":
+        # Reference-prediction candidate: train only on data strictly before the
+        # locked OOS horizon. Locked outcomes remain untouched, even when the
+        # candidate later fails the adoption comparison.
+        selection = selections.iloc[-1].to_dict()
+        locked_start = pd.to_datetime(locked["oos_start"], utc=True, errors="coerce").min()
+        candidate_training = feats.copy()
+        candidate_training["kickoff_utc"] = pd.to_datetime(candidate_training["kickoff_utc"], utc=True, errors="coerce")
+        candidate_training = candidate_training[
+            (candidate_training["kickoff_utc"] < locked_start) & (candidate_training["pit_verified"] == True)
+        ].copy()
+        candidate_version = hashlib.sha256(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_id(history),
+                    "selection": selection,
+                    "score_selection": score_selection,
+                    "score_locked_gate": score_locked_gate,
+                    "training_cutoff": str(locked_start),
+                },
+                sort_keys=True,
+                default=str,
+            ).encode()
+        ).hexdigest()[:16]
+        try:
+            validated_candidate_bundle = train_and_save_bundle(
+                candidate_training,
+                _model_features(candidate_training),
+                selection,
+                str(out / "validated_candidate_model.pkl"),
+                candidate_version,
+                snapshot_id(history),
+                score_selection=score_selection,
+                score_locked_gate=score_locked_gate,
+            )
+            (out / "validated_candidate_model.json").write_text(
+                json.dumps({**validated_candidate_bundle, "status": "VALIDATED_CANDIDATE"}, indent=2, ensure_ascii=False, default=str),
+                encoding="utf-8",
+            )
+            candidate_registry = save_registry(
+                str(out / "validated_candidate_registry.json"),
+                model_version=candidate_version,
+                feature_version="pit_safe_v1",
+                research_cycle=str(pd.Timestamp.utcnow().isoformat()),
+                git_commit_sha=os.getenv("GITHUB_SHA", "unknown"),
+                data_snapshot_id=snapshot_id(history),
+                metrics={"development_oos": development_oos.to_dict(orient="records"), "locked_oos_verification": locked.to_dict(orient="records")},
+                adoption_status="VALIDATED_CANDIDATE",
+                parameters={
+                    "weights": validated_candidate_bundle.get("weights", {}),
+                    "feature_count": validated_candidate_bundle.get("feature_count"),
+                    "fit_rows": validated_candidate_bundle.get("fit_rows"),
+                    "score_method": validated_candidate_bundle.get("score_method", "primary"),
+                    "routing_policy": validated_candidate_bundle.get("routing_policy"),
+                },
+                training_end=validated_candidate_bundle.get("fit_end"),
+                calibration={
+                    "temperature": validated_candidate_bundle.get("temperature"),
+                    "score_method": validated_candidate_bundle.get("score_method", "primary"),
+                    "gate": calibration_gate,
+                },
+            )
+            (out / "validated_candidate_registry.json").write_text(
+                json.dumps({**candidate_registry, "adoption_status": "VALIDATED_CANDIDATE"}, indent=2, ensure_ascii=False, default=str),
+                encoding="utf-8",
+            )
+            candidate_provenance = {
+                "provenance_schema_version": 1,
+                "status": "VALIDATED_CANDIDATE",
+                "model_version": candidate_version,
+                "data_snapshot_id": snapshot_id(history),
+                "training_cutoff_exclusive_utc": str(locked_start),
+                "locked_oos_used_for_training": False,
+                "calibration_gate": calibration_gate,
+            }
+            (out / "validated_candidate_provenance.json").write_text(
+                json.dumps(candidate_provenance, indent=2, ensure_ascii=False, default=str), encoding="utf-8"
+            )
+        except Exception as exc:
+            validated_candidate_bundle = {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
     if adoption.get("status") == "ADOPT" and not selections.empty:
         selection = selections.iloc[-1].to_dict()
         model_version = hashlib.sha256(
