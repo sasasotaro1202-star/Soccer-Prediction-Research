@@ -17,10 +17,10 @@ permissions:
   contents: read
 
 concurrency:
-  # The controller is stateless and short-lived; keep only the newest watchdog decision.
-  # This prevents scheduled/workflow_run bursts from accumulating a controller queue.
+  # Do not cancel an active recovery controller. Its run-reconciliation logic is idempotent
+  # and explicitly handles duplicate/stale requests and dispatch races.
   group: soccer-9h-recovery-main
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   watchdog:

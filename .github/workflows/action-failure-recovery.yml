@@ -10,9 +10,9 @@ permissions:
   actions: write
 
 concurrency:
-  # Only one short CI recovery controller is needed at a time.
+  # Never cancel an active recovery controller; later failure events queue and each target run is retried at most once.
   group: action-failure-recovery-soccer-ci
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   retry-failed-jobs-once:
