@@ -29,7 +29,7 @@ def test_candidates_include_low_dimensional_elo_model():
     names = list(candidates(42))
     assert "elo_logistic" in names
     assert "recency_logistic" in names
-    assert len(names) == 11
+    assert len(names) == 12
     assert "logistic_l2_strong" in names
     assert "hist_gb_robust" in names
     assert "quantile_logistic" in names
