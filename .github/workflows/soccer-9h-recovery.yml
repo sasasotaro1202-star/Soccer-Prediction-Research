@@ -27,7 +27,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: soccer-9h-recovery
+  # Isolate controller runs by exact commit so a newer/older push cannot cancel the wrong recovery cycle.
+  group: soccer-9h-recovery-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
