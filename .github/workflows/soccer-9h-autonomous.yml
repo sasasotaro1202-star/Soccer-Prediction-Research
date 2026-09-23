@@ -16,8 +16,9 @@ permissions:
   contents: read
 
 concurrency:
-  # Isolate runs by exact commit so a validated current-main cycle never waits behind an older SHA.
-  group: soccer-9h-autonomous-${{ github.sha }}
+  # Keep exactly one 9H research cycle active at a time. A main update queues the newest SHA
+  # instead of cancelling the running immutable snapshot; the newest queued run becomes the handoff.
+  group: soccer-9h-autonomous-main
   cancel-in-progress: false
 
 # Three sequential 180-minute phases provide up to 9 hours of repository-side work.
