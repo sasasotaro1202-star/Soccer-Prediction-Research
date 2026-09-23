@@ -17,10 +17,10 @@ permissions:
   contents: read
 
 concurrency:
-  # Serialize controller invocations without cancelling an active recovery pass.
-  # New events wait for the current controller; the controller itself is bounded to 10 minutes.
+  # The controller is stateless and short-lived; keep only the newest watchdog decision.
+  # This prevents scheduled/workflow_run bursts from accumulating a controller queue.
   group: soccer-9h-recovery-main
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   watchdog:
