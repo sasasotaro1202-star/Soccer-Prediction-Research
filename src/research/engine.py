@@ -523,6 +523,11 @@ def run(out_dir: str = "artifacts") -> dict:
                 "training_cutoff_exclusive_utc": str(locked_start),
                 "locked_oos_used_for_training": False,
                 "calibration_gate": calibration_gate,
+                "files": {
+                    "validated_candidate_model.pkl": {"sha256": _sha256(out / "validated_candidate_model.pkl"), "bytes": (out / "validated_candidate_model.pkl").stat().st_size},
+                    "validated_candidate_model.json": {"sha256": _sha256(out / "validated_candidate_model.json"), "bytes": (out / "validated_candidate_model.json").stat().st_size},
+                    "validated_candidate_registry.json": {"sha256": _sha256(out / "validated_candidate_registry.json"), "bytes": (out / "validated_candidate_registry.json").stat().st_size},
+                },
             }
             (out / "validated_candidate_provenance.json").write_text(
                 json.dumps(candidate_provenance, indent=2, ensure_ascii=False, default=str), encoding="utf-8"
