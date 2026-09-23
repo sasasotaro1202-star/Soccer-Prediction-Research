@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from src.prediction.model_bundle import load_bundle, predict_bundle
-from src.prediction.active_model import resolve_active_production_paths, resolve_best_available_paths
+from src.prediction.active_model import resolve_active_production_paths, resolve_best_available_paths, resolve_best_available_paths_with_remote
 from src.prediction.secondary_outputs import predict_mom_candidates, predict_score_candidates, predict_score_markets
 
 
@@ -235,7 +235,14 @@ def run(
         raise ValueError("model_policy must be production or best_available")
     model_mode = "PRODUCTION_ADOPTED"
     if model_policy == "best_available":
-        bundle_path, registry_path, model_mode = resolve_best_available_paths()
+        try:
+            bundle_path, registry_path, model_mode = resolve_best_available_paths()
+        except RuntimeError:
+            repository = __import__("os").environ.get(
+                "SOCCER_PRODUCTION_REPOSITORY",
+                "sasasotaro1202-star/Soccer-Prediction-Research",
+            )
+            bundle_path, registry_path, model_mode = resolve_best_available_paths_with_remote(repository)
         registry = load_best_available_model(registry_path)
     else:
         bundle_path, registry_path = resolve_active_production_paths(bundle_path, registry_path)
