@@ -33,6 +33,7 @@ def _make_artifacts(tmp_path):
         tmp_path / "score_oos_temporal_integrity.json",
         {"status": "PASS", "fail_closed": True},
     )
+    _write_json(tmp_path / "calibration_gate.json", {"status": "PASS", "temperature": 1.0, "calibration_rows": 120, "locked_oos_used_for_calibration": False})
     for name in (
         "oos_metrics.csv",
         "model_selection.csv",
