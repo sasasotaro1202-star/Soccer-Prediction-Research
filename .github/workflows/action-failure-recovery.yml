@@ -4,22 +4,15 @@ on:
   workflow_run:
     workflows:
       - Soccer CI
-      - Legacy V9/V12 Bridge Check
-      - OpenAI API Check
-      - Overnight Integrity
-      - PIT Replay Audit
-      - Soccer Coverage Fixture PIT Audit
-      - Soccer Coverage PIT Audit
-      - Soccer Research Cycle
-      - Soccer Research Robust
     types: [completed]
 
 permissions:
   actions: write
 
 concurrency:
-  group: action-failure-recovery-${{ github.event.workflow_run.id }}
-  cancel-in-progress: false
+  # Only one short CI recovery controller is needed at a time.
+  group: action-failure-recovery-soccer-ci
+  cancel-in-progress: true
 
 jobs:
   retry-failed-jobs-once:
