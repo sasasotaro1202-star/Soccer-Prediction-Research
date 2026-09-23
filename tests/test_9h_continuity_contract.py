@@ -13,7 +13,7 @@ def test_autonomous_workflow_has_continuous_9h_cycle_and_strict_concurrency():
     assert '"tests/**"' in text
     assert 'cron: "15 0,8,16 * * *"' in text
     assert "workflow_dispatch:" in text
-    assert "  push:" in text
+    assert "\n  push:\n" in text
     assert "Recovery controller" in text or "recovery controller" in text.lower()
     assert "group: soccer-9h-autonomous-main" in text
     assert "cancel-in-progress: false" in text
