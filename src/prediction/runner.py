@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from src.prediction.model_bundle import load_bundle, predict_bundle
+from src.prediction.active_model import resolve_active_production_paths, resolve_best_available_paths
 from src.prediction.secondary_outputs import predict_mom_candidates, predict_score_candidates, predict_score_markets
 
 
@@ -42,6 +43,22 @@ def load_adopted_model(registry_path: str = "artifacts/model_registry.json") -> 
         raise RuntimeError("Adopted model registry must contain a JSON object")
     if record.get("adoption_status") != "ADOPT":
         raise RuntimeError("Registry contains no ADOPT model")
+    return record
+
+
+def load_best_available_model(registry_path: str) -> dict:
+    p = Path(registry_path)
+    if not p.exists():
+        raise RuntimeError("Selected model registry does not exist; no safe prediction model is available")
+    try:
+        record = json.loads(p.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"Selected model registry is unreadable: {type(exc).__name__}: {exc}") from exc
+    if not isinstance(record, dict):
+        raise RuntimeError("Selected model registry must contain a JSON object")
+    status = str(record.get("adoption_status", "")).upper()
+    if status not in {"ADOPT", "VALIDATED_CANDIDATE"}:
+        raise RuntimeError(f"Selected registry status is not prediction-safe: {status}")
     return record
 
 
@@ -104,6 +121,45 @@ def _verify_production_provenance(bundle_path: str, registry: dict, bundle: dict
             raise RuntimeError(f"Production provenance artifact missing: {name}")
         if _sha256(path) != expected:
             raise RuntimeError(f"Production provenance hash mismatch: {name}")
+
+
+def _verify_validated_candidate_provenance(bundle_path: str, registry: dict, bundle: dict) -> None:
+    root = Path(bundle_path).parent
+    provenance_path = root / "validated_candidate_provenance.json"
+    if not provenance_path.exists():
+        raise RuntimeError("Validated candidate provenance is missing")
+    try:
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"Validated candidate provenance is unreadable: {type(exc).__name__}: {exc}") from exc
+    if provenance.get("status") != "VALIDATED_CANDIDATE":
+        raise RuntimeError("Validated candidate provenance status is invalid")
+    if provenance.get("locked_oos_used_for_training") is not False:
+        raise RuntimeError("Validated candidate provenance indicates locked-OOS training contamination")
+    if str(provenance.get("model_version")) != str(bundle.get("model_version")):
+        raise RuntimeError("Validated candidate model version mismatch")
+    if str(provenance.get("model_version")) != str(registry.get("model_version")):
+        raise RuntimeError("Validated candidate registry/model version mismatch")
+    gate = provenance.get("calibration_gate")
+    if not isinstance(gate, dict) or gate.get("status") != "PASS":
+        raise RuntimeError("Validated candidate calibration gate is not PASS")
+    files = provenance.get("files")
+    required = {
+        "validated_candidate_model.pkl": Path(bundle_path),
+        "validated_candidate_model.json": root / "validated_candidate_model.json",
+        "validated_candidate_registry.json": root / "validated_candidate_registry.json",
+    }
+    if not isinstance(files, dict):
+        raise RuntimeError("Validated candidate provenance hashes are missing")
+    for name, path in required.items():
+        entry = files.get(name)
+        expected = entry.get("sha256") if isinstance(entry, dict) else None
+        if not isinstance(expected, str) or len(expected) != 64:
+            raise RuntimeError(f"Validated candidate provenance hash missing for {name}")
+        if not path.is_file() or path.stat().st_size <= 0:
+            raise RuntimeError(f"Validated candidate artifact missing: {name}")
+        if _sha256(path) != expected:
+            raise RuntimeError(f"Validated candidate provenance hash mismatch: {name}")
 
 
 def _strict_bool(series: pd.Series, name: str) -> pd.Series:
@@ -171,10 +227,19 @@ def run(
     status_path: str = "artifacts/prediction_status.json",
     prediction_time: str | None = None,
     registry_path: str = "artifacts/model_registry.json",
+    model_policy: str = "production",
 ) -> dict:
     status_file = Path(status_path)
     now = _normalize_prediction_time(prediction_time)
-    registry = load_adopted_model(registry_path)
+    if model_policy not in {"production", "best_available"}:
+        raise ValueError("model_policy must be production or best_available")
+    model_mode = "PRODUCTION_ADOPTED"
+    if model_policy == "best_available":
+        bundle_path, registry_path, model_mode = resolve_best_available_paths()
+        registry = load_best_available_model(registry_path)
+    else:
+        bundle_path, registry_path = resolve_active_production_paths(bundle_path, registry_path)
+        registry = load_adopted_model(registry_path)
     bundle = load_bundle(bundle_path)
     registry_version = registry.get("model_version")
     bundle_version = bundle.get("model_version")
@@ -183,7 +248,10 @@ def run(
             f"Adopted registry/model bundle version mismatch: registry={registry_version!r}, bundle={bundle_version!r}"
         )
     if int(bundle.get("schema_version", 1)) >= 2:
-        _verify_production_provenance(bundle_path, registry, bundle)
+        if model_mode == "VALIDATED_CANDIDATE":
+            _verify_validated_candidate_provenance(bundle_path, registry, bundle)
+        else:
+            _verify_production_provenance(bundle_path, registry, bundle)
     p = Path(fixtures_path)
     if not p.exists():
         return _write_status(status_file, "NO_FIXTURE_INPUT", prediction_time_utc=now.isoformat(), oos_claimed=False)
@@ -240,7 +308,7 @@ def run(
         temp_output = output_file.with_suffix(output_file.suffix + ".tmp")
         result.to_csv(temp_output, index=False)
         temp_output.replace(output_file)
-        return _write_status(status_file, "PREDICTED", prediction_time_utc=now.isoformat(), source_rows=int(len(fixtures)), eligible_rows=int(len(eligible)), prediction_rows=int(len(result)), standard_rows=int((~result["low_confidence"]).sum()), low_confidence_rows=int(result["low_confidence"].sum()), abstained_rows=int(result["abstain"].sum()), output_path=str(output_file), model_version=str(bundle["model_version"]), oos_claimed=bool(registry.get("oos_verified", False)))
+        return _write_status(status_file, "PREDICTED", prediction_time_utc=now.isoformat(), source_rows=int(len(fixtures)), eligible_rows=int(len(eligible)), prediction_rows=int(len(result)), standard_rows=int((~result["low_confidence"]).sum()), low_confidence_rows=int(result["low_confidence"].sum()), abstained_rows=int(result["abstain"].sum()), output_path=str(output_file), model_version=str(bundle["model_version"]), oos_claimed=bool(registry.get("oos_verified", False)), model_mode=model_mode)
     selected_score_method = str(bundle.get("score_method", "primary"))
     if selected_score_method == "neutral_aware":
         if "neutral_venue" not in eligible.columns:
@@ -331,6 +399,7 @@ def run(
         abstained_rows=int(result["abstain"].sum()),
         output_path=str(output_file),
         model_version=str(bundle["model_version"]),
+        model_mode=model_mode,
         oos_claimed=bool(registry.get("oos_verified", False)),
     )
 
@@ -343,8 +412,9 @@ def main() -> int:
     parser.add_argument("--status", default="artifacts/prediction_status.json")
     parser.add_argument("--prediction-time", default=None)
     parser.add_argument("--registry", default="artifacts/model_registry.json")
+    parser.add_argument("--model-policy", choices=["production", "best_available"], default="production")
     args = parser.parse_args()
-    result = run(args.fixtures, args.bundle, args.output, args.status, args.prediction_time, args.registry)
+    result = run(args.fixtures, args.bundle, args.output, args.status, args.prediction_time, args.registry, args.model_policy)
     print(json.dumps(result, ensure_ascii=False, default=str))
     return 0
 

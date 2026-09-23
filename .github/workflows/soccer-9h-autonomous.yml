@@ -13,7 +13,7 @@ on:
     - cron: "15 0,8,16 * * *"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   # Keep exactly one 9H research cycle active at a time. A main update queues the newest SHA
@@ -326,6 +326,97 @@ jobs:
           cp artifacts/locked_oos_metrics.csv artifacts/production_release/
           cp artifacts/model_selection.csv artifacts/production_release/
           cp artifacts/adoption_decision.json artifacts/production_release/
+      - name: Persist validated current production model
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -s artifacts/production_model.pkl
+          test -s artifacts/production_model.json
+          test -s artifacts/model_registry.json
+          test -s artifacts/production_provenance.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git checkout -B persist-current-production origin/main
+            mkdir -p models/current
+            cp artifacts/production_model.pkl models/current/production_model.pkl
+            cp artifacts/production_model.json models/current/production_model.json
+            cp artifacts/model_registry.json models/current/model_registry.json
+            cp artifacts/production_provenance.json models/current/production_provenance.json
+            python - <<'PY'
+            import hashlib, json
+            from pathlib import Path
+            root=Path('models/current')
+            bundle=root/'production_model.pkl'
+            meta=json.loads((root/'production_model.json').read_text(encoding='utf-8'))
+            registry=json.loads((root/'model_registry.json').read_text(encoding='utf-8'))
+            manifest={
+                'status':'ACTIVE_ADOPTED',
+                'model_version':registry.get('model_version') or meta.get('model_version'),
+                'bundle_sha256':hashlib.sha256(bundle.read_bytes()).hexdigest(),
+                'research_git_sha':registry.get('git_commit_sha'),
+                'updated_from_validated_cycle':True,
+            }
+            (root/'ACTIVE_MODEL.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False),encoding='utf-8')
+            PY
+            git add models/current
+            if git diff --cached --quiet; then
+              exit 0
+            fi
+            git commit -m "chore: persist validated current production model"
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Production persistence push attempt ${attempt} failed; retrying against latest main."
+          done
+          exit 1
+      - name: Persist validated research candidate
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ ! -s artifacts/validated_candidate_model.pkl ] || [ ! -s artifacts/validated_candidate_model.json ] || [ ! -s artifacts/validated_candidate_registry.json ] || [ ! -s artifacts/validated_candidate_provenance.json ]; then
+            echo "No validated candidate was produced in this cycle."
+            exit 0
+          fi
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('artifacts/validated_candidate_registry.json').read_text(encoding='utf-8'))
+          p=json.loads(Path('artifacts/validated_candidate_provenance.json').read_text(encoding='utf-8'))
+          if r.get('adoption_status') != 'VALIDATED_CANDIDATE': raise SystemExit('candidate registry status is not VALIDATED_CANDIDATE')
+          if p.get('status') != 'VALIDATED_CANDIDATE': raise SystemExit('candidate provenance status is invalid')
+          if p.get('locked_oos_used_for_training') is not False: raise SystemExit('candidate is not locked-OOS clean')
+          if (p.get('calibration_gate') or {}).get('status') != 'PASS': raise SystemExit('candidate calibration gate is not PASS')
+          if str(r.get('model_version')) != str(p.get('model_version')): raise SystemExit('candidate model version mismatch')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git checkout -B persist-validated-candidate origin/main
+            mkdir -p models/current
+            cp artifacts/validated_candidate_model.pkl models/current/validated_candidate_model.pkl
+            cp artifacts/validated_candidate_model.json models/current/validated_candidate_model.json
+            cp artifacts/validated_candidate_registry.json models/current/validated_candidate_registry.json
+            cp artifacts/validated_candidate_provenance.json models/current/validated_candidate_provenance.json
+            git add models/current/validated_candidate_model.pkl models/current/validated_candidate_model.json models/current/validated_candidate_registry.json models/current/validated_candidate_provenance.json
+            if git diff --cached --quiet; then
+              exit 0
+            fi
+            git commit -m "chore: persist validated research candidate"
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Validated candidate persistence push attempt ${attempt} failed; retrying against latest main."
+          done
+          exit 1
       - name: Write 9-hour health record
         if: always()
         run: |
