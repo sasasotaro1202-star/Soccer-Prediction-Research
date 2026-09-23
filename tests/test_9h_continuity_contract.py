@@ -17,7 +17,12 @@ def test_autonomous_workflow_has_continuous_9h_cycle_and_strict_concurrency():
     assert "Recovery controller" in text or "recovery controller" in text.lower()
     assert "group: soccer-9h-autonomous-main" in text
     assert "cancel-in-progress: false" in text
-    assert text.count("timeout-minutes: 180") >= 3
+    assert "phase1_gate:" in text and "timeout-minutes: 180" in text
+    phase2_block = text.split("phase2_research:", 1)[1].split("phase3_verification:", 1)[0]
+    phase3_block = text.split("phase3_verification:", 1)[1]
+    assert "timeout-minutes: 360" in phase2_block
+    assert "timeout-minutes: 180" in phase3_block
+    assert '"max_planned_runtime_minutes": 720' in text
     for phase in ("phase1_gate:", "phase2_research:", "phase3_verification:"):
         assert phase in text
     assert "production_provenance.json" in text
@@ -49,7 +54,7 @@ def test_recovery_workflow_has_watchdog_and_self_chaining_dispatch():
     assert "cancel_duplicate_current_main_runs" in text
     assert "one canonical run retained" in text
     assert "?per_page=100" in text
-    assert "max_active_age_hours = 10.5" in text
+    assert text.count("max_active_age_hours = 13.5") == 2
     assert "cancel_stale_current_main_runs" in text
     assert "before fresh dispatch" in text
     assert text.count("verify_current_main_active") >= 3
@@ -62,7 +67,7 @@ def test_recovery_workflow_has_watchdog_and_self_chaining_dispatch():
 
 def test_phase3_runs_for_independent_verification_after_phase2_failure():
     text = AUTONOMOUS.read_text(encoding="utf-8")
-    assert "if: always() && needs.phase2_research.result != 'cancelled'" in text
+    assert "if: always() && needs.phase1_gate.result == 'success' && needs.phase2_research.result != 'skipped'" in text
     assert "independent verification and robustness" in text
 
 
