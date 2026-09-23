@@ -19,7 +19,8 @@ on:
     workflows: ["Soccer 9H Autonomous Research"]
     types: [completed]
   schedule:
-    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
+    # 15-minute watchdog: workflow_run completion chaining is the primary continuity path; this schedule is a secondary safety net with lower scheduler load.
+    - cron: "13,28,43,58 * * * *"
 
 permissions:
   actions: write
