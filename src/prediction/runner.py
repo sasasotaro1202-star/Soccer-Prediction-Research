@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from src.prediction.model_bundle import load_bundle, predict_bundle
+from src.prediction.active_model import resolve_active_production_paths
 from src.prediction.secondary_outputs import predict_mom_candidates, predict_score_candidates, predict_score_markets
 
 
@@ -174,6 +175,7 @@ def run(
 ) -> dict:
     status_file = Path(status_path)
     now = _normalize_prediction_time(prediction_time)
+    bundle_path, registry_path = resolve_active_production_paths(bundle_path, registry_path)
     registry = load_adopted_model(registry_path)
     bundle = load_bundle(bundle_path)
     registry_version = registry.get("model_version")
