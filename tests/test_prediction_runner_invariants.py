@@ -12,6 +12,7 @@ def _fixture_rows():
                 "kickoff_utc": "2026-09-16T12:00:00Z",
                 "home_team": "A",
                 "away_team": "B",
+                "competition": "EPL",
                 "source_available_at_utc": "2026-09-15T10:00:00Z",
                 "pit_verified": True,
                 "starter_status": "ANNOUNCED",
@@ -148,3 +149,36 @@ def test_low_confidence_is_separate_from_fixture_eligibility(tmp_path, monkeypat
     assert status["prediction_rows"] == 1
     assert status["low_confidence_rows"] == 1
     assert status["standard_rows"] == 0
+
+
+def test_missing_competition_fails_closed():
+    rows = _fixture_rows().drop(columns=["competition"])
+    with pytest.raises(RuntimeError, match="missing required columns"):
+        _eligible_fixtures(rows, _normalize_prediction_time("2026-09-15T09:00:00Z"))
+
+
+def test_schema2_prediction_requires_provenance(tmp_path, monkeypatch):
+    from src.prediction import runner
+
+    monkeypatch.setattr(
+        runner,
+        "load_adopted_model",
+        lambda path: {"adoption_status": "ADOPT", "model_version": "v1", "oos_verified": True},
+    )
+    monkeypatch.setattr(
+        runner,
+        "load_bundle",
+        lambda path: {"model_version": "v1", "schema_version": 2},
+    )
+
+    fixtures_path = tmp_path / "future.csv"
+    _fixture_rows().to_csv(fixtures_path, index=False)
+    with pytest.raises(RuntimeError, match="Production provenance is missing"):
+        runner.run(
+            fixtures_path=str(fixtures_path),
+            bundle_path=str(tmp_path / "model.pkl"),
+            output_path=str(tmp_path / "predictions.csv"),
+            status_path=str(tmp_path / "status.json"),
+            prediction_time="2026-09-15T11:00:00Z",
+            registry_path=str(tmp_path / "registry.json"),
+        )
