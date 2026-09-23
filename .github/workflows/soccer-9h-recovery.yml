@@ -1,12 +1,14 @@
 name: Soccer 9H Recovery Controller
 
-# Recovery is driven by the 15-minute watchdog plus workflow_run completion chaining; source-code pushes do not
-# create competing recovery runs. The controller always compares against the latest main SHA before dispatching.
+# Recovery is driven by main-push, workflow_run completion chaining, and the 15-minute watchdog. The controller
+# always compares against the latest main SHA before dispatching and never interrupts an active 9H snapshot.
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
+  push:
+    branches: [main]
   workflow_run:
     workflows: ["Soccer 9H Autonomous Research"]
     types: [completed]
