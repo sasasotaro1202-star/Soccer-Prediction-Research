@@ -84,7 +84,10 @@ jobs:
           fresh_current_active = []
           for r in current_active:
               age = age_hours(r)
-              if age is None or age <= max_active_age_hours:
+              status = r.get("status")
+              prestart = status in {"pending", "queued", "waiting", "requested"}
+              # A pre-run request with no runner for 20+ minutes is not a healthy active cycle.
+              if age is None or (age <= max_active_age_hours and not (prestart and age > (20.0 / 60.0))):
                   fresh_current_active.append(r)
 
           if fresh_current_active:
@@ -224,13 +227,14 @@ jobs:
           main_sha = sys.argv[2]
           now = datetime.now(timezone.utc)
           stuck_minutes = 20
+          prestart = {"pending", "queued", "waiting", "requested"}
 
           for run in payload.get("workflow_runs", []):
               if run.get("head_branch") != "main":
                   continue
               if run.get("head_sha") != main_sha:
                   continue
-              if run.get("status") != "pending":
+              if run.get("status") not in prestart:
                   continue
               created = run.get("created_at") or run.get("run_started_at")
               if not created:
