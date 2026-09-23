@@ -175,3 +175,56 @@ def test_bundle_uses_locked_oos_verified_neutral_aware_score_method(tmp_path):
     bundle = load_bundle(str(path))
     assert bundle["score_method"] == "neutral_aware"
     assert bundle["score_model"]["method"] == "neutral_aware_pit_smoothed_venue_split_team_goal_rates"
+
+
+def test_bundle_preserves_and_applies_validated_contextual_routing(tmp_path):
+    df = _fixture().copy()
+    df["competition"] = np.where(np.arange(len(df)) % 2 == 0, "EPL", "LL")
+    df["elo_diff"] = np.linspace(-150, 150, len(df))
+    df["home_goal_total_avg_5"] = 2.2
+    df["away_goal_total_avg_5"] = 1.9
+    df["home_draw_rate_20"] = 0.28
+    df["away_draw_rate_20"] = 0.26
+    df["rest_diff_hours"] = 0.0
+    df["neutral_venue_known"] = True
+    df["neutral_venue"] = False
+
+    path = tmp_path / "production_model.pkl"
+    selection = {
+        "weights": {"logistic": 0.5, "extra_trees": 0.5},
+        "temperature": 1.0,
+        "context_weights": {
+            "COMP:EPL": {"logistic": 0.0, "extra_trees": 1.0},
+            "COMP:LL": {"logistic": 1.0, "extra_trees": 0.0},
+        },
+        "contextual_temperatures": {
+            "COMP:EPL": 1.20,
+            "COMP:LL": 0.90,
+            "GLOBAL": 1.0,
+        },
+        "contextual_temperature_reasons": {
+            "COMP:EPL": "test_route",
+            "COMP:LL": "test_route",
+            "GLOBAL": "global_fallback",
+        },
+    }
+    train_and_save_bundle(
+        df,
+        ["f1", "f2"],
+        selection,
+        str(path),
+        "test-version",
+        "snapshot-1",
+    )
+    bundle = load_bundle(str(path))
+    assert bundle["schema_version"] == 3
+    assert bundle["routing_policy"]["type"] == "hierarchical_validation_context"
+    assert bundle["routing_policy"]["context_weights"]["COMP:EPL"]["extra_trees"] == 1.0
+
+    routed = predict_bundle(bundle, df.iloc[:10])
+    legacy = dict(bundle)
+    legacy.pop("routing_policy")
+    global_only = predict_bundle(legacy, df.iloc[:10])
+    assert np.allclose(routed.sum(axis=1), 1.0)
+    assert np.all(np.isfinite(routed))
+    assert np.max(np.abs(routed - global_only)) > 1e-6
