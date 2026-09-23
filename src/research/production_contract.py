@@ -11,6 +11,8 @@ import json
 import numpy as np
 from typing import Any
 
+from src.prediction.model_bundle import load_bundle
+
 REQUIRED_GATES = ("data", "schema", "leakage", "features", "training", "backtest", "oos", "prediction", "sanity", "artifact")
 REQUIRED_ARTIFACTS = (
     "oos_metrics.csv",
@@ -172,12 +174,39 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             if registry_features is not None and model_features is not None:
                 if _canonical_hash(registry_features) != _canonical_hash(model_features):
                     failures.append("feature_schema_provenance_mismatch")
+
+            # The production bundle must implement the same validated contextual
+            # routing policy that was evaluated OOS; silently regressing to a
+            # legacy global-only predictor is not a valid production artifact.
+            try:
+                bundle = load_bundle(str(root / "production_model.pkl"))
+            except Exception:
+                failures.append("production_bundle_load")
+            else:
+                if int(bundle.get("schema_version", 0)) < 3:
+                    failures.append("production_bundle_routing_schema_missing")
+                bundle_routing = bundle.get("routing_policy")
+                json_routing = model_json.get("routing_policy")
+                registry_routing = (registry.get("parameters") or {}).get("routing_policy")
+                if not isinstance(bundle_routing, dict):
+                    failures.append("production_bundle_routing_policy_missing")
+                if not isinstance(json_routing, dict):
+                    failures.append("production_model_json_routing_policy_missing")
+                if not isinstance(registry_routing, dict):
+                    failures.append("model_registry_routing_policy_missing")
+                if isinstance(bundle_routing, dict) and isinstance(json_routing, dict):
+                    if _canonical_hash(bundle_routing) != _canonical_hash(json_routing):
+                        failures.append("production_routing_metadata_mismatch")
+                if isinstance(bundle_routing, dict) and isinstance(registry_routing, dict):
+                    if _canonical_hash(bundle_routing) != _canonical_hash(registry_routing):
+                        failures.append("production_routing_registry_mismatch")
+
             expected_sha = os.getenv("GITHUB_SHA", "").strip()
             recorded_sha = str(registry.get("git_commit_sha", "")).strip()
             if expected_sha:
                 if not recorded_sha or recorded_sha == "unknown":
                     failures.append("git_commit_provenance_missing")
-                elif recorded_sha != expected_sha:
+                elif recorded_sha != expected_sha: 
                     failures.append("git_commit_provenance_mismatch")
     if str(adoption.get("status", "")).upper() in {"ADOPT", "CHAMPION", "ADOPTED"}:
         score_gate = _read_json(root / "score_oos_gate.json")
