@@ -27,6 +27,8 @@ def test_autonomous_workflow_has_continuous_9h_cycle_and_strict_concurrency():
     assert "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1" in text
     assert "actions/cache@caa296126883cff596d87d8935842f9db880ef25" in text
     assert "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f" in text
+    assert text.count("retention-days: 3") == 3
+    assert "if-no-files-found: error" in text
 
 
 def test_recovery_workflow_has_watchdog_and_self_chaining_dispatch():
