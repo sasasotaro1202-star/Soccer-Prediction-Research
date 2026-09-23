@@ -213,6 +213,37 @@ jobs:
           PY
           }
 
+          cancel_stuck_pending_current_main_runs() {
+            python - "/tmp/9h-runs.json" "${MAIN_SHA}" <<'PY'
+          import json
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          main_sha = sys.argv[2]
+          now = datetime.now(timezone.utc)
+          stuck_minutes = 20
+
+          for run in payload.get("workflow_runs", []):
+              if run.get("head_branch") != "main":
+                  continue
+              if run.get("head_sha") != main_sha:
+                  continue
+              if run.get("status") != "pending":
+                  continue
+              created = run.get("created_at") or run.get("run_started_at")
+              if not created:
+                  continue
+              try:
+                  age_minutes = (now - datetime.fromisoformat(created.replace("Z", "+00:00"))).total_seconds() / 60.0
+              except ValueError:
+                  continue
+              if age_minutes > stuck_minutes:
+                  print(run.get("id"))
+          PY
+          }
+
           cancel_stale_current_main_runs() {
             python - "/tmp/9h-runs.json" "${MAIN_SHA}" <<'PY'
           import json
@@ -363,6 +394,25 @@ jobs:
               esac
               ;;
             DISPATCH)
+              while IFS= read -r STUCK_PENDING_RUN_ID; do
+                [ -z "${STUCK_PENDING_RUN_ID}" ] && continue
+                CANCEL_CODE="$(curl -sS -o /tmp/cancel-stuck-pending.json -w "%{http_code}" -X POST \
+                  -H "Authorization: Bearer ${GH_TOKEN}" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs/${STUCK_PENDING_RUN_ID}/cancel")"
+                case "${CANCEL_CODE}" in
+                  202|409)
+                    echo "RECOVERY: cancelled/conflicted stuck pending current-main run ${STUCK_PENDING_RUN_ID}."
+                    ;;
+                  *)
+                    echo "RECOVERY: failed to cancel stuck pending run ${STUCK_PENDING_RUN_ID} (HTTP ${CANCEL_CODE})."
+                    if [ -f /tmp/cancel-stuck-pending.json ]; then cat /tmp/cancel-stuck-pending.json; fi
+                    exit 1
+                    ;;
+                esac
+              done < <(cancel_stuck_pending_current_main_runs)
+
               while IFS= read -r STALE_CURRENT_RUN_ID; do
                 [ -z "${STALE_CURRENT_RUN_ID}" ] && continue
                 CANCEL_CODE="$(curl -sS -o /tmp/cancel-stale-current-dispatch.json -w "%{http_code}" -X POST \
