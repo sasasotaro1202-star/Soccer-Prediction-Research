@@ -51,3 +51,19 @@ def resolve_best_available_paths() -> tuple[str, str, str]:
         if mode == "VALIDATED_CANDIDATE" and status == "VALIDATED_CANDIDATE":
             return str(bundle.resolve()), str(registry.resolve()), mode
     raise RuntimeError("No safe production or validated-candidate model is currently available")
+
+
+def resolve_best_available_paths_with_remote(repository: str | None = None) -> tuple[str, str, str]:
+    """Resolve local safe models first, then fetch the last published ADOPT bundle."""
+    try:
+        return resolve_best_available_paths()
+    except RuntimeError as local_error:
+        if not repository:
+            raise local_error
+        from src.prediction.current_production import fetch_current_production
+        root = fetch_current_production(repository)
+        bundle = root / 'production_model.pkl'
+        registry = root / 'model_registry.json'
+        if not bundle.is_file() or not registry.is_file():
+            raise RuntimeError('Published current production bundle is incomplete')
+        return str(bundle.resolve()), str(registry.resolve()), 'PRODUCTION_ADOPTED'
