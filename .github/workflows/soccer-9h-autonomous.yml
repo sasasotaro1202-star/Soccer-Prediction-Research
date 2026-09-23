@@ -21,7 +21,9 @@ concurrency:
   group: soccer-9h-autonomous-main
   cancel-in-progress: false
 
-# Three sequential 180-minute phases provide up to 9 hours of repository-side work.
+# Three sequential phases provide up to 12 hours of repository-side work (180 + 360 + 180 minutes).
+# The historical workflow name remains 9H for compatibility; the research phase uses the full
+# GitHub-hosted runner limit so long OOS runs are not cut off at the previous 180-minute boundary.
 # Scheduled starts provide a baseline; the recovery controller chains successful/completed cycles
 # through workflow_run and also provides a 15-minute secondary watchdog for missed/stale/cancelled runs.
 # No production/PIT gate is weakened to keep the workflow green.
@@ -111,7 +113,7 @@ jobs:
       GITHUB_TOKEN: ${{ github.token }}
     needs: phase1_gate
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     steps:
       - name: Checkout exact workflow-trigger commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
@@ -213,12 +215,14 @@ jobs:
           if-no-files-found: error
 
   phase3_verification:
-    # Phase 3 is the independent recovery/verification lane. It must still run when Phase 2 research fails so a transient engine failure cannot consume the entire 9H cycle without an independent retry. Strict production gates remain authoritative.
-    if: always() && needs.phase2_research.result != 'cancelled'
+    # Phase 3 is the independent recovery/verification lane. It runs after any non-skipped Phase 2 result,
+    # including a timeout/failure, so a transient engine failure cannot consume the entire cycle without
+    # an independent retry. Strict production gates remain authoritative.
+    if: always() && needs.phase1_gate.result == 'success' && needs.phase2_research.result != 'skipped'
     name: Phase 3 - independent verification and robustness
     env:
       GITHUB_TOKEN: ${{ github.token }}
-    needs: phase2_research
+    needs: [phase1_gate, phase2_research]
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -318,7 +322,7 @@ jobs:
               "gate_present": gate.exists(),
               "run_status_present": status.exists(),
               "production_gate_remains_strict": True,
-              "max_planned_runtime_minutes": 540,
+              "max_planned_runtime_minutes": 720,
               "note": "No gate is relaxed for the purpose of producing a green workflow."
           }
           if Path("artifacts/production_provenance.json").exists():
@@ -340,3 +344,5 @@ jobs:
 # The recovery controller prefers runs whose head_sha matches current main.
 # Fresh-cycle marker kept intentionally lightweight so code changes and provenance gates are verified on the current main SHA.
 # Latest-main handoff remains non-cancelling so an older research cycle can finish safely.
+# Phase 2 is allowed up to the GitHub-hosted 6-hour job limit; recovery age checks include margin for
+# the full 12-hour three-phase cycle.

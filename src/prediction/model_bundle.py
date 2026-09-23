@@ -274,6 +274,13 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
             raise RuntimeError(
                 f"Production score method/model mismatch: score_method={score_method!r}, model_method={method!r}"
             )
+        if score_method == "time_decay":
+            try:
+                half_life_days = float(score_model.get("half_life_days"))
+            except (TypeError, ValueError):
+                raise RuntimeError("Production time-decay score model has invalid half_life_days")
+            if not np.isfinite(half_life_days) or half_life_days <= 0:
+                raise RuntimeError("Production time-decay score model has non-positive half_life_days")
         if score_method != "primary":
             gate = bundle.get("score_locked_verification")
             if not isinstance(gate, dict) or gate.get("status") != "PASS" or str(gate.get("selected_method")) != score_method:

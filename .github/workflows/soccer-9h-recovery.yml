@@ -69,7 +69,7 @@ jobs:
           runs = payload.get("workflow_runs", [])
 
           now = datetime.now(timezone.utc)
-          max_active_age_hours = 10.5
+          max_active_age_hours = 13.5
           active = []
           for r in runs:
               if r.get("head_branch") != "main":
@@ -231,7 +231,7 @@ jobs:
           payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
           main_sha = sys.argv[2]
           now = datetime.now(timezone.utc)
-          max_active_age_hours = 10.5
+          max_active_age_hours = 13.5
 
           for run in payload.get("workflow_runs", []):
               if run.get("head_branch") != "main":
