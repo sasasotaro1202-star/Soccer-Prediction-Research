@@ -268,6 +268,43 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
                 row[f"{k}_diff_{w}"] = hs[f"{k}_avg"] - aws[f"{k}_avg"]
         meetings = list(h2h[(home, away)])[-5:]
         row["h2h_games_5"] = float(len(meetings)); row["h2h_home_win_rate_5"] = float(np.mean([x == 0 for x in meetings])) if meetings else np.nan; row["h2h_draw_rate_5"] = float(np.mean([x == 1 for x in meetings])) if meetings else np.nan; row["h2h_away_win_rate_5"] = float(np.mean([x == 2 for x in meetings])) if meetings else np.nan; row["h2h_points_edge_5"] = float(np.mean([3 if x == 0 else 1 if x == 1 else 0 for x in meetings]) - np.mean([3 if x == 2 else 1 if x == 1 else 0 for x in meetings])) if meetings else np.nan
+        # PIT-safe momentum and matchup interactions. These use only feature state
+        # already replayed up to the prediction cutoff, never the current/future result.
+        for metric in ("points_ewma", "gd_ewma", "gf_ewma", "ga_ewma", "win_rate"):
+            h3 = row.get(f"home_{metric}_3", np.nan)
+            h10 = row.get(f"home_{metric}_10", np.nan)
+            a3 = row.get(f"away_{metric}_3", np.nan)
+            a10 = row.get(f"away_{metric}_10", np.nan)
+            row[f"home_{metric}_momentum_3v10"] = h3 - h10 if pd.notna(h3) and pd.notna(h10) else np.nan
+            row[f"away_{metric}_momentum_3v10"] = a3 - a10 if pd.notna(a3) and pd.notna(a10) else np.nan
+            row[f"{metric}_momentum_diff_3v10"] = (
+                row[f"home_{metric}_momentum_3v10"] - row[f"away_{metric}_momentum_3v10"]
+                if pd.notna(row[f"home_{metric}_momentum_3v10"]) and pd.notna(row[f"away_{metric}_momentum_3v10"])
+                else np.nan
+            )
+
+        h_attack = row.get("home_gf_ewma_5", np.nan)
+        a_defense = row.get("away_ga_ewma_5", np.nan)
+        a_attack = row.get("away_gf_ewma_5", np.nan)
+        h_defense = row.get("home_ga_ewma_5", np.nan)
+        if all(pd.notna(v) for v in (h_attack, a_defense, a_attack, h_defense)):
+            row["attack_defense_matchup_diff_5"] = (h_attack - a_defense) - (a_attack - h_defense)
+            row["attack_defense_matchup_sum_5"] = (h_attack - a_defense) + (a_attack - h_defense)
+        else:
+            row["attack_defense_matchup_diff_5"] = np.nan
+            row["attack_defense_matchup_sum_5"] = np.nan
+
+        home_draw = row.get("home_draw_rate_10", np.nan)
+        away_draw = row.get("away_draw_rate_10", np.nan)
+        row["draw_tension_10"] = home_draw * away_draw if pd.notna(home_draw) and pd.notna(away_draw) else np.nan
+
+        if pd.notna(row.get("dynamic_elo_diff", np.nan)) and pd.notna(row.get("rest_diff_hours", np.nan)):
+            row["strength_rest_interaction"] = float(
+                np.tanh(row["dynamic_elo_diff"] / 200.0) * np.tanh(row["rest_diff_hours"] / 48.0)
+            )
+        else:
+            row["strength_rest_interaction"] = np.nan
+
         available_times = [team_last_available[t] for t in (home, away) if t in team_last_available]
         row["feature_source_max_available_at_utc"] = max(available_times) if available_times else pd.NaT
         home_history = list(team_games[home])[-required_window:] if required_window else []
