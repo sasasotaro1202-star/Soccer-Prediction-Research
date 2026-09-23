@@ -31,7 +31,8 @@ def test_candidates_include_low_dimensional_elo_model():
     assert "recency_logistic" in names
     assert len(names) == 11
     assert "logistic_l2_strong" in names
-    assert "hist_gb_robust" in names\n    assert "quantile_logistic" in names
+    assert "hist_gb_robust" in names
+    assert "quantile_logistic" in names
     assert "dynamic_elo_logistic" in names
 
 
