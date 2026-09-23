@@ -1,5 +1,9 @@
 import json
 import os
+import pickle
+
+import numpy as np
+from sklearn.dummy import DummyClassifier
 
 from src.research.production_contract import evaluate_production_contract, write_contract_result
 
@@ -65,14 +69,52 @@ def _minimal_passing_artifacts(tmp_path):
         "locked_block_rows": [500, 500],
         "minimum_locked_rows_per_block": 500,
     })
-    # The contract only needs a non-empty bundle in the unit fixture; runtime
-    # integration tests validate that the real pickle is loadable elsewhere.
-    (tmp_path / "production_model.pkl").write_bytes(b"test-bundle")
+    # The production contract deliberately loads and cross-checks the deployable
+    # bundle. Keep this fixture minimal but structurally identical to production.
+    estimator = DummyClassifier(strategy="prior").fit(
+        np.asarray([[0.0], [1.0], [2.0]]), np.asarray([0, 1, 2])
+    )
+    routing_policy = {
+        "schema_version": 1,
+        "type": "hierarchical_validation_context",
+        "fallback_weights": {"m": 1.0},
+        "fallback_temperature": 1.0,
+        "context_weights": {"MISSING": {"m": 1.0}},
+        "contextual_temperatures": {"MISSING": 1.0},
+        "contextual_temperature_reasons": {"MISSING": "unit_fixture"},
+    }
+    bundle = {
+        "schema_version": 3,
+        "model_version": "v1",
+        "data_snapshot_id": "unit-snapshot",
+        "feature_cols": ["f1"],
+        "weights": {"m": 1.0},
+        "temperature": 1.0,
+        "models": {"m": estimator},
+        "fit_rows": 3,
+        "fit_end": "2025-01-03T00:00:00Z",
+        "score_method": "primary",
+        "score_model": {"method": "pit_smoothed_venue_split_team_goal_rates"},
+        "routing_policy": routing_policy,
+    }
+    with (tmp_path / "production_model.pkl").open("wb") as fh:
+        pickle.dump(bundle, fh, protocol=pickle.HIGHEST_PROTOCOL)
     _write(tmp_path / "model_registry.json", {
         "adoption_status": "ADOPT",
+        "model_version": "v1",
+        "feature_cols": ["f1"],
         "git_commit_sha": os.getenv("GITHUB_SHA", ""),
+        "parameters": {"weights": {"m": 1.0}, "routing_policy": routing_policy},
+        "calibration": {"temperature": 1.0},
     })
-    _write(tmp_path / "production_model.json", {"adoption_status": "ADOPT"})
+    _write(tmp_path / "production_model.json", {
+        "adoption_status": "ADOPT",
+        "model_version": "v1",
+        "feature_cols": ["f1"],
+        "weights": {"m": 1.0},
+        "temperature": 1.0,
+        "routing_policy": routing_policy,
+    })
 
 
 def test_contract_fails_closed_when_evidence_is_missing(tmp_path):
