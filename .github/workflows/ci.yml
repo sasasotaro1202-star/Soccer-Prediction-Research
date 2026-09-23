@@ -13,8 +13,9 @@ permissions:
 # Main-branch CI is intentionally re-runnable on the exact latest commit for final verification.
 
 concurrency:
-  # Every exact commit gets its own CI lane; a newer push cannot cancel verification of a different SHA.
-  group: soccer-ci-${{ github.sha }}
+  # CI is disposable; keep only the newest verification for each ref to prevent stale queue buildup.
+  # Long-running 9H research uses a separate concurrency group and is never cancelled by this policy.
+  group: soccer-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
