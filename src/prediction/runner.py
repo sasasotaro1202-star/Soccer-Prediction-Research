@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +18,7 @@ REQUIRED_FIXTURE_COLUMNS = {
     "kickoff_utc",
     "home_team",
     "away_team",
+    "competition",
     "source_available_at_utc",
     "pit_verified",
     "starter_status",
@@ -54,6 +56,54 @@ def _write_status(path: Path, status: str, **extra: object) -> dict:
     payload = {"status": status, **extra}
     _atomic_write_text(path, json.dumps(payload, indent=2, ensure_ascii=False, default=str))
     return payload
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _verify_production_provenance(bundle_path: str, registry: dict, bundle: dict) -> None:
+    """Require exact production artifact provenance before serving schema>=2 models."""
+    root = Path(bundle_path).parent
+    provenance_path = root / "production_provenance.json"
+    if not provenance_path.exists():
+        raise RuntimeError("Production provenance is missing; refusing schema>=2 prediction")
+
+    try:
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"Production provenance is unreadable: {type(exc).__name__}: {exc}") from exc
+    if not isinstance(provenance, dict):
+        raise RuntimeError("Production provenance must be a JSON object")
+
+    recorded_version = provenance.get("production_model_json_version")
+    if recorded_version is not None and str(recorded_version) != str(bundle.get("model_version")):
+        raise RuntimeError("Production provenance model version mismatch")
+    recorded_registry_version = provenance.get("registry_model_version")
+    if recorded_registry_version is not None and str(recorded_registry_version) != str(registry.get("model_version")):
+        raise RuntimeError("Production provenance registry version mismatch")
+
+    files = provenance.get("files")
+    if not isinstance(files, dict):
+        raise RuntimeError("Production provenance file hashes are missing")
+
+    for name, path in (
+        ("production_model.pkl", Path(bundle_path)),
+        ("production_model.json", root / "production_model.json"),
+        ("model_registry.json", root / "model_registry.json"),
+    ):
+        entry = files.get(name)
+        expected = entry.get("sha256") if isinstance(entry, dict) else None
+        if not isinstance(expected, str) or len(expected) != 64:
+            raise RuntimeError(f"Production provenance hash missing for {name}")
+        if not path.is_file() or path.stat().st_size <= 0:
+            raise RuntimeError(f"Production provenance artifact missing: {name}")
+        if _sha256(path) != expected:
+            raise RuntimeError(f"Production provenance hash mismatch: {name}")
 
 
 def _strict_bool(series: pd.Series, name: str) -> pd.Series:
@@ -132,6 +182,8 @@ def run(
         raise RuntimeError(
             f"Adopted registry/model bundle version mismatch: registry={registry_version!r}, bundle={bundle_version!r}"
         )
+    if int(bundle.get("schema_version", 1)) >= 2:
+        _verify_production_provenance(bundle_path, registry, bundle)
     p = Path(fixtures_path)
     if not p.exists():
         return _write_status(status_file, "NO_FIXTURE_INPUT", prediction_time_utc=now.isoformat(), oos_claimed=False)
