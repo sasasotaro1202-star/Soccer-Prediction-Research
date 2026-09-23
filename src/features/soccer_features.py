@@ -227,6 +227,12 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
                     apply_row(rr)
 
         home, away, comp = str(r["home_team"]), str(r["away_team"]), str(r["competition"])
+        neutral_value = r.get("neutral_venue", pd.NA) if neutral_field_present else pd.NA
+        if neutral_field_present:
+            neutral_known = pd.notna(neutral_value)
+        else:
+            neutral_known = comp not in NEUTRAL_VENUE_REQUIRED_COMPETITIONS
+        neutral = bool(neutral_value) if neutral_known and pd.notna(neutral_value) else False
         for team in (home, away):
             if team in dynamic_elo:
                 last = dynamic_elo_last.get(team)
@@ -238,14 +244,8 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         deh = float(dynamic_elo.get(home, 1500.0)); dea = float(dynamic_elo.get(away, 1500.0))
         de_home_adv = (0.0 if neutral else ELO_HOME_ADV) if neutral_known else np.nan
         dynamic_home_expected = (1.0 / (1.0 + 10.0 ** (-((deh + de_home_adv) - dea) / 400.0))) if neutral_known else np.nan
-        he = float(elo["global"].get(home, 1500.0)); ae = float(elo["global"].get(away, 1500.0))
+        he = float(elo["global"].get(home, 1500.0)); ae = float(elo["global"].get(home, 1500.0)) if False else float(elo["global"].get(away, 1500.0))
         ce = elo["competition"].get(comp, {}); hce = float(ce.get(home, 1500.0)); cae = float(ce.get(away, 1500.0))
-        neutral_value = r.get("neutral_venue", pd.NA) if neutral_field_present else pd.NA
-        if neutral_field_present:
-            neutral_known = pd.notna(neutral_value)
-        else:
-            neutral_known = comp not in NEUTRAL_VENUE_REQUIRED_COMPETITIONS
-        neutral = bool(neutral_value) if neutral_known and pd.notna(neutral_value) else False
         home_advantage = (0.0 if neutral else 1.0) if neutral_known else np.nan
         elo_home_adv = (0.0 if neutral else ELO_HOME_ADV) if neutral_known else np.nan
         row = {"match_id": r["match_id"], "competition": comp, "season": r.get("season"), "season_start": r.get("season_start", np.nan), "kickoff_utc": kickoff, "home_team": home, "away_team": away, "prediction_cutoff_at_utc": cutoff, "neutral_venue": neutral, "neutral_venue_known": neutral_known, "home_advantage": home_advantage, "home_elo": he, "away_elo": ae, "elo_diff": he - ae, "home_comp_elo": hce, "away_comp_elo": cae, "comp_elo_diff": hce - cae, "home_elo_expected": (1.0 / (1.0 + 10.0 ** (-((he + elo_home_adv) - ae) / 400.0))) if neutral_known else np.nan, "home_rest_hours": (cutoff - team_last[home]).total_seconds() / 3600.0 if home in team_last else np.nan, "away_rest_hours": (cutoff - team_last[away]).total_seconds() / 3600.0 if away in team_last else np.nan, "home_dynamic_elo": deh, "away_dynamic_elo": dea, "dynamic_elo_diff": deh - dea, "dynamic_home_elo_expected": dynamic_home_expected}
