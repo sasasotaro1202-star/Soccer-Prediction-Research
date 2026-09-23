@@ -9,6 +9,7 @@ ELO_K = 20.0
 ELO_HOME_ADV = 55.0
 DYNAMIC_ELO_K = 28.0
 DYNAMIC_ELO_MEAN_REVERSION_30D = 0.08
+COMPETITION_ELO_SHRINK_K = 8.0
 NEUTRAL_VENUE_REQUIRED_COMPETITIONS = {"AG_M", "AG_W"}
 STAT_KEYS = ("shots", "shots_on_target", "corners", "fouls", "yellow_cards", "red_cards")
 
@@ -125,6 +126,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     elo = {"global": {}, "competition": {}}
     dynamic_elo: dict[str, float] = {}
     dynamic_elo_last: dict[str, pd.Timestamp] = {}
+    competition_games: dict[tuple[str, str], int] = defaultdict(int)
     eligible_indices: set[int] = set()
     availability_order = sorted(
         [i for i, r in enumerate(h_records) if pd.notna(r["source_available_at_utc"])],
@@ -136,7 +138,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     required_window = min(windows) if windows else 0
 
     def reset_state() -> None:
-        nonlocal team_games, team_last, team_last_available, h2h, elo, dynamic_elo, dynamic_elo_last, processed_event_max
+        nonlocal team_games, team_last, team_last_available, h2h, elo, dynamic_elo, dynamic_elo_last, competition_games, processed_event_max
         team_games = defaultdict(lambda: deque(maxlen=40))
         team_last = {}
         team_last_available = {}
@@ -144,6 +146,7 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         elo = {"global": {}, "competition": {}}
         dynamic_elo = {}
         dynamic_elo_last = {}
+        competition_games = defaultdict(int)
         processed_event_max = pd.NaT
 
     def apply_row(r: dict) -> None:
@@ -173,6 +176,8 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         dynamic_elo[home] = deh + delta
         dynamic_elo[away] = dea - delta
         _update_elo(elo, home, away, result, str(r["competition"]), neutral_venue=neutral)
+        competition_games[(str(r["competition"]), home)] += 1
+        competition_games[(str(r["competition"]), away)] += 1
         for team in (home, away):
             gf, ga, pts, venue, gd = _team_result(r, team)
             entry = {"time": event, "gf": gf, "ga": ga, "points": pts, "venue": venue, "gd": gd, "competition": str(r["competition"]), "available": available}
@@ -244,11 +249,19 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
         deh = float(dynamic_elo.get(home, 1500.0)); dea = float(dynamic_elo.get(away, 1500.0))
         de_home_adv = (0.0 if neutral else ELO_HOME_ADV) if neutral_known else np.nan
         dynamic_home_expected = (1.0 / (1.0 + 10.0 ** (-((deh + de_home_adv) - dea) / 400.0))) if neutral_known else np.nan
-        he = float(elo["global"].get(home, 1500.0)); ae = float(elo["global"].get(home, 1500.0)) if False else float(elo["global"].get(away, 1500.0))
+        he = float(elo["global"].get(home, 1500.0)); ae = float(elo["global"].get(away, 1500.0))
         ce = elo["competition"].get(comp, {}); hce = float(ce.get(home, 1500.0)); cae = float(ce.get(away, 1500.0))
+        hcount = float(competition_games.get((comp, home), 0))
+        acount = float(competition_games.get((comp, away), 0))
+        hshrink = hcount / (hcount + COMPETITION_ELO_SHRINK_K) if hcount > 0 else 0.0
+        ashrink = acount / (acount + COMPETITION_ELO_SHRINK_K) if acount > 0 else 0.0
+        hcse = hshrink * hce + (1.0 - hshrink) * he
+        acse = ashrink * cae + (1.0 - ashrink) * ae
+        shrunk_elo_adv = (0.0 if neutral else ELO_HOME_ADV) if neutral_known else np.nan
+        shrunk_home_expected = (1.0 / (1.0 + 10.0 ** (-((hcse + shrunk_elo_adv) - acse) / 400.0))) if neutral_known else np.nan
         home_advantage = (0.0 if neutral else 1.0) if neutral_known else np.nan
         elo_home_adv = (0.0 if neutral else ELO_HOME_ADV) if neutral_known else np.nan
-        row = {"match_id": r["match_id"], "competition": comp, "season": r.get("season"), "season_start": r.get("season_start", np.nan), "kickoff_utc": kickoff, "home_team": home, "away_team": away, "prediction_cutoff_at_utc": cutoff, "neutral_venue": neutral, "neutral_venue_known": neutral_known, "home_advantage": home_advantage, "home_elo": he, "away_elo": ae, "elo_diff": he - ae, "home_comp_elo": hce, "away_comp_elo": cae, "comp_elo_diff": hce - cae, "home_elo_expected": (1.0 / (1.0 + 10.0 ** (-((he + elo_home_adv) - ae) / 400.0))) if neutral_known else np.nan, "home_rest_hours": (cutoff - team_last[home]).total_seconds() / 3600.0 if home in team_last else np.nan, "away_rest_hours": (cutoff - team_last[away]).total_seconds() / 3600.0 if away in team_last else np.nan, "home_dynamic_elo": deh, "away_dynamic_elo": dea, "dynamic_elo_diff": deh - dea, "dynamic_home_elo_expected": dynamic_home_expected}
+        row = {"match_id": r["match_id"], "competition": comp, "season": r.get("season"), "season_start": r.get("season_start", np.nan), "kickoff_utc": kickoff, "home_team": home, "away_team": away, "prediction_cutoff_at_utc": cutoff, "neutral_venue": neutral, "neutral_venue_known": neutral_known, "home_advantage": home_advantage, "home_elo": he, "away_elo": ae, "elo_diff": he - ae, "home_comp_elo": hce, "away_comp_elo": cae, "comp_elo_diff": hce - cae, "home_elo_expected": (1.0 / (1.0 + 10.0 ** (-((he + elo_home_adv) - ae) / 400.0))) if neutral_known else np.nan, "home_rest_hours": (cutoff - team_last[home]).total_seconds() / 3600.0 if home in team_last else np.nan, "away_rest_hours": (cutoff - team_last[away]).total_seconds() / 3600.0 if away in team_last else np.nan, "home_dynamic_elo": deh, "away_dynamic_elo": dea, "dynamic_elo_diff": deh - dea, "dynamic_home_elo_expected": dynamic_home_expected, "home_comp_elo_shrunk": hcse, "away_comp_elo_shrunk": acse, "comp_elo_shrunk_diff": hcse - acse, "home_comp_elo_shrunk_expected": shrunk_home_expected}
         row["rest_diff_hours"] = row["home_rest_hours"] - row["away_rest_hours"] if pd.notna(row["home_rest_hours"]) and pd.notna(row["away_rest_hours"]) else np.nan
         row["elo_gap_abs"] = abs(row["elo_diff"])
         pit_blocked = False
