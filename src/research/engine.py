@@ -210,6 +210,7 @@ def _build_research_gates(
         "adoption_decision.json",
         "oos_temporal_integrity.json",
         "score_oos_temporal_integrity.json",
+        "calibration_gate.json",
     )
     artifacts_present = all((out / name).is_file() and (out / name).stat().st_size > 0 for name in required_artifacts)
 
@@ -376,6 +377,49 @@ def run(out_dir: str = "artifacts") -> dict:
     if len(wf) < 3 or oos_temporal.get("status") != "PASS":
         report = {"status": "BLOCKED", "reason": "At least three chronological OOS blocks are required: development plus two locked holdout blocks.", "snapshot_id": snapshot_id(history), "pit_policy": PIT_POLICY, "pit_verified_rows": pit_verified, "pit_total_rows": pit_total, "archive_audit": archive_audit, "audit": audit_report, "oos_claimed": False}; _write_status(out, report); return report
     development_oos = wf.iloc[:-2].copy(); locked = wf.tail(2).copy(); development_oos.to_csv(out / "development_oos_metrics.csv", index=False); locked.to_csv(out / "locked_oos_metrics.csv", index=False)
+    # Explicit calibration evidence for production readiness. Calibration is learned
+    # only from the disjoint validation calibration slice and never from locked OOS.
+    latest_selection = selections.iloc[-1].to_dict() if not selections.empty else {}
+    try:
+        calibration_temperature = float(latest_selection.get("temperature", float("nan")))
+    except (TypeError, ValueError):
+        calibration_temperature = float("nan")
+    try:
+        calibration_rows = int(latest_selection.get("calibration_rows", 0))
+    except (TypeError, ValueError):
+        calibration_rows = 0
+    calibration_used = bool(latest_selection.get("temperature_calibration_used", False))
+    contextual_temperatures = latest_selection.get("contextual_temperatures") or {}
+    contextual_temps_valid = False
+    if isinstance(contextual_temperatures, dict):
+        try:
+            contextual_temps_valid = all(
+                np.isfinite(float(value)) and 0.70 <= float(value) <= 1.60
+                for value in contextual_temperatures.values()
+            )
+        except (TypeError, ValueError):
+            contextual_temps_valid = False
+    calibration_gate = {
+        "status": "PASS" if (
+            np.isfinite(calibration_temperature)
+            and 0.70 <= calibration_temperature <= 1.60
+            and calibration_rows >= 60
+            and isinstance(latest_selection.get("temperature"), (int, float, np.number))
+            and contextual_temps_valid
+        ) else "FAIL",
+        "method": "temperature_scaling_on_disjoint_validation_calibration_slice",
+        "temperature": calibration_temperature,
+        "calibration_rows": calibration_rows,
+        "temperature_calibration_used": calibration_used,
+        "contextual_temperatures": contextual_temperatures,
+        "contextual_temperatures_valid": contextual_temps_valid,
+        "source": "model_selection.csv:last_validation_fold_selection_record",
+        "locked_oos_used_for_calibration": False,
+        "fail_closed": True,
+    }
+    (out / "calibration_gate.json").write_text(
+        json.dumps(calibration_gate, indent=2, ensure_ascii=False, default=str), encoding="utf-8"
+    )
     stability_folds = []
     for _, row in wf.iterrows():
         stability_folds.append({
