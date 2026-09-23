@@ -326,14 +326,6 @@ jobs:
           cp artifacts/locked_oos_metrics.csv artifacts/production_release/
           cp artifacts/model_selection.csv artifacts/production_release/
           cp artifacts/adoption_decision.json artifacts/production_release/
-      - name: Upload adopted production bundle
-        if: success()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with:
-          name: soccer-production-bundle-${{ github.run_id }}
-          path: artifacts/production_release
-          retention-days: 3
-          if-no-files-found: error
       - name: Write 9-hour health record
         if: always()
         run: |
