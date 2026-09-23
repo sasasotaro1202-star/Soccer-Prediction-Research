@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from src.prediction.model_bundle import load_bundle, predict_bundle
-from src.prediction.active_model import resolve_active_production_paths
+from src.prediction.active_model import resolve_active_production_paths, resolve_best_available_paths
 from src.prediction.secondary_outputs import predict_mom_candidates, predict_score_candidates, predict_score_markets
 
 
@@ -43,6 +43,22 @@ def load_adopted_model(registry_path: str = "artifacts/model_registry.json") -> 
         raise RuntimeError("Adopted model registry must contain a JSON object")
     if record.get("adoption_status") != "ADOPT":
         raise RuntimeError("Registry contains no ADOPT model")
+    return record
+
+
+def load_best_available_model(registry_path: str) -> dict:
+    p = Path(registry_path)
+    if not p.exists():
+        raise RuntimeError("Selected model registry does not exist; no safe prediction model is available")
+    try:
+        record = json.loads(p.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"Selected model registry is unreadable: {type(exc).__name__}: {exc}") from exc
+    if not isinstance(record, dict):
+        raise RuntimeError("Selected model registry must contain a JSON object")
+    status = str(record.get("adoption_status", "")).upper()
+    if status not in {"ADOPT", "VALIDATED_CANDIDATE"}:
+        raise RuntimeError(f"Selected registry status is not prediction-safe: {status}")
     return record
 
 
@@ -172,11 +188,19 @@ def run(
     status_path: str = "artifacts/prediction_status.json",
     prediction_time: str | None = None,
     registry_path: str = "artifacts/model_registry.json",
+    model_policy: str = "production",
 ) -> dict:
     status_file = Path(status_path)
     now = _normalize_prediction_time(prediction_time)
-    bundle_path, registry_path = resolve_active_production_paths(bundle_path, registry_path)
-    registry = load_adopted_model(registry_path)
+    if model_policy not in {"production", "best_available"}:
+        raise ValueError("model_policy must be production or best_available")
+    model_mode = "PRODUCTION_ADOPTED"
+    if model_policy == "best_available":
+        bundle_path, registry_path, model_mode = resolve_best_available_paths()
+        registry = load_best_available_model(registry_path)
+    else:
+        bundle_path, registry_path = resolve_active_production_paths(bundle_path, registry_path)
+        registry = load_adopted_model(registry_path)
     bundle = load_bundle(bundle_path)
     registry_version = registry.get("model_version")
     bundle_version = bundle.get("model_version")
@@ -333,6 +357,7 @@ def run(
         abstained_rows=int(result["abstain"].sum()),
         output_path=str(output_file),
         model_version=str(bundle["model_version"]),
+        model_mode=model_mode,
         oos_claimed=bool(registry.get("oos_verified", False)),
     )
 
@@ -345,8 +370,9 @@ def main() -> int:
     parser.add_argument("--status", default="artifacts/prediction_status.json")
     parser.add_argument("--prediction-time", default=None)
     parser.add_argument("--registry", default="artifacts/model_registry.json")
+    parser.add_argument("--model-policy", choices=["production", "best_available"], default="production")
     args = parser.parse_args()
-    result = run(args.fixtures, args.bundle, args.output, args.status, args.prediction_time, args.registry)
+    result = run(args.fixtures, args.bundle, args.output, args.status, args.prediction_time, args.registry, args.model_policy)
     print(json.dumps(result, ensure_ascii=False, default=str))
     return 0
 
