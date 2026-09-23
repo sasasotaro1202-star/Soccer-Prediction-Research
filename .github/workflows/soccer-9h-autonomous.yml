@@ -16,7 +16,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: soccer-9h-autonomous-main
+  # Isolate runs by exact commit so a validated current-main cycle never waits behind an older SHA.
+  group: soccer-9h-autonomous-${{ github.sha }}
   cancel-in-progress: false
 
 # Three sequential 180-minute phases provide up to 9 hours of repository-side work.
