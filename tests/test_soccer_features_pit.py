@@ -74,7 +74,20 @@ def test_unknown_publication_time_does_not_become_pit_verified():
 
 
 def test_pit_features_include_momentum_and_matchup_interactions():
-    history = _sample_history()
+    rows = []
+    for i in range(12):
+        home = "A" if i % 2 == 0 else "B"
+        away = "B" if i % 2 == 0 else "A"
+        rows.append(_game(
+            f"m{i}",
+            f"2025-01-{i+1:02d} 12:00",
+            home,
+            away,
+            1 if i % 3 else 0,
+            0 if i % 2 else 1,
+            f"2025-01-{i+1:02d} 14:00",
+        ))
+    history = pd.DataFrame(rows)
     out = build_match_features(history, history)
     assert "points_ewma_momentum_diff_3v10" in out.columns
     assert "attack_defense_matchup_diff_5" in out.columns
