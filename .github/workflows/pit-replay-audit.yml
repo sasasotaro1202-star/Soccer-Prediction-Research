@@ -72,7 +72,7 @@ jobs:
         with:
           name: soccer-pit-audit-${{ github.run_id }}
           path: artifacts/pit-audit/
-          retention-days: 30
+          retention-days: 3
 
 # PIT remains a hard production gate: a BLOCKED audit never authorizes OOS/model adoption.
 # This workflow is diagnostic, so insufficient archived evidence is recorded in artifacts
