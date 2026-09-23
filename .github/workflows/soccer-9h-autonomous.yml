@@ -374,6 +374,49 @@ jobs:
             echo "Production persistence push attempt ${attempt} failed; retrying against latest main."
           done
           exit 1
+      - name: Persist validated research candidate
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ ! -s artifacts/validated_candidate_model.pkl ] || [ ! -s artifacts/validated_candidate_model.json ] || [ ! -s artifacts/validated_candidate_registry.json ] || [ ! -s artifacts/validated_candidate_provenance.json ]; then
+            echo "No validated candidate was produced in this cycle."
+            exit 0
+          fi
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('artifacts/validated_candidate_registry.json').read_text(encoding='utf-8'))
+          p=json.loads(Path('artifacts/validated_candidate_provenance.json').read_text(encoding='utf-8'))
+          if r.get('adoption_status') != 'VALIDATED_CANDIDATE': raise SystemExit('candidate registry status is not VALIDATED_CANDIDATE')
+          if p.get('status') != 'VALIDATED_CANDIDATE': raise SystemExit('candidate provenance status is invalid')
+          if p.get('locked_oos_used_for_training') is not False: raise SystemExit('candidate is not locked-OOS clean')
+          if (p.get('calibration_gate') or {}).get('status') != 'PASS': raise SystemExit('candidate calibration gate is not PASS')
+          if str(r.get('model_version')) != str(p.get('model_version')): raise SystemExit('candidate model version mismatch')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git checkout -B persist-validated-candidate origin/main
+            mkdir -p models/current
+            cp artifacts/validated_candidate_model.pkl models/current/validated_candidate_model.pkl
+            cp artifacts/validated_candidate_model.json models/current/validated_candidate_model.json
+            cp artifacts/validated_candidate_registry.json models/current/validated_candidate_registry.json
+            cp artifacts/validated_candidate_provenance.json models/current/validated_candidate_provenance.json
+            git add models/current/validated_candidate_model.pkl models/current/validated_candidate_model.json models/current/validated_candidate_registry.json models/current/validated_candidate_provenance.json
+            if git diff --cached --quiet; then
+              exit 0
+            fi
+            git commit -m "chore: persist validated research candidate"
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Validated candidate persistence push attempt ${attempt} failed; retrying against latest main."
+          done
+          exit 1
       - name: Write 9-hour health record
         if: always()
         run: |
