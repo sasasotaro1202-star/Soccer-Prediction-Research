@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
   workflow_run:
     workflows: ["Soccer 9H Autonomous Research"]
-    types: [requested, completed]
+    types: [completed]
   schedule:
     # 15-minute watchdog: workflow_run completion chaining is the primary continuity path; this schedule is a secondary safety net with lower scheduler load.
     - cron: "13,28,43,58 * * * *"
@@ -28,7 +28,7 @@ jobs:
   watchdog:
     name: Monitor and recover 9H research
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 10
     steps:
       - name: Inspect and recover 9H workflow
         shell: bash
@@ -36,69 +36,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-
-          # A requested 9H run can remain pending before any runner job is allocated.
-          # Monitor that event directly so continuity does not depend on scheduled-trigger delivery.
-          if [ "$GITHUB_EVENT_NAME" = "workflow_run" ] && [ "${{ github.event.action }}" = "requested" ]; then
-            REQUESTED_RUN_ID="${{ github.event.workflow_run.id }}"
-            for poll in $(seq 1 23); do
-              MAIN_SHA="$(curl --retry 3 --retry-delay 2 --retry-all-errors -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/commits/main" | python -c "import json,sys; print(json.load(sys.stdin)[\"sha\"])" )"
-              RUN_JSON="$(curl --retry 3 --retry-delay 2 --retry-all-errors -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$REQUESTED_RUN_ID")"
-              printf "%s" "$RUN_JSON" > /tmp/requested-9h.json
-              STATE="$(python -c "import json; print(json.load(open(\"/tmp/requested-9h.json\")).get(\"status\") or \"\")")"
-              CREATED_AT="$(python -c "import json; print(json.load(open(\"/tmp/requested-9h.json\")).get(\"created_at\") or \"\")")"
-              case "$STATE" in
-                in_progress|completed)
-                  echo "Requested 9H run $REQUESTED_RUN_ID left the pre-run state: $STATE."
-                  exit 0
-                  ;;
-                pending|queued|waiting|requested)
-                  ;;
-                *)
-                  echo "Unexpected requested-run state=$STATE; normal recovery remains authoritative."
-                  exit 0
-                  ;;
-              esac
-              CREATED_TS="$(date -u -d "$CREATED_AT" +%s)"
-              NOW_TS="$(date -u +%s)"
-              AGE_SEC=$((NOW_TS - CREATED_TS))
-              if [ "$AGE_SEC" -ge 1200 ]; then
-                echo "Requested run $REQUESTED_RUN_ID stayed $STATE for >=20m; replacing with latest main $MAIN_SHA."
-                CANCEL_CODE="$(curl --retry 3 --retry-delay 2 --retry-all-errors -sS -o /tmp/requested-cancel.json -w "%{http_code}" -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$REQUESTED_RUN_ID/cancel")"
-                case "$CANCEL_CODE" in
-                  202|409) echo "Requested-run cancel accepted/conflicted (HTTP $CANCEL_CODE)." ;;
-                  *) echo "Requested-run cancel failed with HTTP $CANCEL_CODE." >&2; cat /tmp/requested-cancel.json || true; exit 1 ;;
-                esac
-                DISPATCH_CODE="$(curl --retry 3 --retry-delay 2 --retry-all-errors -sS -o /tmp/requested-dispatch.json -w "%{http_code}" -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -d "{\"ref\":\"main\"}" "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/soccer-9h-autonomous.yml/dispatches")"
-                if [ "$DISPATCH_CODE" != "204" ]; then
-                  echo "Requested-run replacement dispatch failed with HTTP $DISPATCH_CODE." >&2
-                  cat /tmp/requested-dispatch.json || true
-                  exit 1
-                fi
-                for verify in $(seq 1 30); do
-                  sleep 5
-                  VERIFY_JSON="$(curl --retry 3 --retry-delay 2 --retry-all-errors -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/soccer-9h-autonomous.yml/runs?branch=main&per_page=30")"
-                  if VERIFY_MAIN_SHA="$MAIN_SHA" VERIFY_JSON_TEXT="$VERIFY_JSON" python - <<"PY"
-import json, os
-payload=json.loads(os.environ["VERIFY_JSON_TEXT"])
-main_sha=os.environ["VERIFY_MAIN_SHA"]
-active={"pending","queued","waiting","requested","in_progress"}
-found=any(r.get("head_branch")=="main" and r.get("head_sha")==main_sha and r.get("status") in active for r in payload.get("workflow_runs",[]))
-raise SystemExit(0 if found else 1)
-PY
-                  then
-                    echo "Verified active current-main 9H replacement after requested-event recovery."
-                    exit 0
-                  fi
-                done
-                echo "Replacement dispatch accepted but active current-main 9H run was not observed." >&2
-                exit 1
-              fi
-              sleep 60
-            done
-            echo "Requested-event 9H monitor window ended without a terminal state." >&2
-            exit 1
-          fi
 
           API="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/soccer-9h-autonomous.yml/runs?per_page=100"
           MAIN_SHA="$(curl --retry 3 --retry-delay 2 --retry-all-errors -fsSL \
