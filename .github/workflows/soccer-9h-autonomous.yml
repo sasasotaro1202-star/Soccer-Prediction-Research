@@ -20,8 +20,8 @@ concurrency:
   cancel-in-progress: false
 
 # Three sequential 180-minute phases provide up to 9 hours of repository-side work.
-# Scheduled starts provide a baseline; the recovery controller also chains successful cycles
-# immediately and watches every 5 minutes for missed/stale/cancelled runs.
+# Scheduled starts provide a baseline; the recovery controller chains successful/completed cycles
+# through workflow_run and also provides a 15-minute secondary watchdog for missed/stale/cancelled runs.
 # No production/PIT gate is weakened to keep the workflow green.
 jobs:
   phase1_gate:
