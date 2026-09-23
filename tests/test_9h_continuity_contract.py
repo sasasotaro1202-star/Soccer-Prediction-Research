@@ -39,7 +39,7 @@ def test_recovery_workflow_has_watchdog_and_self_chaining_dispatch():
     assert "types: [completed]" in text
     assert "actions: write" in text
     assert "contents: read" in text
-    assert "group: soccer-9h-recovery" in text
+    assert "group: soccer-9h-recovery-${{ github.sha }}" in text
     assert "cancel-in-progress: true" in text
     assert 'if run.get("head_sha") == main_sha:' in text
     assert "rerun-failed-jobs" in text
