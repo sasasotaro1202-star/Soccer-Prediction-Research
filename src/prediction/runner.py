@@ -234,10 +234,16 @@ def run(
     if model_policy not in {"production", "best_available"}:
         raise ValueError("model_policy must be production or best_available")
     model_mode = "PRODUCTION_ADOPTED"
-    if model_policy == "best_available":
+    standard_paths = (
+        bundle_path == "artifacts/production_model.pkl"
+        and registry_path == "artifacts/model_registry.json"
+    )
+    if model_policy == "best_available" and standard_paths:
         bundle_path, registry_path, model_mode = resolve_best_available_paths()
         registry = load_best_available_model(registry_path)
     else:
+        # Explicit caller paths are preserved. This keeps isolated validation runs
+        # deterministic while the normal production entrypoint still uses best_available.
         bundle_path, registry_path = resolve_active_production_paths(bundle_path, registry_path)
         registry = load_adopted_model(registry_path)
     bundle = load_bundle(bundle_path)
