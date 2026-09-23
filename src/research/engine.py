@@ -443,6 +443,7 @@ def run(out_dir: str = "artifacts") -> dict:
                     "feature_count": model_bundle.get("feature_count"),
                     "fit_rows": model_bundle.get("fit_rows"),
                     "score_method": model_bundle.get("score_method", "primary"),
+                    "routing_policy": model_bundle.get("routing_policy"),
                 },
                 training_end=model_bundle.get("fit_end"),
                 calibration={
