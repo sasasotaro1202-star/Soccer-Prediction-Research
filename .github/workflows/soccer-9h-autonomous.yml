@@ -33,7 +33,7 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ github.token }}
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 180
     steps:
       - name: Checkout exact workflow-trigger commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
