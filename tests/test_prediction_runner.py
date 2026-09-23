@@ -67,3 +67,10 @@ def test_missing_required_fixture_field_fails_closed():
     d = _fixtures(Path(".")).drop(columns=["source_available_at_utc"])
     with pytest.raises(RuntimeError, match="missing required columns"):
         _eligible_fixtures(d, pd.Timestamp("2026-09-14T12:00:00Z"))
+
+
+def test_default_model_policy_prefers_best_available():
+    import inspect
+    from src.prediction.runner import run
+
+    assert inspect.signature(run).parameters["model_policy"].default == "best_available"
