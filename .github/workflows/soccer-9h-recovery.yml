@@ -20,7 +20,7 @@ concurrency:
   # The controller is stateless and short-lived; keep only the newest watchdog decision.
   # This prevents scheduled/workflow_run bursts from accumulating a controller queue.
   group: soccer-9h-recovery-main
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   watchdog:
