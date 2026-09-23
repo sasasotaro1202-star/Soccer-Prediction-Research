@@ -124,9 +124,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          unzip -p production-current.zip '*/production_model.json' > /tmp/production_model.json
-          unzip -p production-current.zip '*/model_registry.json' > /tmp/model_registry.json
+          unzip -p production-current.zip production_model.json > /tmp/production_model.json
+          unzip -p production-current.zip model_registry.json > /tmp/model_registry.json
           MODEL_VERSION="$(python -c 'import json; print(json.load(open("/tmp/production_model.json"))["model_version"])')"
+          export MODEL_VERSION
           python - <<'PY' > production-current-manifest.json
           import json, os, time
           payload={
