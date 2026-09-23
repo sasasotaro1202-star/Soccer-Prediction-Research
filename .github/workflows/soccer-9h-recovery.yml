@@ -27,9 +27,10 @@ permissions:
   contents: read
 
 concurrency:
-  # Isolate controller runs by exact commit so a newer/older push cannot cancel the wrong recovery cycle.
-  group: soccer-9h-recovery-${{ github.sha }}
-  cancel-in-progress: true
+  # Serialize controller invocations without cancelling an active recovery pass.
+  # New events wait for the current controller; the controller itself is bounded to 10 minutes.
+  group: soccer-9h-recovery-main
+  cancel-in-progress: false
 
 jobs:
   watchdog:
@@ -211,10 +212,10 @@ jobs:
                   continue
               if run.get("head_sha") == main_sha:
                   continue
-              # Current main has priority. Once a newer commit exists, an obsolete
-              # cycle must not consume a runner slot indefinitely. Cancellation is
-              # limited to runs on older SHAs; the current-main run is never selected.
-              if run.get("status") not in {"pending", "queued", "waiting", "requested", "in_progress"}:
+              # Never interrupt an actively executing immutable research snapshot merely
+              # because main advanced. It may finish its bounded 9H cycle safely. Only
+              # obsolete queued/requested work may be discarded before a fresh dispatch.
+              if run.get("status") not in {"pending", "queued", "waiting", "requested"}:
                   continue
               print(run.get("id"))
           PY
@@ -281,9 +282,9 @@ jobs:
 
           case "${ACTION}" in
             ACTIVE)
-              # A current-main run may already be queued while an obsolete run
-              # is still in progress. Always cancel obsolete runs first; never
-              # let stale work occupy the single-run lane indefinitely.
+              # A current-main run may already be queued while an older immutable run
+              # is still in progress. Preserve the active run; only obsolete queued work
+              # is cancelled so the newest main snapshot remains the eventual handoff.
               while IFS= read -r STALE_RUN_ID; do
                 [ -z "${STALE_RUN_ID}" ] && continue
                 CANCEL_CODE="$(curl -sS -o /tmp/cancel-active.json -w "%{http_code}" -X POST                   -H "Authorization: Bearer ${GH_TOKEN}"                   -H "Accept: application/vnd.github+json"                   -H "X-GitHub-Api-Version: 2022-11-28"                   "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs/${STALE_RUN_ID}/cancel")"
