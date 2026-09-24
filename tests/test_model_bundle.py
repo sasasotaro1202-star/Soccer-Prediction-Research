@@ -254,3 +254,54 @@ def test_bundle_preserves_and_applies_validated_contextual_routing(tmp_path):
     assert np.allclose(routed.sum(axis=1), 1.0)
     assert np.all(np.isfinite(routed))
     assert np.max(np.abs(routed - global_only)) > 1e-6
+
+
+def test_bundle_persists_and_applies_risk_temperature_modifiers(tmp_path):
+    df = _fixture().copy()
+    df["competition"] = "EPL"
+    df["elo_diff"] = np.linspace(-150, 150, len(df))
+    df["home_goal_total_avg_5"] = 2.2
+    df["away_goal_total_avg_5"] = 1.9
+    df["home_draw_rate_20"] = 0.28
+    df["away_draw_rate_20"] = 0.26
+    df["rest_diff_hours"] = 0.0
+    df["neutral_venue_known"] = True
+    df["neutral_venue"] = False
+
+    selection = {
+        "weights": {"logistic": 1.0},
+        "temperature": 1.0,
+        "context_weights": {"COMP:EPL": {"logistic": 1.0}},
+        "contextual_temperatures": {"COMP:EPL": 1.0, "GLOBAL": 1.0},
+        "contextual_temperature_reasons": {"COMP:EPL": "test", "GLOBAL": "test"},
+        "risk_temperature_modifiers": {"LOW": 1.0, "MEDIUM": 1.0, "HIGH": 1.20},
+        "risk_temperature_reasons": {"HIGH": "test"},
+        "dynamic_routing": {
+            "schema_version": 1,
+            "type": "drift_uncertainty_router",
+            "enabled": True,
+            "drift_strength": 0.85,
+            "uncertainty_strength": 0.75,
+            "min_specialist_trust": 0.25,
+            "feature_cols": ["f1", "f2"],
+        },
+    }
+    path = tmp_path / "production_model.pkl"
+    train_and_save_bundle(
+        df,
+        ["f1", "f2"],
+        selection,
+        str(path),
+        "test-version",
+        "snapshot-1",
+    )
+    bundle = load_bundle(str(path))
+    assert bundle["routing_policy"]["risk_temperature_modifiers"]["HIGH"] == 1.20
+
+    extreme = df[["f1", "f2"]].iloc[:1].copy()
+    extreme.loc[:, "f1"] = 50.0
+    extreme.loc[:, "f2"] = 50.0
+    probs = predict_bundle(bundle, extreme)
+    assert probs.shape == (1, 3)
+    assert np.all(np.isfinite(probs))
+    assert np.allclose(probs.sum(axis=1), 1.0)
