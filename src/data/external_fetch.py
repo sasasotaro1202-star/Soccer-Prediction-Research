@@ -101,7 +101,13 @@ class ExternalFetcher:
                 body = body_path.read_bytes()
                 stored = json.loads(meta_path.read_text(encoding="utf-8"))
                 if stored.get("content_sha256") == content_sha256(body):
-                    metadata = FetchMetadata(**stored, cache_hit=True)
+                    stored = dict(stored)
+                    stored["cache_hit"] = True
+                    stored["pit_safe"] = pit_is_safe(
+                        stored.get("feature_available_at"),
+                        prediction_cutoff_at,
+                    )
+                    metadata = FetchMetadata(**stored)
                     return CachedResponse(body, metadata)
             except (OSError, ValueError, TypeError):
                 pass
