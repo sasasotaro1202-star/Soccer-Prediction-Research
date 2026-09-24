@@ -150,3 +150,51 @@ def dynamic_route_weights(
         raise ValueError("Dynamic routing produced invalid weights")
     dynamic /= sums
     return dynamic, {"trust": trust, "uncertainty": uncertainty, "entropy": entropy, "disagreement": disagreement, "drift": drift}
+
+
+def routing_risk_score(
+    drift_scores: np.ndarray | list[float],
+    uncertainty_scores: np.ndarray | list[float],
+    *,
+    drift_weight: float = 0.55,
+) -> np.ndarray:
+    """Combine covariate drift and predictive uncertainty for calibration only.
+
+    This score is deliberately outcome-free. It is not a performance estimate; it
+    is a prediction-time risk index used to select a conservative recalibration
+    temperature. Keeping it separate from the routing weights prevents the
+    calibration layer from changing the specialist/global trust policy itself.
+    """
+    drift = np.asarray(drift_scores, dtype=float)
+    uncertainty = np.asarray(uncertainty_scores, dtype=float)
+    if drift.shape != uncertainty.shape:
+        raise ValueError("drift_scores and uncertainty_scores shape mismatch")
+    if not np.isfinite(drift).all() or not np.isfinite(uncertainty).all():
+        raise ValueError("routing risk inputs must be finite")
+    if (drift < 0).any() or (uncertainty < 0).any():
+        raise ValueError("routing risk inputs must be non-negative")
+    if not np.isfinite(drift_weight) or not 0.0 <= float(drift_weight) <= 1.0:
+        raise ValueError("drift_weight must be within [0, 1]")
+    d = np.clip(drift, 0.0, 1.0)
+    u = np.clip(uncertainty, 0.0, 1.0)
+    return np.clip(float(drift_weight) * d + (1.0 - float(drift_weight)) * u, 0.0, 1.0)
+
+
+def routing_risk_bucket(
+    risk_scores: np.ndarray | list[float],
+    *,
+    low_cut: float = 0.33,
+    high_cut: float = 0.66,
+) -> np.ndarray:
+    """Map a continuous routing-risk score into three sparse-safe calibration bins."""
+    scores = np.asarray(risk_scores, dtype=float)
+    if not np.isfinite(scores).all() or (scores < 0).any():
+        raise ValueError("risk_scores must be finite and non-negative")
+    if not 0.0 < float(low_cut) < float(high_cut) < 1.0:
+        raise ValueError("risk bucket cut points must satisfy 0 < low_cut < high_cut < 1")
+    values = np.clip(scores, 0.0, 1.0)
+    return np.where(
+        values < float(low_cut),
+        "LOW",
+        np.where(values < float(high_cut), "MEDIUM", "HIGH"),
+    )
