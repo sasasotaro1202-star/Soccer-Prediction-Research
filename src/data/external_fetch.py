@@ -93,6 +93,7 @@ class ExternalFetcher:
         feature_available_at: str | None = None,
         prediction_cutoff_at: str | None = None,
         headers: dict[str, str] | None = None,
+        cache_ttl_seconds: float | None = None,
     ) -> CachedResponse:
         key = request_key(url, params)
         body_path, meta_path = self._paths(source, key)
@@ -100,7 +101,15 @@ class ExternalFetcher:
             try:
                 body = body_path.read_bytes()
                 stored = json.loads(meta_path.read_text(encoding="utf-8"))
-                if stored.get("content_sha256") == content_sha256(body):
+                fresh = True
+                if cache_ttl_seconds is not None:
+                    if not np.isfinite(float(cache_ttl_seconds)) or float(cache_ttl_seconds) < 0:
+                        raise ValueError("cache_ttl_seconds must be finite and non-negative")
+                    retrieved_at = datetime.fromisoformat(
+                        str(stored.get("retrieved_at", "")).replace("Z", "+00:00")
+                    )
+                    fresh = (utc_now() - retrieved_at.astimezone(timezone.utc)).total_seconds() <= float(cache_ttl_seconds)
+                if fresh and stored.get("content_sha256") == content_sha256(body):
                     stored = dict(stored)
                     stored["cache_hit"] = True
                     stored["pit_safe"] = pit_is_safe(
