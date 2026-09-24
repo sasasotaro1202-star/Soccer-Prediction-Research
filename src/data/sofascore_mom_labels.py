@@ -30,9 +30,17 @@ DEFAULT_MAX_EVENT_DELTA_HOURS = 6.0
 
 
 def _norm_team(value: Any) -> str:
-    # NFKC preserves Japanese dakuten/handakuten while still normalizing
-    # compatibility forms. Character identity must remain conservative.
-    text = unicodedata.normalize("NFKC", str(value or ""))
+    # NFKD lets us compare Latin diacritics conservatively, but stripping every
+    # combining mark would corrupt Japanese kana dakuten/handakuten.
+    decomposed = unicodedata.normalize("NFKD", str(value or ""))
+    kept: list[str] = []
+    for ch in decomposed:
+        if unicodedata.combining(ch):
+            previous = kept[-1] if kept else ""
+            if "LATIN" in unicodedata.name(previous, ""):
+                continue
+        kept.append(ch)
+    text = "".join(kept)
     text = text.casefold()
     # Keep non-Latin scripts intact. Do not use fuzzy similarity here: a wrong
     # event label is worse than a missing label.
