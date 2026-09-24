@@ -8,7 +8,7 @@ from scipy.optimize import minimize, minimize_scalar
 
 from src.evaluation.metrics import classification_metrics
 from src.models.baselines import candidates
-from src.monitoring.dynamic_routing import build_drift_reference, compute_drift_scores, dynamic_route_weights
+from src.monitoring.dynamic_routing import build_drift_reference, compute_drift_scores, dynamic_route_weights, routing_risk_bucket, routing_risk_score
 
 TARGET_ACCURACY = 0.80
 
@@ -173,6 +173,68 @@ def _contextual_temperatures(
         reasons[route_key] = "context_temperature_shrunk_from_calibration"
 
     return temperatures, reasons
+
+
+def _risk_temperature_modifiers(
+    y: pd.Series,
+    proba: np.ndarray,
+    risk_scores: np.ndarray,
+    *,
+    min_rows: int = 80,
+    prior_strength: int = 240,
+) -> tuple[dict[str, float], dict[str, str]]:
+    """Fit small risk-bucket temperature modifiers on calibration rows only."""
+    if len(y) != len(proba) or len(y) != len(risk_scores):
+        raise ValueError("Risk calibration inputs must have equal lengths")
+    raw = np.asarray(proba, dtype=float)
+    if raw.ndim != 2 or raw.shape[1] != 3 or not np.isfinite(raw).all():
+        raise ValueError("Risk calibration probabilities are invalid")
+    buckets = routing_risk_bucket(np.asarray(risk_scores, dtype=float))
+    yv = np.asarray(y, dtype=int)
+    modifiers: dict[str, float] = {}
+    reasons: dict[str, str] = {}
+    for bucket in ("LOW", "MEDIUM", "HIGH"):
+        idx = np.flatnonzero(buckets == bucket)
+        if len(idx) < int(min_rows):
+            modifiers[bucket] = 1.0
+            reasons[bucket] = "identity_sparse_risk_bucket"
+            continue
+        fitted, improved = _fit_temperature(
+            pd.Series(yv[idx]),
+            raw[idx],
+        )
+        alpha = float(len(idx) / (len(idx) + max(int(prior_strength), 1)))
+        modifier = 1.0 + alpha * (float(fitted) - 1.0)
+        modifier = float(np.clip(modifier, 0.85, 1.20))
+        if not improved:
+            modifier = 1.0
+            reasons[bucket] = "identity_no_calibration_gain"
+        else:
+            reasons[bucket] = "risk_bucket_temperature_shrunk"
+        modifiers[bucket] = modifier
+    return modifiers, reasons
+
+
+def _apply_risk_temperature_modifiers(
+    proba: np.ndarray,
+    risk_scores: np.ndarray,
+    modifiers: dict[str, float],
+) -> np.ndarray:
+    """Apply bounded multiplicative temperature corrections by prediction-time risk."""
+    p = np.asarray(proba, dtype=float)
+    scores = np.asarray(risk_scores, dtype=float)
+    if p.ndim != 2 or p.shape[1] != 3 or len(p) != len(scores):
+        raise ValueError("Risk temperature probability/score shape mismatch")
+    buckets = routing_risk_bucket(scores)
+    out = np.empty_like(p, dtype=float)
+    for i, bucket in enumerate(buckets):
+        temperature = float(modifiers.get(str(bucket), 1.0))
+        if not np.isfinite(temperature) or not 0.85 <= temperature <= 1.20:
+            raise ValueError("Risk temperature modifier is outside the production bound")
+        out[i] = _temperature_transform(p[i:i + 1], temperature)[0]
+    if not np.isfinite(out).all():
+        raise ValueError("Risk temperature calibration produced invalid probabilities")
+    return out
 
 
 def _apply_contextual_temperatures(
@@ -425,7 +487,9 @@ def _routed_ensemble_proba(
     context_weights: dict[str, dict[str, float]],
     fallback: dict[str, float],
     dynamic_policy: dict | None = None,
-) -> tuple[np.ndarray, list[str]]:
+    *,
+    return_diagnostics: bool = False,
+) -> tuple[np.ndarray, list[str]] | tuple[np.ndarray, list[str], dict[str, np.ndarray]]:
     """Batch-predict every model once, then apply hierarchical routing row-wise."""
     if frame.empty:
         return np.empty((0, 3), dtype=float), []
@@ -472,13 +536,21 @@ def _routed_ensemble_proba(
         model_predictions[name] = pred / pred_sum
 
     effective_weights = weight_matrix
+    routing_diag: dict[str, np.ndarray] = {
+        "drift": np.zeros(n, dtype=float),
+        "uncertainty": np.zeros(n, dtype=float),
+        "entropy": np.zeros(n, dtype=float),
+        "disagreement": np.zeros(n, dtype=float),
+        "trust": np.ones(n, dtype=float),
+        "risk": np.zeros(n, dtype=float),
+    }
     if isinstance(dynamic_policy, dict) and bool(dynamic_policy.get("enabled", False)):
         reference = dynamic_policy.get("reference")
         dynamic_feature_cols = dynamic_policy.get("feature_cols") or feature_cols
         drift_scores = compute_drift_scores(routed, reference or {}, list(dynamic_feature_cols))
         fallback_source = dynamic_policy.get("fallback_weights", fallback)
         fallback_vector = np.asarray([float(fallback_source.get(name, 0.0)) for name in names], dtype=float)
-        effective_weights, _ = dynamic_route_weights(
+        effective_weights, diag = dynamic_route_weights(
             weight_matrix,
             fallback_vector,
             model_predictions,
@@ -486,6 +558,11 @@ def _routed_ensemble_proba(
             drift_strength=float(dynamic_policy.get("drift_strength", 0.85)),
             uncertainty_strength=float(dynamic_policy.get("uncertainty_strength", 0.75)),
             min_specialist_trust=float(dynamic_policy.get("min_specialist_trust", 0.25)),
+        )
+        routing_diag.update({str(k): np.asarray(v, dtype=float) for k, v in diag.items()})
+        routing_diag["risk"] = routing_risk_score(
+            routing_diag["drift"],
+            routing_diag["uncertainty"],
         )
 
     probs = np.zeros((n, 3), dtype=float)
@@ -496,6 +573,8 @@ def _routed_ensemble_proba(
     if np.any(row_sum <= 0) or not np.isfinite(row_sum).all():
         raise ValueError("Routed ensemble produced invalid probability rows")
     probs /= row_sum
+    if return_diagnostics:
+        return probs, routes, routing_diag
     return probs, routes
 
 
@@ -577,22 +656,37 @@ def run_walk_forward(
         )
 
         # Probability calibration is fitted only on the second validation half.
-        val_probs, _calibration_routes = _routed_ensemble_proba(
+        val_probs, _calibration_routes, calibration_risk_diag = _routed_ensemble_proba(
             val_calib,
             validation_models,
             feature_cols,
             context_weights,
             weights,
             dynamic_policy=dynamic_policy,
+            return_diagnostics=True,
         )
         val_probs = np.clip(val_probs, 1e-9, 1.0)
         val_probs /= val_probs.sum(axis=1, keepdims=True)
-        calibration_temperature, calibration_used = _fit_temperature(val_calib.target.astype(int), val_probs)
+        calibration_y = val_calib.target.astype(int)
+        calibration_temperature, calibration_used = _fit_temperature(calibration_y, val_probs)
         contextual_temperatures, contextual_temperature_reasons = _contextual_temperatures(
-            val_calib.target.astype(int),
+            calibration_y,
             val_probs,
             _calibration_routes,
             calibration_temperature,
+        )
+        # Risk calibration is layered on top of the context calibration and is
+        # deliberately low-amplitude so uncertainty never becomes a large ad-hoc shift.
+        context_calibrated = _apply_contextual_temperatures(
+            val_probs,
+            _calibration_routes,
+            contextual_temperatures,
+            calibration_temperature,
+        )
+        risk_temperature_modifiers, risk_temperature_reasons = _risk_temperature_modifiers(
+            calibration_y,
+            context_calibrated,
+            calibration_risk_diag["risk"],
         )
 
         selected.append({
@@ -614,6 +708,8 @@ def run_walk_forward(
             "temperature_calibration_used": calibration_used,
             "contextual_temperatures": contextual_temperatures,
             "contextual_temperature_reasons": contextual_temperature_reasons,
+            "risk_temperature_modifiers": risk_temperature_modifiers,
+            "risk_temperature_reasons": risk_temperature_reasons,
             "dynamic_routing": dynamic_policy,
         })
 
@@ -622,13 +718,14 @@ def run_walk_forward(
             name: _fit_predict(model, train[feature_cols], train.target.astype(int))
             for name, model in candidates(random_state).items()
         }
-        probs, _oos_routes = _routed_ensemble_proba(
+        probs, _oos_routes, oos_risk_diag = _routed_ensemble_proba(
             oos,
             fitted,
             feature_cols,
             context_weights,
             weights,
             dynamic_policy=dynamic_policy,
+            return_diagnostics=True,
         )
         probs = np.clip(probs, 1e-9, 1.0)
         probs /= probs.sum(axis=1, keepdims=True)
@@ -637,6 +734,11 @@ def run_walk_forward(
             _oos_routes,
             contextual_temperatures,
             calibration_temperature,
+        )
+        probs = _apply_risk_temperature_modifiers(
+            probs,
+            oos_risk_diag["risk"],
+            risk_temperature_modifiers,
         )
 
         candidate_metrics = classification_metrics(oos.target.astype(int), probs)
