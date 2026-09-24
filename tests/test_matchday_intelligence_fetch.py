@@ -4,6 +4,7 @@ from src.data.matchday_intelligence_fetch import (
     _devig,
     parse_football_data_fixtures,
     parse_sofascore_event,
+    _sofascore_competition,
     parse_event_roster,
     parse_injury_impact,
     parse_market_odds,
@@ -152,3 +153,20 @@ def test_football_data_fixture_with_unknown_division_is_ignored():
         max_events=10,
     )
     assert rows == []
+
+
+def test_weather_missing_fields_remain_unknown():
+    kickoff = pd.Timestamp("2026-09-25T12:00:00Z")
+    severity, temp = parse_weather_severity(
+        {"hourly": {"time": ["2026-09-25T12:00:00Z"], "temperature_2m": [20]}},
+        kickoff,
+    )
+    assert pd.isna(severity)
+    assert pd.isna(temp)
+
+
+def test_live_scope_maps_requested_uefa_and_friendly_competitions():
+    assert _sofascore_competition({"tournament": {"name": "UEFA Conference League"}}) == "UECL"
+    assert _sofascore_competition({"tournament": {"name": "UEFA Nations League"}}) == "UEFA_NATIONS_LEAGUE_M"
+    assert _sofascore_competition({"tournament": {"name": "Emperor's Cup"}}) == "EMP_CUP"
+    assert _sofascore_competition({"tournament": {"name": "International Friendly Games"}}) == "FRIENDLY"
