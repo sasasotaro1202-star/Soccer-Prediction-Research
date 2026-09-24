@@ -224,22 +224,32 @@ def predict_mom_distribution(
     logits = np.asarray(model.decision_function(d[list(MOM_FEATURE_COLUMNS)]), dtype=float).reshape(-1)
     if not np.isfinite(logits).all():
         raise RuntimeError("MOM model produced non-finite logits")
+
+    # Normalize only within each fixture. A single global softmax across multiple
+    # fixtures would make probabilities depend on which other fixtures were batched.
     logits = logits / temperature
-    logits = logits - np.max(logits)
-    exp_logits = np.exp(np.clip(logits, -700.0, 700.0))
-    denom = max(float(exp_logits.sum()), _EPS)
-    probs = exp_logits / denom
-    if not np.isfinite(probs).all() or abs(float(probs.sum()) - 1.0) > 1e-9:
-        raise RuntimeError("MOM full probability distribution is invalid")
+    probabilities = np.zeros(len(d), dtype=float)
+    for match_id, idx in d.groupby("match_id", sort=False).groups.items():
+        loc = np.asarray(list(idx), dtype=int)
+        local_logits = logits[loc]
+        local_logits = local_logits - np.max(local_logits)
+        exp_logits = np.exp(np.clip(local_logits, -700.0, 700.0))
+        denom = max(float(exp_logits.sum()), _EPS)
+        probabilities[loc] = exp_logits / denom
+        if not np.isfinite(probabilities[loc]).all() or abs(float(probabilities[loc].sum()) - 1.0) > 1e-9:
+            raise RuntimeError(f"MOM probability distribution is invalid for match_id={match_id!r}")
 
     out = d[["match_id", "player_id", "kickoff_utc"]].copy()
-    out["probability"] = probs
+    out["probability"] = probabilities
     return out.sort_values(["match_id", "probability", "player_id"], ascending=[True, False, True], kind="mergesort").reset_index(drop=True)
 
 
 def select_mom_top4_from_distribution(distribution: pd.DataFrame) -> list[MOMCandidate]:
-    """Select exactly four candidates from one fixture's full distribution."""
-    required = {"player_id", "probability"}
+    """Select exactly four candidates from exactly one fixture's full distribution."""
+    required = {"match_id", "player_id", "probability"}
     if not required.issubset(distribution.columns):
-        raise ValueError("MOM distribution missing player_id/probability")
+        raise ValueError("MOM distribution missing match_id/player_id/probability")
+    match_ids = distribution["match_id"].astype("string").drop_duplicates()
+    if len(match_ids) != 1:
+        raise ValueError("MOM top-4 selection requires exactly one match_id")
     return select_mom_candidates(distribution["player_id"], distribution["probability"], top_k=4)
