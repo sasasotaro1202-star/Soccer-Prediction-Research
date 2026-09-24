@@ -215,6 +215,7 @@ def train_and_save_bundle(
         "score_locked_verification": score_locked_gate,
         **({"score_model": score_model} if score_model is not None else {}),
         **({"routing_policy": routing_policy} if routing_policy is not None else {}),
+        "matchday_policy": selection.get("matchday_policy") if isinstance(selection.get("matchday_policy"), dict) else {"schema_version": 1, "status": "SHADOW_ONLY", "reason": "No independently validated chronological OOS matchday policy is present."},
         "mom_model": {"status": "UPSTREAM_PLAYER_MODEL_REQUIRED", "output_top_k": 4},
     }
     p = Path(output_path)
@@ -333,6 +334,21 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
             reference = dynamic.get("reference")
             if not isinstance(reference, dict) or not isinstance(reference.get("features"), dict) or not reference.get("features"):
                 raise RuntimeError("Production dynamic routing reference is missing")
+    matchday_policy = bundle.get("matchday_policy", {"schema_version": 1, "status": "SHADOW_ONLY"})
+    if not isinstance(matchday_policy, dict):
+        raise RuntimeError("Production matchday_policy must be an object")
+    if matchday_policy.get("schema_version") != 1:
+        raise RuntimeError("Production matchday_policy schema_version must be 1")
+    status = str(matchday_policy.get("status", "SHADOW_ONLY")).upper()
+    if status not in {"PASS", "SHADOW_ONLY"}:
+        raise RuntimeError(f"Unsupported production matchday_policy status: {status}")
+    if status == "PASS":
+        evidence = matchday_policy.get("evidence")
+        if not isinstance(evidence, dict) or evidence.get("oos_verified") is not True:
+            raise RuntimeError("Production matchday policy PASS requires explicit OOS evidence")
+        if evidence.get("locked_holdout_untouched") is not True:
+            raise RuntimeError("Production matchday policy PASS requires untouched locked holdout evidence")
+
     score_method = str(bundle.get("score_method", "primary"))
     if score_method not in {"primary", "neutral_aware", "recency", "time_decay", "dixon_coles", "negative_binomial"}:
         raise RuntimeError(f"Unsupported production score method: {score_method}")

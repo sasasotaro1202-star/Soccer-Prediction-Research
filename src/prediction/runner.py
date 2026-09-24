@@ -388,7 +388,19 @@ def run(
     if not np.isfinite(probs).all() or not np.allclose(probs.sum(axis=1), 1.0, atol=1e-6):
         raise RuntimeError("Production prediction produced invalid probabilities")
     base_probs = probs.copy()
-    probs, matchday_diagnostics = apply_matchday_intelligence(probs, eligible, now)
+    shadow_probs, matchday_diagnostics = apply_matchday_intelligence(probs, eligible, now)
+    matchday_policy = bundle.get("matchday_policy") or {"schema_version": 1, "status": "SHADOW_ONLY"}
+    matchday_policy_status = str(matchday_policy.get("status", "SHADOW_ONLY")).upper() if isinstance(matchday_policy, dict) else "SHADOW_ONLY"
+    matchday_live_enabled = matchday_policy_status == "PASS"
+    probs = shadow_probs if matchday_live_enabled else base_probs
+    if not matchday_live_enabled:
+        blocked = matchday_diagnostics["status"].astype(str).copy()
+        shadow_applied = matchday_diagnostics["applied"].astype(bool).copy()
+        matchday_diagnostics["status"] = np.where(
+            shadow_applied,
+            "SHADOW_ONLY_UNVALIDATED_POLICY",
+            blocked,
+        )
     if probs.shape != (len(eligible), 3) or not np.isfinite(probs).all():
         raise RuntimeError("Matchday intelligence produced invalid probabilities")
     if not np.allclose(probs.sum(axis=1), 1.0, atol=1e-6):
@@ -400,6 +412,11 @@ def run(
     result["p_home"] = probs[:, 0]
     result["p_draw"] = probs[:, 1]
     result["p_away"] = probs[:, 2]
+    result["shadow_p_home"] = shadow_probs[:, 0]
+    result["shadow_p_draw"] = shadow_probs[:, 1]
+    result["shadow_p_away"] = shadow_probs[:, 2]
+    result["matchday_live_enabled"] = bool(matchday_live_enabled)
+    result["matchday_policy_status"] = matchday_policy_status
     labels = np.array(["H", "D", "A"])
     result["prediction"] = labels[np.argmax(probs, axis=1)]
     result["confidence"] = probs.max(axis=1)
@@ -414,7 +431,8 @@ def run(
     result["prediction_set"] = np.where(result["low_confidence"], "LOW_CONFIDENCE", "STANDARD")
     result["prediction_time_utc"] = now.isoformat()
     result["matchday_status"] = matchday_diagnostics["status"].astype(str).to_numpy()
-    result["matchday_applied"] = matchday_diagnostics["applied"].astype(bool).to_numpy()
+    result["matchday_applied"] = (matchday_diagnostics["applied"].astype(bool) & bool(matchday_live_enabled)).to_numpy()
+    result["matchday_shadow_applied"] = matchday_diagnostics["applied"].astype(bool).to_numpy()
     result["matchday_freshness"] = pd.to_numeric(matchday_diagnostics["freshness"], errors="coerce").to_numpy()
     result["matchday_signal_count"] = pd.to_numeric(matchday_diagnostics["signal_count"], errors="coerce").fillna(0).astype(int).to_numpy()
     result["matchday_adjustment_l1"] = pd.to_numeric(matchday_diagnostics["adjustment_l1"], errors="coerce").fillna(0.0).to_numpy()

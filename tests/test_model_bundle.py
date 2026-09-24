@@ -305,3 +305,55 @@ def test_bundle_persists_and_applies_risk_temperature_modifiers(tmp_path):
     assert probs.shape == (1, 3)
     assert np.all(np.isfinite(probs))
     assert np.allclose(probs.sum(axis=1), 1.0)
+
+
+def test_bundle_defaults_unvalidated_matchday_policy_to_shadow_only(tmp_path):
+    df = _fixture()
+    path = tmp_path / "production_model.pkl"
+    train_and_save_bundle(
+        df, ["f1", "f2"], {"weights": {"logistic": 1.0}, "temperature": 1.0},
+        str(path), "test-version", "snapshot-1",
+    )
+    bundle = load_bundle(str(path))
+    assert bundle["matchday_policy"]["schema_version"] == 1
+    assert bundle["matchday_policy"]["status"] == "SHADOW_ONLY"
+
+
+def test_bundle_rejects_matchday_policy_pass_without_oos_evidence(tmp_path):
+    df = _fixture()
+    path = tmp_path / "production_model.pkl"
+    train_and_save_bundle(
+        df, ["f1", "f2"],
+        {
+            "weights": {"logistic": 1.0},
+            "temperature": 1.0,
+            "matchday_policy": {"schema_version": 1, "status": "PASS"},
+        },
+        str(path), "test-version", "snapshot-1",
+    )
+    with pytest.raises(RuntimeError, match="requires explicit OOS evidence"):
+        load_bundle(str(path))
+
+
+def test_bundle_accepts_matchday_policy_pass_with_locked_oos_evidence(tmp_path):
+    df = _fixture()
+    path = tmp_path / "production_model.pkl"
+    policy = {
+        "schema_version": 1,
+        "status": "PASS",
+        "evidence": {
+            "oos_verified": True,
+            "locked_holdout_untouched": True,
+        },
+    }
+    train_and_save_bundle(
+        df, ["f1", "f2"],
+        {
+            "weights": {"logistic": 1.0},
+            "temperature": 1.0,
+            "matchday_policy": policy,
+        },
+        str(path), "test-version", "snapshot-1",
+    )
+    bundle = load_bundle(str(path))
+    assert bundle["matchday_policy"] == policy
