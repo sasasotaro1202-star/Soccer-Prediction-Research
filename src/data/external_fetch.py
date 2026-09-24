@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -103,7 +104,7 @@ class ExternalFetcher:
                 stored = json.loads(meta_path.read_text(encoding="utf-8"))
                 fresh = True
                 if cache_ttl_seconds is not None:
-                    if not np.isfinite(float(cache_ttl_seconds)) or float(cache_ttl_seconds) < 0:
+                    if not math.isfinite(float(cache_ttl_seconds)) or float(cache_ttl_seconds) < 0:
                         raise ValueError("cache_ttl_seconds must be finite and non-negative")
                     retrieved_at = datetime.fromisoformat(
                         str(stored.get("retrieved_at", "")).replace("Z", "+00:00")
