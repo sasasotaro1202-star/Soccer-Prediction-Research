@@ -70,12 +70,18 @@ def train_and_save_bundle(
     raw_context_weights = selection.get("context_weights") or {}
     raw_context_temperatures = selection.get("contextual_temperatures") or {}
     raw_context_temperature_reasons = selection.get("contextual_temperature_reasons") or {}
+    raw_risk_temperature_modifiers = selection.get("risk_temperature_modifiers") or {}
+    raw_risk_temperature_reasons = selection.get("risk_temperature_reasons") or {}
     if not isinstance(raw_context_weights, dict):
         raise ValueError("Locked selection context_weights must be an object")
     if not isinstance(raw_context_temperatures, dict):
         raise ValueError("Locked selection contextual_temperatures must be an object")
     if not isinstance(raw_context_temperature_reasons, dict):
         raise ValueError("Locked selection contextual_temperature_reasons must be an object")
+    if not isinstance(raw_risk_temperature_modifiers, dict):
+        raise ValueError("Locked selection risk_temperature_modifiers must be an object")
+    if not isinstance(raw_risk_temperature_reasons, dict):
+        raise ValueError("Locked selection risk_temperature_reasons must be an object")
 
     context_weights: dict[str, dict[str, float]] = {}
     for route_key, mapping in raw_context_weights.items():
@@ -95,6 +101,13 @@ def train_and_save_bundle(
         context_weights[str(route_key)] = {
             name: float(value / total_context) for name, value in normalized.items()
         }
+
+    risk_temperature_modifiers: dict[str, float] = {}
+    for bucket, value in raw_risk_temperature_modifiers.items():
+        value = float(value)
+        if not np.isfinite(value) or not 0.85 <= value <= 1.20:
+            raise ValueError(f"Invalid risk temperature modifier for bucket {bucket!r}")
+        risk_temperature_modifiers[str(bucket)] = value
 
     contextual_temperatures: dict[str, float] = {}
     for route_key, value in raw_context_temperatures.items():
@@ -178,6 +191,10 @@ def train_and_save_bundle(
             "contextual_temperatures": contextual_temperatures,
             "contextual_temperature_reasons": {
                 str(k): str(v) for k, v in raw_context_temperature_reasons.items()
+            },
+            "risk_temperature_modifiers": risk_temperature_modifiers,
+            "risk_temperature_reasons": {
+                str(k): str(v) for k, v in raw_risk_temperature_reasons.items()
             },
             **({"dynamic_routing": dynamic_routing} if dynamic_routing is not None else {}),
         }
@@ -276,6 +293,16 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
             values = np.asarray(list(mapping.values()), dtype=float)
             if not np.all(np.isfinite(values)) or np.any(values < 0) or not np.isclose(values.sum(), 1.0, atol=1e-8):
                 raise RuntimeError(f"Production routing context weights are invalid for {route_key!r}")
+        risk_temperature_modifiers = routing.get("risk_temperature_modifiers", {})
+        if not isinstance(risk_temperature_modifiers, dict):
+            raise RuntimeError("Production risk_temperature_modifiers are invalid")
+        for bucket, value in risk_temperature_modifiers.items():
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                raise RuntimeError(f"Production risk temperature modifier is invalid for {bucket!r}")
+            if not np.isfinite(value) or not 0.85 <= value <= 1.20:
+                raise RuntimeError(f"Production risk temperature modifier is out of bounds for {bucket!r}")
         routing_temps = routing.get("contextual_temperatures", {})
         if not isinstance(routing_temps, dict):
             raise RuntimeError("Production contextual temperatures are invalid")
@@ -356,21 +383,28 @@ def predict_bundle(bundle: dict[str, Any], X: pd.DataFrame) -> np.ndarray:
     routing = bundle.get("routing_policy")
     if isinstance(routing, dict):
         try:
-            probs, routes = _routed_ensemble_proba(
+            probs, routes, routing_diag = _routed_ensemble_proba(
                 X,
                 bundle["models"],
                 feature_cols,
                 routing.get("context_weights", {}),
                 {str(k): float(v) for k, v in routing.get("fallback_weights", bundle["weights"]).items()},
                 dynamic_policy=routing.get("dynamic_routing"),
+                return_diagnostics=True,
             )
             probs = np.clip(probs, 1e-9, 1.0)
             probs /= probs.sum(axis=1, keepdims=True)
-            return _apply_contextual_temperatures(
+            probs = _apply_contextual_temperatures(
                 probs,
                 routes,
                 {str(k): float(v) for k, v in routing.get("contextual_temperatures", {}).items()},
                 float(routing.get("fallback_temperature", bundle["temperature"])),
+            )
+            from src.evaluation.walk_forward import _apply_risk_temperature_modifiers
+            return _apply_risk_temperature_modifiers(
+                probs,
+                routing_diag["risk"],
+                {str(k): float(v) for k, v in routing.get("risk_temperature_modifiers", {}).items()},
             )
         except Exception as exc:
             raise RuntimeError(
