@@ -24,7 +24,9 @@ permissions:
 
 concurrency:
   group: soccer-matchday-intelligence
-  cancel-in-progress: true
+  # A scheduled refresh must finish; do not cancel an in-flight snapshot
+  # merely because the next 15-minute tick arrived.
+  cancel-in-progress: false
 
 jobs:
   refresh:
