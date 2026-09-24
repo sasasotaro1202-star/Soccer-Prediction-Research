@@ -4,8 +4,9 @@ from pathlib import Path
 import json
 import pandas as pd
 from src.data.competition_sources import TARGET_COMPETITIONS, source_plans
+from src.data.competition_catalog import COMPETITION_CATALOG
 from src.data.football_data import load_available_history
-COMPETITION_NAMES={"EPL":"Premier League","AG_M":"Asian Games Men","AG_W":"Asian Games Women","ERE":"Eredivisie","LL":"La Liga","SA":"Serie A","BL1":"Bundesliga","J1":"J1","J2":"J2","J3":"J3","FL1":"Ligue 1","UCL":"UEFA Champions League","UEL":"UEFA Europa League","U23_M":"Men\u2019s U23","U18_M":"Men\u2019s U18"}
+COMPETITION_NAMES={spec.code: spec.name for spec in COMPETITION_CATALOG}
 CANONICAL_FIELDS=("fixture_id","competition","season","home_team","away_team","kickoff_utc","result","home_goals","away_goals","home_shots","away_shots","home_shots_on_target","away_shots_on_target","home_corners","away_corners","home_fouls","away_fouls","home_yellow_cards","away_yellow_cards","home_red_cards","away_red_cards")
 @dataclass(frozen=True)
 class AuditConfig:
