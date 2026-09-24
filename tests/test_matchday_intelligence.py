@@ -132,3 +132,20 @@ def test_nan_optional_groups_do_not_block_other_matchday_signals():
     )
     assert diag.loc[0, "status"] == "APPLIED"
     assert "injury" in diag.loc[0, "signal_names"]
+
+
+def test_market_probability_prevents_duplicate_odds_diagnostic():
+    fixtures = _fixtures(
+        matchday_market_p_home=0.50,
+        matchday_market_p_draw=0.27,
+        matchday_market_p_away=0.23,
+        matchday_odds_home=2.00,
+        matchday_odds_draw=3.60,
+        matchday_odds_away=4.20,
+    )
+    base = np.asarray([[0.50, 0.27, 0.23]])
+    _, diag = apply_matchday_intelligence(
+        base, fixtures, pd.Timestamp("2026-09-25T09:00:00Z")
+    )
+    assert diag.loc[0, "signal_names"] == "market"
+    assert int(diag.loc[0, "signal_count"]) == 3
