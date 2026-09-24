@@ -193,7 +193,7 @@ def routing_risk_score(
     *,
     drift_weight: float = 0.55,
     support_scores: np.ndarray | list[float] | None = None,
-    support_weight: float = 0.15,
+    support_weight: float = 0.0,
 ) -> np.ndarray:
     """Combine covariate drift and predictive uncertainty for calibration only.
 
