@@ -138,6 +138,176 @@ def fetch_mom_label(
     }
 
 
+def fetch_unique_tournament_seasons(
+    tournament_id: int,
+    *,
+    fetcher: ExternalFetcher,
+) -> tuple[list[dict[str, Any]], str]:
+    url = f"{SOFASCORE_BASE}/unique-tournament/{int(tournament_id)}/seasons"
+    response = fetcher.get(
+        "sofascore_tournament_seasons",
+        url,
+        headers=SOFASCORE_HEADERS,
+    )
+    payload = _parse_json(response.body)
+    seasons = payload.get("seasons")
+    if not isinstance(seasons, list):
+        raise RuntimeError("SofaScore seasons payload missing seasons list")
+    return [x for x in seasons if isinstance(x, dict)], response.metadata.retrieved_at
+
+
+def select_season_id(
+    seasons: list[dict[str, Any]],
+    season_start_year: int,
+) -> int:
+    matches = []
+    for season in seasons:
+        raw_name = str(season.get("name") or season.get("year") or "")
+        if str(int(season_start_year)) in raw_name:
+            try:
+                matches.append((int(season["id"]), raw_name))
+            except (TypeError, ValueError):
+                continue
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"SofaScore season lookup is ambiguous for {season_start_year}: {matches}"
+        )
+    return matches[0][0]
+
+
+def fetch_tournament_season_events(
+    tournament_id: int,
+    season_id: int,
+    *,
+    fetcher: ExternalFetcher,
+    max_pages: int = 200,
+) -> tuple[list[dict[str, Any]], str]:
+    events: list[dict[str, Any]] = []
+    retrieval_times: list[str] = []
+    seen_ids: set[str] = set()
+    for page in range(max(1, int(max_pages))):
+        url = f"{SOFASCORE_BASE}/unique-tournament/{int(tournament_id)}/season/{int(season_id)}/events/last/{page}"
+        response = fetcher.get(
+            "sofascore_tournament_season_events",
+            url,
+            headers=SOFASCORE_HEADERS,
+        )
+        retrieval_times.append(response.metadata.retrieved_at)
+        payload = _parse_json(response.body)
+        page_events = payload.get("events")
+        if not isinstance(page_events, list):
+            raise RuntimeError("SofaScore season events payload missing events list")
+        if not page_events:
+            break
+        added = 0
+        for event in page_events:
+            if not isinstance(event, dict) or event.get("id") in (None, ""):
+                continue
+            event_id = str(event["id"])
+            if event_id in seen_ids:
+                continue
+            seen_ids.add(event_id)
+            events.append(event)
+            added += 1
+        if added == 0:
+            break
+    if not events:
+        raise RuntimeError(
+            f"SofaScore season event acquisition returned no events for tournament={tournament_id} season={season_id}"
+        )
+    return events, max(retrieval_times)
+
+
+def collect_sofascore_mom_labels_tournament_season(
+    fixtures: pd.DataFrame,
+    *,
+    tournament_id: int,
+    season_id: int,
+    cache_dir: str = "cache/external",
+    max_event_delta_hours: float = DEFAULT_MAX_EVENT_DELTA_HOURS,
+    retries: int = 3,
+    max_event_pages: int = 200,
+) -> pd.DataFrame:
+    required = {"match_id", "kickoff_utc", "home_team", "away_team"}
+    missing = sorted(required - set(fixtures.columns))
+    if missing:
+        raise ValueError(f"MOM label fixtures missing columns: {missing}")
+
+    d = fixtures.copy()
+    d["match_id"] = d["match_id"].astype("string").str.strip()
+    d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
+    if d["kickoff_utc"].isna().any() or d["match_id"].eq("").any():
+        raise ValueError("MOM label fixtures contain invalid match_id/kickoff_utc")
+
+    fetcher = ExternalFetcher(cache_dir=cache_dir, retries=retries)
+    events, _ = fetch_tournament_season_events(
+        tournament_id,
+        season_id,
+        fetcher=fetcher,
+        max_pages=max_event_pages,
+    )
+
+    rows: list[dict[str, Any]] = []
+    for fixture in d.itertuples(index=False):
+        series = pd.Series(fixture._asdict())
+        candidates = _event_candidates(events, series, max_event_delta_hours)
+        if not candidates:
+            rows.append({
+                "match_id": str(series["match_id"]),
+                "label_status": "EVENT_NOT_MATCHED",
+                "event_id": "",
+                "player_id": "",
+                "player_name": "",
+                "label_source": "sofascore_best_players_summary",
+                "label_retrieved_at_utc": "",
+                "event_kickoff_utc": "",
+                "event_match_delta_hours": None,
+                "source_content_sha256": "",
+            })
+            continue
+        best = candidates[0]
+        tie = [
+            x for x in candidates
+            if abs(float(x["delta_hours"]) - float(best["delta_hours"])) < 1e-9
+        ]
+        if len(tie) > 1:
+            rows.append({
+                "match_id": str(series["match_id"]),
+                "label_status": "AMBIGUOUS_EVENT_MATCH",
+                "event_id": "",
+                "player_id": "",
+                "player_name": "",
+                "label_source": "sofascore_best_players_summary",
+                "label_retrieved_at_utc": "",
+                "event_kickoff_utc": "",
+                "event_match_delta_hours": float(best["delta_hours"]),
+                "source_content_sha256": "",
+            })
+            continue
+
+        event_id = best["event"].get("id")
+        if event_id in (None, ""):
+            raise RuntimeError(f"SofaScore matched event has no id for match_id={series['match_id']!r}")
+        label = fetch_mom_label(event_id, fetcher=fetcher)
+        event_time = best.get("event_kickoff_utc")
+        rows.append({
+            "match_id": str(series["match_id"]),
+            "label_status": "LABEL_FOUND" if label["label_found"] else "LABEL_MISSING",
+            "event_id": label["event_id"],
+            "player_id": label["player_id"],
+            "player_name": label["player_name"],
+            "label_source": label["source"],
+            "label_retrieved_at_utc": label["retrieved_at_utc"],
+            "event_kickoff_utc": event_time.isoformat() if isinstance(event_time, pd.Timestamp) else "",
+            "event_match_delta_hours": float(best["delta_hours"]),
+            "source_content_sha256": label["source_content_sha256"],
+        })
+
+    out = pd.DataFrame(rows)
+    if not out.empty and out["match_id"].duplicated().any():
+        raise RuntimeError("MOM label acquisition produced duplicate match_id rows")
+    return out
+
 def collect_sofascore_mom_labels(
     fixtures: pd.DataFrame,
     *,
