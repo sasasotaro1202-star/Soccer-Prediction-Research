@@ -57,10 +57,10 @@ def _fixtures(tmp_path: Path) -> pd.DataFrame:
     )
 
 
-def test_eligibility_is_forward_looking_and_starter_gated():
+def test_eligibility_is_forward_looking_without_requiring_official_lineups():
     d = _fixtures(Path("."))
     out = _eligible_fixtures(d, pd.Timestamp("2026-09-14T12:00:00Z"))
-    assert out["match_id"].tolist() == ["ok"]
+    assert out["match_id"].tolist() == ["ok", "no-starters"]
 
 
 def test_missing_required_fixture_field_fails_closed():
