@@ -216,7 +216,10 @@ def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) ->
         (d["kickoff_utc"] > prediction_time)
         & (d["source_available_at_utc"] <= prediction_time)
         & d["pit_verified"]
-        & d["starter_status"].isin({"ANNOUNCED", "CONFIRMED"})
+        # A prediction is allowed before official lineups. Confirmed lineups
+        # enrich the matchday layer; they are not a prerequisite for producing
+        # a PIT-safe baseline prediction.
+        & d["starter_status"].isin({"EXPECTED", "ANNOUNCED", "CONFIRMED"})
     ].copy()
     return d.sort_values("kickoff_utc", kind="mergesort")
 

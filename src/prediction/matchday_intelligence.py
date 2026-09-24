@@ -205,20 +205,53 @@ def apply_matchday_intelligence(
             state_prob = _softmax(logits + freshness * np.array([delta / 2.0, 0.0, -delta / 2.0]))
             state_weight = 0.20 * freshness * signal_confidence
             adjusted = (1.0 - state_weight) * outputs[i] + state_weight * state_prob
+            market_reference = None
             if _present_group_row(row, _SIGNAL_GROUPS["market"]):
-                market = _validate_group(row, _SIGNAL_GROUPS["market"], "market")
+                market_reference = _validate_group(row, _SIGNAL_GROUPS["market"], "market")
                 market_weight = 0.15 * freshness * signal_confidence
-                adjusted = (1.0 - market_weight) * adjusted + market_weight * market
+                adjusted = (1.0 - market_weight) * adjusted + market_weight * market_reference
                 signal_names.append("market")
                 signal_count += 3
             elif _present_group_row(row, _SIGNAL_GROUPS["market_odds"]):
                 odds = _validate_group(row, _SIGNAL_GROUPS["market_odds"], "market_odds")
-                market = 1.0 / np.clip(odds, 1.000001, None)
-                market /= market.sum()
+                market_reference = 1.0 / np.clip(odds, 1.000001, None)
+                market_reference /= market_reference.sum()
                 market_weight = 0.15 * freshness * signal_confidence
-                adjusted = (1.0 - market_weight) * adjusted + market_weight * market
+                adjusted = (1.0 - market_weight) * adjusted + market_weight * market_reference
                 signal_names.append("market_odds")
                 signal_count += 3
+
+            # Large model-vs-market disagreement is a risk signal, not a
+            # directional instruction. Apply only a small uncertainty increase
+            # after bounded market fusion so one market snapshot cannot dominate.
+            if market_reference is not None:
+                disagreement = float(np.abs(outputs[i] - market_reference).sum() / 2.0)
+                if disagreement > 0.20:
+                    market_temperature = 1.0 + 0.10 * float(
+                        np.clip((disagreement - 0.20) / 0.40, 0.0, 1.0)
+                    ) * freshness * signal_confidence
+                    adjusted = _softmax(
+                        np.log(np.clip(adjusted, 1e-9, 1.0)) / market_temperature
+                    )
+                    signal_names.append("market_uncertainty")
+                    signal_count += 1
+
+            # Severe weather is treated as uncertainty, not as an invented
+            # home/away edge. A bounded temperature increase flattens the
+            # distribution and is only applied when weather evidence is
+            # actually present and PIT-safe.
+            if "matchday_weather_severity" in row.index and _value_present(row, "matchday_weather_severity"):
+                weather_severity = float(
+                    pd.to_numeric(pd.Series([row["matchday_weather_severity"]]), errors="coerce").iloc[0]
+                )
+                if not np.isfinite(weather_severity) or not 0.0 <= weather_severity <= 1.0:
+                    raise ValueError("matchday_weather_severity is outside [0, 1]")
+                if weather_severity > 0.0:
+                    weather_temperature = 1.0 + 0.20 * weather_severity * freshness * signal_confidence
+                    adjusted = _softmax(np.log(np.clip(adjusted, 1e-9, 1.0)) / weather_temperature)
+                    signal_names.append("weather_uncertainty")
+                    signal_count += 1
+
             adjusted = np.clip(adjusted, 1e-9, 1.0)
             adjusted /= adjusted.sum()
             shift = adjusted - base[i]
