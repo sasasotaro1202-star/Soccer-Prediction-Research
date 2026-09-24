@@ -244,7 +244,7 @@ def fit_mom_model(
         # complete fixture groups and models the winner choice directly.
         model = ConditionalMOMLogit(l2=1.0 / max(float(regularization_c), 1e-9))
         ordered = d.sort_values(["kickoff_utc", "match_id", "player_id"], kind="mergesort").reset_index(drop=True)
-        model.fit(ordered[list(MOM_FEATURE_COLUMNS)], ordered["is_motm"].to_numpy(dtype=int))
+        model.fit(ordered[list(MOM_FEATURE_COLUMNS)].set_axis(ordered["match_id"].astype(str).to_numpy(), axis="index"), ordered["is_motm"].to_numpy(dtype=int))
         d = ordered
     elif method == "binary_logit":
         model = Pipeline([
