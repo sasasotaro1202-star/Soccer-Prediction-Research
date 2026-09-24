@@ -72,11 +72,11 @@ def _load_frames(start: str, end: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.D
                 ht.name AS home_team,
                 at.name AS away_team
             FROM read_parquet('{urls["fixtures"]}') f
-            JOIN read_parquet('https://huggingface.co/datasets/{SOCCER_DATASET_REPOSITORY.split("/",1)[1]}/resolve/{SOCCER_DATASET_COMMIT}/leagues.parquet') l
+            JOIN read_parquet('{dataset_base}/leagues.parquet') l
               ON f.league_id = l.id
-            JOIN read_parquet('https://huggingface.co/datasets/{SOCCER_DATASET_REPOSITORY.split("/",1)[1]}/resolve/{SOCCER_DATASET_COMMIT}/teams.parquet') ht
+            JOIN read_parquet('{dataset_base}/teams.parquet') ht
               ON f.home_team_id = ht.id
-            JOIN read_parquet('https://huggingface.co/datasets/{SOCCER_DATASET_REPOSITORY.split("/",1)[1]}/resolve/{SOCCER_DATASET_COMMIT}/teams.parquet') at
+            JOIN read_parquet('{dataset_base}/teams.parquet') at
               ON f.away_team_id = at.id
             WHERE l.id = 39
               AND f.is_played = TRUE
