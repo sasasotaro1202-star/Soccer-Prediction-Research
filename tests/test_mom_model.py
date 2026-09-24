@@ -141,6 +141,21 @@ def test_prediction_fails_closed_when_feature_is_future_at_prediction_time():
         )
 
 
+def test_missing_feature_values_are_imputed_without_zeroing():
+    d = _rows(8)
+    d.loc[d["match_id"] == "m0", "recent_goals_per90_ewm"] = np.nan
+    d.loc[d["match_id"] == "m1", "recent_shots_per90_ewm"] = np.nan
+    model = fit_mom_model(d, min_matches=5)
+    candidates = _rows(1).drop(columns=["is_motm"])
+    candidates.loc[0, "recent_goals_per90_ewm"] = np.nan
+    candidates.loc[1, "recent_shots_per90_ewm"] = np.nan
+    dist = predict_mom_distribution(model, candidates, prediction_time=None)
+    assert len(dist) == 6
+    assert np.isfinite(dist["probability"]).all()
+    assert float(dist["probability"].sum()) == pytest.approx(1.0, abs=1e-10)
+    assert model["metadata"]["missingness_aware_imputation"] is True
+
+
 def test_training_rejects_match_without_exactly_one_motm():
     d = _rows(5)
     d.loc[d["match_id"] == "m0", "is_motm"] = 0
