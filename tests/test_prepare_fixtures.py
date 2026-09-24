@@ -110,3 +110,23 @@ def test_empty_future_fixture_snapshot_is_fail_closed(tmp_path):
     assert out.empty
     assert out_path.exists()
     assert list(pd.read_csv(out_path).columns) == list(fixtures.columns)
+
+
+def test_prepare_from_files_empty_snapshot_does_not_require_history(tmp_path):
+    import src.prediction.prepare_fixtures as module
+    fixtures_path = tmp_path / "future.csv"
+    output_path = tmp_path / "prepared.csv"
+    fixtures_path.write_text("match_id,competition,kickoff_utc,home_team,away_team,source_available_at_utc,starter_status\n", encoding="utf-8")
+    called = {"value": False}
+    def fail_history():
+        called["value"] = True
+        raise AssertionError("history should not be loaded for an empty snapshot")
+    original = module.load_available_history
+    module.load_available_history = fail_history
+    try:
+        out = module.prepare_from_files(str(fixtures_path), str(output_path))
+    finally:
+        module.load_available_history = original
+    assert out.empty
+    assert called["value"] is False
+    assert output_path.exists()

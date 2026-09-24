@@ -116,5 +116,10 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: soccer-matchday-intelligence-${{ github.run_id }}
-          path: artifacts/future_matchday_fixtures.csv,artifacts/matchday_intelligence_status.json,artifacts/future_fixtures.csv,artifacts/predictions.csv,artifacts/prediction_status.json
+          path: |
+            artifacts/future_matchday_fixtures.csv
+            artifacts/matchday_intelligence_status.json
+            artifacts/future_fixtures.csv
+            artifacts/predictions.csv
+            artifacts/prediction_status.json
           retention-days: 2

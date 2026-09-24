@@ -182,11 +182,16 @@ def _get_json(
     url: str,
     params: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], str]:
+    headers = {"User-Agent": "Soccer-Prediction-Research/1.0", "Accept": "application/json, text/plain, */*", "Accept-Language": "en-US,en;q=0.9"}
+    if str(source).startswith("sofascore"):
+        headers.update({"Referer": "https://www.sofascore.com/", "Origin": "https://www.sofascore.com"})
+    elif str(source).startswith("espn"):
+        headers.update({"Referer": "https://www.espn.com/", "Origin": "https://www.espn.com"})
     response = fetcher.get(
         source,
         url,
         params=params,
-        headers={"User-Agent": "Soccer-Prediction-Research/1.0"},
+        headers=headers,
         cache_ttl_seconds=600.0,
     )
     try:
@@ -373,9 +378,18 @@ def _matchday_base_row(
 
 
 def _sofascore_competition(event: dict[str, Any]) -> str | None:
-    tournament = event.get("tournament") or event.get("uniqueTournament") or {}
-    name = str(tournament.get("name") or "").strip()
-    return SOFASCORE_COMPETITIONS.get(name)
+    # Prefer the canonical uniqueTournament name because qualification-stage
+    # events often expose a stage-specific tournament name while the
+    # uniqueTournament identifies the parent competition consistently.
+    candidates = [
+        event.get("uniqueTournament") or {},
+        event.get("tournament") or {},
+    ]
+    for tournament in candidates:
+        name = str(tournament.get("name") or "").strip()
+        if name in SOFASCORE_COMPETITIONS:
+            return SOFASCORE_COMPETITIONS[name]
+    return None
 
 
 def parse_sofascore_event(event: dict[str, Any]) -> dict[str, Any] | None:
@@ -515,7 +529,7 @@ def _enrich_sofascore_lineup(fetcher: ExternalFetcher, row: dict[str, Any]) -> t
     payload, at = _get_json(
         fetcher,
         "sofascore_lineups",
-        f"https://www.sofascore.com/api/v1/event/{event_id}/lineups",
+        f"https://api.sofascore.com/api/v1/event/{event_id}/lineups",
     )
     retrieval_times = [at]
     confirmed = payload.get("confirmed") is True
@@ -630,7 +644,7 @@ def _collect_sofascore_day(
         payload, scheduled_at = _get_json(
             fetcher,
             "sofascore_scheduled_events",
-            f"https://www.sofascore.com/api/v1/sport/football/scheduled-events/{date_key}",
+            f"https://api.sofascore.com/api/v1/sport/football/scheduled-events/{date_key}",
         )
     except Exception as exc:
         return [], [{"source": "sofascore_scheduled_events", "error": f"{type(exc).__name__}: {exc}"}], None

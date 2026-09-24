@@ -10,3 +10,5 @@ def test_matchday_refresh_contract_is_read_only_and_quarter_hourly():
     assert "contents: read" in content
     assert "cancel-in-progress: false" in content
     assert "upload-artifact@v6" in content
+    assert "path: |" in content
+    assert "artifacts/future_matchday_fixtures.csv" in content
