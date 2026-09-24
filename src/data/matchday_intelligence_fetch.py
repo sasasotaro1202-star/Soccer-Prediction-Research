@@ -397,6 +397,8 @@ def _matchday_base_row(
         "matchday_injury_impact_away": np.nan,
         "matchday_lineup_impact_home": np.nan,
         "matchday_lineup_impact_away": np.nan,
+        "matchday_lineup_missing_count_home": np.nan,
+        "matchday_lineup_missing_count_away": np.nan,
         "matchday_weather_penalty_home": np.nan,
         "matchday_weather_penalty_away": np.nan,
         "matchday_rest_diff_hours": np.nan,
@@ -602,16 +604,24 @@ def _enrich_sofascore_lineup(fetcher: ExternalFetcher, row: dict[str, Any]) -> t
             )
         ]
         counts[side] = len(starters)
-        impact, severe = _sofascore_missing_impact(group.get("missingPlayers"))
+        missing_players = group.get("missingPlayers")
+        impact, severe = _sofascore_missing_impact(missing_players)
         row[f"matchday_injury_impact_{side}"] = impact
+        if confirmed and isinstance(missing_players, list):
+            # 0 missing => neutral 0.50 baseline; each confirmed missing player
+            # adds a small bounded availability burden. Do not infer player quality.
+            burden = float(np.clip(0.50 + 0.04 * len(missing_players), 0.50, 0.90))
+            row[f"matchday_lineup_impact_{side}"] = burden
+        if isinstance(missing_players, list):
+            row[f"matchday_lineup_missing_count_{side}"] = len(missing_players)
         row["matchday_signal_confidence"] = max(
             float(row.get("matchday_signal_confidence", 0.30)),
             float(np.clip(0.45 + severe * 0.10, 0.45, 0.85)),
         )
     if confirmed and counts.get("home", 0) >= 11 and counts.get("away", 0) >= 11:
         row["starter_status"] = "ANNOUNCED"
-        row["matchday_lineup_impact_home"] = 0.5
-        row["matchday_lineup_impact_away"] = 0.5
+        row["matchday_lineup_impact_home"] = row.get("matchday_lineup_impact_home", 0.50)
+        row["matchday_lineup_impact_away"] = row.get("matchday_lineup_impact_away", 0.50)
         row["matchday_signal_confidence"] = max(
             float(row.get("matchday_signal_confidence", 0.30)), 0.85
         )
