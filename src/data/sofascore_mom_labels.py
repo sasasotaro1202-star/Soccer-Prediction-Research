@@ -41,7 +41,7 @@ def _norm_team(value: Any) -> str:
             if "LATIN" in unicodedata.name(previous, ""):
                 continue
         kept.append(ch)
-    text = "".join(kept).casefold()
+    text = unicodedata.normalize("NFKC", "".join(kept).casefold())
     # Remove punctuation/separators without treating non-Latin scripts as
     # word separators. Do not use fuzzy similarity.
     return "".join(
