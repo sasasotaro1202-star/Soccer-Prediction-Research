@@ -170,3 +170,27 @@ def test_live_scope_maps_requested_uefa_and_friendly_competitions():
     assert _sofascore_competition({"tournament": {"name": "UEFA Nations League"}}) == "UEFA_NATIONS_LEAGUE_M"
     assert _sofascore_competition({"tournament": {"name": "Emperor's Cup"}}) == "EMP_CUP"
     assert _sofascore_competition({"tournament": {"name": "International Friendly Games"}}) == "FRIENDLY"
+
+
+def test_matchday_base_row_preserves_unknown_optional_signals():
+    from src.data.matchday_intelligence_fetch import _matchday_base_row
+
+    row = _matchday_base_row(
+        match_id="m1",
+        kickoff=pd.Timestamp("2026-09-25T12:00:00Z"),
+        home_team="A",
+        away_team="B",
+        competition="EPL",
+        source="test",
+        available_at="2026-09-24T12:00:00Z",
+    )
+    for key in (
+        "matchday_injury_impact_home",
+        "matchday_injury_impact_away",
+        "matchday_lineup_impact_home",
+        "matchday_lineup_impact_away",
+        "matchday_weather_penalty_home",
+        "matchday_weather_penalty_away",
+        "matchday_rest_diff_hours",
+    ):
+        assert pd.isna(row[key])
