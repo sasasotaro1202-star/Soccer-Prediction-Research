@@ -30,8 +30,9 @@ DEFAULT_MAX_EVENT_DELTA_HOURS = 6.0
 
 
 def _norm_team(value: Any) -> str:
-    # NFKD lets us compare Latin diacritics conservatively, but stripping every
-    # combining mark would corrupt Japanese kana dakuten/handakuten.
+    # NFKD removes compatibility noise while preserving non-Latin identity.
+    # Strip Latin combining marks only; Japanese kana dakuten/handakuten must
+    # survive because they are part of the team name's identity.
     decomposed = unicodedata.normalize("NFKD", str(value or ""))
     kept: list[str] = []
     for ch in decomposed:
@@ -40,11 +41,13 @@ def _norm_team(value: Any) -> str:
             if "LATIN" in unicodedata.name(previous, ""):
                 continue
         kept.append(ch)
-    text = "".join(kept)
-    text = text.casefold()
-    # Keep non-Latin scripts intact. Do not use fuzzy similarity here: a wrong
-    # event label is worse than a missing label.
-    return re.sub(r"[\W_]+", "", text, flags=re.UNICODE)
+    text = "".join(kept).casefold()
+    # Remove punctuation/separators without treating non-Latin scripts as
+    # word separators. Do not use fuzzy similarity.
+    return "".join(
+        ch for ch in text
+        if unicodedata.category(ch)[0] not in {"P", "Z"}
+    )
 
 
 def _parse_json(body: bytes) -> dict[str, Any]:
