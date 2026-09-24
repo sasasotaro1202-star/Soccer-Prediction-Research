@@ -178,7 +178,7 @@ def build_mom_feature_rows(
     """
     if min_history_appearances < 1 or lookback_appearances < min_history_appearances:
         raise ValueError("invalid player history window")
-    f, p, _ = _prepare_inputs(fixtures, player_matches, player_stats, match_stats)
+    f, p, s = _prepare_inputs(fixtures, player_matches, player_stats, match_stats)
     fixture_known = s[["fixture_id", "known_at"]].drop_duplicates("fixture_id")
     played = f.loc[f["is_played"]].merge(
         fixture_known.rename(columns={"fixture_id": "id"}), on="id", how="left", validate="one_to_one"
