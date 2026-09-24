@@ -91,8 +91,8 @@ SOFASCORE_COMPETITIONS: dict[str, str] = {
     "Club Friendly Games": "FRIENDLY",
     "Friendlies": "FRIENDLY",
     "Major League Soccer": "MLS",
-    "Liga Profesional de Fútbol": "AG_M",
-    "Liga Profesional": "AG_M",
+    "Liga Profesional de Fútbol": "ARG",
+    "Liga Profesional": "ARG",
 }
 
 FOOTBALL_DATA_DIVISIONS: dict[str, str] = {
@@ -105,7 +105,7 @@ FOOTBALL_DATA_DIVISIONS: dict[str, str] = {
     "J1": "J1",
     "J2": "J2",
     "USA": "MLS",
-    "ARG": "AG_M",
+    "ARG": "ARG",
 }
 FOOTBALL_DATA_TZ: dict[str, str] = {
     "EPL": "Europe/London",
@@ -117,7 +117,7 @@ FOOTBALL_DATA_TZ: dict[str, str] = {
     "J1": "Asia/Tokyo",
     "J2": "Asia/Tokyo",
     "MLS": "America/New_York",
-    "AG_M": "America/Argentina/Buenos_Aires",
+    "ARG": "America/Argentina/Buenos_Aires",
 }
 
 
