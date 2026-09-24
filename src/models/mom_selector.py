@@ -33,6 +33,8 @@ def select_mom_candidates(
     probs = np.asarray(list(probabilities), dtype=float)
     if len(ids) != len(probs):
         raise ValueError("player_ids and probabilities must have equal length")
+    if len(set(ids)) != len(ids):
+        raise ValueError("player_ids must be unique within a fixture")
     if len(ids) < top_k:
         raise ValueError("at least 4 eligible players are required")
     if not np.all(np.isfinite(probs)) or np.any(probs < 0):
