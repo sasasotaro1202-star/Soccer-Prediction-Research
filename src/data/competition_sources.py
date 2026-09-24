@@ -7,16 +7,21 @@ from dataclasses import dataclass
 # "CL" is treated as the standard UEFA Champions League alias for UCL.
 TARGET_COMPETITIONS = (
     "EPL", "AG_M", "AG_W", "ERE", "LL", "SA", "BL1", "J1", "J2", "J3",
-    "FL1", "UCL", "UEL", "U23_M", "U18_M",
+    "FL1",
+    "UCL", "UEL", "UECL", "UEFA_SUPER_CUP", "UEFA_YOUTH_LEAGUE", "UWCL", "UWEC",
+    "UEFA_EURO_M", "UEFA_EURO_QUALI_M", "UEFA_NATIONS_LEAGUE_M",
+    "UEFA_EURO_W", "UEFA_EURO_QUALI_W", "UEFA_NATIONS_LEAGUE_W",
+    "UEFA_U21", "UEFA_U19", "UEFA_U17", "UEFA_WU19", "UEFA_WU17",
+    "UEFA_REGIONS_CUP",
+    "U23_M", "U18_M",
 )
 
 # Supplemental competitions are deliberately outside the strict 15-competition
 # completion gate. They are acquired into a separate auxiliary dataset so they
 # can improve context without silently contaminating the production club model.
 AUXILIARY_COMPETITIONS = (
-    "WORLD_CUP", "WORLD_CUP_QUALI", "ASIAN_CUP", "EURO", "EURO_QUALI",
-    "NATIONS_LEAGUE", "INTERNATIONAL_FRIENDLY",
-    "EMPERORS_CUP", "INTERHIGH", "JFA_U20", "JFA_U18",
+    "WORLD_CUP", "WORLD_CUP_QUALI", "ASIAN_CUP",
+    "INTERNATIONAL_FRIENDLY", "EMPERORS_CUP", "INTERHIGH", "JFA_U20", "JFA_U18",
 )
 
 AUXILIARY_NAMES = {
@@ -53,8 +58,25 @@ PLANS = {
     "ERE": ("Football-Data.co.uk", "football-data.org", "Sportmonks", "openfootball"),
     "AG_M": ("AFC", "Asian Games", "openfootball/internationals", "Olympics", "ESPN"),
     "AG_W": ("AFC", "Olympics", "women_international_results", "FootyStats", "ESPN"),
-    "UCL": ("openfootball", "football-data.org", "Sportmonks"),
-    "UEL": ("openfootball", "football-data.org", "Sportmonks"),
+    "UCL": ("UEFA", "openfootball", "football-data.org", "Sportmonks"),
+    "UEL": ("UEFA", "openfootball", "football-data.org", "Sportmonks"),
+    "UECL": ("UEFA", "openfootball", "Sportmonks"),
+    "UEFA_SUPER_CUP": ("UEFA", "ESPN", "Sportmonks"),
+    "UEFA_YOUTH_LEAGUE": ("UEFA", "ESPN", "openfootball"),
+    "UWCL": ("UEFA", "ESPN", "Sportmonks"),
+    "UWEC": ("UEFA", "ESPN", "Sportmonks"),
+    "UEFA_EURO_M": ("UEFA", "openfootball/internationals", "ESPN"),
+    "UEFA_EURO_QUALI_M": ("UEFA", "openfootball/internationals", "ESPN"),
+    "UEFA_NATIONS_LEAGUE_M": ("UEFA", "openfootball/internationals", "ESPN"),
+    "UEFA_EURO_W": ("UEFA", "ESPN", "openfootball/internationals"),
+    "UEFA_EURO_QUALI_W": ("UEFA", "ESPN", "openfootball/internationals"),
+    "UEFA_NATIONS_LEAGUE_W": ("UEFA", "ESPN", "openfootball/internationals"),
+    "UEFA_U21": ("UEFA", "ESPN", "openfootball/internationals"),
+    "UEFA_U19": ("UEFA", "ESPN", "openfootball/internationals"),
+    "UEFA_U17": ("UEFA", "ESPN", "openfootball/internationals"),
+    "UEFA_WU19": ("UEFA", "ESPN", "openfootball/internationals"),
+    "UEFA_WU17": ("UEFA", "ESPN", "openfootball/internationals"),
+    "UEFA_REGIONS_CUP": ("UEFA", "ESPN", "openfootball/internationals"),
     "U23_M": ("FIFA", "AFC", "openfootball/internationals", "ESPN"),
     "U18_M": ("JFA", "AFC", "UEFA", "ESPN"),
     "J1": ("J.League", "Sportmonks", "TheStatsAPI"),
