@@ -81,3 +81,11 @@ def test_recovery_preserves_active_obsolete_9h_run_on_main_advance():
     assert 'run.get("status") not in {"pending", "queued", "waiting", "requested"}' in text
     assert '"in_progress"' not in text.split("cancel_obsolete_runs()", 1)[1].split("cancel_stale_current_main_runs()", 1)[0]
     assert "Never interrupt an actively executing immutable research snapshot" in text
+
+
+def test_production_gate_failure_never_authorizes_persistence():
+    text = AUTONOMOUS.read_text(encoding="utf-8")
+    assert "id: production_contract" in text
+    assert "production_contract_passed == 'true'" in text
+    assert "fail_closed_for_persistence" in text
+    assert "False production contract remains a recorded research gate" in text
