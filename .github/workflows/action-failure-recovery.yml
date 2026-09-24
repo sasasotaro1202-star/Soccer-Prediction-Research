@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows:
       - Soccer CI
+      - Soccer Matchday Intelligence Refresh
       - Legacy V9/V12 Bridge Check
     types: [completed]
 
