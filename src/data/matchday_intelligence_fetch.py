@@ -1035,7 +1035,10 @@ def collect_matchday_snapshots(
                 rows.extend(new_day_rows)
                 fallback_usage.append({"provider": "sofascore", "date": date, "rows": len(new_day_rows)})
             errors.extend(day_errors)
-        if not new_day_rows and len(rows) < max_events:
+        # Football-Data is a complementary free/keyless coverage source.
+        # Do not suppress it merely because SofaScore returned one or more rows;
+        # a partial SofaScore snapshot can still miss another supported league.
+        if len(rows) < max_events:
             fd_rows, fd_errors, _ = _collect_football_data_fallback(
                 fetcher,
                 now_ts=now_ts,
