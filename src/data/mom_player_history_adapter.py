@@ -138,6 +138,10 @@ def _prepare_inputs(
     )
     p["minutes"] = p["minutes"].combine_first(p["_flat_minutes"])
     p["rating"] = p["rating"].combine_first(p["_flat_rating"])
+    for column in ("goals_total", "goals_assists", "shots_total", "passes_key"):
+        p[column] = _numeric(p, column).combine_first(
+            _numeric(p, f"_flat_{column}")
+        )
     p["position"] = p["position"].astype("string")
     p["is_starter"] = p["is_starter"].astype("boolean")
 
