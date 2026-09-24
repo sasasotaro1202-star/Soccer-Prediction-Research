@@ -30,8 +30,9 @@ DEFAULT_MAX_EVENT_DELTA_HOURS = 6.0
 
 
 def _norm_team(value: Any) -> str:
-    text = unicodedata.normalize("NFKD", str(value or ""))
-    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    # NFKC preserves Japanese dakuten/handakuten while still normalizing
+    # compatibility forms. Character identity must remain conservative.
+    text = unicodedata.normalize("NFKC", str(value or ""))
     text = text.casefold()
     # Keep non-Latin scripts intact. Do not use fuzzy similarity here: a wrong
     # event label is worse than a missing label.
