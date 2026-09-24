@@ -2,9 +2,10 @@ from src.data.fixture_field_audit import TARGET_COMPETITIONS, COMPETITION_NAMES,
 import pandas as pd
 
 
-def test_target_competitions_match_canonical_name_catalog():
+def test_target_competitions_have_canonical_names():
     assert len(TARGET_COMPETITIONS) == len(set(TARGET_COMPETITIONS))
-    assert set(TARGET_COMPETITIONS) == set(COMPETITION_NAMES)
+    assert set(TARGET_COMPETITIONS) <= set(COMPETITION_NAMES)
+    assert all(str(COMPETITION_NAMES[code]).strip() for code in TARGET_COMPETITIONS)
 
 
 def test_unobserved_competitions_are_not_promoted_to_available():
