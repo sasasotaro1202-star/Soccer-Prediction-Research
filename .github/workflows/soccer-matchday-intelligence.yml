@@ -54,8 +54,8 @@ jobs:
       - name: Refresh current matchday intelligence
         env:
           PYTHONPATH: .
-          DAYS: \${{ inputs.days || '2' }}
-          HORIZON_HOURS: \${{ inputs.horizon_hours || '12' }}
+          DAYS: ${{ inputs.days || '2' }}
+          HORIZON_HOURS: ${{ inputs.horizon_hours || '12' }}
         run: |
           set -euo pipefail
           python -m src.data.matchday_intelligence_fetch \
@@ -113,6 +113,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: soccer-matchday-intelligence-\${{ github.run_id }}
+          name: soccer-matchday-intelligence-${{ github.run_id }}
           path: artifacts/future_matchday_fixtures.csv,artifacts/matchday_intelligence_status.json,artifacts/future_fixtures.csv,artifacts/predictions.csv,artifacts/prediction_status.json
           retention-days: 2
