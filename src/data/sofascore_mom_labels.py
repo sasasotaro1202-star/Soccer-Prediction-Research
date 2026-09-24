@@ -35,7 +35,7 @@ def _norm_team(value: Any) -> str:
     text = text.casefold()
     # Keep non-Latin scripts intact. Do not use fuzzy similarity here: a wrong
     # event label is worse than a missing label.
-    return re.sub(r"[\\W_]+", "", text, flags=re.UNICODE)
+    return re.sub(r"[\W_]+", "", text, flags=re.UNICODE)
 
 
 def _parse_json(body: bytes) -> dict[str, Any]:
@@ -138,7 +138,7 @@ def fetch_mom_label(
         "retrieved_at_utc": response.metadata.retrieved_at,
         "source_content_sha256": hashlib.sha256(response.body).hexdigest(),
         "source": "sofascore_best_players_summary",
-        "cache_hit": bool(response.metadata.cache_hit),
+        "cache_hit": bool(getattr(response.metadata, "cache_hit", False)),
     }
 
 
@@ -353,9 +353,17 @@ def collect_sofascore_mom_labels(
     )
 
     event_index: list[dict[str, Any]] = []
+    seen_event_ids: set[str] = set()
     for date_utc in dates:
         events, retrieved_at = fetch_scheduled_events_for_date(date_utc, fetcher=fetcher)
         for event in events:
+            event_id = str(event.get("id") or "").strip()
+            # Scheduled-events endpoints can overlap adjacent-date windows. Deduplicate
+            # by provider event identity so one real fixture cannot become ambiguous.
+            if event_id and event_id in seen_event_ids:
+                continue
+            if event_id:
+                seen_event_ids.add(event_id)
             event_index.append({
                 "event": event,
                 "scheduled_retrieved_at_utc": retrieved_at,
