@@ -12,6 +12,7 @@ import pandas as pd
 from src.prediction.model_bundle import load_bundle, predict_bundle
 from src.prediction.active_model import resolve_active_production_paths, resolve_best_available_paths
 from src.prediction.secondary_outputs import predict_mom_candidates, predict_score_candidates, predict_score_markets
+from src.prediction.matchday_intelligence import apply_matchday_intelligence
 
 
 REQUIRED_FIXTURE_COLUMNS = {
@@ -283,6 +284,11 @@ def run(
         raise RuntimeError(f"Production prediction returned unexpected probability shape: {probs.shape}")
     if not np.isfinite(probs).all() or not np.allclose(probs.sum(axis=1), 1.0, atol=1e-6):
         raise RuntimeError("Production prediction produced invalid probabilities")
+    probs, matchday_diagnostics = apply_matchday_intelligence(probs, eligible, now)
+    if probs.shape != (len(eligible), 3) or not np.isfinite(probs).all():
+        raise RuntimeError("Matchday intelligence produced invalid probabilities")
+    if not np.allclose(probs.sum(axis=1), 1.0, atol=1e-6):
+        raise RuntimeError("Matchday intelligence produced non-normalized probabilities")
     result = eligible[["match_id", "kickoff_utc", "home_team", "away_team"]].copy()
     result["p_home"] = probs[:, 0]
     result["p_draw"] = probs[:, 1]
@@ -300,6 +306,13 @@ def run(
     result["abstain"] = result["low_confidence"]
     result["prediction_set"] = np.where(result["low_confidence"], "LOW_CONFIDENCE", "STANDARD")
     result["prediction_time_utc"] = now.isoformat()
+    result["matchday_status"] = matchday_diagnostics["status"].astype(str).to_numpy()
+    result["matchday_applied"] = matchday_diagnostics["applied"].astype(bool).to_numpy()
+    result["matchday_freshness"] = pd.to_numeric(matchday_diagnostics["freshness"], errors="coerce").to_numpy()
+    result["matchday_signal_count"] = pd.to_numeric(matchday_diagnostics["signal_count"], errors="coerce").fillna(0).astype(int).to_numpy()
+    result["matchday_adjustment_l1"] = pd.to_numeric(matchday_diagnostics["adjustment_l1"], errors="coerce").fillna(0.0).to_numpy()
+    result["matchday_source"] = matchday_diagnostics["source"].astype(str).to_numpy()
+    result["matchday_signals"] = matchday_diagnostics["signal_names"].astype(str).to_numpy()
     # Legacy schema-1 bundles remain valid for historical 1X2 tests only. Production secondary outputs require schema 2.
     if bundle.get("schema_version", 1) >= 2:
         if "score_model" not in bundle:

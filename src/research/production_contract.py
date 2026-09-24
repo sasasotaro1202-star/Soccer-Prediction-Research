@@ -211,6 +211,20 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
                     failures.append("production_model_json_routing_policy_missing")
                 if not isinstance(registry_routing, dict):
                     failures.append("model_registry_routing_policy_missing")
+                for route_name, route_payload in (
+                    ("bundle", bundle_routing.get("dynamic_routing") if isinstance(bundle_routing, dict) else None),
+                    ("model_json", json_routing.get("dynamic_routing") if isinstance(json_routing, dict) else None),
+                    ("registry", registry_routing.get("dynamic_routing") if isinstance(registry_routing, dict) else None),
+                ):
+                    if not isinstance(route_payload, dict):
+                        failures.append(f"production_{route_name}_dynamic_routing_missing")
+                    else:
+                        if route_payload.get("schema_version") != 1 or route_payload.get("type") != "drift_uncertainty_router":
+                            failures.append(f"production_{route_name}_dynamic_routing_schema")
+                        if route_payload.get("enabled") is not True:
+                            failures.append(f"production_{route_name}_dynamic_routing_disabled")
+                        if not isinstance(route_payload.get("reference"), dict):
+                            failures.append(f"production_{route_name}_dynamic_routing_reference_missing")
                 if isinstance(bundle_routing, dict) and isinstance(json_routing, dict):
                     if _canonical_hash(bundle_routing) != _canonical_hash(json_routing):
                         failures.append("production_routing_metadata_mismatch")

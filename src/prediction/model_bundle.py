@@ -9,6 +9,7 @@ import pandas as pd
 
 from src.evaluation.walk_forward import _apply_contextual_temperatures, _routed_ensemble_proba
 from src.models.baselines import candidates
+from src.monitoring.dynamic_routing import build_drift_reference
 from src.models.dixon_coles import fit_dixon_coles_model
 from src.models.negative_binomial import fit_negative_binomial_score_model
 from src.prediction.secondary_outputs import fit_neutral_aware_score_rate_model, fit_recency_score_rate_model, fit_score_rate_model, fit_time_decay_score_rate_model
@@ -140,7 +141,34 @@ def train_and_save_bundle(
             score_model = fit_score_rate_model(d)
 
     routing_policy = None
-    if context_weights or contextual_temperatures:
+    raw_dynamic_routing = selection.get("dynamic_routing") or {}
+    if not isinstance(raw_dynamic_routing, dict):
+        raise ValueError("Locked selection dynamic_routing must be an object")
+    dynamic_routing = None
+    if raw_dynamic_routing:
+        if raw_dynamic_routing.get("schema_version") != 1 or raw_dynamic_routing.get("type") != "drift_uncertainty_router":
+            raise ValueError("Locked dynamic_routing schema/type is invalid")
+        drift_strength = float(raw_dynamic_routing.get("drift_strength", 0.85))
+        uncertainty_strength = float(raw_dynamic_routing.get("uncertainty_strength", 0.75))
+        min_specialist_trust = float(raw_dynamic_routing.get("min_specialist_trust", 0.25))
+        if not np.isfinite(drift_strength) or not 0.0 <= drift_strength <= 3.0:
+            raise ValueError("Invalid dynamic drift_strength")
+        if not np.isfinite(uncertainty_strength) or not 0.0 <= uncertainty_strength <= 3.0:
+            raise ValueError("Invalid dynamic uncertainty_strength")
+        if not np.isfinite(min_specialist_trust) or not 0.05 <= min_specialist_trust <= 0.95:
+            raise ValueError("Invalid dynamic min_specialist_trust")
+        dynamic_routing = {
+            "schema_version": 1,
+            "type": "drift_uncertainty_router",
+            "enabled": bool(raw_dynamic_routing.get("enabled", True)),
+            "drift_strength": drift_strength,
+            "uncertainty_strength": uncertainty_strength,
+            "min_specialist_trust": min_specialist_trust,
+            "feature_cols": list(feature_cols),
+            "reference": build_drift_reference(d, feature_cols),
+            "reference_scope": "final_pit_verified_training_data_only",
+        }
+    if context_weights or contextual_temperatures or dynamic_routing:
         routing_policy = {
             "schema_version": 1,
             "type": "hierarchical_validation_context",
@@ -151,6 +179,7 @@ def train_and_save_bundle(
             "contextual_temperature_reasons": {
                 str(k): str(v) for k, v in raw_context_temperature_reasons.items()
             },
+            **({"dynamic_routing": dynamic_routing} if dynamic_routing is not None else {}),
         }
 
     bundle = {
@@ -254,6 +283,29 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
             value = float(value)
             if not np.isfinite(value) or not 0.70 <= value <= 1.60:
                 raise RuntimeError(f"Production contextual temperature is invalid for {route_key!r}")
+        dynamic = routing.get("dynamic_routing")
+        if dynamic is not None:
+            if not isinstance(dynamic, dict):
+                raise RuntimeError("Production dynamic_routing is invalid")
+            if dynamic.get("schema_version") != 1 or dynamic.get("type") != "drift_uncertainty_router":
+                raise RuntimeError("Production dynamic_routing schema/type is invalid")
+            if dynamic.get("enabled") is not True:
+                raise RuntimeError("Production dynamic_routing must be enabled for schema 3")
+            try:
+                drift_strength = float(dynamic.get("drift_strength"))
+                uncertainty_strength = float(dynamic.get("uncertainty_strength"))
+                min_trust = float(dynamic.get("min_specialist_trust"))
+            except (TypeError, ValueError):
+                raise RuntimeError("Production dynamic_routing parameters are invalid")
+            if not np.isfinite(drift_strength) or not 0.0 <= drift_strength <= 3.0:
+                raise RuntimeError("Production dynamic drift_strength is invalid")
+            if not np.isfinite(uncertainty_strength) or not 0.0 <= uncertainty_strength <= 3.0:
+                raise RuntimeError("Production dynamic uncertainty_strength is invalid")
+            if not np.isfinite(min_trust) or not 0.05 <= min_trust <= 0.95:
+                raise RuntimeError("Production dynamic min_specialist_trust is invalid")
+            reference = dynamic.get("reference")
+            if not isinstance(reference, dict) or not isinstance(reference.get("features"), dict) or not reference.get("features"):
+                raise RuntimeError("Production dynamic routing reference is missing")
     score_method = str(bundle.get("score_method", "primary"))
     if score_method not in {"primary", "neutral_aware", "recency", "time_decay", "dixon_coles", "negative_binomial"}:
         raise RuntimeError(f"Unsupported production score method: {score_method}")
@@ -310,6 +362,7 @@ def predict_bundle(bundle: dict[str, Any], X: pd.DataFrame) -> np.ndarray:
                 feature_cols,
                 routing.get("context_weights", {}),
                 {str(k): float(v) for k, v in routing.get("fallback_weights", bundle["weights"]).items()},
+                dynamic_policy=routing.get("dynamic_routing"),
             )
             probs = np.clip(probs, 1e-9, 1.0)
             probs /= probs.sum(axis=1, keepdims=True)

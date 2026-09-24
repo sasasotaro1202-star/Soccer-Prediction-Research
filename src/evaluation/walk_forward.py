@@ -8,6 +8,7 @@ from scipy.optimize import minimize, minimize_scalar
 
 from src.evaluation.metrics import classification_metrics
 from src.models.baselines import candidates
+from src.monitoring.dynamic_routing import build_drift_reference, compute_drift_scores, dynamic_route_weights
 
 TARGET_ACCURACY = 0.80
 
@@ -423,6 +424,7 @@ def _routed_ensemble_proba(
     feature_cols: list[str],
     context_weights: dict[str, dict[str, float]],
     fallback: dict[str, float],
+    dynamic_policy: dict | None = None,
 ) -> tuple[np.ndarray, list[str]]:
     """Batch-predict every model once, then apply hierarchical routing row-wise."""
     if frame.empty:
@@ -459,16 +461,36 @@ def _routed_ensemble_proba(
                 routes[i] = f"{level}:{key}"
                 break
 
-    probs = np.zeros((n, 3), dtype=float)
-    for j, name in enumerate(names):
+    model_predictions: dict[str, np.ndarray] = {}
+    for name in names:
         pred = np.asarray(fitted_models[name].predict_proba(routed[feature_cols]), dtype=float)
         if pred.shape != (n, 3) or not np.isfinite(pred).all():
             raise ValueError(f"Model {name!r} produced invalid routed probabilities")
         pred_sum = pred.sum(axis=1, keepdims=True)
         if np.any(pred_sum <= 0):
             raise ValueError(f"Model {name!r} produced a zero probability row")
-        pred = pred / pred_sum
-        probs += weight_matrix[:, [j]] * pred
+        model_predictions[name] = pred / pred_sum
+
+    effective_weights = weight_matrix
+    if isinstance(dynamic_policy, dict) and bool(dynamic_policy.get("enabled", False)):
+        reference = dynamic_policy.get("reference")
+        dynamic_feature_cols = dynamic_policy.get("feature_cols") or feature_cols
+        drift_scores = compute_drift_scores(routed, reference or {}, list(dynamic_feature_cols))
+        fallback_source = dynamic_policy.get("fallback_weights", fallback)
+        fallback_vector = np.asarray([float(fallback_source.get(name, 0.0)) for name in names], dtype=float)
+        effective_weights, _ = dynamic_route_weights(
+            weight_matrix,
+            fallback_vector,
+            model_predictions,
+            drift_scores,
+            drift_strength=float(dynamic_policy.get("drift_strength", 0.85)),
+            uncertainty_strength=float(dynamic_policy.get("uncertainty_strength", 0.75)),
+            min_specialist_trust=float(dynamic_policy.get("min_specialist_trust", 0.25)),
+        )
+
+    probs = np.zeros((n, 3), dtype=float)
+    for j, name in enumerate(names):
+        probs += effective_weights[:, [j]] * model_predictions[name]
 
     row_sum = probs.sum(axis=1, keepdims=True)
     if np.any(row_sum <= 0) or not np.isfinite(row_sum).all():
@@ -522,6 +544,16 @@ def run_walk_forward(
 
         validation_models = {}
         scores = {}
+        dynamic_policy = {
+            "schema_version": 1,
+            "type": "drift_uncertainty_router",
+            "enabled": True,
+            "drift_strength": 0.85,
+            "uncertainty_strength": 0.75,
+            "min_specialist_trust": 0.25,
+            "feature_cols": list(feature_cols),
+            "reference": build_drift_reference(fit, feature_cols),
+        }
         for name, model in candidates(random_state).items():
             validation_models[name] = _fit_predict(model, fit[feature_cols], fit.target.astype(int))
             scores[name] = _validation_score(validation_models[name], val_select, feature_cols)
@@ -581,6 +613,7 @@ def run_walk_forward(
             "temperature_calibration_used": calibration_used,
             "contextual_temperatures": contextual_temperatures,
             "contextual_temperature_reasons": contextual_temperature_reasons,
+            "dynamic_routing": dynamic_policy,
         })
 
         # Refit candidates on all historical data available before this OOS block.
@@ -594,6 +627,7 @@ def run_walk_forward(
             feature_cols,
             context_weights,
             weights,
+            dynamic_policy=dynamic_policy,
         )
         probs = np.clip(probs, 1e-9, 1.0)
         probs /= probs.sum(axis=1, keepdims=True)
