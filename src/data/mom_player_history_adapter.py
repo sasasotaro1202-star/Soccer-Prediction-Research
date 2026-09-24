@@ -248,7 +248,7 @@ def build_mom_feature_rows(
                 assists = _numeric(g, "goals_assists").to_numpy(float)
                 shots = _numeric(g, "shots_total").to_numpy(float)
                 key_passes = _numeric(g, "passes_key").to_numpy(float)
-                per90_den = np.clip(minutes, 1.0, None) / 90.0
+                per90_den = np.clip(minutes, 60.0, None) / 90.0
 
                 valid_rating = np.isfinite(rating)
                 rating_ewm = float(np.average(rating[valid_rating], weights=weights[valid_rating])) if valid_rating.any() else np.nan
@@ -288,8 +288,9 @@ def build_mom_feature_rows(
     if out.empty:
         raise RuntimeError("No PIT-safe MOM candidate rows could be constructed")
 
-    # Missing player-performance fields are never converted to zero. Candidates with
-    # non-finite required aggregates are dropped by the fail-closed filter below.
+    # Use a conservative 60-minute denominator floor for rate features. This avoids
+    # extreme per90 inflation from tiny substitute appearances while preserving PIT.
+
     required = {
         "match_id", "player_id", "kickoff_utc", "feature_available_at_utc",
         "pit_verified", "candidate_history_matches",
