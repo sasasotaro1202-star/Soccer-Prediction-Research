@@ -1,6 +1,11 @@
 name: Soccer Matchday Intelligence Refresh
 
 on:
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: ["Soccer 9H Autonomous Research"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       days:
@@ -23,6 +28,10 @@ concurrency:
 
 jobs:
   refresh:
+    if: >
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
