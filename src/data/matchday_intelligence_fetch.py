@@ -381,14 +381,38 @@ def _sofascore_competition(event: dict[str, Any]) -> str | None:
     # Prefer the canonical uniqueTournament name because qualification-stage
     # events often expose a stage-specific tournament name while the
     # uniqueTournament identifies the parent competition consistently.
+    tournament = event.get("tournament") or {}
     candidates = [
+        # Scheduled-event payloads normally nest the canonical competition
+        # under tournament.uniqueTournament; accept both nested and top-level
+        # forms because public payload variants are not fully uniform.
+        tournament.get("uniqueTournament") or {},
         event.get("uniqueTournament") or {},
-        event.get("tournament") or {},
+        tournament,
     ]
-    for tournament in candidates:
-        name = str(tournament.get("name") or "").strip()
+    for candidate in candidates:
+        name = str(candidate.get("name") or "").strip()
         if name in SOFASCORE_COMPETITIONS:
             return SOFASCORE_COMPETITIONS[name]
+        slug = str(candidate.get("slug") or "").strip().lower()
+        if slug:
+            slug_map = {
+                "premier-league": "EPL",
+                "eredivisie": "ERE",
+                "laliga": "LL",
+                "serie-a": "SA",
+                "bundesliga": "BL1",
+                "ligue-1": "FL1",
+                "j1-league": "J1",
+                "j2-league": "J2",
+                "j3-league": "J3",
+                "uefa-champions-league": "UCL",
+                "uefa-europa-league": "UEL",
+                "uefa-europa-conference-league": "UECL",
+            }
+            mapped = slug_map.get(slug)
+            if mapped:
+                return mapped
     return None
 
 
