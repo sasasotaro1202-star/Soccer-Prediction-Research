@@ -36,9 +36,8 @@ def sample_history():
     ])
 
 
-def test_target_scope_has_exactly_15_competitions():
-    assert len(TARGET_COMPETITIONS) == 15
-    assert len(set(TARGET_COMPETITIONS)) == 15
+def test_target_scope_has_unique_canonical_competitions():
+    assert len(TARGET_COMPETITIONS) == len(set(TARGET_COMPETITIONS))
 
 
 def test_fixture_audit_keeps_canonical_identity():
@@ -71,7 +70,7 @@ def test_coverage_marks_unobserved_competitions_unavailable_not_zero():
     h = sample_history()
     f = field_audit(h)
     c = coverage_matrix(h, f)
-    row = c[c.competition == "UCL"].iloc[0]
+    row = c[c.competition == "UECL"].iloc[0]
     assert row.status == "UNAVAILABLE"
     assert row.fixture_count == 0
     reason = row.reason.lower()

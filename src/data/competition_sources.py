@@ -17,7 +17,7 @@ TARGET_COMPETITIONS = (
     "U23_M", "U18_M",
 )
 
-# Supplemental competitions are deliberately outside the strict 15-competition
+# Supplemental competitions are deliberately outside the strict active target
 # completion gate. They are acquired into a separate auxiliary dataset so they
 # can improve context without silently contaminating the production club model.
 AUXILIARY_COMPETITIONS = (
