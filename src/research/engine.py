@@ -146,6 +146,52 @@ def _model_features(feats: pd.DataFrame) -> list[str]:
     return cols
 
 
+def _load_preflight_pit_features(out: Path, history: pd.DataFrame) -> pd.DataFrame | None:
+    """Load the PIT-replayed feature matrix produced by completion_gate.
+
+    The completion gate enriches historical rows with explicit publication
+    evidence before building pit_replay_features.csv. Re-loading raw history
+    here would discard that evidence and can incorrectly reduce pit_verified to
+    zero. The handoff is validated by exact match identity and outcome
+    availability; no inferred timestamps are introduced.
+    """
+    path = out / "pit_replay_features.csv"
+    if not path.is_file() or path.stat().st_size <= 0:
+        return None
+
+    features = pd.read_csv(path)
+    required_features = {"match_id", "pit_verified", "prediction_cutoff_at_utc", "kickoff_utc"}
+    missing = sorted(required_features - set(features.columns))
+    if missing:
+        raise RuntimeError(
+            f"PIT preflight feature handoff is missing required columns: {missing}"
+        )
+    if features["match_id"].isna().any() or features["match_id"].astype(str).str.strip().eq("").any():
+        raise RuntimeError("PIT preflight feature handoff contains missing/empty match_id values")
+    if features["match_id"].duplicated().any():
+        raise RuntimeError("PIT preflight feature handoff contains duplicate match_id values")
+
+    outcomes = history[["match_id", "home_goals", "away_goals"]].copy()
+    if outcomes["match_id"].isna().any() or outcomes["match_id"].duplicated().any():
+        raise RuntimeError("Historical outcome table has missing/duplicate match_id values")
+
+    merged = features.merge(
+        outcomes,
+        on="match_id",
+        how="left",
+        validate="one_to_one",
+    )
+    if len(merged) != len(features):
+        raise RuntimeError("PIT preflight feature handoff changed row count during outcome join")
+    if merged[["home_goals", "away_goals"]].isna().any().any():
+        missing_outcomes = int(merged[["home_goals", "away_goals"]].isna().any(axis=1).sum())
+        raise RuntimeError(
+            f"PIT preflight feature handoff has {missing_outcomes} rows without historical outcomes"
+        )
+
+    merged["pit_verified"] = merged["pit_verified"].astype(bool)
+    return merged
+
 def _archive_audit_sample(history: pd.DataFrame, out: Path) -> dict:
     if os.getenv("PIT_ENABLE_ARCHIVE_AUDIT", "0") != "1":
         return {"status": "SKIPPED", "reason": "disabled_in_main_research"}
@@ -280,7 +326,15 @@ def run(out_dir: str = "artifacts") -> dict:
     if history.empty:
         report = {"status": "BLOCKED", "reason": "No historical data acquired", "oos_claimed": False, "audit": audit_report}; _write_status(out, report); return report
     archive_audit = _archive_audit_sample(history, out)
-    feats = add_target(build_match_features(history, history), history); feats.to_csv(out / "pit_replay_features.csv", index=False)
+    preflight_feats = _load_preflight_pit_features(out, history)
+    if preflight_feats is not None:
+        feats = preflight_feats
+    else:
+        # Backward-compatible fallback for direct/local engine invocation.
+        # The production workflow normally reaches this branch only when the
+        # preflight artifact is unavailable, in which case PIT remains fail-closed.
+        feats = add_target(build_match_features(history, history), history)
+        feats.to_csv(out / "pit_replay_features.csv", index=False)
     pit_verified = int(feats["pit_verified"].sum()) if "pit_verified" in feats.columns else 0; pit_total = int(len(feats))
     if pit_verified == 0:
         report = {"status": "BLOCKED", "reason": "No match rows have sufficient historical result state under deterministic PIT.", "acquired_rows": int(len(history)), "snapshot_id": snapshot_id(history), "pit_policy": PIT_POLICY, "pit_verified_rows": 0, "pit_verified_rate": 0.0, "archive_audit": archive_audit, "audit": audit_report, "oos_claimed": False}; report["ai_research"] = weakness_advice(report); _write_status(out, report); return report
