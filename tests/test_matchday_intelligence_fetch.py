@@ -200,6 +200,7 @@ def test_matchday_base_row_preserves_unknown_optional_signals():
 
 def test_asian_games_are_not_misrouted_to_argentina():
     assert "AG_M" not in ESPN_LEAGUES
-    assert FOOTBALL_DATA_DIVISIONS.get("ARG") == "AG_M"
+    assert FOOTBALL_DATA_DIVISIONS.get("ARG") == "ARG"
     assert _sofascore_competition({"tournament": {"name": "Asian Games"}}) == "AG_M"
     assert _sofascore_competition({"tournament": {"name": "Asian Games, Women"}}) == "AG_W"
+    assert _sofascore_competition({"tournament": {"name": "Liga Profesional de Fútbol"}}) == "ARG"
