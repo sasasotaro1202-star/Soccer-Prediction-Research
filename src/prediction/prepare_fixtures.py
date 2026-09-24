@@ -37,6 +37,17 @@ def prepare_future_fixtures(
         dupes = f.loc[f["match_id"].duplicated(keep=False), "match_id"].astype(str).unique().tolist()[:10]
         raise RuntimeError(f"Future fixture input contains duplicate match_id values: {dupes}")
 
+    # Empty future snapshots are a valid fail-closed state (for example when
+    # every external source is temporarily unavailable). Do not pass an empty
+    # frame into the feature builder, which may legitimately return no columns.
+    if f.empty:
+        out = f.copy()
+        if output_path:
+            path = Path(output_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            out.to_csv(path, index=False)
+        return out
+
     feature_rows = build_match_features(history, f)
     if feature_rows["match_id"].duplicated().any():
         raise RuntimeError("Feature builder returned duplicate future fixture identities")
