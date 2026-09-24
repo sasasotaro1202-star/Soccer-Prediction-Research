@@ -56,8 +56,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
-      - name: Checkout
+      - name: Checkout exact source commit
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact source commit
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
+          echo "Verified source SHA: $ACTUAL_SHA"
 
       - name: Setup Python
         uses: actions/setup-python@v6
