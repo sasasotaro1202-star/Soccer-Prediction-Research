@@ -274,6 +274,9 @@ def test_football_data_complements_partial_sofascore_coverage(monkeypatch):
         def __init__(self, *args, **kwargs):
             pass
 
+        def get(self, *args, **kwargs):
+            raise RuntimeError("ESPN unavailable")
+
     monkeypatch.setattr(m, "ExternalFetcher", DummyFetcher)
     monkeypatch.setattr(
         m,
@@ -308,11 +311,6 @@ def test_football_data_complements_partial_sofascore_coverage(monkeypatch):
         m,
         "_collect_football_data_fallback",
         lambda *args, **kwargs: ([football_data], [], "2026-09-25T00:02:00Z"),
-    )
-    monkeypatch.setattr(
-        DummyFetcher,
-        "get",
-        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("ESPN unavailable")),
     )
 
     frame, status = m.collect_matchday_snapshots(days=1, horizon_hours=24, max_events=20)
