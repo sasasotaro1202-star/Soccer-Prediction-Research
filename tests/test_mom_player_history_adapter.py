@@ -47,12 +47,19 @@ def _frames():
         {"fixture_id": fid, "known_at": (base + pd.Timedelta(days=3 * (fid - 1))) + pd.Timedelta(minutes=105)}
         for fid in range(1, 6)
     ])
-    return fixtures, players, stats
+    player_stats = players[["fixture_id", "player_id"]].copy()
+    player_stats["games_minutes"] = players["minutes"]
+    player_stats["games_rating"] = players["rating"]
+    player_stats["goals_total"] = players["goals_total"]
+    player_stats["goals_assists"] = players["goals_assists"]
+    player_stats["shots_total"] = players["shots_total"]
+    player_stats["passes_key"] = players["passes_key"]
+    return fixtures, players, player_stats, stats
 
 
 def test_build_mom_features_uses_only_prior_known_player_facts():
-    fixtures, players, stats = _frames()
-    out = build_mom_feature_rows(fixtures, players, stats, min_history_appearances=1, lookback_appearances=5)
+    fixtures, players, player_stats, stats = _frames()
+    out = build_mom_feature_rows(fixtures, players, player_stats, stats, min_history_appearances=1, lookback_appearances=5)
     assert not out.empty
     assert set(MOM_FEATURE_COLUMNS).issubset(out.columns)
     assert (out["feature_available_at_utc"] < out["kickoff_utc"]).all()
@@ -61,11 +68,11 @@ def test_build_mom_features_uses_only_prior_known_player_facts():
 
 
 def test_target_fixture_statistics_do_not_enter_candidate_features():
-    fixtures, players, stats = _frames()
+    fixtures, players, player_stats, stats = _frames()
     target_id = 5
     target_kickoff = fixtures.loc[fixtures["id"] == target_id, "date_utc"].iloc[0]
     players.loc[players["fixture_id"] == target_id, ["rating", "goals_total", "goals_assists", "shots_total", "passes_key"]] = 99
-    out = build_mom_feature_rows(fixtures, players, stats, min_history_appearances=1)
+    out = build_mom_feature_rows(fixtures, players, player_stats, stats, min_history_appearances=1)
     target = out.loc[out["match_id"] == str(target_id)]
     assert not target.empty
     assert (target["feature_available_at_utc"] < target_kickoff).all()
@@ -75,7 +82,7 @@ def test_target_fixture_statistics_do_not_enter_candidate_features():
 
 def test_label_attachment_never_converts_unmatched_target_to_negative():
     fixtures, players, stats = _frames()
-    features = build_mom_feature_rows(fixtures, players, stats, min_history_appearances=1)
+    features = build_mom_feature_rows(fixtures, players, player_stats, stats, min_history_appearances=1)
     labels = pd.DataFrame([{"match_id": "5.0", "player_id": str(features.loc[features["match_id"] == "5.0", "player_id"].iloc[0])}])
     labelled = attach_mom_labels(features, labels)
     assert "is_motm" in labelled.columns
