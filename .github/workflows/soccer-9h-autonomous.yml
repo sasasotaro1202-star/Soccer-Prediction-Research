@@ -416,6 +416,7 @@ jobs:
       - name: Persist validated current production model
         if: >-
           success() &&
+          steps.production_contract.outputs.production_contract_passed == 'true' &&
           steps.latest_main_handoff.outputs.current_main_matches == 'true'
         shell: bash
         env:
