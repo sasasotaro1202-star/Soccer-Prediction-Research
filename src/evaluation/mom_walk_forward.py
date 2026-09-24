@@ -77,9 +77,18 @@ def _validate_history(frame: pd.DataFrame) -> pd.DataFrame:
     if bool((counts != 1).any()):
         raise RuntimeError("MOM WFO requires exactly one positive MOTM label per match")
 
-    values = d[list(MOM_FEATURE_COLUMNS)].apply(pd.to_numeric, errors="coerce")
-    if not np.isfinite(values.to_numpy(dtype=float)).all():
-        raise RuntimeError("MOM WFO feature matrix contains NaN or inf")
+    for column in MOM_FEATURE_COLUMNS:
+        raw = d[column]
+        values = pd.to_numeric(raw, errors="coerce")
+        invalid = raw.notna() & values.isna()
+        if bool(invalid.any()):
+            raise RuntimeError(f"MOM WFO feature column {column!r} contains non-numeric values")
+        if bool(np.isinf(values.to_numpy(dtype=float)).any()):
+            raise RuntimeError(f"MOM WFO feature column {column!r} contains infinite values")
+        d[column] = values
+    # Missing feature values are retained explicitly. The MOM estimator applies
+    # fit-slice-only median imputation plus missingness indicators.
+
 
     return d.sort_values(["kickoff_utc", "match_id", "player_id"], kind="mergesort").reset_index(drop=True)
 
