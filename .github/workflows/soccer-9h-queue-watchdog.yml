@@ -1,8 +1,9 @@
 name: Soccer 9H Queue Watchdog
 
 on:
-  push:
-    branches: [main]
+  # Main pushes are handled by the primary recovery controller. Keeping the
+  # watchdog schedule independent prevents recovery+watchdog push races that
+  # can dispatch duplicate current-main 9H runs.
   workflow_dispatch:
   schedule:
     # Independent 5-minute queue watchdog. This is separate from the recovery
