@@ -39,12 +39,29 @@ def _freshness(age_hours: float) -> float:
     return float(np.clip(math.exp(-max(age_hours, 0.0) / 48.0), 0.25, 1.0))
 
 
+def _value_present(row: pd.Series, name: str) -> bool:
+    if name not in row.index:
+        return False
+    value = row[name]
+    if pd.isna(value):
+        return False
+    return str(value).strip() != ""
+
+
 def _present_group(columns: set[str], names: tuple[str, ...]) -> bool:
     return any(name in columns for name in names)
 
 
+def _present_group_row(row: pd.Series, names: tuple[str, ...]) -> bool:
+    return any(_value_present(row, name) for name in names)
+
+
+def _frame_has_group(frame: pd.DataFrame, names: tuple[str, ...]) -> bool:
+    return any(name in frame.columns and frame[name].notna().any() for name in names)
+
+
 def _validate_group(row: pd.Series, names: tuple[str, ...], group: str) -> np.ndarray:
-    present = [name in row.index for name in names]
+    present = [_value_present(row, name) for name in names]
     if any(present) and not all(present):
         raise ValueError(f"{group} signal is partially specified")
     values = []
@@ -97,7 +114,7 @@ def apply_matchday_intelligence(
     base = np.clip(base, 1e-9, 1.0)
     base /= base.sum(axis=1, keepdims=True)
     columns = set(fixtures.columns)
-    signal_present = any(_present_group(columns, names) for names in _SIGNAL_GROUPS.values())
+    signal_present = any(_frame_has_group(fixtures, names) for names in _SIGNAL_GROUPS.values())
     if not signal_present:
         return base.copy(), pd.DataFrame([_diagnostic("ABSENT") for _ in range(len(fixtures))])
     missing_meta = [name for name in _REQUIRED_META if name not in columns]
@@ -113,6 +130,9 @@ def apply_matchday_intelligence(
     diagnostics = []
     for i, (_, row) in enumerate(fixtures.iterrows()):
         try:
+            if not any(_present_group_row(row, names) for names in _SIGNAL_GROUPS.values()):
+                diagnostics.append(_diagnostic("ABSENT"))
+                continue
             if not _parse_bool(row["matchday_pit_verified"]):
                 raise PermissionError("matchday PIT verification is false")
             source = str(row["matchday_source"]).strip()
@@ -148,7 +168,7 @@ def apply_matchday_intelligence(
             signal_names = []
             signal_count = 0
             for group, names in _SIGNAL_GROUPS.items():
-                if not _present_group(columns, names):
+                if not _present_group_row(row, names):
                     continue
                 values = _validate_group(row, names, group)
                 if group == "injury":
@@ -180,13 +200,13 @@ def apply_matchday_intelligence(
             state_prob = _softmax(logits + freshness * np.array([delta / 2.0, 0.0, -delta / 2.0]))
             state_weight = 0.20 * freshness * signal_confidence
             adjusted = (1.0 - state_weight) * outputs[i] + state_weight * state_prob
-            if _present_group(columns, _SIGNAL_GROUPS["market"]):
+            if _present_group_row(row, _SIGNAL_GROUPS["market"]):
                 market = _validate_group(row, _SIGNAL_GROUPS["market"], "market")
                 market_weight = 0.15 * freshness * signal_confidence
                 adjusted = (1.0 - market_weight) * adjusted + market_weight * market
                 signal_names.append("market")
                 signal_count += 3
-            elif _present_group(columns, _SIGNAL_GROUPS["market_odds"]):
+            elif _present_group_row(row, _SIGNAL_GROUPS["market_odds"]):
                 odds = _validate_group(row, _SIGNAL_GROUPS["market_odds"], "market_odds")
                 market = 1.0 / np.clip(odds, 1.000001, None)
                 market /= market.sum()

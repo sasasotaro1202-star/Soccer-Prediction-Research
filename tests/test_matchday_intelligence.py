@@ -112,3 +112,23 @@ def test_signal_confidence_scales_matchday_adjustment():
     high_out, _ = apply_matchday_intelligence(base, high, now)
     low_out, _ = apply_matchday_intelligence(base, low, now)
     assert np.abs(high_out - base).sum() > np.abs(low_out - base).sum()
+
+
+def test_nan_optional_groups_do_not_block_other_matchday_signals():
+    fixtures = _fixtures(
+        matchday_injury_impact_home=0.8,
+        matchday_injury_impact_away=0.2,
+        matchday_rest_diff_hours=np.nan,
+        matchday_market_p_home=np.nan,
+        matchday_market_p_draw=np.nan,
+        matchday_market_p_away=np.nan,
+        matchday_odds_home=np.nan,
+        matchday_odds_draw=np.nan,
+        matchday_odds_away=np.nan,
+    )
+    base = np.asarray([[0.55, 0.25, 0.20]])
+    out, diag = apply_matchday_intelligence(
+        base, fixtures, pd.Timestamp("2026-09-25T09:00:00Z")
+    )
+    assert diag.loc[0, "status"] == "APPLIED"
+    assert "injury" in diag.loc[0, "signal_names"]
