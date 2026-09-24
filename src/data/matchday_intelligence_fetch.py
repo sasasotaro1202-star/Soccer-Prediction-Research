@@ -27,7 +27,6 @@ ESPN_LEAGUES: dict[str, str] = {
     "J3": "jpn.3",
     "UCL": "uefa.champions",
     "UEL": "uefa.europa",
-    "AG_M": "arg.1",
     "MLS": "usa.1",
 }
 
@@ -81,12 +80,19 @@ SOFASCORE_COMPETITIONS: dict[str, str] = {
     "International Friendly": "FRIENDLY",
     "International Friendlies": "FRIENDLY",
     "International Friendly Games": "FRIENDLY",
+    "International Friendlies Women": "INTL_W",
+    "International Friendly Games Women": "INTL_W",
     "Club Friendly": "FRIENDLY",
+    "Asian Games": "AG_M",
+    "Asian Games, Men": "AG_M",
+    "Asian Games Men": "AG_M",
+    "Asian Games, Women": "AG_W",
+    "Asian Games Women": "AG_W",
     "Club Friendly Games": "FRIENDLY",
     "Friendlies": "FRIENDLY",
     "Major League Soccer": "MLS",
-    "Liga Profesional de Fútbol": "AG_M",
-    "Liga Profesional": "AG_M",
+    "Liga Profesional de Fútbol": "ARG",
+    "Liga Profesional": "ARG",
 }
 
 FOOTBALL_DATA_DIVISIONS: dict[str, str] = {
@@ -99,7 +105,7 @@ FOOTBALL_DATA_DIVISIONS: dict[str, str] = {
     "J1": "J1",
     "J2": "J2",
     "USA": "MLS",
-    "ARG": "AG_M",
+    "ARG": "ARG",
 }
 FOOTBALL_DATA_TZ: dict[str, str] = {
     "EPL": "Europe/London",
@@ -111,7 +117,7 @@ FOOTBALL_DATA_TZ: dict[str, str] = {
     "J1": "Asia/Tokyo",
     "J2": "Asia/Tokyo",
     "MLS": "America/New_York",
-    "AG_M": "America/Argentina/Buenos_Aires",
+    "ARG": "America/Argentina/Buenos_Aires",
 }
 
 
@@ -354,7 +360,7 @@ def _matchday_base_row(
         "matchday_lineup_impact_away": np.nan,
         "matchday_weather_penalty_home": np.nan,
         "matchday_weather_penalty_away": np.nan,
-        "matchday_rest_diff_hours": np.nan
+        "matchday_rest_diff_hours": np.nan,
         "matchday_market_p_home": np.nan,
         "matchday_market_p_draw": np.nan,
         "matchday_market_p_away": np.nan,
