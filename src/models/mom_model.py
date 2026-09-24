@@ -284,6 +284,10 @@ def predict_mom_distribution(
     if "is_motm" in d.columns:
         raise ValueError("MOM prediction input must not contain future outcome labels")
 
+    # Group-local probability arrays use positional indices. Resetting here prevents
+    # a sliced OOS frame's original labels from becoming out-of-bounds NumPy indices.
+    d = d.reset_index(drop=True)
+
     model = model_bundle["model"]
     temperature = float((model_bundle.get("metadata") or {}).get("temperature", 1.0))
     if not np.isfinite(temperature) or temperature <= 0:
@@ -295,8 +299,10 @@ def predict_mom_distribution(
             pt = pt.tz_localize("UTC")
         else:
             pt = pt.tz_convert("UTC")
+        if bool((d["feature_available_at_utc"] >= d["kickoff_utc"]).any()):
+            raise RuntimeError("MOM prediction PIT violation: feature unavailable at or after kickoff")
         if bool((d["feature_available_at_utc"] > pt).any()):
-            raise RuntimeError("MOM prediction contains a feature unavailable at prediction_time")
+            raise RuntimeError("MOM prediction feature unavailable at prediction_time")
         if bool((d["kickoff_utc"] <= pt).any()):
             raise RuntimeError("MOM prediction contains a fixture that is not in the future")
 
