@@ -70,14 +70,14 @@ def _load_frames(start: str, end: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.D
                 f.goals_away,
                 f.is_played,
                 ht.name AS home_team,
-                at.name AS away_team
+                away_team_ref.name AS away_team
             FROM read_parquet('{urls["fixtures"]}') f
             JOIN read_parquet('{dataset_base}/leagues.parquet') l
               ON f.league_id = l.id
             JOIN read_parquet('{dataset_base}/teams.parquet') ht
               ON f.home_team_id = ht.id
-            JOIN read_parquet('{dataset_base}/teams.parquet') at
-              ON f.away_team_id = at.id
+            JOIN read_parquet('{dataset_base}/teams.parquet') away_team_ref
+              ON f.away_team_id = away_team_ref.id
             WHERE l.id = 39
               AND f.is_played = TRUE
               AND CAST(f.date_utc AS TIMESTAMP) >= TIMESTAMP '{start}'
