@@ -196,3 +196,36 @@ def test_request_delay_rejects_non_finite_value():
             season_id=100,
             request_delay_seconds=float("inf"),
         )
+
+
+def test_select_season_id_requires_unique_match():
+    from src.data.sofascore_mom_labels import select_season_id
+    assert select_season_id([{"id": 2024, "name": "2024/25"}], 2024) == 2024
+    with pytest.raises(RuntimeError, match="ambiguous"):
+        select_season_id([{"id": 1, "name": "2024"}, {"id": 2, "name": "2024/25"}], 2024)
+
+
+def test_fetch_season_events_stops_after_empty_page(monkeypatch):
+    import src.data.sofascore_mom_labels as m
+
+    class Response:
+        def __init__(self, payload):
+            self.body = json.dumps(payload).encode()
+            self.metadata = type("Meta", (), {"retrieved_at": "2026-09-25T13:00:00Z", "cache_hit": False})()
+
+    class FakeFetcher:
+        def __init__(self):
+            self.calls = []
+        def get(self, source, url, **kwargs):
+            self.calls.append(url)
+            page = int(url.rsplit("/", 1)[-1])
+            payload = {"events": []} if page >= 2 else {"events": [{"id": page + 1}]}
+            return Response(payload)
+
+    fetcher = FakeFetcher()
+    events, retrieved = m.fetch_tournament_season_events(
+        17, 100, fetcher=fetcher, max_pages=10
+    )
+    assert [x["id"] for x in events] == [1, 2]
+    assert len(fetcher.calls) == 3
+    assert retrieved == "2026-09-25T13:00:00Z"
