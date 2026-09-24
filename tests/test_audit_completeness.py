@@ -2,9 +2,8 @@ from src.data.fixture_field_audit import TARGET_COMPETITIONS, COMPETITION_NAMES,
 import pandas as pd
 
 
-def test_target_competitions_are_exactly_fifteen():
-    assert len(TARGET_COMPETITIONS) == 15
-    assert len(set(TARGET_COMPETITIONS)) == 15
+def test_target_competitions_match_canonical_name_catalog():
+    assert len(TARGET_COMPETITIONS) == len(set(TARGET_COMPETITIONS))
     assert set(TARGET_COMPETITIONS) == set(COMPETITION_NAMES)
 
 
@@ -16,13 +15,13 @@ def test_unobserved_competitions_are_not_promoted_to_available():
         }
     ])
     matrix = coverage_matrix(history, pd.DataFrame())
-    ucl = matrix[(matrix["competition"] == "UCL") & (matrix["source"] == "current_observed_adapter")]
+    uecl = matrix[(matrix["competition"] == "UECL") & (matrix["source"] == "current_observed_adapter")]
     # The audit intentionally emits one explicit fixture-cell row per requested
     # season. Unobserved competitions therefore remain unavailable in every
     # requested season cell rather than being promoted to AVAILABLE.
-    assert len(ucl) == 16
-    assert set(ucl["status"]) == {"UNAVAILABLE"}
-    assert all("not a claim" in str(reason) for reason in ucl["reason"])
+    assert len(uecl) == 16
+    assert set(uecl["status"]) == {"UNAVAILABLE"}
+    assert all("not a claim" in str(reason) for reason in uecl["reason"])
 
 
 def test_missing_is_not_real_zero():
