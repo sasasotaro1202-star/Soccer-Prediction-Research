@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from datetime import datetime, timezone
+from io import BytesIO
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +33,51 @@ ESPN_LEAGUES: dict[str, str] = {
 
 DETAILED_HORIZON_HOURS = 12.0
 MAX_EVENTS = 80
+SOFASCORE_LINEUP_ENRICH_LIMIT = 16
+FOOTBALL_DATA_FIXTURES_URL = "https://www.football-data.co.uk/fixtures.csv"
+
+SOFASCORE_COMPETITIONS: dict[str, str] = {
+    "Premier League": "EPL",
+    "Eredivisie": "ERE",
+    "LaLiga": "LL",
+    "La Liga": "LL",
+    "Serie A": "SA",
+    "Bundesliga": "BL1",
+    "Ligue 1": "FL1",
+    "J1 League": "J1",
+    "J2 League": "J2",
+    "J3 League": "J3",
+    "UEFA Champions League": "UCL",
+    "UEFA Europa League": "UEL",
+    "Major League Soccer": "MLS",
+    "Liga Profesional de Fútbol": "AG_M",
+    "Liga Profesional": "AG_M",
+}
+
+FOOTBALL_DATA_DIVISIONS: dict[str, str] = {
+    "E0": "EPL",
+    "N1": "ERE",
+    "SP1": "LL",
+    "I1": "SA",
+    "D1": "BL1",
+    "F1": "FL1",
+    "J1": "J1",
+    "J2": "J2",
+    "USA": "MLS",
+    "ARG": "AG_M",
+}
+FOOTBALL_DATA_TZ: dict[str, str] = {
+    "EPL": "Europe/London",
+    "ERE": "Europe/Amsterdam",
+    "LL": "Europe/Madrid",
+    "SA": "Europe/Rome",
+    "BL1": "Europe/Berlin",
+    "FL1": "Europe/Paris",
+    "J1": "Asia/Tokyo",
+    "J2": "Asia/Tokyo",
+    "MLS": "America/New_York",
+    "AG_M": "America/Argentina/Buenos_Aires",
+}
 
 
 def _now() -> datetime:
@@ -65,6 +113,26 @@ def _devig(odds: tuple[float, float, float]) -> tuple[float, float, float]:
         raise ValueError("invalid market odds")
     inv /= total
     return tuple(float(v) for v in inv)
+
+
+def _get_csv(
+    fetcher: ExternalFetcher,
+    source: str,
+    url: str,
+) -> tuple[pd.DataFrame, str]:
+    response = fetcher.get(
+        source,
+        url,
+        headers={"User-Agent": "Soccer-Prediction-Research/1.0"},
+        cache_ttl_seconds=900.0,
+    )
+    try:
+        frame = pd.read_csv(BytesIO(response.body), encoding="utf-8", encoding_errors="replace")
+    except UnicodeDecodeError:
+        frame = pd.read_csv(BytesIO(response.body), encoding="cp1252", encoding_errors="replace")
+    except Exception as exc:
+        raise RuntimeError(f"{source}: invalid CSV") from exc
+    return frame, response.metadata.retrieved_at
 
 
 def _get_json(
@@ -195,6 +263,234 @@ def parse_weather_severity(
     return float(np.clip(severity, 0.0, 1.0)), temp
 
 
+def _matchday_base_row(
+    *,
+    match_id: str,
+    kickoff: pd.Timestamp,
+    home_team: str,
+    away_team: str,
+    competition: str,
+    source: str,
+    available_at: str,
+    home_team_id: str = "",
+    away_team_id: str = "",
+    venue_name: str = "",
+    venue_city: str = "",
+    venue_country: str = "",
+    venue_lat: float | None = None,
+    venue_lon: float | None = None,
+) -> dict[str, Any]:
+    return {
+        "match_id": match_id,
+        "kickoff_utc": kickoff.isoformat(),
+        "home_team": home_team,
+        "away_team": away_team,
+        "competition": competition,
+        "home_team_id": home_team_id,
+        "away_team_id": away_team_id,
+        "venue_name": venue_name,
+        "venue_city": venue_city,
+        "venue_country": venue_country,
+        "venue_lat": venue_lat,
+        "venue_lon": venue_lon,
+        "source_available_at_utc": available_at,
+        "pit_verified": True,
+        "starter_status": "EXPECTED",
+        "matchday_available_at_utc": available_at,
+        "matchday_pit_verified": True,
+        "matchday_source": source,
+        "matchday_signal_confidence": 0.30,
+        "matchday_injury_impact_home": 0.0,
+        "matchday_injury_impact_away": 0.0,
+        "matchday_lineup_impact_home": 0.0,
+        "matchday_lineup_impact_away": 0.0,
+        "matchday_weather_penalty_home": 0.0,
+        "matchday_weather_penalty_away": 0.0,
+        "matchday_rest_diff_hours": np.nan,
+        "matchday_market_p_home": np.nan,
+        "matchday_market_p_draw": np.nan,
+        "matchday_market_p_away": np.nan,
+        "matchday_odds_home": np.nan,
+        "matchday_odds_draw": np.nan,
+        "matchday_odds_away": np.nan,
+        "matchday_market_provider": "",
+        "matchday_weather_severity": np.nan,
+    }
+
+
+def _sofascore_competition(event: dict[str, Any]) -> str | None:
+    tournament = event.get("tournament") or event.get("uniqueTournament") or {}
+    name = str(tournament.get("name") or "").strip()
+    return SOFASCORE_COMPETITIONS.get(name)
+
+
+def parse_sofascore_event(event: dict[str, Any]) -> dict[str, Any] | None:
+    competition = _sofascore_competition(event)
+    if competition is None:
+        return None
+    event_id = event.get("id")
+    try:
+        kickoff = pd.Timestamp(datetime.fromtimestamp(int(event["startTimestamp"]), tz=timezone.utc))
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+    home = event.get("homeTeam") or {}
+    away = event.get("awayTeam") or {}
+    home_name = str(home.get("name") or home.get("shortName") or "").strip()
+    away_name = str(away.get("name") or away.get("shortName") or "").strip()
+    if event_id is None or not home_name or not away_name:
+        return None
+    venue = event.get("venue") or {}
+    country = venue.get("country") or {}
+    coords = event.get("venueCoordinates") or venue.get("coordinates") or {}
+    canonical = f"sofascore|{event_id}|{competition}|{home_name}|{away_name}"
+    match_id = "sofa:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:20]
+    return {
+        "match_id": match_id,
+        "sofascore_event_id": str(event_id),
+        "home_team_id": str(home.get("id") or ""),
+        "away_team_id": str(away.get("id") or ""),
+        "kickoff_utc": kickoff.isoformat(),
+        "home_team": home_name,
+        "away_team": away_name,
+        "competition": competition,
+        "venue_name": str(venue.get("name") or "").strip(),
+        "venue_city": str(venue.get("city") or "").strip(),
+        "venue_country": str(country.get("name") or "").strip(),
+        "venue_lat": _number(coords.get("latitude")),
+        "venue_lon": _number(coords.get("longitude")),
+    }
+
+
+def parse_football_data_fixtures(
+    frame: pd.DataFrame,
+    *,
+    now: pd.Timestamp,
+    horizon_hours: float,
+    available_at: str,
+    max_events: int,
+) -> list[dict[str, Any]]:
+    required = {"Div", "Date", "Time", "HomeTeam", "AwayTeam"}
+    if not required.issubset(frame.columns):
+        missing = sorted(required - set(frame.columns))
+        raise RuntimeError(f"football-data fixtures missing columns: {missing}")
+    rows: list[dict[str, Any]] = []
+    upper = now + pd.Timedelta(hours=float(horizon_hours))
+    temp = frame.copy()
+    temp["Div"] = temp["Div"].astype("string").str.strip()
+    temp = temp[temp["Div"].isin(FOOTBALL_DATA_DIVISIONS)]
+    for _, raw in temp.iterrows():
+        div = str(raw["Div"]).strip()
+        competition = FOOTBALL_DATA_DIVISIONS[div]
+        tz_name = FOOTBALL_DATA_TZ.get(competition)
+        if tz_name is None:
+            continue
+        date_text = str(raw.get("Date", "")).strip()
+        time_text = str(raw.get("Time", "")).strip()
+        if not date_text or not time_text or date_text == "nan" or time_text == "nan":
+            continue
+        naive = pd.to_datetime(f"{date_text} {time_text}", dayfirst=True, errors="coerce")
+        if pd.isna(naive):
+            continue
+        kickoff = pd.Timestamp(naive).tz_localize(
+            ZoneInfo(tz_name), ambiguous="NaT", nonexistent="NaT"
+        ).tz_convert("UTC")
+        if pd.isna(kickoff) or kickoff <= now or kickoff > upper:
+            continue
+        home = str(raw.get("HomeTeam", "")).strip()
+        away = str(raw.get("AwayTeam", "")).strip()
+        if not home or not away or home == "nan" or away == "nan":
+            continue
+        canonical = f"football-data|{div}|{kickoff.isoformat()}|{home}|{away}"
+        match_id = "fdx:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:20]
+        row = _matchday_base_row(
+            match_id=match_id,
+            kickoff=kickoff,
+            home_team=home,
+            away_team=away,
+            competition=competition,
+            source="football-data.co.uk",
+            available_at=available_at,
+        )
+        odds_candidates = [
+            ("AvgH", "AvgD", "AvgA", "football-data:average"),
+            ("B365H", "B365D", "B365A", "football-data:b365"),
+            ("PSH", "PSD", "PSA", "football-data:ps"),
+        ]
+        for hcol, dcol, acol, provider in odds_candidates:
+            values = [_number(raw.get(c)) for c in (hcol, dcol, acol)]
+            if all(v is not None and v > 1.0 for v in values):
+                odds = tuple(float(v) for v in values)
+                probs = _devig(odds)
+                row["matchday_odds_home"], row["matchday_odds_draw"], row["matchday_odds_away"] = odds
+                row["matchday_market_p_home"], row["matchday_market_p_draw"], row["matchday_market_p_away"] = probs
+                row["matchday_market_provider"] = provider
+                row["matchday_signal_confidence"] = 0.55
+                break
+        rows.append(row)
+        if len(rows) >= int(max_events):
+            break
+    return rows
+
+
+def _sofascore_missing_impact(items: list[dict[str, Any]] | None) -> tuple[float, int]:
+    total = 0.0
+    severe = 0
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        reason = str(item.get("reason") or item.get("status") or "").strip().lower()
+        if "injur" in reason:
+            weight = 1.0
+        elif "suspend" in reason:
+            weight = 0.85
+        elif "ill" in reason or "sick" in reason:
+            weight = 0.60
+        else:
+            weight = 0.35
+        total += weight
+        severe += int(weight >= 0.85)
+    return float(np.clip(total / 4.0, 0.0, 1.0)), severe
+
+
+def _enrich_sofascore_lineup(fetcher: ExternalFetcher, row: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    event_id = str(row.get("sofascore_event_id") or "")
+    if not event_id:
+        return row, []
+    payload, at = _get_json(
+        fetcher,
+        "sofascore_lineups",
+        f"https://www.sofascore.com/api/v1/event/{event_id}/lineups",
+    )
+    retrieval_times = [at]
+    confirmed = payload.get("confirmed") is True
+    counts: dict[str, int] = {}
+    for side in ("home", "away"):
+        group = payload.get(side) or {}
+        players = group.get("players") or []
+        starters = [
+            p for p in players
+            if isinstance(p, dict) and (
+                p.get("starter") is True or p.get("substitute") is False
+            )
+        ]
+        counts[side] = len(starters)
+        impact, severe = _sofascore_missing_impact(group.get("missingPlayers"))
+        row[f"matchday_injury_impact_{side}"] = impact
+        row["matchday_signal_confidence"] = max(
+            float(row.get("matchday_signal_confidence", 0.30)),
+            float(np.clip(0.45 + severe * 0.10, 0.45, 0.85)),
+        )
+    if confirmed and counts.get("home", 0) >= 11 and counts.get("away", 0) >= 11:
+        row["starter_status"] = "ANNOUNCED"
+        row["matchday_lineup_impact_home"] = 0.5
+        row["matchday_lineup_impact_away"] = 0.5
+        row["matchday_signal_confidence"] = max(
+            float(row.get("matchday_signal_confidence", 0.30)), 0.85
+        )
+    row["matchday_source"] = "sofascore"
+    return row, retrieval_times
+
+
 def _event_core(event: dict[str, Any], competition: str) -> dict[str, Any] | None:
     competitions = event.get("competitions") or []
     if not competitions:
@@ -265,6 +561,111 @@ def _weather(
     return severity, retrieved, lat, lon
 
 
+def _collect_sofascore_day(
+    fetcher: ExternalFetcher,
+    *,
+    day: datetime,
+    now_ts: pd.Timestamp,
+    horizon_hours: float,
+    max_events: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, str]], str | None]:
+    date_key = day.strftime("%Y-%m-%d")
+    try:
+        payload, scheduled_at = _get_json(
+            fetcher,
+            "sofascore_scheduled_events",
+            f"https://www.sofascore.com/api/v1/sport/football/scheduled-events/{date_key}",
+        )
+    except Exception as exc:
+        return [], [{"source": "sofascore_scheduled_events", "error": f"{type(exc).__name__}: {exc}"}], None
+    errors: list[dict[str, str]] = []
+    parsed: list[dict[str, Any]] = []
+    upper = now_ts + pd.Timedelta(hours=float(horizon_hours))
+    for event in payload.get("events", []) or []:
+        core = parse_sofascore_event(event)
+        if not core:
+            continue
+        kickoff = _ts(core["kickoff_utc"])
+        if kickoff is None or kickoff <= now_ts or kickoff > upper:
+            continue
+        row = _matchday_base_row(
+            match_id=core["match_id"],
+            kickoff=kickoff,
+            home_team=core["home_team"],
+            away_team=core["away_team"],
+            competition=core["competition"],
+            source="sofascore",
+            available_at=scheduled_at,
+            home_team_id=core.get("home_team_id", ""),
+            away_team_id=core.get("away_team_id", ""),
+            venue_name=core.get("venue_name", ""),
+            venue_city=core.get("venue_city", ""),
+            venue_country=core.get("venue_country", ""),
+            venue_lat=core.get("venue_lat"),
+            venue_lon=core.get("venue_lon"),
+        )
+        row["sofascore_event_id"] = core["sofascore_event_id"]
+        parsed.append(row)
+    parsed.sort(key=lambda x: (str(x["kickoff_utc"]), str(x["match_id"])))
+    for row in parsed[:min(int(max_events), SOFASCORE_LINEUP_ENRICH_LIMIT)]:
+        kickoff = _ts(row["kickoff_utc"])
+        if kickoff is None:
+            continue
+        times = [scheduled_at]
+        try:
+            row, extra = _enrich_sofascore_lineup(fetcher, row)
+            times.extend(extra)
+        except Exception as exc:
+            errors.append({
+                "source": "sofascore_lineups",
+                "match_id": str(row["match_id"]),
+                "error": f"{type(exc).__name__}: {exc}",
+            })
+        try:
+            severity, at, lat, lon = _weather(fetcher, row, kickoff)
+            if at:
+                times.append(at)
+            row["venue_lat"], row["venue_lon"] = lat, lon
+            row["matchday_weather_severity"] = severity
+            row["matchday_weather_penalty_home"] = severity
+            row["matchday_weather_penalty_away"] = severity
+        except Exception as exc:
+            errors.append({
+                "source": "open_meteo",
+                "match_id": str(row["match_id"]),
+                "error": f"{type(exc).__name__}: {exc}",
+            })
+        row["matchday_available_at_utc"] = max(times)
+        row["matchday_pit_verified"] = all(pd.Timestamp(x).tzinfo is not None for x in times)
+    return parsed[:int(max_events)], errors, scheduled_at
+
+
+def _collect_football_data_fallback(
+    fetcher: ExternalFetcher,
+    *,
+    now_ts: pd.Timestamp,
+    horizon_hours: float,
+    max_events: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, str]], str | None]:
+    try:
+        frame, retrieved_at = _get_csv(
+            fetcher, "football_data_fixtures", FOOTBALL_DATA_FIXTURES_URL
+        )
+        rows = parse_football_data_fixtures(
+            frame,
+            now=now_ts,
+            horizon_hours=horizon_hours,
+            available_at=retrieved_at,
+            max_events=max_events,
+        )
+        return rows, [], retrieved_at
+    except Exception as exc:
+        return [], [{
+            "source": "football_data_fixtures",
+            "error": f"{type(exc).__name__}: {exc}",
+        }], None
+
+
 def collect_matchday_snapshots(
     *,
     days: int = 2,
@@ -280,8 +681,11 @@ def collect_matchday_snapshots(
     errors: list[dict[str, str]] = []
     seen: set[str] = set()
 
+    fallback_usage: list[dict[str, Any]] = []
     for day_offset in range(max(1, int(days))):
-        date = (now + pd.Timedelta(days=day_offset)).strftime("%Y%m%d")
+        day_start = now + pd.Timedelta(days=day_offset)
+        date = day_start.strftime("%Y%m%d")
+        before_day_rows = len(rows)
         for competition, league in ESPN_LEAGUES.items():
             try:
                 scoreboard, scoreboard_at = _get_json(
@@ -474,6 +878,35 @@ def collect_matchday_snapshots(
         if len(rows) >= max_events:
             break
 
+        if len(rows) == before_day_rows and len(rows) < max_events:
+            day_rows, day_errors, _ = _collect_sofascore_day(
+                fetcher,
+                day=day_start,
+                now_ts=now_ts,
+                horizon_hours=float(horizon_hours),
+                max_events=max_events - len(rows),
+            )
+            if day_rows:
+                rows.extend(day_rows)
+                fallback_usage.append({"provider": "sofascore", "date": date, "rows": len(day_rows)})
+            errors.extend(day_errors)
+            if not day_rows and len(rows) < max_events:
+                fd_rows, fd_errors, _ = _collect_football_data_fallback(
+                    fetcher,
+                    now_ts=now_ts,
+                    horizon_hours=float(horizon_hours),
+                    max_events=max_events - len(rows),
+                )
+                day_date = day_start.date()
+                fd_rows = [
+                    row for row in fd_rows
+                    if _ts(row["kickoff_utc"]) is not None and _ts(row["kickoff_utc"]).date() == day_date
+                ]
+                if fd_rows:
+                    rows.extend(fd_rows)
+                    fallback_usage.append({"provider": "football-data.co.uk", "date": date, "rows": len(fd_rows)})
+                errors.extend(fd_errors)
+
     frame = pd.DataFrame(rows)
     if not frame.empty:
         frame["kickoff_utc"] = pd.to_datetime(frame["kickoff_utc"], utc=True)
@@ -485,15 +918,22 @@ def collect_matchday_snapshots(
             .reset_index(drop=True)
         )
 
+    snapshot_finished = _now()
+    if not frame.empty:
+        available = pd.to_datetime(frame["matchday_available_at_utc"], utc=True, errors="coerce")
+        frame["matchday_pit_verified"] = available.notna() & (available <= pd.Timestamp(snapshot_finished))
     status = {
         "status": "COLLECTED" if not frame.empty else (
             "DEFERRED_EXTERNAL_SOURCE" if errors else "NO_UPCOMING_FIXTURES"
         ),
-        "prediction_time_utc": iso_utc(now),
+        "prediction_time_utc": iso_utc(snapshot_finished),
+        "snapshot_started_at_utc": iso_utc(now),
+        "snapshot_finished_at_utc": iso_utc(snapshot_finished),
         "rows": int(len(frame)),
         "errors": errors,
+        "fallback_usage": fallback_usage,
         "historical_pit_claim": False,
-        "current_snapshot_pit_basis": "conservative_observation_time",
+        "current_snapshot_pit_basis": "source_retrieval_time_and_snapshot_finish",
         "free_keyless_default": True,
     }
     return frame, status
