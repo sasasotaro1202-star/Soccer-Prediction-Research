@@ -69,6 +69,32 @@ def test_prediction_is_full_distribution_and_top4_is_exactly_four():
     assert [x.rank for x in top4] == [1, 2, 3, 4]
 
 
+def test_prediction_normalizes_probabilities_independently_per_fixture():
+    model = fit_mom_model(_rows(6), min_matches=5)
+    one = _rows(1).drop(columns=["is_motm"])
+    two = _rows(1).drop(columns=["is_motm"]).copy()
+    two["match_id"] = "m_other"
+    two["kickoff_utc"] = two["kickoff_utc"] + pd.Timedelta(days=1)
+    two["feature_available_at_utc"] = two["kickoff_utc"] - pd.Timedelta(hours=1)
+    candidates = pd.concat([one, two], ignore_index=True)
+    dist = predict_mom_distribution(model, candidates, prediction_time="2024-12-31T23:00:00Z")
+    sums = dist.groupby("match_id")["probability"].sum()
+    assert set(sums.index) == {"m0", "m_other"}
+    assert all(abs(float(x) - 1.0) < 1e-10 for x in sums)
+
+
+def test_top4_selection_refuses_multiple_fixtures():
+    model = fit_mom_model(_rows(6), min_matches=5)
+    candidates = _rows(1).drop(columns=["is_motm"])
+    other = candidates.copy()
+    other["match_id"] = "m_other"
+    other["kickoff_utc"] = other["kickoff_utc"] + pd.Timedelta(days=1)
+    other["feature_available_at_utc"] = other["kickoff_utc"] - pd.Timedelta(hours=1)
+    dist = predict_mom_distribution(model, pd.concat([candidates, other], ignore_index=True), prediction_time="2024-12-31T23:00:00Z")
+    with pytest.raises(ValueError, match="exactly one match_id"):
+        select_mom_top4_from_distribution(dist)
+
+
 def test_prediction_rejects_outcome_labels():
     model = fit_mom_model(_rows(6), min_matches=5)
     with pytest.raises(ValueError, match="must not contain future outcome"):
