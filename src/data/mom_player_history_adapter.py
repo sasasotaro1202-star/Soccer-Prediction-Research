@@ -124,9 +124,13 @@ def build_mom_feature_rows(
     if min_history_appearances < 1 or lookback_appearances < min_history_appearances:
         raise ValueError("invalid player history window")
     f, p, _ = _prepare_inputs(fixtures, player_matches, match_stats)
-    played = f.loc[f["is_played"]].sort_values("date_utc", kind="mergesort").copy()
+    fixture_known = s[["fixture_id", "known_at"]].drop_duplicates("fixture_id")
+    played = f.loc[f["is_played"]].merge(
+        fixture_known.rename(columns={"fixture_id": "id"}), on="id", how="left", validate="one_to_one"
+    ).sort_values("date_utc", kind="mergesort").copy()
     if played.empty:
         raise RuntimeError("No played fixtures available for MOM feature construction")
+    played = played.loc[played["known_at"].notna()].copy()
 
     p = p.loc[p["match_kickoff_utc"].notna() & p["known_at"].notna()].copy()
     if p.empty:
@@ -139,13 +143,7 @@ def build_mom_feature_rows(
         if pd.isna(row.goals_home) or pd.isna(row.goals_away):
             continue
         # Resolve its conservative post-match availability timestamp.
-        match_known = (
-            p.loc[p["fixture_id"] == float(row.id), "known_at"].dropna().min()
-            if bool((p["fixture_id"] == float(row.id)).any())
-            else pd.NaT
-        )
-        if pd.isna(match_known):
-            continue
+        match_known = row.known_at
         event = row.date_utc
         team_goals[float(row.home_team_id)].append((event, match_known, float(row.goals_home), float(row.goals_away)))
         team_goals[float(row.away_team_id)].append((event, match_known, float(row.goals_away), float(row.goals_home)))
@@ -153,7 +151,7 @@ def build_mom_feature_rows(
     p = p.sort_values(["team_id", "player_id", "match_kickoff_utc", "fixture_id"], kind="mergesort")
     rows: list[dict[str, Any]] = []
     for fixture in played.itertuples(index=False):
-        target_id = float(fixture.id)
+        target_id = str(int(fixture.id))
         target_kickoff = fixture.date_utc
         sides = {
             float(fixture.home_team_id): float(fixture.away_team_id),
