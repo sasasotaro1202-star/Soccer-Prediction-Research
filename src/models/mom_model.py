@@ -24,8 +24,6 @@ MOM_FEATURE_COLUMNS = (
     "recent_minutes_ewm",
     "recent_goals_per90_ewm",
     "recent_assists_per90_ewm",
-    "recent_xg_per90_ewm",
-    "recent_xa_per90_ewm",
     "recent_key_passes_per90_ewm",
     "recent_shots_per90_ewm",
     "recent_starts_rate",
