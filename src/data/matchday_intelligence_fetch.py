@@ -78,6 +78,7 @@ def _get_json(
         url,
         params=params,
         headers={"User-Agent": "Soccer-Prediction-Research/1.0"},
+        cache_ttl_seconds=600.0,
     )
     try:
         payload = json.loads(response.body.decode("utf-8-sig"))
