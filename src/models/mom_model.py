@@ -54,6 +54,7 @@ class MOMModelMetadata:
     positive_rows: int
     negative_rows: int
     temperature: float
+    missingness_aware_imputation: bool
 
 
 def _parse_utc(frame: pd.DataFrame, column: str) -> pd.Series:
@@ -100,11 +101,14 @@ def _validate_base(frame: pd.DataFrame, *, prediction: bool = False) -> pd.DataF
     for column in MOM_FEATURE_COLUMNS:
         if column not in d.columns:
             raise ValueError(f"MOM data missing feature column {column!r}")
-        d[column] = pd.to_numeric(d[column], errors="coerce")
-
-    bad_numeric = ~np.isfinite(d[list(MOM_FEATURE_COLUMNS)].to_numpy(dtype=float)).all(axis=1)
-    if bool(bad_numeric.any()):
-        raise ValueError("MOM feature matrix contains NaN, inf, or non-numeric values")
+        raw = d[column]
+        converted = pd.to_numeric(raw, errors="coerce")
+        invalid = raw.notna() & converted.isna()
+        if bool(invalid.any()):
+            raise ValueError(f"MOM feature column {column!r} contains non-numeric values")
+        if bool(np.isinf(converted.to_numpy(dtype=float)).any()):
+            raise ValueError(f"MOM feature column {column!r} contains infinite values")
+        d[column] = converted
 
     if d.duplicated(subset=["match_id", "player_id"]).any():
         raise ValueError("MOM data contains duplicate match_id/player_id rows")
@@ -137,6 +141,38 @@ def _verified_training_slice(history: pd.DataFrame) -> pd.DataFrame:
 
 
 
+class MissingnessAwareMOMTransformer:
+    """Median-impute historical-only features while preserving missingness flags.
+
+    Medians are learned strictly from the fit slice. Missing values are never
+    interpreted as zero performance; a binary missingness indicator is appended
+    for every model feature.
+    """
+
+    def fit(self, frame: pd.DataFrame) -> "MissingnessAwareMOMTransformer":
+        x = frame[list(MOM_FEATURE_COLUMNS)].apply(pd.to_numeric, errors="coerce")
+        self.medians_ = x.median(axis=0, skipna=True).to_numpy(dtype=float)
+        if not np.isfinite(self.medians_).all():
+            bad = [c for c, v in zip(MOM_FEATURE_COLUMNS, self.medians_) if not np.isfinite(v)]
+            raise RuntimeError(f"MOM imputation cannot learn medians for all-missing features: {bad}")
+        return self
+
+    def transform(self, frame: pd.DataFrame) -> np.ndarray:
+        if not hasattr(self, "medians_"):
+            raise RuntimeError("MOM imputer is not fitted")
+        x = frame[list(MOM_FEATURE_COLUMNS)].apply(pd.to_numeric, errors="coerce")
+        values = x.to_numpy(dtype=float)
+        missing = ~np.isfinite(values)
+        filled = np.where(missing, self.medians_[None, :], values)
+        out = np.concatenate([filled, missing.astype(float)], axis=1)
+        if not np.isfinite(out).all():
+            raise RuntimeError("MOM imputation produced non-finite features")
+        return out
+
+    def fit_transform(self, frame: pd.DataFrame) -> np.ndarray:
+        return self.fit(frame).transform(frame)
+
+
 class ConditionalMOMLogit:
     """Conditional-choice model: exactly one MOM winner per fixture.
 
@@ -149,8 +185,9 @@ class ConditionalMOMLogit:
         self.l2 = float(l2)
 
     def fit(self, frame: pd.DataFrame, y: np.ndarray) -> "ConditionalMOMLogit":
-        x = frame.to_numpy(dtype=float)
         labels = np.asarray(y, dtype=int)
+        self.transformer_ = MissingnessAwareMOMTransformer()
+        x = self.transformer_.fit_transform(frame[list(MOM_FEATURE_COLUMNS)])
         self.mean_ = x.mean(axis=0)
         self.scale_ = x.std(axis=0)
         self.scale_[self.scale_ < 1e-12] = 1.0
@@ -202,7 +239,8 @@ class ConditionalMOMLogit:
         return self
 
     def decision_function(self, frame: pd.DataFrame) -> np.ndarray:
-        z = (frame.to_numpy(dtype=float) - self.mean_) / self.scale_
+        x = self.transformer_.transform(frame[list(MOM_FEATURE_COLUMNS)])
+        z = (x - self.mean_) / self.scale_
         scores = z @ self.coef_
         if not np.isfinite(scores).all():
             raise RuntimeError("Conditional MOM model produced non-finite scores")
@@ -246,6 +284,7 @@ def fit_mom_model(
         d = ordered
     elif method == "binary_logit":
         model = Pipeline([
+            ("impute_missingness", MissingnessAwareMOMTransformer()),
             ("scale", StandardScaler()),
             ("model", LogisticRegression(
                 max_iter=3000,
@@ -267,6 +306,7 @@ def fit_mom_model(
         positive_rows=int(y.sum()),
         negative_rows=int((y == 0).sum()),
         temperature=float(temperature),
+        missingness_aware_imputation=True,
     )
     return {"model": model, "metadata": meta.__dict__.copy()}
 
