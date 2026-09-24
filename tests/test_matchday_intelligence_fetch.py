@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import pandas as pd
 
 from src.data.matchday_intelligence_fetch import (
@@ -264,3 +265,57 @@ def test_espn_json_falls_back_to_web_hostname_after_html_response():
         "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard",
         "https://site.web.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard",
     ]
+
+
+def test_football_data_complements_partial_sofascore_coverage(monkeypatch):
+    import src.data.matchday_intelligence_fetch as m
+
+    class DummyFetcher:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    monkeypatch.setattr(m, "ExternalFetcher", DummyFetcher)
+    monkeypatch.setattr(
+        m,
+        "_now",
+        lambda: datetime(2026, 9, 25, 0, 0, tzinfo=timezone.utc),
+    )
+    base_time = pd.Timestamp("2026-09-25T00:00:00Z")
+    sofa = m._matchday_base_row(
+        match_id="sofa:partial",
+        kickoff=base_time + pd.Timedelta(hours=6),
+        home_team="Sofa Home",
+        away_team="Sofa Away",
+        competition="EPL",
+        source="sofascore",
+        available_at="2026-09-25T00:01:00Z",
+    )
+    football_data = m._matchday_base_row(
+        match_id="fdx:complement",
+        kickoff=base_time + pd.Timedelta(hours=12),
+        home_team="FD Home",
+        away_team="FD Away",
+        competition="EPL",
+        source="football-data.co.uk",
+        available_at="2026-09-25T00:02:00Z",
+    )
+    monkeypatch.setattr(
+        m,
+        "_collect_sofascore_day",
+        lambda *args, **kwargs: ([sofa], [], "2026-09-25T00:01:00Z"),
+    )
+    monkeypatch.setattr(
+        m,
+        "_collect_football_data_fallback",
+        lambda *args, **kwargs: ([football_data], [], "2026-09-25T00:02:00Z"),
+    )
+    monkeypatch.setattr(
+        DummyFetcher,
+        "get",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("ESPN unavailable")),
+    )
+
+    frame, status = m.collect_matchday_snapshots(days=1, horizon_hours=24, max_events=20)
+    assert set(frame["match_id"]) == {"sofa:partial", "fdx:complement"}
+    assert any(x["provider"] == "sofascore" for x in status["fallback_usage"])
+    assert any(x["provider"] == "football-data.co.uk" for x in status["fallback_usage"])
