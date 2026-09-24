@@ -378,9 +378,18 @@ def _matchday_base_row(
 
 
 def _sofascore_competition(event: dict[str, Any]) -> str | None:
-    tournament = event.get("tournament") or event.get("uniqueTournament") or {}
-    name = str(tournament.get("name") or "").strip()
-    return SOFASCORE_COMPETITIONS.get(name)
+    # Prefer the canonical uniqueTournament name because qualification-stage
+    # events often expose a stage-specific tournament name while the
+    # uniqueTournament identifies the parent competition consistently.
+    candidates = [
+        event.get("uniqueTournament") or {},
+        event.get("tournament") or {},
+    ]
+    for tournament in candidates:
+        name = str(tournament.get("name") or "").strip()
+        if name in SOFASCORE_COMPETITIONS:
+            return SOFASCORE_COMPETITIONS[name]
+    return None
 
 
 def parse_sofascore_event(event: dict[str, Any]) -> dict[str, Any] | None:
