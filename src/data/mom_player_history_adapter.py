@@ -120,10 +120,10 @@ def _prepare_inputs(
     flat_map = {
         "games_minutes": "_flat_minutes",
         "games_rating": "_flat_rating",
-        "goals_total": "goals_total",
-        "goals_assists": "goals_assists",
-        "shots_total": "shots_total",
-        "passes_key": "passes_key",
+        "goals_total": "_flat_goals_total",
+        "goals_assists": "_flat_goals_assists",
+        "shots_total": "_flat_shots_total",
+        "passes_key": "_flat_passes_key",
     }
     for src, dst in flat_map.items():
         ps[dst] = _numeric(ps, src)
