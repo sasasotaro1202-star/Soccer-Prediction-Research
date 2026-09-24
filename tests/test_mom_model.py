@@ -155,6 +155,24 @@ def test_unknown_pit_rows_do_not_get_imputed_as_safe():
         fit_mom_model(d, min_matches=5)
 
 
+def test_conditional_mom_model_uses_fixture_level_choice_structure():
+    model = fit_mom_model(
+        _rows(8),
+        min_matches=5,
+        method="conditional_logit",
+        regularization_c=0.30,
+    )
+    assert model["metadata"]["method"] == "pit_player_form_conditional_logit"
+    candidates = _rows(1).drop(columns=["is_motm"])
+    dist = predict_mom_distribution(
+        model,
+        candidates,
+        prediction_time="2024-12-31T23:00:00Z",
+    )
+    assert len(dist) == 6
+    assert float(dist["probability"].sum()) == pytest.approx(1.0, abs=1e-10)
+
+
 def test_feature_names_are_outcome_free():
     forbidden = {"motm", "player_of_the_match", "final", "result", "match_rating"}
     assert not any(any(token in c.lower() for token in forbidden) for c in MOM_FEATURE_COLUMNS)
