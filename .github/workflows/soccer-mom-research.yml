@@ -1,0 +1,93 @@
+name: Soccer MOM Research
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "UTC start date for bounded MOM research"
+        required: false
+        default: "2024-08-01"
+        type: string
+      end:
+        description: "UTC end date for bounded MOM research"
+        required: false
+        default: "2025-06-01"
+        type: string
+      season_start_year:
+        description: "SofaScore season start year"
+        required: false
+        default: "2024"
+        type: string
+      tournament_id:
+        description: "SofaScore unique tournament id"
+        required: false
+        default: "17"
+        type: string
+  schedule:
+    - cron: "17 5 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soccer-mom-research
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 5))
+          done
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 duckdb
+
+      - name: Run deterministic tests
+        env:
+          PYTHONHASHSEED: "0"
+        run: python -m pytest -q
+
+      - name: Run bounded real-data MOM research
+        env:
+          PYTHONHASHSEED: "0"
+        run: |
+          mkdir -p artifacts
+          python scripts/run_mom_research.py \
+            --start "${{ inputs.start || '2024-08-01' }}" \
+            --end "${{ inputs.end || '2025-06-01' }}" \
+            --season-start-year "${{ inputs.season_start_year || '2024' }}" \
+            --tournament-id "${{ inputs.tournament_id || '17' }}" \
+            --output-dir artifacts/mom_research
+
+      - name: Verify MOM research report exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mom_research/mom_research_report.json
+
+      - name: Upload MOM research artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: soccer-mom-research-${{ github.run_id }}
+          path: artifacts/mom_research/
+          retention-days: 7
+          if-no-files-found: error
