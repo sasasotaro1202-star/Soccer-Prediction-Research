@@ -189,6 +189,17 @@ def _load_preflight_pit_features(out: Path, history: pd.DataFrame) -> pd.DataFra
             f"PIT preflight feature handoff has {missing_outcomes} rows without historical outcomes"
         )
 
+    home_goals = pd.to_numeric(merged["home_goals"], errors="coerce")
+    away_goals = pd.to_numeric(merged["away_goals"], errors="coerce")
+    merged["target"] = np.select(
+        [
+            home_goals.isna() | away_goals.isna(),
+            home_goals > away_goals,
+            home_goals == away_goals,
+        ],
+        [np.nan, 0, 1],
+        default=2,
+    )
     merged["pit_verified"] = merged["pit_verified"].astype(bool)
     return merged
 
