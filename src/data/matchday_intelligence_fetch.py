@@ -282,7 +282,7 @@ def parse_weather_severity(
     hourly = payload.get("hourly") or {}
     times = pd.to_datetime(pd.Series(hourly.get("time") or []), utc=True, errors="coerce")
     if times.empty or times.isna().all():
-        return 0.0, 0.0
+        return np.nan, np.nan
     index = int(np.argmin(np.abs((times - kickoff).dt.total_seconds().to_numpy(dtype=float))))
 
     def value(key: str) -> float | None:
