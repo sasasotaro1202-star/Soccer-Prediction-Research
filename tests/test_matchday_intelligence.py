@@ -167,3 +167,19 @@ def test_severe_weather_flattens_probabilities_without_creating_directional_bias
     assert out[0].max() < base[0].max()
     assert out[0, 1] > base[0, 1]
     assert np.allclose(out.sum(axis=1), 1.0, atol=1e-12)
+
+
+def test_large_model_market_disagreement_is_treated_as_uncertainty():
+    fixtures = _fixtures(
+        matchday_market_p_home=0.20,
+        matchday_market_p_draw=0.30,
+        matchday_market_p_away=0.50,
+    )
+    base = np.asarray([[0.80, 0.12, 0.08]])
+    out, diag = apply_matchday_intelligence(
+        base, fixtures, pd.Timestamp("2026-09-25T09:00:00Z")
+    )
+    assert diag.loc[0, "status"] == "APPLIED"
+    assert "market_uncertainty" in diag.loc[0, "signal_names"]
+    assert out[0].max() < base[0].max()
+    assert np.allclose(out.sum(axis=1), 1.0, atol=1e-12)
