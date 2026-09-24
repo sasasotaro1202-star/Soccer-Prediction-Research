@@ -13,7 +13,7 @@ permissions:
 # Keep exact-commit verification from being cancelled by a later push on the same PR.
 # Long-running research has its own concurrency group.
 concurrency:
-  group: soccer-ci-${{ github.ref }}
+  group: soccer-ci-${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 jobs:
