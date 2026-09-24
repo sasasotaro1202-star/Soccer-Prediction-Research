@@ -35,8 +35,8 @@ def test_phase3_never_persists_stale_research_to_newer_main():
     text = AUTONOMOUS.read_text(encoding="utf-8")
     assert "Verify latest-main handoff before persistence" in text
     assert "id: latest_main_handoff" in text
-    assert "current_main_matches=true" in text
-    assert "current_main_matches=false" in text
+    assert 'CURRENT_MAIN_MATCHES="true"' in text
+    assert 'CURRENT_MAIN_MATCHES="false"' in text
     assert "steps.latest_main_handoff.outputs.current_main_matches == 'true'" in text
     assert "latest_main_handoff.json" in text
 
