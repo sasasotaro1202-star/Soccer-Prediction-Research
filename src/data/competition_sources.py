@@ -13,6 +13,7 @@ TARGET_COMPETITIONS = (
     "UEFA_EURO_W", "UEFA_EURO_QUALI_W", "UEFA_NATIONS_LEAGUE_W",
     "UEFA_U21", "UEFA_U19", "UEFA_U17", "UEFA_WU19", "UEFA_WU17",
     "UEFA_REGIONS_CUP",
+    "EMP_CUP", "INTL_M", "INTL_W",
     "U23_M", "U18_M",
 )
 
@@ -77,6 +78,9 @@ PLANS = {
     "UEFA_WU19": ("UEFA", "ESPN", "openfootball/internationals"),
     "UEFA_WU17": ("UEFA", "ESPN", "openfootball/internationals"),
     "UEFA_REGIONS_CUP": ("UEFA", "ESPN", "openfootball/internationals"),
+    "EMP_CUP": ("JFA", "ESPN", "openfootball"),
+    "INTL_M": ("FIFA", "JFA", "openfootball/internationals", "ESPN"),
+    "INTL_W": ("FIFA", "JFA", "UEFA", "openfootball/internationals", "ESPN"),
     "U23_M": ("FIFA", "AFC", "openfootball/internationals", "ESPN"),
     "U18_M": ("JFA", "AFC", "UEFA", "ESPN"),
     "J1": ("J.League", "Sportmonks", "TheStatsAPI"),
