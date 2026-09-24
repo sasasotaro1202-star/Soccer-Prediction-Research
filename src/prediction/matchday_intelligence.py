@@ -12,6 +12,7 @@ _SIGNAL_GROUPS = {
     "weather": ("matchday_weather_penalty_home", "matchday_weather_penalty_away"),
     "rest": ("matchday_rest_diff_hours",),
     "market": ("matchday_market_p_home", "matchday_market_p_draw", "matchday_market_p_away"),
+    "market_odds": ("matchday_odds_home", "matchday_odds_draw", "matchday_odds_away"),
 }
 _REQUIRED_META = ("matchday_available_at_utc", "matchday_pit_verified", "matchday_source")
 
@@ -62,6 +63,9 @@ def _validate_group(row: pd.Series, names: tuple[str, ...], group: str) -> np.nd
             raise ValueError("market probability is outside [0, 1]")
         if not np.isclose(result.sum(), 1.0, atol=1e-4):
             raise ValueError("market probabilities do not sum to one")
+    if group == "market_odds":
+        if np.any(result <= 1.0):
+            raise ValueError("decimal market odds must be greater than one")
     return result
 
 
@@ -121,6 +125,15 @@ def apply_matchday_intelligence(
                 available = available.tz_convert("UTC")
             if pd.isna(available) or available > now:
                 raise PermissionError("matchday evidence is unavailable at prediction time")
+            signal_confidence = 1.0
+            if "matchday_signal_confidence" in row.index:
+                signal_confidence = float(pd.to_numeric(pd.Series([row["matchday_signal_confidence"]]), errors="coerce").iloc[0])
+                if not np.isfinite(signal_confidence) or not 0.0 <= signal_confidence <= 1.0:
+                    raise ValueError("matchday_signal_confidence is outside [0, 1]")
+            if "starter_status" in row.index:
+                starter_status = str(row["starter_status"]).strip().upper()
+            else:
+                starter_status = "UNKNOWN"
             if "kickoff_utc" in row.index:
                 kickoff = pd.Timestamp(row["kickoff_utc"])
                 if kickoff.tzinfo is None:
@@ -143,6 +156,8 @@ def apply_matchday_intelligence(
                     signal_names.append("injury")
                     signal_count += 2
                 elif group == "lineup":
+                    if starter_status not in {"ANNOUNCED", "CONFIRMED"}:
+                        continue
                     delta += -0.50 * (values[0] - values[1])
                     signal_names.append("lineup")
                     signal_count += 2
@@ -154,16 +169,30 @@ def apply_matchday_intelligence(
                     delta += 0.006 * float(np.clip(values[0], -72.0, 72.0))
                     signal_names.append("rest")
                     signal_count += 1
-            delta = float(np.clip(delta, -1.5, 1.5))
+                elif group == "market_odds":
+                    implied = 1.0 / np.clip(values, 1.000001, None)
+                    implied /= implied.sum()
+                    market = implied
+                    signal_names.append("market_odds")
+                    signal_count += 3
+            delta = float(np.clip(delta * signal_confidence, -1.5, 1.5))
             logits = np.log(np.clip(outputs[i], 1e-9, 1.0))
             state_prob = _softmax(logits + freshness * np.array([delta / 2.0, 0.0, -delta / 2.0]))
-            state_weight = 0.20 * freshness
+            state_weight = 0.20 * freshness * signal_confidence
             adjusted = (1.0 - state_weight) * outputs[i] + state_weight * state_prob
             if _present_group(columns, _SIGNAL_GROUPS["market"]):
                 market = _validate_group(row, _SIGNAL_GROUPS["market"], "market")
-                market_weight = 0.15 * freshness
+                market_weight = 0.15 * freshness * signal_confidence
                 adjusted = (1.0 - market_weight) * adjusted + market_weight * market
                 signal_names.append("market")
+                signal_count += 3
+            if _present_group(columns, _SIGNAL_GROUPS["market_odds"]):
+                odds = _validate_group(row, _SIGNAL_GROUPS["market_odds"], "market_odds")
+                market = 1.0 / np.clip(odds, 1.000001, None)
+                market /= market.sum()
+                market_weight = 0.15 * freshness * signal_confidence
+                adjusted = (1.0 - market_weight) * adjusted + market_weight * market
+                signal_names.append("market_odds")
                 signal_count += 3
             adjusted = np.clip(adjusted, 1e-9, 1.0)
             adjusted /= adjusted.sum()
