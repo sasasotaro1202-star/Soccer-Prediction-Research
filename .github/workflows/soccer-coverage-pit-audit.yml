@@ -15,6 +15,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # PIT providers use the token for authenticated GitHub API history reads.
+  # Without this, Actions silently falls back to the unauthenticated 60-req/hour API limit.
+  GITHUB_TOKEN: ${{ github.token }}
+
 concurrency:
   group: soccer-coverage-pit-audit
   cancel-in-progress: false
