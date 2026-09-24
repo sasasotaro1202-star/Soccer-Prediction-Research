@@ -69,3 +69,46 @@ def test_freshness_reduces_adjustment():
     stale_out, stale_diag = apply_matchday_intelligence(base, stale, now)
     assert fresh_diag.loc[0, "adjustment_l1"] > stale_diag.loc[0, "adjustment_l1"]
     assert fresh_diag.loc[0, "freshness"] > stale_diag.loc[0, "freshness"]
+
+
+def test_raw_decimal_market_odds_are_devigged():
+    fixtures = _fixtures(
+        matchday_odds_home=2.00,
+        matchday_odds_draw=3.60,
+        matchday_odds_away=4.20,
+    )
+    base = np.asarray([[0.45, 0.30, 0.25]])
+    out, diag = apply_matchday_intelligence(base, fixtures, pd.Timestamp("2026-09-25T09:00:00Z"))
+    assert diag.loc[0, "status"] == "APPLIED"
+    assert np.allclose(out.sum(axis=1), 1.0, atol=1e-12)
+    assert "market_odds" in diag.loc[0, "signal_names"]
+
+
+def test_unconfirmed_lineup_signal_is_ignored():
+    fixtures = _fixtures(
+        starter_status="EXPECTED",
+        matchday_lineup_impact_home=1.0,
+        matchday_lineup_impact_away=0.0,
+    )
+    base = np.asarray([[0.55, 0.25, 0.20]])
+    out, diag = apply_matchday_intelligence(base, fixtures, pd.Timestamp("2026-09-25T09:00:00Z"))
+    assert np.allclose(out, base)
+    assert "lineup" not in diag.loc[0, "signal_names"]
+
+
+def test_signal_confidence_scales_matchday_adjustment():
+    high = _fixtures(
+        matchday_signal_confidence=1.0,
+        matchday_injury_impact_home=0.9,
+        matchday_injury_impact_away=0.1,
+    )
+    low = _fixtures(
+        matchday_signal_confidence=0.25,
+        matchday_injury_impact_home=0.9,
+        matchday_injury_impact_away=0.1,
+    )
+    base = np.asarray([[0.55, 0.25, 0.20]])
+    now = pd.Timestamp("2026-09-25T09:00:00Z")
+    high_out, _ = apply_matchday_intelligence(base, high, now)
+    low_out, _ = apply_matchday_intelligence(base, low, now)
+    assert np.abs(high_out - base).sum() > np.abs(low_out - base).sum()
