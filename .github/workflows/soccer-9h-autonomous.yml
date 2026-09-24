@@ -300,6 +300,45 @@ jobs:
           if payload.get("production_contract_passed") is not True:
               raise SystemExit("strict production contract did not pass")
           PY
+      - name: Verify latest-main handoff before persistence
+        id: latest_main_handoff
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/9h
+          TRIGGER_SHA="${GITHUB_SHA}"
+          if git fetch origin main >/tmp/latest-main-fetch.log 2>&1; then
+            MAIN_SHA="$(git rev-parse origin/main)"
+            if [ "${MAIN_SHA}" = "${TRIGGER_SHA}" ]; then
+              CURRENT_MAIN_MATCHES="true"
+              echo "LATEST_MAIN_HANDOFF: exact workflow SHA is still main."
+            else
+              CURRENT_MAIN_MATCHES="false"
+              echo "LATEST_MAIN_HANDOFF: stale immutable research snapshot; trigger=${TRIGGER_SHA} main=${MAIN_SHA}. Persistence will be skipped."
+            fi
+          else
+            MAIN_SHA=""
+            CURRENT_MAIN_MATCHES="false"
+            echo "LATEST_MAIN_HANDOFF: unable to verify latest main; persistence will be skipped." >&2
+            cat /tmp/latest-main-fetch.log >&2 || true
+          fi
+          echo "current_main_matches=${CURRENT_MAIN_MATCHES}" >> "$GITHUB_OUTPUT"
+          export MAIN_SHA CURRENT_MAIN_MATCHES
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          payload = {
+              "workflow_sha": os.environ.get("GITHUB_SHA", ""),
+              "main_sha": os.environ.get("MAIN_SHA", ""),
+              "current_main_matches": os.environ.get("CURRENT_MAIN_MATCHES", "false") == "true",
+          }
+          Path("artifacts/9h/latest_main_handoff.json").write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+          )
+          PY
       - name: Export adopted production bundle
         if: success()
         shell: bash
@@ -322,7 +361,9 @@ jobs:
           cp artifacts/model_selection.csv artifacts/production_release/
           cp artifacts/adoption_decision.json artifacts/production_release/
       - name: Persist validated current production model
-        if: success()
+        if: >-
+          success() &&
+          steps.latest_main_handoff.outputs.current_main_matches == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -370,7 +411,9 @@ jobs:
           done
           exit 1
       - name: Persist validated research candidate
-        if: always()
+        if: >-
+          always() &&
+          steps.latest_main_handoff.outputs.current_main_matches == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -421,6 +464,7 @@ jobs:
           from pathlib import Path
           gate = Path("artifacts/completion_gate.json")
           status = Path("artifacts/run_status.json")
+          handoff = Path("artifacts/9h/latest_main_handoff.json")
           payload = {
               "workflow": "soccer-9h-autonomous",
               "head_sha": os.popen("git rev-parse HEAD").read().strip(),
@@ -429,6 +473,7 @@ jobs:
               "gate_present": gate.exists(),
               "run_status_present": status.exists(),
               "production_gate_remains_strict": True,
+              "latest_main_handoff": json.loads(handoff.read_text(encoding="utf-8")) if handoff.exists() else {"current_main_matches": False},
               "max_planned_runtime_minutes": 720,
               "note": "No gate is relaxed for the purpose of producing a green workflow."
           }
