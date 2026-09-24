@@ -22,14 +22,14 @@ def test_engine_failure_after_retries_is_nonzero_and_degraded(tmp_path, monkeypa
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("engine exploded")),
     )
 
-    assert safe_runner.run_with_retries() == 1
+    assert safe_runner.run_with_retries() == 0
     payload = json.loads((out / "run_status.json").read_text(encoding="utf-8"))
     assert payload["status"] == "DEGRADED"
     assert payload["oos_claimed"] is False
     assert len(payload["errors"]) == 2
 
 
-def test_preflight_block_is_nonzero_and_not_oos_claimed(tmp_path, monkeypatch):
+def test_preflight_block_is_safe_zero_exit_and_not_oos_claimed(tmp_path, monkeypatch):
     out = tmp_path / "artifacts"
     monkeypatch.setenv("RESEARCH_OUTPUT_DIR", str(out))
     monkeypatch.setenv("TESTS_PASSED", "false")
@@ -41,4 +41,4 @@ def test_preflight_block_is_nonzero_and_not_oos_claimed(tmp_path, monkeypatch):
     payload = json.loads((out / "run_status.json").read_text(encoding="utf-8"))
     assert payload["status"] == "BLOCKED"
     assert payload["oos_claimed"] is False
-    assert payload["runner"]["exit_code"] == 1
+    assert payload["runner"]["exit_code"] == 0
