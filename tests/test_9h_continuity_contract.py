@@ -12,7 +12,7 @@ def test_autonomous_workflow_has_continuous_9h_cycle_and_strict_concurrency():
     assert "workflow_dispatch:" in text
     assert "recovery controller" in text.lower()
     assert "group: soccer-9h-autonomous-main" in text
-    assert "cancel-in-progress: false" in text
+    assert "cancel-in-progress: true" in text
     assert "phase1_gate:" in text and "timeout-minutes: 180" in text
     phase2_block = text.split("phase2_research:", 1)[1].split("phase3_verification:", 1)[0]
     phase3_block = text.split("phase3_verification:", 1)[1]
