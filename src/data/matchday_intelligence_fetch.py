@@ -433,6 +433,8 @@ def parse_football_data_fixtures(
 
 
 def _sofascore_missing_impact(items: list[dict[str, Any]] | None) -> tuple[float, int]:
+    if items is None:
+        return np.nan, 0
     total = 0.0
     severe = 0
     for item in items or []:
@@ -531,7 +533,7 @@ def _weather(
     if lat is None or lon is None:
         name = f"{row.get('venue_city', '')}, {row.get('venue_country', '')}".strip(", ")
         if not name:
-            return 0.0, None, lat, lon
+            return np.nan, None, lat, lon
         geo, retrieved = _get_json(
             fetcher,
             "open_meteo_geocoding",
@@ -540,11 +542,11 @@ def _weather(
         )
         results = geo.get("results") or []
         if not results:
-            return 0.0, retrieved, lat, lon
+            return np.nan, retrieved, lat, lon
         lat = _number(results[0].get("latitude"))
         lon = _number(results[0].get("longitude"))
     if lat is None or lon is None:
-        return 0.0, retrieved, lat, lon
+        return np.nan, retrieved, lat, lon
     weather, retrieved = _get_json(
         fetcher,
         "open_meteo_forecast",
