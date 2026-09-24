@@ -244,10 +244,10 @@ def build_mom_feature_rows(
 
                 minutes = _numeric(g, "minutes").to_numpy(float)
                 rating = _numeric(g, "rating").to_numpy(float)
-                goals = _numeric(g, "goals_total").fillna(0.0).to_numpy(float)
-                assists = _numeric(g, "goals_assists").fillna(0.0).to_numpy(float)
-                shots = _numeric(g, "shots_total").fillna(0.0).to_numpy(float)
-                key_passes = _numeric(g, "passes_key").fillna(0.0).to_numpy(float)
+                goals = _numeric(g, "goals_total").to_numpy(float)
+                assists = _numeric(g, "goals_assists").to_numpy(float)
+                shots = _numeric(g, "shots_total").to_numpy(float)
+                key_passes = _numeric(g, "passes_key").to_numpy(float)
                 per90_den = np.clip(minutes, 1.0, None) / 90.0
 
                 valid_rating = np.isfinite(rating)
@@ -257,6 +257,11 @@ def build_mom_feature_rows(
 
                 team_attack = float(np.mean([x[2] for x in team_slice[-5:]]))
                 opponent_defense = float(np.mean([x[3] for x in opponent_slice[-5:]])) if opponent_slice else np.nan
+                used_known_at = [g["known_at"].max(), *[x[1] for x in team_slice[-5:]], *[x[1] for x in opponent_slice[-5:]]]
+                used_known_at = [ts for ts in used_known_at if pd.notna(ts)]
+                if not used_known_at:
+                    continue
+                feature_available_at = max(used_known_at)
                 position = str(g["position"].dropna().iloc[-1]) if g["position"].notna().any() else ""
                 rows.append({
                     "match_id": str(target_id),
@@ -283,8 +288,8 @@ def build_mom_feature_rows(
     if out.empty:
         raise RuntimeError("No PIT-safe MOM candidate rows could be constructed")
 
-    # Unknown xG/xA are deliberately not imputed to zero. The current public
-    # dataset does not guarantee these player-level fields across all leagues.
+    # Missing player-performance fields are never converted to zero. Candidates with
+    # non-finite required aggregates are dropped by the fail-closed filter below.
     required = {
         "match_id", "player_id", "kickoff_utc", "feature_available_at_utc",
         "pit_verified", "candidate_history_matches",
