@@ -52,6 +52,18 @@ def _numeric(frame: pd.DataFrame, column: str, default: float = np.nan) -> pd.Se
     return pd.to_numeric(frame[column], errors="coerce")
 
 
+def _canonical_identity(value: Any) -> str:
+    """Normalize numeric-looking IDs so CSV/PQ string coercion cannot break joins."""
+    text = str(value).strip()
+    try:
+        numeric = float(text)
+    except (TypeError, ValueError):
+        return text
+    if np.isfinite(numeric) and numeric.is_integer():
+        return str(int(numeric))
+    return text
+
+
 def _position_weight(value: Any) -> float:
     code = str(value or "").upper().strip()
     if code in {"F", "FW", "ST", "CF", "LW", "RW"}:
@@ -278,15 +290,15 @@ def attach_mom_labels(
     _require(labels, required, "MOM labels")
     x = feature_rows.copy()
     y = labels[[match_id_col, player_id_col]].copy()
-    y[match_id_col] = y[match_id_col].astype("string").str.strip()
-    y[player_id_col] = y[player_id_col].astype("string").str.strip()
+    y[match_id_col] = y[match_id_col].map(_canonical_identity).astype("string")
+    y[player_id_col] = y[player_id_col].map(_canonical_identity).astype("string")
     y = y.drop_duplicates()
     if y.duplicated(match_id_col).any():
         counts = y.groupby(match_id_col)[player_id_col].nunique()
         if bool((counts > 1).any()):
             raise ValueError("MOM labels contain multiple winners for one match")
-    x[match_id_col] = x[match_id_col].astype("string").str.strip()
-    x[player_id_col] = x[player_id_col].astype("string").str.strip()
+    x[match_id_col] = x[match_id_col].map(_canonical_identity).astype("string")
+    x[player_id_col] = x[player_id_col].map(_canonical_identity).astype("string")
     x["is_motm"] = 0
     winners = set(zip(y[match_id_col].astype(str), y[player_id_col].astype(str)))
     x["is_motm"] = [
