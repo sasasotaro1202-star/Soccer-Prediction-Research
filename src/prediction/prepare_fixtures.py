@@ -73,6 +73,10 @@ def prepare_future_fixtures(
 
 def prepare_from_files(fixtures_path: str, output_path: str, history_path: str | None = None) -> pd.DataFrame:
     fixtures = pd.read_csv(fixtures_path)
+    # Empty upstream snapshots are a valid fail-closed state. Return immediately
+    # instead of loading the full historical dataset just to produce zero rows.
+    if fixtures.empty:
+        return prepare_future_fixtures(fixtures, pd.DataFrame(), output_path)
     if history_path:
         history = pd.read_csv(history_path)
         for c in ("kickoff_utc", "source_available_at_utc"):
