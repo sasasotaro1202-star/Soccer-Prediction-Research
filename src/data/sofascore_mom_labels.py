@@ -30,11 +30,12 @@ DEFAULT_MAX_EVENT_DELTA_HOURS = 6.0
 
 
 def _norm_team(value: Any) -> str:
-    text = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode("ascii")
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
     text = text.casefold()
-    # Remove only presentation punctuation/spacing. Do not use fuzzy similarity
-    # here: a wrong event label is worse than a missing label.
-    return re.sub(r"[^a-z0-9]+", "", text)
+    # Keep non-Latin scripts intact. Do not use fuzzy similarity here: a wrong
+    # event label is worse than a missing label.
+    return re.sub(r"[\\W_]+", "", text, flags=re.UNICODE)
 
 
 def _parse_json(body: bytes) -> dict[str, Any]:
