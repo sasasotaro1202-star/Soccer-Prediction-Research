@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.data.fixture_field_audit import TARGET_COMPETITIONS
+from src.data.competition_sources import source_plans
 from src.data.football_data import load_available_history
 # Use the optimized, fail-closed adapter.  Importing v2 directly bypasses the
 # retry/redirect handling and precise early-capture scan implemented by the fast
@@ -44,6 +45,23 @@ CANONICAL_SOURCES = {
     "U18_M": "JFA / AFC / UEFA",
 }
 NON_APPLICABLE_CELLS = {("J3", f"{y}/{str(y + 1)[-2:]}") for y in range(2010, 2014)}
+
+_CANONICAL_SOURCE_PLAN = {
+    plan.competition: plan.canonical_candidates[0]
+    for plan in source_plans()
+    if plan.canonical_candidates
+}
+
+
+def _canonical_source_for(comp: str) -> str:
+    return CANONICAL_SOURCES.get(
+        comp,
+        _CANONICAL_SOURCE_PLAN.get(comp, "UNVERIFIED / no canonical source configured"),
+    )
+
+
+def _has_status(cell: object, wanted: str) -> bool:
+    return wanted in {part.strip() for part in str(cell).split("|") if part.strip()}
 
 
 def _normalize_acquisition(acq: pd.DataFrame) -> pd.DataFrame:
@@ -306,7 +324,7 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
     for comp in TARGET_COMPETITIONS:
         for season in SEASONS:
             if (comp, season) in NON_APPLICABLE_CELLS:
-                rows.append({"competition": comp, "season": season, "canonical_source": CANONICAL_SOURCES[comp], "status": "NOT_APPLICABLE", "rows": 0, "reason": "Competition did not exist in this historical season"})
+                rows.append({"competition": comp, "season": season, "canonical_source": _canonical_source_for(comp), "status": "NOT_APPLICABLE", "rows": 0, "reason": "Competition did not exist in this historical season"})
                 continue
             candidates = acquisition[(acquisition.competition == comp) & acquisition.season.map(lambda x: _season_display(comp, x) == season)]
             # Calendar-year competitions (J1/J2/J3/Asian Games/youth) are emitted by
@@ -334,10 +352,10 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
 
     missing_audit_cells = int(matrix.status.eq("MISSING_AUDIT_CELL").sum())
     parse_error_cells = int(matrix.status.str.contains("PARSE_ERROR", na=False).sum())
-    available_cells = int(matrix.status.str.contains("AVAILABLE", na=False).sum())
-    unavailable_cells = int(matrix.status.str.contains("UNAVAILABLE", na=False).sum())
-    not_applicable_cells = int(matrix.status.str.contains("NOT_APPLICABLE", na=False).sum())
-    accounted_cells = int(matrix.status.str.contains(r"AVAILABLE|UNAVAILABLE|NOT_APPLICABLE", regex=True, na=False).sum())
+    available_cells = int(matrix.status.map(lambda cell: _has_status(cell, "AVAILABLE")).sum())
+    unavailable_cells = int(matrix.status.map(lambda cell: _has_status(cell, "UNAVAILABLE")).sum())
+    not_applicable_cells = int(matrix.status.map(lambda cell: _has_status(cell, "NOT_APPLICABLE")).sum())
+    accounted_cells = int(matrix.status.map(lambda cell: any(_has_status(cell, token) for token in ("AVAILABLE", "UNAVAILABLE", "NOT_APPLICABLE"))).sum())
     scope_complete = missing_audit_cells == 0
 
     duplicate_source_rows = int(reconciliation.duplicate_source_identity.sum()) if "duplicate_source_identity" in reconciliation.columns and not reconciliation.empty else 0
