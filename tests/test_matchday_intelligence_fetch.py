@@ -204,3 +204,9 @@ def test_asian_games_are_not_misrouted_to_argentina():
     assert _sofascore_competition({"tournament": {"name": "Asian Games"}}) == "AG_M"
     assert _sofascore_competition({"tournament": {"name": "Asian Games, Women"}}) == "AG_W"
     assert _sofascore_competition({"tournament": {"name": "Liga Profesional de Fútbol"}}) == "ARG"
+
+
+def test_weather_without_timestamps_remains_unknown():
+    severity, temp = parse_weather_severity({"hourly": {}}, pd.Timestamp("2026-09-25T12:00:00Z"))
+    assert pd.isna(severity)
+    assert pd.isna(temp)
