@@ -52,3 +52,39 @@ def test_prepare_rejects_unknown_kickoff():
     f.loc[0, "kickoff_utc"] = "not-a-time"
     with pytest.raises(RuntimeError, match="invalid kickoff_utc"):
         prepare_future_fixtures(f, _history())
+
+
+def test_prepare_future_fixtures_preserves_matchday_intelligence_fields(monkeypatch):
+    import src.prediction.prepare_fixtures as pf
+
+    history = pd.DataFrame([{
+        "match_id": "h1",
+        "kickoff_utc": "2026-09-20T12:00:00Z",
+        "home_team": "A",
+        "away_team": "B",
+        "home_goals": 1,
+        "away_goals": 0,
+        "competition": "EPL",
+        "source_available_at_utc": "2026-09-20T10:00:00Z",
+    }])
+    fixtures = pd.DataFrame([{
+        "match_id": "m1",
+        "competition": "EPL",
+        "kickoff_utc": "2026-09-25T12:00:00Z",
+        "home_team": "A",
+        "away_team": "B",
+        "source_available_at_utc": "2026-09-24T10:00:00Z",
+        "starter_status": "CONFIRMED",
+        "matchday_available_at_utc": "2026-09-25T08:00:00Z",
+        "matchday_pit_verified": True,
+        "matchday_source": "free-public-test-source",
+        "matchday_market_p_home": 0.50,
+        "matchday_market_p_draw": 0.27,
+        "matchday_market_p_away": 0.23,
+    }])
+    feature_rows = fixtures[["match_id", "kickoff_utc", "home_team", "away_team", "competition"]].copy()
+    feature_rows["feature_x"] = 1.0
+    monkeypatch.setattr(pf, "build_match_features", lambda history, future: feature_rows.copy())
+    out = pf.prepare_future_fixtures(fixtures, history)
+    for col in ["matchday_available_at_utc", "matchday_pit_verified", "matchday_source", "matchday_market_p_home", "matchday_market_p_draw", "matchday_market_p_away"]:
+        assert col in out.columns

@@ -40,7 +40,15 @@ def prepare_future_fixtures(
     feature_rows = build_match_features(history, f)
     if feature_rows["match_id"].duplicated().any():
         raise RuntimeError("Feature builder returned duplicate future fixture identities")
-    passthrough = f[["match_id", "source_available_at_utc", "starter_status"]].copy()
+    matchday_columns = [c for c in f.columns if c.startswith("matchday_")]
+    passthrough_columns = ["match_id", "source_available_at_utc", "starter_status", *matchday_columns]
+    passthrough = f[passthrough_columns].copy()
+    # Matchday intelligence is an evidence layer, not part of historical feature fitting.
+    # Preserve its raw PIT metadata/signals verbatim so the production runner can validate
+    # and apply them later without guessing or silently dropping the evidence.
+    overlap = [c for c in matchday_columns if c in feature_rows.columns]
+    if overlap:
+        feature_rows = feature_rows.drop(columns=overlap)
     out = feature_rows.merge(passthrough, on="match_id", how="left", validate="one_to_one")
     if len(out) != len(f):
         raise RuntimeError("Future fixture preparation changed fixture row count")
