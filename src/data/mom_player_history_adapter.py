@@ -295,8 +295,9 @@ def build_mom_feature_rows(
     if out.empty:
         raise RuntimeError("No PIT-safe MOM candidate rows could be constructed")
 
-    # Use a conservative 60-minute denominator floor for rate features. This avoids
-    # extreme per90 inflation from tiny substitute appearances while preserving PIT.
+    # Missing performance statistics remain explicit NaN values. The downstream
+    # MOM model learns training-slice-only median imputation plus missingness
+    # indicators; no missing statistic is converted to zero here.
 
     required = {
         "match_id", "player_id", "kickoff_utc", "feature_available_at_utc",
@@ -311,10 +312,13 @@ def build_mom_feature_rows(
         "opponent_defense_strength", "position_attack_weight", "days_rest",
     ]
     numeric = out[model_features].apply(pd.to_numeric, errors="coerce")
+    # Numeric conversion validates schema, but missing values are deliberately
+    # retained for model-side missingness-aware imputation.
+    if bool(np.isinf(numeric.to_numpy(dtype=float)).any()):
+        raise RuntimeError("MOM feature construction produced infinite values")
     out = out.loc[
         out["pit_verified"]
         & (out["feature_available_at_utc"] < out["kickoff_utc"])
-        & np.isfinite(numeric.to_numpy(dtype=float)).all(axis=1)
     ].copy()
     return out.reset_index(drop=True)
 
