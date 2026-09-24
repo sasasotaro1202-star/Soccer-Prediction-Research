@@ -11,6 +11,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import minimize
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -136,6 +137,80 @@ def _verified_training_slice(history: pd.DataFrame) -> pd.DataFrame:
     return d
 
 
+
+
+class ConditionalMOMLogit:
+    """Conditional-choice model: exactly one MOM winner per fixture.
+
+    The objective is a grouped conditional log-likelihood, so class imbalance
+    from varying squad sizes is handled by the softmax denominator rather than
+    an arbitrary binary class weight.
+    """
+
+    def __init__(self, l2: float = 1.0):
+        self.l2 = float(l2)
+
+    def fit(self, frame: pd.DataFrame, y: np.ndarray) -> "ConditionalMOMLogit":
+        x = frame.to_numpy(dtype=float)
+        labels = np.asarray(y, dtype=int)
+        self.mean_ = x.mean(axis=0)
+        self.scale_ = x.std(axis=0)
+        self.scale_[self.scale_ < 1e-12] = 1.0
+        z = (x - self.mean_) / self.scale_
+
+        # Caller supplies rows sorted by match. Each contiguous group has exactly
+        # one positive label; this makes the optimization a grouped conditional logit.
+        match_ids = frame.index.to_numpy()
+        groups = []
+        start = 0
+        if len(z):
+            current = match_ids[0]
+            for i, value in enumerate(match_ids[1:], start=1):
+                if value != current:
+                    groups.append((start, i))
+                    start = i
+                    current = value
+            groups.append((start, len(z)))
+
+        def objective(beta: np.ndarray) -> tuple[float, np.ndarray]:
+            loss = 0.5 * self.l2 * float(np.dot(beta, beta))
+            grad = self.l2 * beta.copy()
+            for lo, hi in groups:
+                zg = z[lo:hi]
+                yg = labels[lo:hi]
+                positive = np.flatnonzero(yg == 1)
+                if len(positive) != 1:
+                    raise RuntimeError("Conditional MOM training requires exactly one positive per match")
+                scores = zg @ beta
+                shift = float(np.max(scores))
+                exp_scores = np.exp(np.clip(scores - shift, -700.0, 700.0))
+                probs = exp_scores / max(float(exp_scores.sum()), _EPS)
+                target = positive[0]
+                loss += -float(scores[target] - shift - np.log(max(float(exp_scores.sum()), _EPS)))
+                grad += zg.T @ probs
+                grad -= zg[target]
+            return float(loss), grad
+
+        result = minimize(
+            lambda beta: objective(beta)[0],
+            np.zeros(z.shape[1], dtype=float),
+            jac=lambda beta: objective(beta)[1],
+            method="L-BFGS-B",
+            options={"maxiter": 400, "ftol": 1e-10, "gtol": 1e-7},
+        )
+        if not result.success or not np.isfinite(result.x).all():
+            raise RuntimeError(f"Conditional MOM optimization failed: {result.message}")
+        self.coef_ = np.asarray(result.x, dtype=float)
+        return self
+
+    def decision_function(self, frame: pd.DataFrame) -> np.ndarray:
+        z = (frame.to_numpy(dtype=float) - self.mean_) / self.scale_
+        scores = z @ self.coef_
+        if not np.isfinite(scores).all():
+            raise RuntimeError("Conditional MOM model produced non-finite scores")
+        return scores
+
+
 def fit_mom_model(
     history: pd.DataFrame,
     *,
@@ -143,6 +218,7 @@ def fit_mom_model(
     temperature: float = 1.0,
     min_matches: int = 5,
     random_state: int = 42,
+    method: str = "binary_logit",
 ) -> dict[str, Any]:
     """Fit a conservative binary MOM scorer on PIT-verified historical rows.
 
@@ -163,20 +239,30 @@ def fit_mom_model(
     if np.unique(y).size != 2:
         raise RuntimeError("MOM training requires both positive and negative classes")
 
-    model = Pipeline([
-        ("scale", StandardScaler()),
-        ("model", LogisticRegression(
-            max_iter=3000,
-            C=float(regularization_c),
-            class_weight="balanced",
-            random_state=random_state,
-        )),
-    ])
-    model.fit(d[list(MOM_FEATURE_COLUMNS)], y)
+    if method == "conditional_logit":
+        # Preserve chronological row/group order; ConditionalMOMLogit consumes
+        # complete fixture groups and models the winner choice directly.
+        model = ConditionalMOMLogit(l2=1.0 / max(float(regularization_c), 1e-9))
+        ordered = d.sort_values(["kickoff_utc", "match_id", "player_id"], kind="mergesort").reset_index(drop=True)
+        model.fit(ordered[list(MOM_FEATURE_COLUMNS)], ordered["is_motm"].to_numpy(dtype=int))
+        d = ordered
+    elif method == "binary_logit":
+        model = Pipeline([
+            ("scale", StandardScaler()),
+            ("model", LogisticRegression(
+                max_iter=3000,
+                C=float(regularization_c),
+                class_weight="balanced",
+                random_state=random_state,
+            )),
+        ])
+        model.fit(d[list(MOM_FEATURE_COLUMNS)], y)
+    else:
+        raise ValueError("Unsupported MOM training method")
 
     meta = MOMModelMetadata(
         schema_version=1,
-        method="pit_player_form_logistic_softmax",
+        method="pit_player_form_conditional_logit" if method == "conditional_logit" else "pit_player_form_logistic_softmax",
         feature_columns=MOM_FEATURE_COLUMNS,
         training_rows=int(len(d)),
         training_matches=match_count,
