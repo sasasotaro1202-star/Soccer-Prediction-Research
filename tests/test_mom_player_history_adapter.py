@@ -81,9 +81,9 @@ def test_target_fixture_statistics_do_not_enter_candidate_features():
 
 
 def test_label_attachment_never_converts_unmatched_target_to_negative():
-    fixtures, players, stats = _frames()
+    fixtures, players, player_stats, stats = _frames()
     features = build_mom_feature_rows(fixtures, players, player_stats, stats, min_history_appearances=1)
-    labels = pd.DataFrame([{"match_id": "5.0", "player_id": str(features.loc[features["match_id"] == "5.0", "player_id"].iloc[0])}])
+    labels = pd.DataFrame([{"match_id": "5.0", "player_id": str(features.loc[features["match_id"] == "5", "player_id"].iloc[0])}])
     labelled = attach_mom_labels(features, labels)
     assert "is_motm" in labelled.columns
     assert labelled.groupby("match_id")["is_motm"].sum().eq(1).all()
