@@ -224,12 +224,8 @@ def collect_sofascore_mom_labels(
         if event_id in (None, ""):
             raise RuntimeError(f"SofaScore matched event has no id for match_id={series['match_id']!r}")
         label = fetch_mom_label(event_id, fetcher=fetcher)
-        event_time = best["event_kickoff_utc"] if "event_kickoff_utc" in best else best["event"].get("startTimestamp")
-        event_time_utc = (
-            pd.to_datetime(int(event_time), unit="s", utc=True).isoformat()
-            if isinstance(event_time, (int, float))
-            else ""
-        )
+        event_time = best.get("event_kickoff_utc")
+        event_time_utc = event_time.isoformat() if isinstance(event_time, pd.Timestamp) else ""
         rows.append({
             "match_id": str(series["match_id"]),
             "label_status": "LABEL_FOUND" if label["label_found"] else "LABEL_MISSING",
