@@ -15,6 +15,21 @@ import pandas as pd
 REQUIRED_FIXTURE_COLUMNS = {"id", "date_utc", "home_team_id", "away_team_id", "goals_home", "goals_away"}
 REQUIRED_PLAYER_COLUMNS = {"fixture_id", "team_id", "player_id", "player_name"}
 REQUIRED_KNOWN_AT_COLUMNS = {"fixture_id", "known_at"}
+SOCCER_DATASET_REPOSITORY = "v-eatpizzanot/soccer-dataset"
+SOCCER_DATASET_COMMIT = "af71e692edbda9e4697ce1bda2e06b551f3a0052"
+SOCCER_DATASET_VERSION = "1.0.0"
+SOCCER_DATASET_LICENSE = "CC-BY-4.0"
+
+def soccer_dataset_pinned_urls() -> dict[str, str]:
+    base = f"https://huggingface.co/datasets/eatpizzanot/soccer-dataset/resolve/{SOCCER_DATASET_COMMIT}"
+    return {
+        "fixtures": f"{base}/fixtures.parquet",
+        "match_stats": f"{base}/match_stats.parquet",
+        "fixture_players": f"{base}/fixture_players.parquet",
+        "fixture_players_stats_flat": f"{base}/fixture_players_stats_flat.parquet",
+    }
+
+
 STAT_COLUMNS = (
     "rating",
     "minutes",
@@ -298,4 +313,8 @@ def mom_data_contract_report(feature_rows: pd.DataFrame) -> dict[str, Any]:
         "matches_with_at_least_4_candidates": int((match_counts >= 4).sum()),
         "minimum_candidates": int(match_counts.min()),
         "fail_closed": True,
+        "source_repository": SOCCER_DATASET_REPOSITORY,
+        "source_commit": SOCCER_DATASET_COMMIT,
+        "source_version": SOCCER_DATASET_VERSION,
+        "source_license": SOCCER_DATASET_LICENSE,
     }
