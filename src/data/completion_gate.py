@@ -346,7 +346,7 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
                 status = "|".join(sorted(set(candidates.status.astype(str))))
                 count = int(pd.to_numeric(candidates.rows, errors="coerce").fillna(0).sum())
                 reason = "Explicit acquisition status from one or more adapters"
-            rows.append({"competition": comp, "season": season, "canonical_source": CANONICAL_SOURCES[comp], "status": status, "rows": count, "reason": reason})
+            rows.append({"competition": comp, "season": season, "canonical_source": _canonical_source_for(comp), "status": status, "rows": count, "reason": reason})
     matrix = pd.DataFrame(rows)
     matrix.to_csv(root / "competition_season_gate.csv", index=False)
 
