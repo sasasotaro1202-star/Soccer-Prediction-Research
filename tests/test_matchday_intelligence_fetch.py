@@ -317,3 +317,42 @@ def test_football_data_complements_partial_sofascore_coverage(monkeypatch):
     assert set(frame["match_id"]) == {"sofa:partial", "fdx:complement"}
     assert any(x["provider"] == "sofascore" for x in status["fallback_usage"])
     assert any(x["provider"] == "football-data.co.uk" for x in status["fallback_usage"])
+
+def test_matchday_lineup_signal_uses_confirmed_availability_burden_not_fixed_zero_point_five():
+    import src.data.matchday_intelligence_fetch as m
+    row = m._matchday_base_row(
+        match_id="m-lineup",
+        kickoff=pd.Timestamp("2026-09-25T12:00:00Z"),
+        home_team="A",
+        away_team="B",
+        competition="EPL",
+        source="sofascore",
+        available_at="2026-09-25T10:00:00Z",
+    )
+    class Dummy:
+        pass
+    class Fetcher:
+        def get(self, *args, **kwargs):
+            return Dummy()
+    # Patch the JSON helper because _enrich_sofascore_lineup only needs its decoded payload.
+    original = m._get_json
+    try:
+        m._get_json = lambda *args, **kwargs: ({
+            "confirmed": True,
+            "home": {
+                "players": [{"starter": True, "player": {"id": str(i)}} for i in range(11)],
+                "missingPlayers": [{}],
+            },
+            "away": {
+                "players": [{"starter": True, "player": {"id": str(i)}} for i in range(11, 22)],
+                "missingPlayers": [],
+            },
+        }, "2026-09-25T11:00:00Z")
+        updated, _ = m._enrich_sofascore_lineup(Fetcher(), row)
+    finally:
+        m._get_json = original
+    assert updated["starter_status"] == "ANNOUNCED"
+    assert updated["matchday_lineup_missing_count_home"] == 1
+    assert updated["matchday_lineup_missing_count_away"] == 0
+    assert updated["matchday_lineup_impact_home"] > updated["matchday_lineup_impact_away"]
+    assert updated["matchday_lineup_impact_away"] == 0.50
