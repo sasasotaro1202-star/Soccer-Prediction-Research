@@ -228,3 +228,36 @@ def test_future_matchday_snapshot_is_not_merged(tmp_path):
     )
     assert status == "NO_PIT_SAFE_ROWS"
     assert "matchday_source" not in merged.columns
+
+
+def test_prediction_output_keeps_matchday_baseline_probabilities(tmp_path, monkeypatch):
+    from src.prediction import runner
+
+    monkeypatch.setattr(
+        runner,
+        "load_adopted_model",
+        lambda path: {"adoption_status": "ADOPT", "model_version": "v1", "oos_verified": True},
+    )
+    monkeypatch.setattr(runner, "load_bundle", lambda path: {"model_version": "v1"})
+    monkeypatch.setattr(runner, "predict_bundle", lambda bundle, X: [[0.60, 0.25, 0.15]])
+
+    fixtures_path = tmp_path / "future.csv"
+    output_path = tmp_path / "predictions.csv"
+    status_path = tmp_path / "status.json"
+    _fixture_rows().to_csv(fixtures_path, index=False)
+
+    status = runner.run(
+        fixtures_path=str(fixtures_path),
+        bundle_path=str(tmp_path / "model.pkl"),
+        output_path=str(output_path),
+        status_path=str(status_path),
+        prediction_time="2026-09-15T11:00:00Z",
+        registry_path=str(tmp_path / "registry.json"),
+    )
+
+    result = pd.read_csv(output_path)
+    assert {"base_p_home", "base_p_draw", "base_p_away"} <= set(result.columns)
+    assert result.loc[0, "base_p_home"] == pytest.approx(0.60)
+    assert result.loc[0, "base_p_draw"] == pytest.approx(0.25)
+    assert result.loc[0, "base_p_away"] == pytest.approx(0.15)
+    assert status["status"] == "PREDICTED"

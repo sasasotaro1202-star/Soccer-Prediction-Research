@@ -378,12 +378,16 @@ def run(
         raise RuntimeError(f"Production prediction returned unexpected probability shape: {probs.shape}")
     if not np.isfinite(probs).all() or not np.allclose(probs.sum(axis=1), 1.0, atol=1e-6):
         raise RuntimeError("Production prediction produced invalid probabilities")
+    base_probs = probs.copy()
     probs, matchday_diagnostics = apply_matchday_intelligence(probs, eligible, now)
     if probs.shape != (len(eligible), 3) or not np.isfinite(probs).all():
         raise RuntimeError("Matchday intelligence produced invalid probabilities")
     if not np.allclose(probs.sum(axis=1), 1.0, atol=1e-6):
         raise RuntimeError("Matchday intelligence produced non-normalized probabilities")
     result = eligible[["match_id", "kickoff_utc", "home_team", "away_team"]].copy()
+    result["base_p_home"] = base_probs[:, 0]
+    result["base_p_draw"] = base_probs[:, 1]
+    result["base_p_away"] = base_probs[:, 2]
     result["p_home"] = probs[:, 0]
     result["p_draw"] = probs[:, 1]
     result["p_away"] = probs[:, 2]
