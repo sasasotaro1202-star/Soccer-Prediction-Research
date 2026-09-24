@@ -81,3 +81,14 @@ def test_mom_wfo_development_locked_split():
 def test_mom_feature_schema_is_explicit():
     assert len(MOM_FEATURE_COLUMNS) >= 10
     assert all(isinstance(x, str) and x for x in MOM_FEATURE_COLUMNS)
+
+
+def test_mom_wfo_accepts_conditional_logit_method():
+    metrics = run_mom_walk_forward(
+        _rows(18),
+        n_blocks=6,
+        min_train_matches=5,
+        method="conditional_logit",
+    )
+    assert len(metrics) >= 3
+    assert np.isfinite(metrics[["top1_hit_rate", "top4_hit_rate", "mrr", "ndcg_at_4", "logloss", "brier", "ece"]].to_numpy()).all()
