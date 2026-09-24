@@ -16,13 +16,16 @@ REQUIRED_FIXTURE_COLUMNS = {"id", "date_utc", "home_team_id", "away_team_id", "g
 REQUIRED_PLAYER_COLUMNS = {"fixture_id", "team_id", "player_id", "player_name", "is_starter", "position", "minutes", "rating"}
 REQUIRED_PLAYER_STATS_COLUMNS = {"fixture_id", "player_id"}
 REQUIRED_KNOWN_AT_COLUMNS = {"fixture_id", "known_at"}
-SOCCER_DATASET_REPOSITORY = "v-eatpizzanot/soccer-dataset"
-SOCCER_DATASET_COMMIT = "af71e692edbda9e4697ce1bda2e06b551f3a0052"
+# Source-code provenance and the separately published immutable HF data revision.
+SOCCER_DATASET_SOURCE_REPOSITORY = "v-eatpizzanot/soccer-dataset"
+SOCCER_DATASET_SOURCE_COMMIT = "af71e692edbda9e4697ce1bda2e06b551f3a0052"
+SOCCER_DATASET_REPOSITORY = "eatpizzanot/soccer-dataset"
+SOCCER_DATASET_COMMIT = "f0cbe86"
 SOCCER_DATASET_VERSION = "1.0.0"
 SOCCER_DATASET_LICENSE = "CC-BY-4.0"
 
 def soccer_dataset_pinned_urls() -> dict[str, str]:
-    base = f"https://huggingface.co/datasets/eatpizzanot/soccer-dataset/resolve/{SOCCER_DATASET_COMMIT}"
+    base = f"https://huggingface.co/datasets/{SOCCER_DATASET_REPOSITORY}/resolve/{SOCCER_DATASET_COMMIT}"
     return {
         "fixtures": f"{base}/fixtures.parquet",
         "match_stats": f"{base}/match_stats.parquet",
