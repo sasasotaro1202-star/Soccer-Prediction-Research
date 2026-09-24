@@ -16,7 +16,7 @@ concurrency:
   # CI is disposable; keep only the newest verification for each ref to prevent stale queue buildup.
   # Long-running 9H research uses a separate concurrency group and is never cancelled by this policy.
   group: soccer-ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   test:
