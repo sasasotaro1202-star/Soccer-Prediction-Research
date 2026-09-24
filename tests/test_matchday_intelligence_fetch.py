@@ -329,6 +329,7 @@ def test_matchday_lineup_signal_uses_confirmed_availability_burden_not_fixed_zer
         source="sofascore",
         available_at="2026-09-25T10:00:00Z",
     )
+    row["sofascore_event_id"] = "12345"
     class Dummy:
         pass
     class Fetcher:
