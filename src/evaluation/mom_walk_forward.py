@@ -172,6 +172,7 @@ def run_mom_walk_forward(
     regularization_c: float = 0.30,
     temperature: float = 1.0,
     random_state: int = 42,
+    method: str = "binary_logit",
 ) -> pd.DataFrame:
     """Run expanding-window chronological OOS evaluation by complete match blocks."""
     d = _validate_history(history)
@@ -199,6 +200,7 @@ def run_mom_walk_forward(
             temperature=temperature,
             min_matches=min_train_matches,
             random_state=random_state,
+            method=method,
         )
 
         distributions = []
