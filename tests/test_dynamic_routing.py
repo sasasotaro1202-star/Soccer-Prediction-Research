@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from src.monitoring.dynamic_routing import build_drift_reference, compute_drift_scores, dynamic_route_weights, normalized_entropy
+from src.monitoring.dynamic_routing import build_drift_reference, compute_drift_scores, dynamic_route_weights, normalized_entropy, routing_risk_bucket, routing_risk_score
 
 
 def test_drift_reference_is_deterministic_and_reference_only():
@@ -36,3 +36,10 @@ def test_entropy_is_bounded():
     assert low < high
     assert 0.0 <= low <= 1.0
     assert 0.0 <= high <= 1.0
+
+
+def test_routing_risk_score_and_bucket_are_bounded():
+    scores = routing_risk_score(np.asarray([0.0, 0.5, 1.0]), np.asarray([0.0, 0.2, 1.0]))
+    assert np.all((scores >= 0.0) & (scores <= 1.0))
+    buckets = routing_risk_bucket(scores)
+    assert list(buckets) == ["LOW", "MEDIUM", "HIGH"]
