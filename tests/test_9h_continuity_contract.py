@@ -31,6 +31,15 @@ def test_autonomous_workflow_has_continuous_9h_cycle_and_strict_concurrency():
     assert text.count("retention-days: 3") == 3
     assert "if-no-files-found: error" in text
 
+def test_phase3_never_persists_stale_research_to_newer_main():
+    text = AUTONOMOUS.read_text(encoding="utf-8")
+    assert "Verify latest-main handoff before persistence" in text
+    assert "id: latest_main_handoff" in text
+    assert 'CURRENT_MAIN_MATCHES="true"' in text
+    assert 'CURRENT_MAIN_MATCHES="false"' in text
+    assert "steps.latest_main_handoff.outputs.current_main_matches == 'true'" in text
+    assert "latest_main_handoff.json" in text
+
 
 def test_recovery_workflow_has_watchdog_and_self_chaining_dispatch():
     text = RECOVERY.read_text(encoding="utf-8")
