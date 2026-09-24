@@ -186,7 +186,7 @@ def apply_matchday_intelligence(
                 adjusted = (1.0 - market_weight) * adjusted + market_weight * market
                 signal_names.append("market")
                 signal_count += 3
-            if _present_group(columns, _SIGNAL_GROUPS["market_odds"]):
+            elif _present_group(columns, _SIGNAL_GROUPS["market_odds"]):
                 odds = _validate_group(row, _SIGNAL_GROUPS["market_odds"], "market_odds")
                 market = 1.0 / np.clip(odds, 1.000001, None)
                 market /= market.sum()

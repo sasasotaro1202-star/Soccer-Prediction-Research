@@ -492,7 +492,15 @@ def _routed_ensemble_proba(
 ) -> tuple[np.ndarray, list[str]] | tuple[np.ndarray, list[str], dict[str, np.ndarray]]:
     """Batch-predict every model once, then apply hierarchical routing row-wise."""
     if frame.empty:
-        return np.empty((0, 3), dtype=float), []
+        empty_diag = {
+            "drift": np.empty(0, dtype=float),
+            "uncertainty": np.empty(0, dtype=float),
+            "entropy": np.empty(0, dtype=float),
+            "disagreement": np.empty(0, dtype=float),
+            "trust": np.empty(0, dtype=float),
+            "risk": np.empty(0, dtype=float),
+        }
+        return (np.empty((0, 3), dtype=float), [], empty_diag) if return_diagnostics else (np.empty((0, 3), dtype=float), [])
 
     routed = _routing_context(frame.reset_index(drop=True)).reset_index(drop=True)
     names = list(fitted_models)

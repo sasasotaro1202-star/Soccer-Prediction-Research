@@ -23,3 +23,52 @@ def test_pit_gate_requires_real_timestamps_and_cutoff_order():
 
 def test_iso_timestamp_comparison_handles_offsets():
     assert pit_is_safe("2026-01-01T09:00:00+09:00", "2026-01-01T00:00:01Z")
+
+
+def test_cache_ttl_forces_refetch(monkeypatch, tmp_path):
+    from src.data import external_fetch
+
+    class Response:
+        status_code = 200
+        content = b"fresh"
+        def raise_for_status(self):
+            return None
+
+    calls = {"n": 0}
+    def fake_get(*args, **kwargs):
+        calls["n"] += 1
+        return Response()
+
+    monkeypatch.setattr(external_fetch.requests, "get", fake_get)
+    fetcher = external_fetch.ExternalFetcher(cache_dir=tmp_path, retries=1)
+    first = fetcher.get("test", "https://example.test/data", cache_ttl_seconds=0)
+    second = fetcher.get("test", "https://example.test/data", cache_ttl_seconds=0)
+    assert first.metadata.cache_hit is False
+    assert second.metadata.cache_hit is False
+    assert calls["n"] == 2
+
+
+def test_cache_hit_recomputes_pit_against_new_cutoff(monkeypatch, tmp_path):
+    from src.data import external_fetch
+
+    class Response:
+        status_code = 200
+        content = b"same"
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(external_fetch.requests, "get", lambda *a, **k: Response())
+    fetcher = external_fetch.ExternalFetcher(cache_dir=tmp_path, retries=1)
+    first = fetcher.get(
+        "test", "https://example.test/pit",
+        feature_available_at="2026-01-02T00:00:00Z",
+        prediction_cutoff_at="2026-01-03T00:00:00Z",
+    )
+    second = fetcher.get(
+        "test", "https://example.test/pit",
+        feature_available_at="2026-01-02T00:00:00Z",
+        prediction_cutoff_at="2026-01-01T00:00:00Z",
+    )
+    assert first.metadata.pit_safe is True
+    assert second.metadata.cache_hit is True
+    assert second.metadata.pit_safe is False

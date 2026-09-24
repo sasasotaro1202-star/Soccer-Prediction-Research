@@ -1,0 +1,90 @@
+name: Soccer Matchday Intelligence Refresh
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "UTC days of fixture snapshots to collect"
+        required: false
+        default: "2"
+      horizon_hours:
+        description: "Detailed refresh horizon around kickoff"
+        required: false
+        default: "12"
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soccer-matchday-intelligence
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies with bounded retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt; then exit 0; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 10))
+          done
+      - name: Refresh current matchday intelligence
+        env:
+          PYTHONPATH: .
+          DAYS: \${{ inputs.days || '2' }}
+          HORIZON_HOURS: \${{ inputs.horizon_hours || '12' }}
+        run: |
+          set -euo pipefail
+          python -m src.data.matchday_intelligence_fetch \
+            --days "\${DAYS}" \
+            --horizon-hours "\${HORIZON_HOURS}" \
+            --output artifacts/future_matchday_fixtures.csv \
+            --status artifacts/matchday_intelligence_status.json
+      - name: Validate snapshot contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+
+          status = json.loads(Path("artifacts/matchday_intelligence_status.json").read_text())
+          frame = pd.read_csv("artifacts/future_matchday_fixtures.csv")
+          required = {
+              "match_id", "kickoff_utc", "home_team", "away_team",
+              "source_available_at_utc", "pit_verified", "starter_status",
+              "matchday_available_at_utc", "matchday_pit_verified",
+          }
+          missing = sorted(required - set(frame.columns))
+          if missing:
+              raise SystemExit(f"matchday snapshot missing required columns: {missing}")
+          if frame["match_id"].duplicated().any():
+              raise SystemExit("duplicate match_id in matchday snapshot")
+          allowed_status = {"EXPECTED", "ANNOUNCED"}
+          actual_status = set(frame["starter_status"].dropna().astype(str).str.upper())
+          if not actual_status <= allowed_status:
+              raise SystemExit(f"unexpected starter_status values: {sorted(actual_status - allowed_status)}")
+          print({"status": status.get("status"), "rows": len(frame), "errors": len(status.get("errors", []))})
+          PY
+      - name: Upload matchday intelligence artifact
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: soccer-matchday-intelligence-\${{ github.run_id }}
+          path: artifacts/future_matchday_fixtures.csv,artifacts/matchday_intelligence_status.json
+          retention-days: 2

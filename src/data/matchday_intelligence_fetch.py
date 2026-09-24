@@ -1,0 +1,541 @@
+from __future__ import annotations
+
+import argparse
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
+from src.data.external_fetch import ExternalFetcher, iso_utc
+
+
+ESPN_LEAGUES: dict[str, str] = {
+    "EPL": "eng.1",
+    "ERE": "ned.1",
+    "LL": "esp.1",
+    "SA": "ita.1",
+    "BL1": "ger.1",
+    "FL1": "fra.1",
+    "J1": "jpn.1",
+    "J2": "jpn.2",
+    "J3": "jpn.3",
+    "UCL": "uefa.champions",
+    "UEL": "uefa.europa",
+    "AG_M": "arg.1",
+    "MLS": "usa.1",
+}
+
+DETAILED_HORIZON_HOURS = 12.0
+MAX_EVENTS = 80
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _ts(value: Any) -> pd.Timestamp | None:
+    if value is None or value == "":
+        return None
+    out = pd.to_datetime(value, utc=True, errors="coerce")
+    return None if pd.isna(out) else pd.Timestamp(out)
+
+
+def _number(value: Any) -> float | None:
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    return out if np.isfinite(out) else None
+
+
+def _american_prob(value: Any) -> float | None:
+    number = _number(value)
+    if number is None or number == 0:
+        return None
+    return 100.0 / (number + 100.0) if number > 0 else -number / (-number + 100.0)
+
+
+def _devig(odds: tuple[float, float, float]) -> tuple[float, float, float]:
+    inv = np.asarray([1.0 / max(float(v), 1.000001) for v in odds], dtype=float)
+    total = float(inv.sum())
+    if not np.isfinite(total) or total <= 0:
+        raise ValueError("invalid market odds")
+    inv /= total
+    return tuple(float(v) for v in inv)
+
+
+def _get_json(
+    fetcher: ExternalFetcher,
+    source: str,
+    url: str,
+    params: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], str]:
+    response = fetcher.get(
+        source,
+        url,
+        params=params,
+        headers={"User-Agent": "Soccer-Prediction-Research/1.0"},
+        cache_ttl_seconds=600.0,
+    )
+    try:
+        payload = json.loads(response.body.decode("utf-8-sig"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"{source}: invalid JSON") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"{source}: payload root is not an object")
+    return payload, response.metadata.retrieved_at
+
+
+def parse_market_odds(
+    summary: dict[str, Any],
+) -> tuple[tuple[float, float, float] | None, tuple[float, float, float] | None, str]:
+    candidates: list[tuple[int, str, tuple[float, float, float]]] = []
+    for item in summary.get("odds", []) or []:
+        if not isinstance(item, dict):
+            continue
+        home_obj = item.get("homeTeamOdds") or {}
+        away_obj = item.get("awayTeamOdds") or {}
+        draw_obj = item.get("drawOdds") or item.get("drawTeamOdds") or {}
+        home = _number(home_obj.get("value") or home_obj.get("decimalValue"))
+        draw = _number(draw_obj.get("value") or draw_obj.get("decimalValue"))
+        away = _number(away_obj.get("value") or away_obj.get("decimalValue"))
+        provider = str((item.get("provider") or {}).get("name") or "ESPN")
+        priority = int(_number((item.get("provider") or {}).get("priority")) or 9999)
+        if home is not None and draw is not None and away is not None and min(home, draw, away) > 1.0:
+            candidates.append((priority, provider, (home, draw, away)))
+            continue
+        hp = _american_prob(home_obj.get("moneyLine"))
+        dp = _american_prob(draw_obj.get("moneyLine"))
+        ap = _american_prob(away_obj.get("moneyLine"))
+        if hp is not None and dp is not None and ap is not None:
+            values = np.asarray([hp, dp, ap], dtype=float)
+            values /= values.sum()
+            return None, tuple(float(v) for v in values), provider
+    if not candidates:
+        return None, None, ""
+    _, provider, odds = sorted(candidates, key=lambda x: (x[0], x[1]))[0]
+    return odds, _devig(odds), provider
+
+
+def parse_injury_impact(payload: dict[str, Any]) -> tuple[float, int, float]:
+    weights = {
+        "out": 1.0,
+        "doubtful": 0.70,
+        "questionable": 0.35,
+        "day-to-day": 0.35,
+        "probable": 0.10,
+    }
+    total = 0.0
+    severe = 0
+    entries = payload.get("injuries", []) or []
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        status = str(
+            item.get("status")
+            or (item.get("fantasy") or {}).get("status")
+            or ""
+        ).strip().lower()
+        weight = next((v for k, v in weights.items() if k in status), 0.0)
+        total += weight
+        if weight >= 0.70:
+            severe += 1
+    impact = float(np.clip(total / 4.0, 0.0, 1.0))
+    confidence = float(np.clip(0.50 + min(len(entries), 8) * 0.06, 0.50, 0.95))
+    return impact, severe, confidence
+
+
+def parse_event_roster(payload: dict[str, Any]) -> tuple[int, set[str]]:
+    starters: set[str] = set()
+    for item in payload.get("entries", []) or []:
+        if not isinstance(item, dict) or item.get("starter") is not True:
+            continue
+        athlete = item.get("athlete") or {}
+        athlete_id = athlete.get("id") or item.get("playerId")
+        if athlete_id is not None:
+            starters.add(str(athlete_id))
+    return len(starters), starters
+
+
+def parse_weather_severity(
+    payload: dict[str, Any],
+    kickoff: pd.Timestamp,
+) -> tuple[float, float]:
+    hourly = payload.get("hourly") or {}
+    times = pd.to_datetime(pd.Series(hourly.get("time") or []), utc=True, errors="coerce")
+    if times.empty or times.isna().all():
+        return 0.0, 0.0
+    index = int(np.argmin(np.abs((times - kickoff).dt.total_seconds().to_numpy(dtype=float))))
+
+    def value(key: str, default: float = 0.0) -> float:
+        values = hourly.get(key) or []
+        raw = values[index] if index < len(values) else None
+        out = _number(raw)
+        return default if out is None else out
+
+    precip = value("precipitation_probability")
+    wind = value("windspeed_10m")
+    temp = value("temperature_2m", 20.0)
+    code = value("weathercode")
+    severity = (
+        0.45 * float(np.clip((precip - 40.0) / 60.0, 0.0, 1.0))
+        + 0.30 * float(np.clip((wind - 20.0) / 30.0, 0.0, 1.0))
+        + 0.15 * float(np.clip((abs(temp - 20.0) - 8.0) / 18.0, 0.0, 1.0))
+        + (0.10 if code >= 95 else 0.0)
+    )
+    return float(np.clip(severity, 0.0, 1.0)), temp
+
+
+def _event_core(event: dict[str, Any], competition: str) -> dict[str, Any] | None:
+    competitions = event.get("competitions") or []
+    if not competitions:
+        return None
+    comp = competitions[0]
+    home = next((x for x in comp.get("competitors", []) or [] if x.get("homeAway") == "home"), None)
+    away = next((x for x in comp.get("competitors", []) or [] if x.get("homeAway") == "away"), None)
+    kickoff = _ts(event.get("date") or comp.get("startDate"))
+    if not home or not away or kickoff is None:
+        return None
+    venue = comp.get("venue") or {}
+    address = venue.get("address") or {}
+    return {
+        "match_id": f"espn:{event.get('id')}",
+        "espn_event_id": str(event.get("id")),
+        "espn_league": ESPN_LEAGUES[competition],
+        "kickoff_utc": kickoff.isoformat(),
+        "home_team": str((home.get("team") or {}).get("displayName") or home.get("id")),
+        "away_team": str((away.get("team") or {}).get("displayName") or away.get("id")),
+        "home_team_id": str((home.get("team") or {}).get("id") or home.get("id") or ""),
+        "away_team_id": str((away.get("team") or {}).get("id") or away.get("id") or ""),
+        "competition": competition,
+        "venue_name": str(venue.get("fullName") or ""),
+        "venue_city": str(address.get("city") or ""),
+        "venue_country": str(address.get("country") or ""),
+        "venue_lat": _number((venue.get("coordinates") or {}).get("latitude")),
+        "venue_lon": _number((venue.get("coordinates") or {}).get("longitude")),
+    }
+
+
+def _weather(
+    fetcher: ExternalFetcher,
+    row: dict[str, Any],
+    kickoff: pd.Timestamp,
+) -> tuple[float, str | None, float | None, float | None]:
+    lat, lon = row.get("venue_lat"), row.get("venue_lon")
+    retrieved = None
+    if lat is None or lon is None:
+        name = f"{row.get('venue_city', '')}, {row.get('venue_country', '')}".strip(", ")
+        if not name:
+            return 0.0, None, lat, lon
+        geo, retrieved = _get_json(
+            fetcher,
+            "open_meteo_geocoding",
+            "https://geocoding-api.open-meteo.com/v1/search",
+            {"name": name, "count": 1, "language": "en", "format": "json"},
+        )
+        results = geo.get("results") or []
+        if not results:
+            return 0.0, retrieved, lat, lon
+        lat = _number(results[0].get("latitude"))
+        lon = _number(results[0].get("longitude"))
+    if lat is None or lon is None:
+        return 0.0, retrieved, lat, lon
+    weather, retrieved = _get_json(
+        fetcher,
+        "open_meteo_forecast",
+        "https://api.open-meteo.com/v1/forecast",
+        {
+            "latitude": lat,
+            "longitude": lon,
+            "hourly": "temperature_2m,precipitation_probability,windspeed_10m,weathercode",
+            "timezone": "UTC",
+            "forecast_days": 2,
+        },
+    )
+    severity, _ = parse_weather_severity(weather, kickoff)
+    return severity, retrieved, lat, lon
+
+
+def collect_matchday_snapshots(
+    *,
+    days: int = 2,
+    horizon_hours: float = DETAILED_HORIZON_HOURS,
+    max_events: int = MAX_EVENTS,
+    cache_dir: str = "cache/external",
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Collect current evidence; no historical PIT claim is made."""
+    now = _now()
+    now_ts = pd.Timestamp(now)
+    fetcher = ExternalFetcher(cache_dir=cache_dir, timeout=20.0, retries=3, backoff=1.0)
+    rows: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    for day_offset in range(max(1, int(days))):
+        date = (now + pd.Timedelta(days=day_offset)).strftime("%Y%m%d")
+        for competition, league in ESPN_LEAGUES.items():
+            try:
+                scoreboard, scoreboard_at = _get_json(
+                    fetcher,
+                    "espn_scoreboard",
+                    f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard",
+                    {"dates": date},
+                )
+            except Exception as exc:
+                errors.append({
+                    "source": "espn_scoreboard",
+                    "competition": competition,
+                    "error": f"{type(exc).__name__}: {exc}",
+                })
+                continue
+
+            for event in scoreboard.get("events", []) or []:
+                core = _event_core(event, competition)
+                if not core or core["match_id"] in seen:
+                    continue
+                kickoff = _ts(core["kickoff_utc"])
+                if kickoff is None or kickoff <= now_ts:
+                    continue
+                seen.add(core["match_id"])
+
+                row: dict[str, Any] = {
+                    **core,
+                    "source_available_at_utc": scoreboard_at,
+                    "pit_verified": True,
+                    "starter_status": "EXPECTED",
+                    "matchday_available_at_utc": scoreboard_at,
+                    "matchday_pit_verified": True,
+                    "matchday_source": "espn_scoreboard",
+                    "matchday_signal_confidence": 0.40,
+                    "matchday_injury_impact_home": 0.0,
+                    "matchday_injury_impact_away": 0.0,
+                    "matchday_lineup_impact_home": 0.0,
+                    "matchday_lineup_impact_away": 0.0,
+                    "matchday_weather_penalty_home": 0.0,
+                    "matchday_weather_penalty_away": 0.0,
+                    "matchday_rest_diff_hours": np.nan,
+                    "matchday_market_p_home": np.nan,
+                    "matchday_market_p_draw": np.nan,
+                    "matchday_market_p_away": np.nan,
+                    "matchday_odds_home": np.nan,
+                    "matchday_odds_draw": np.nan,
+                    "matchday_odds_away": np.nan,
+                    "matchday_market_provider": "",
+                    "matchday_weather_severity": np.nan,
+                }
+
+                near = (kickoff - now_ts).total_seconds() / 3600.0 <= float(horizon_hours)
+                if near:
+                    retrieval_times = [scoreboard_at]
+                    try:
+                        summary, at = _get_json(
+                            fetcher,
+                            "espn_summary",
+                            f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/summary",
+                            {"event": core["espn_event_id"]},
+                        )
+                        retrieval_times.append(at)
+                        odds, market, provider = parse_market_odds(summary)
+                        if odds is not None:
+                            row["matchday_odds_home"], row["matchday_odds_draw"], row["matchday_odds_away"] = odds
+                        if market is not None:
+                            row["matchday_market_p_home"], row["matchday_market_p_draw"], row["matchday_market_p_away"] = market
+                        row["matchday_market_provider"] = provider
+                    except Exception as exc:
+                        errors.append({
+                            "source": "espn_summary",
+                            "match_id": core["match_id"],
+                            "error": f"{type(exc).__name__}: {exc}",
+                        })
+
+                    injury_ok = 0
+                    for side, key in (("home", "home_team_id"), ("away", "away_team_id")):
+                        team_id = row[key]
+                        if not team_id:
+                            continue
+                        try:
+                            payload, at = _get_json(
+                                fetcher,
+                                "espn_injuries",
+                                f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/teams/{team_id}/injuries",
+                            )
+                            retrieval_times.append(at)
+                            impact, _, _ = parse_injury_impact(payload)
+                            row[f"matchday_injury_impact_{side}"] = impact
+                            injury_ok += 1
+                        except Exception as exc:
+                            errors.append({
+                                "source": "espn_injuries",
+                                "match_id": core["match_id"],
+                                "error": f"{type(exc).__name__}: {exc}",
+                            })
+
+                    starters: dict[str, int] = {}
+                    for side, key in (("home", "home_team_id"), ("away", "away_team_id")):
+                        team_id = row[key]
+                        if not team_id:
+                            continue
+                        url = (
+                            f"https://sports.core.api.espn.com/v2/sports/soccer/leagues/{league}"
+                            f"/events/{core['espn_event_id']}/competitions/{core['espn_event_id']}"
+                            f"/competitors/{team_id}/roster"
+                        )
+                        try:
+                            payload, at = _get_json(fetcher, "espn_event_roster", url)
+                            retrieval_times.append(at)
+                            count, _ = parse_event_roster(payload)
+                            starters[side] = count
+                        except Exception as exc:
+                            errors.append({
+                                "source": "espn_event_roster",
+                                "match_id": core["match_id"],
+                                "error": f"{type(exc).__name__}: {exc}",
+                            })
+                    if starters.get("home", 0) >= 11 and starters.get("away", 0) >= 11:
+                        row["starter_status"] = "ANNOUNCED"
+                        row["matchday_signal_confidence"] = max(row["matchday_signal_confidence"], 0.85)
+
+                    rest_values: dict[str, float] = {}
+                    for side, key in (("home", "home_team_id"), ("away", "away_team_id")):
+                        team_id = row[key]
+                        if not team_id:
+                            continue
+                        try:
+                            schedule, at = _get_json(
+                                fetcher,
+                                "espn_team_schedule",
+                                f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/teams/{team_id}/schedule",
+                                {"limit": 30},
+                            )
+                            retrieval_times.append(at)
+                            prior = [
+                                _ts(e.get("date") or e.get("startDate"))
+                                for e in schedule.get("events", []) or []
+                            ]
+                            prior = [x for x in prior if x is not None and x < kickoff]
+                            if prior:
+                                rest_values[side] = float((kickoff - max(prior)).total_seconds() / 3600.0)
+                        except Exception as exc:
+                            errors.append({
+                                "source": "espn_team_schedule",
+                                "match_id": core["match_id"],
+                                "error": f"{type(exc).__name__}: {exc}",
+                            })
+                    if "home" in rest_values and "away" in rest_values:
+                        row["matchday_rest_diff_hours"] = rest_values["home"] - rest_values["away"]
+
+                    try:
+                        severity, at, lat, lon = _weather(fetcher, row, kickoff)
+                        if at:
+                            retrieval_times.append(at)
+                        row["venue_lat"], row["venue_lon"] = lat, lon
+                        row["matchday_weather_severity"] = severity
+                        # Same weather is not turned into an invented home/away edge.
+                        row["matchday_weather_penalty_home"] = severity
+                        row["matchday_weather_penalty_away"] = severity
+                    except Exception as exc:
+                        errors.append({
+                            "source": "open_meteo",
+                            "match_id": core["match_id"],
+                            "error": f"{type(exc).__name__}: {exc}",
+                        })
+
+                    row["matchday_available_at_utc"] = max(retrieval_times)
+                    row["matchday_pit_verified"] = all(
+                        pd.Timestamp(x).tzinfo is not None and pd.Timestamp(x) <= now_ts
+                        for x in retrieval_times
+                    )
+                    quality = [
+                        float(bool(row["matchday_market_provider"])),
+                        float(injury_ok == 2),
+                        float(row["starter_status"] == "ANNOUNCED"),
+                        float(pd.notna(row["matchday_weather_severity"])),
+                        float(pd.notna(row["matchday_rest_diff_hours"])),
+                    ]
+                    row["matchday_signal_confidence"] = float(
+                        np.clip(max(row["matchday_signal_confidence"], np.mean(quality)), 0.0, 1.0)
+                    )
+                    row["matchday_source"] = "espn+open_meteo"
+
+                rows.append(row)
+                if len(rows) >= max_events:
+                    break
+            if len(rows) >= max_events:
+                break
+        if len(rows) >= max_events:
+            break
+
+    frame = pd.DataFrame(rows)
+    if not frame.empty:
+        frame["kickoff_utc"] = pd.to_datetime(frame["kickoff_utc"], utc=True)
+        frame["source_available_at_utc"] = pd.to_datetime(frame["source_available_at_utc"], utc=True)
+        frame["matchday_available_at_utc"] = pd.to_datetime(frame["matchday_available_at_utc"], utc=True)
+        frame = (
+            frame.drop_duplicates("match_id")
+            .sort_values(["kickoff_utc", "match_id"], kind="mergesort")
+            .reset_index(drop=True)
+        )
+
+    status = {
+        "status": "COLLECTED" if not frame.empty else (
+            "DEFERRED_EXTERNAL_SOURCE" if errors else "NO_UPCOMING_FIXTURES"
+        ),
+        "prediction_time_utc": iso_utc(now),
+        "rows": int(len(frame)),
+        "errors": errors,
+        "historical_pit_claim": False,
+        "current_snapshot_pit_basis": "conservative_observation_time",
+        "free_keyless_default": True,
+    }
+    return frame, status
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", default="artifacts/future_matchday_fixtures.csv")
+    parser.add_argument("--status", default="artifacts/matchday_intelligence_status.json")
+    parser.add_argument("--days", type=int, default=2)
+    parser.add_argument("--horizon-hours", type=float, default=DETAILED_HORIZON_HOURS)
+    parser.add_argument("--max-events", type=int, default=MAX_EVENTS)
+    parser.add_argument("--cache-dir", default="cache/external")
+    args = parser.parse_args()
+
+    output = Path(args.output)
+    status_path = Path(args.status)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    status_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        frame, status = collect_matchday_snapshots(
+            days=max(1, args.days),
+            horizon_hours=max(1.0, args.horizon_hours),
+            max_events=max(1, args.max_events),
+            cache_dir=args.cache_dir,
+        )
+    except Exception as exc:
+        status = {
+            "status": "FAILED_INTERNAL",
+            "error": f"{type(exc).__name__}: {exc}",
+            "free_keyless_default": True,
+        }
+        status_path.write_text(json.dumps(status, indent=2, ensure_ascii=False), encoding="utf-8")
+        return 1
+
+    if frame.empty:
+        pd.DataFrame(columns=[
+            "match_id", "kickoff_utc", "home_team", "away_team", "competition",
+            "source_available_at_utc", "pit_verified", "starter_status",
+            "matchday_available_at_utc", "matchday_pit_verified",
+        ]).to_csv(output, index=False)
+    else:
+        frame.to_csv(output, index=False)
+    status_path.write_text(json.dumps(status, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    print(json.dumps(status, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
