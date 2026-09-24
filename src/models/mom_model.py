@@ -149,7 +149,7 @@ class MissingnessAwareMOMTransformer:
     for every model feature.
     """
 
-    def fit(self, frame: pd.DataFrame) -> "MissingnessAwareMOMTransformer":
+    def fit(self, frame: pd.DataFrame, y: Any = None) -> "MissingnessAwareMOMTransformer":
         x = frame[list(MOM_FEATURE_COLUMNS)].apply(pd.to_numeric, errors="coerce")
         self.medians_ = x.median(axis=0, skipna=True).to_numpy(dtype=float)
         if not np.isfinite(self.medians_).all():
@@ -169,8 +169,8 @@ class MissingnessAwareMOMTransformer:
             raise RuntimeError("MOM imputation produced non-finite features")
         return out
 
-    def fit_transform(self, frame: pd.DataFrame) -> np.ndarray:
-        return self.fit(frame).transform(frame)
+    def fit_transform(self, frame: pd.DataFrame, y: Any = None) -> np.ndarray:
+        return self.fit(frame, y).transform(frame)
 
 
 class ConditionalMOMLogit:
