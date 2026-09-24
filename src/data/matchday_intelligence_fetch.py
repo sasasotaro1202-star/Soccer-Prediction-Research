@@ -360,7 +360,7 @@ def _matchday_base_row(
         "matchday_lineup_impact_away": np.nan,
         "matchday_weather_penalty_home": np.nan,
         "matchday_weather_penalty_away": np.nan,
-        "matchday_rest_diff_hours": np.nan
+        "matchday_rest_diff_hours": np.nan,
         "matchday_market_p_home": np.nan,
         "matchday_market_p_draw": np.nan,
         "matchday_market_p_away": np.nan,
