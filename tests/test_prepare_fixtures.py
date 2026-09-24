@@ -88,3 +88,25 @@ def test_prepare_future_fixtures_preserves_matchday_intelligence_fields(monkeypa
     out = pf.prepare_future_fixtures(fixtures, history)
     for col in ["matchday_available_at_utc", "matchday_pit_verified", "matchday_source", "matchday_market_p_home", "matchday_market_p_draw", "matchday_market_p_away"]:
         assert col in out.columns
+
+
+def test_empty_future_fixture_snapshot_is_fail_closed(tmp_path):
+    history = pd.DataFrame({
+        "match_id": ["h1"],
+        "kickoff_utc": [pd.Timestamp("2026-09-20T12:00:00Z")],
+        "home_team": ["A"],
+        "away_team": ["B"],
+        "home_goals": [1],
+        "away_goals": [0],
+        "source_available_at_utc": [pd.Timestamp("2026-09-20T10:00:00Z")],
+    })
+    fixtures = pd.DataFrame(columns=[
+        "match_id", "competition", "kickoff_utc", "home_team", "away_team",
+        "source_available_at_utc", "starter_status", "pit_verified",
+    ])
+    out_path = tmp_path / "future.csv"
+    from src.prediction.prepare_fixtures import prepare_future_fixtures
+    out = prepare_future_fixtures(fixtures, history, str(out_path))
+    assert out.empty
+    assert out_path.exists()
+    assert list(pd.read_csv(out_path).columns) == list(fixtures.columns)
