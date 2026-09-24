@@ -89,6 +89,22 @@ COMPETITION_CATALOG: tuple[CompetitionSpec, ...] = (
     CompetitionSpec("UCL", "UEFA Champions League", "Europe", "continental", "europe"),
     CompetitionSpec("UEL", "UEFA Europa League", "Europe", "continental", "europe"),
     CompetitionSpec("UECL", "UEFA Conference League", "Europe", "continental", "europe"),
+    CompetitionSpec("UEFA_SUPER_CUP", "UEFA Super Cup", "Europe", "continental", "europe"),
+    CompetitionSpec("UEFA_YOUTH_LEAGUE", "UEFA Youth League", "Europe", "youth", "europe"),
+    CompetitionSpec("UWCL", "UEFA Women's Champions League", "Europe", "continental", "europe"),
+    CompetitionSpec("UWEC", "UEFA Women's Europa Cup", "Europe", "continental", "europe"),
+    CompetitionSpec("UEFA_EURO_M", "UEFA European Championship (EURO)", "Europe", "senior", "international"),
+    CompetitionSpec("UEFA_EURO_QUALI_M", "UEFA European Qualifiers", "Europe", "senior", "international"),
+    CompetitionSpec("UEFA_NATIONS_LEAGUE_M", "UEFA Nations League", "Europe", "senior", "international"),
+    CompetitionSpec("UEFA_EURO_W", "UEFA Women's European Championship", "Europe", "senior", "international"),
+    CompetitionSpec("UEFA_EURO_QUALI_W", "UEFA Women's European Qualifiers", "Europe", "senior", "international"),
+    CompetitionSpec("UEFA_NATIONS_LEAGUE_W", "UEFA Women's Nations League", "Europe", "senior", "international"),
+    CompetitionSpec("UEFA_U21", "UEFA European Under-21 Championship", "Europe", "U21", "youth"),
+    CompetitionSpec("UEFA_U19", "UEFA European Under-19 Championship", "Europe", "U19", "youth"),
+    CompetitionSpec("UEFA_U17", "UEFA European Under-17 Championship", "Europe", "U17", "youth"),
+    CompetitionSpec("UEFA_WU19", "UEFA Women's European Under-19 Championship", "Europe", "U19", "youth"),
+    CompetitionSpec("UEFA_WU17", "UEFA Women's European Under-17 Championship", "Europe", "U17", "youth"),
+    CompetitionSpec("UEFA_REGIONS_CUP", "UEFA Regions' Cup", "Europe", "amateur", "europe"),
 
     # ------------------------------------------------------------------
     # International senior football: men and women.
@@ -169,7 +185,13 @@ def research_targets() -> list[CompetitionSpec]:
 # OOS research and production work must not spend resources on them.
 ACTIVE_SCOPE = frozenset({
     "EPL", "AG_M", "AG_W", "ERE", "LL", "SA", "BL1",
-    "J1", "J2", "J3", "FL1", "UCL", "UEL", "U23_M", "U18_M",
+    "J1", "J2", "J3", "FL1",
+    "UCL", "UEL", "UECL", "UEFA_SUPER_CUP", "UEFA_YOUTH_LEAGUE", "UWCL", "UWEC",
+    "UEFA_EURO_M", "UEFA_EURO_QUALI_M", "UEFA_NATIONS_LEAGUE_M",
+    "UEFA_EURO_W", "UEFA_EURO_QUALI_W", "UEFA_NATIONS_LEAGUE_W",
+    "UEFA_U21", "UEFA_U19", "UEFA_U17", "UEFA_WU19", "UEFA_WU17",
+    "UEFA_REGIONS_CUP", "EMP_CUP", "INTL_M", "INTL_W",
+    "U23_M", "U18_M",
 })
 
 def active_competitions() -> tuple[CompetitionSpec, ...]:
