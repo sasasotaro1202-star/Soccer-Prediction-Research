@@ -28,7 +28,7 @@ def test_load_preflight_pit_features_reuses_gate_features_and_attaches_outcomes(
     assert result["home_goals"].tolist() == [2, 0]
     assert result["away_goals"].tolist() == [1, 1]
     assert result["pit_verified"].tolist() == [True, False]
-    assert result["target"].tolist() == [0, 1]
+    assert result["target"].tolist() == [0, 2]
 
 
 def test_load_preflight_pit_features_rejects_missing_outcome_identity(tmp_path):
