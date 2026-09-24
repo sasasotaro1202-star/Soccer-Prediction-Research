@@ -93,3 +93,6 @@ def test_pit_features_include_momentum_and_matchup_interactions():
     assert "attack_defense_matchup_diff_5" in out.columns
     assert "draw_tension_10" in out.columns
     assert "strength_rest_interaction" in out.columns
+    assert "home_history_support_n" in out.columns
+    assert "away_history_support_n" in out.columns
+    assert float(out.iloc[-1]["home_history_support_n"]) >= 0.0
