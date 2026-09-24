@@ -41,7 +41,12 @@ DEFAULT_START = "2024-08-01"
 DEFAULT_END = "2025-06-01"
 
 
-def _load_frames(start: str, end: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def _load_frames(
+    start: str,
+    end: str,
+    *,
+    history_start: str | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     try:
         import duckdb
     except ImportError as exc:
@@ -50,6 +55,15 @@ def _load_frames(start: str, end: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.D
     urls = soccer_dataset_pinned_urls()
     owner, name = SOCCER_DATASET_REPOSITORY.split("/", 1)
     dataset_base = f"https://huggingface.co/datasets/{owner}/{name}/resolve/{SOCCER_DATASET_COMMIT}"
+    target_start = pd.Timestamp(start)
+    target_end = pd.Timestamp(end)
+    if target_end <= target_start:
+        raise ValueError("MOM target end must be after target start")
+    if history_start is None:
+        history_start = (target_start - pd.Timedelta(days=370)).strftime("%Y-%m-%d")
+    history_start_ts = pd.Timestamp(history_start)
+    if history_start_ts >= target_start:
+        raise ValueError("MOM history_start must precede target start")
     con = duckdb.connect()
     try:
         try:
@@ -80,8 +94,8 @@ def _load_frames(start: str, end: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.D
               ON f.away_team_id = away_team_ref.id
             WHERE l.id = 39
               AND f.is_played = TRUE
-              AND CAST(f.date_utc AS TIMESTAMP) >= TIMESTAMP '{start}'
-              AND CAST(f.date_utc AS TIMESTAMP) < TIMESTAMP '{end}'
+              AND CAST(f.date_utc AS TIMESTAMP) >= TIMESTAMP '{history_start_ts.strftime("%Y-%m-%d %H:%M:%S")}'
+              AND CAST(f.date_utc AS TIMESTAMP) < TIMESTAMP '{target_end.strftime("%Y-%m-%d %H:%M:%S")}'
             ORDER BY f.date_utc, f.id
         """
         fixtures = con.execute(fixture_sql).fetchdf()
@@ -186,10 +200,23 @@ def run(
             "season_start_year": int(season_start_year),
             "start": start,
             "end": end,
+            "history_start": None,
         },
     }
 
-    fixtures, player_matches, player_stats, match_stats = _load_frames(start, end)
+    history_start = (pd.Timestamp(start) - pd.Timedelta(days=370)).strftime("%Y-%m-%d")
+    report["target"]["history_start"] = history_start
+    fixtures, player_matches, player_stats, match_stats = _load_frames(
+        start,
+        end,
+        history_start=history_start,
+    )
+    target_fixtures = fixtures.loc[
+        (pd.to_datetime(fixtures["date_utc"], utc=True) >= pd.Timestamp(start, tz="UTC"))
+        & (pd.to_datetime(fixtures["date_utc"], utc=True) < pd.Timestamp(end, tz="UTC"))
+    ].copy()
+    if target_fixtures.empty:
+        raise RuntimeError("No target EPL fixtures found after history expansion")
     features = build_mom_feature_rows(
         fixtures,
         player_matches,
@@ -221,7 +248,7 @@ def run(
     }
 
     labels = collect_sofascore_mom_labels_tournament_season(
-        fixtures[["id", "date_utc", "home_team", "away_team"]].rename(columns={"id": "match_id", "date_utc": "kickoff_utc"}),
+        target_fixtures[["id", "date_utc", "home_team", "away_team"]].rename(columns={"id": "match_id", "date_utc": "kickoff_utc"}),
         tournament_id=tournament_id,
         season_id=season_id,
         cache_dir=str(root / "cache"),
