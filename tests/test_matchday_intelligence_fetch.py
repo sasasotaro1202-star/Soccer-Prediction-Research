@@ -2,6 +2,8 @@ import pandas as pd
 
 from src.data.matchday_intelligence_fetch import (
     _devig,
+    parse_football_data_fixtures,
+    parse_sofascore_event,
     parse_event_roster,
     parse_injury_impact,
     parse_market_odds,
@@ -91,3 +93,62 @@ def test_parse_market_odds_prefers_explicit_decimal_value():
     assert odds == (3.50, 3.00, 2.25)
     assert provider == "explicit-decimal"
     assert abs(sum(probs) - 1.0) < 1e-12
+
+
+def test_parse_sofascore_event_maps_supported_tournament():
+    payload = {
+        "id": 123,
+        "startTimestamp": 1790337600,
+        "tournament": {"name": "Premier League"},
+        "homeTeam": {"id": 1, "name": "Home FC"},
+        "awayTeam": {"id": 2, "name": "Away FC"},
+        "venue": {"name": "Test Stadium", "city": "London", "country": {"name": "England"}},
+    }
+    row = parse_sofascore_event(payload)
+    assert row is not None
+    assert row["competition"] == "EPL"
+    assert row["home_team"] == "Home FC"
+    assert row["away_team"] == "Away FC"
+
+
+def test_parse_football_data_fixtures_uses_current_fixture_shape():
+    frame = pd.DataFrame([{
+        "Div": "E0",
+        "Date": "25/09/2026",
+        "Time": "20:00",
+        "HomeTeam": "Home FC",
+        "AwayTeam": "Away FC",
+        "AvgH": 2.0,
+        "AvgD": 3.5,
+        "AvgA": 4.0,
+    }])
+    rows = parse_football_data_fixtures(
+        frame,
+        now=pd.Timestamp("2026-09-25T00:00:00Z"),
+        horizon_hours=24,
+        available_at="2026-09-25T00:05:00Z",
+        max_events=10,
+    )
+    assert len(rows) == 1
+    assert rows[0]["competition"] == "EPL"
+    assert rows[0]["matchday_market_provider"] == "football-data:average"
+    probs = [rows[0]["matchday_market_p_home"], rows[0]["matchday_market_p_draw"], rows[0]["matchday_market_p_away"]]
+    assert abs(sum(probs) - 1.0) < 1e-12
+
+
+def test_football_data_fixture_with_unknown_division_is_ignored():
+    frame = pd.DataFrame([{
+        "Div": "UNKNOWN",
+        "Date": "25/09/2026",
+        "Time": "20:00",
+        "HomeTeam": "Home FC",
+        "AwayTeam": "Away FC",
+    }])
+    rows = parse_football_data_fixtures(
+        frame,
+        now=pd.Timestamp("2026-09-25T00:00:00Z"),
+        horizon_hours=24,
+        available_at="2026-09-25T00:05:00Z",
+        max_events=10,
+    )
+    assert rows == []
