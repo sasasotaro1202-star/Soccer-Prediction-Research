@@ -13,6 +13,7 @@ from src.prediction.model_bundle import load_bundle, predict_bundle
 from src.prediction.active_model import resolve_active_production_paths, resolve_best_available_paths
 from src.prediction.secondary_outputs import predict_mom_candidates, predict_score_candidates, predict_score_markets
 from src.prediction.matchday_intelligence import apply_matchday_intelligence
+from src.data.competition_sources import TARGET_COMPETITIONS
 
 
 REQUIRED_FIXTURE_COLUMNS = {
@@ -210,6 +211,11 @@ def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) ->
         raise RuntimeError("Future fixture input contains invalid/missing source_available_at_utc values")
     d["pit_verified"] = _strict_bool(d["pit_verified"], "pit_verified")
     d["starter_status"] = d["starter_status"].astype("string").str.upper().str.strip()
+    d["competition"] = d["competition"].astype("string").str.strip().str.upper()
+    # Live auxiliary/supplemental competitions may coexist in the acquisition
+    # snapshot, but they are not production-prediction targets until they pass
+    # the same historical PIT/OOS/completion gates as the active scope.
+    d = d[d["competition"].isin(TARGET_COMPETITIONS)].copy()
     if d["starter_status"].isna().any() or d["starter_status"].eq("").any():
         raise RuntimeError("Future fixture input contains missing/empty starter_status values")
     d = d[
