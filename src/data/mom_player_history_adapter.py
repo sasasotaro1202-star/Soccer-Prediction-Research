@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 REQUIRED_FIXTURE_COLUMNS = {"id", "date_utc", "home_team_id", "away_team_id", "goals_home", "goals_away"}
-REQUIRED_PLAYER_COLUMNS = {"fixture_id", "team_id", "player_id", "player_name"}
+REQUIRED_PLAYER_COLUMNS = {"fixture_id", "team_id", "player_id", "player_name", "is_starter", "position", "minutes", "rating"}
 REQUIRED_PLAYER_STATS_COLUMNS = {"fixture_id", "player_id"}
 REQUIRED_KNOWN_AT_COLUMNS = {"fixture_id", "known_at"}
 SOCCER_DATASET_REPOSITORY = "v-eatpizzanot/soccer-dataset"
@@ -135,8 +135,8 @@ def _prepare_inputs(
     )
     p["minutes"] = p["minutes"].combine_first(p["_flat_minutes"])
     p["rating"] = p["rating"].combine_first(p["_flat_rating"])
-    p["position"] = p.get("position", pd.Series("", index=p.index, dtype="string")).astype("string")
-    p["is_starter"] = p.get("is_starter", pd.Series(False, index=p.index)).fillna(False).astype(bool)
+    p["position"] = p["position"].astype("string")
+    p["is_starter"] = p["is_starter"].astype("boolean")
 
     s["fixture_id"] = pd.to_numeric(s["fixture_id"], errors="coerce")
     s["known_at"] = pd.to_datetime(s["known_at"], utc=True, errors="coerce")
