@@ -59,8 +59,8 @@ jobs:
         run: |
           set -euo pipefail
           python -m src.data.matchday_intelligence_fetch \
-            --days "\${DAYS}" \
-            --horizon-hours "\${HORIZON_HOURS}" \
+            --days "${DAYS}" \
+            --horizon-hours "${HORIZON_HOURS}" \
             --output artifacts/future_matchday_fixtures.csv \
             --status artifacts/matchday_intelligence_status.json
       - name: Validate snapshot contract
