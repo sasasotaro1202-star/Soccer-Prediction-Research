@@ -83,6 +83,21 @@ def _minimal_passing_artifacts(tmp_path):
         "context_weights": {"MISSING": {"m": 1.0}},
         "contextual_temperatures": {"MISSING": 1.0},
         "contextual_temperature_reasons": {"MISSING": "unit_fixture"},
+        "dynamic_routing": {
+            "schema_version": 1,
+            "type": "drift_uncertainty_router",
+            "enabled": True,
+            "drift_strength": 0.85,
+            "uncertainty_strength": 0.75,
+            "min_specialist_trust": 0.25,
+            "feature_cols": ["f1"],
+            "reference": {
+                "schema_version": 1,
+                "type": "reference_only_robust_numeric",
+                "features": {"f1": {"median": 1.0, "scale": 1.0, "n": 3}},
+            },
+            "reference_scope": "final_pit_verified_training_data_only",
+        },
     }
     bundle = {
         "schema_version": 3,
