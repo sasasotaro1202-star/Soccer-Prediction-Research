@@ -1,0 +1,223 @@
+name: Soccer 9H Queue Watchdog
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Independent 5-minute queue watchdog. This is separate from the recovery
+    # controller so a missed/delayed recovery schedule cannot leave the 9H queue
+    # permanently pending.
+    - cron: "*/5 * * * *"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: soccer-9h-queue-watchdog
+  cancel-in-progress: true
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Reconcile stuck 9H queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          get_runs() {
+            curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/soccer-9h-autonomous.yml/runs?per_page=20"
+          }
+
+          get_runs > /tmp/9h-runs.json
+          MAIN_SHA="$(curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/git/ref/heads/main" \
+            | python -c 'import json,sys; print(json.load(sys.stdin)["object"]["sha"])')"
+
+          export MAIN_SHA
+          DECISION="$(python - /tmp/9h-runs.json <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          payload = json.loads(Path("/tmp/9h-runs.json").read_text())
+          main_sha = os.environ["MAIN_SHA"]
+          prestart = {"pending", "queued", "waiting", "requested"}
+          active = prestart | {"in_progress"}
+
+          def ts(run):
+              raw = run.get("created_at") or run.get("updated_at")
+              if not raw:
+                  return datetime.min.replace(tzinfo=timezone.utc)
+              return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+
+          now = datetime.now(timezone.utc)
+          runs = [
+              run for run in payload.get("workflow_runs", [])
+              if run.get("head_branch") == "main"
+              and run.get("status") in active
+          ]
+          in_progress = [r for r in runs if r.get("status") == "in_progress"]
+          if in_progress:
+              print("ACTIVE")
+              raise SystemExit(0)
+
+          current_pending = [
+              r for r in runs
+              if r.get("head_sha") == main_sha and r.get("status") in prestart
+          ]
+          if current_pending:
+              oldest = min(current_pending, key=ts)
+              age_min = (now - ts(oldest)).total_seconds() / 60.0
+              if age_min >= 20.0:
+                  print("RESTART")
+              else:
+                  print("WAIT")
+              raise SystemExit(0)
+
+          # No current-main run is active. If only obsolete prestart work remains,
+          # clear it and create one fresh run on the latest main SHA.
+          obsolete_pending = [
+              r for r in runs
+              if r.get("head_sha") != main_sha and r.get("status") in prestart
+          ]
+          if obsolete_pending:
+              print("CLEAN_DISPATCH")
+          else:
+              completed = [
+                  r for r in payload.get("workflow_runs", [])
+                  if r.get("status") == "completed"
+                  and r.get("head_branch") == "main"
+                  and r.get("head_sha") == main_sha
+              ]
+              if not completed:
+                  print("DISPATCH")
+              else:
+                  latest = max(completed, key=lambda r: r.get("updated_at") or r.get("created_at") or "")
+                  age_h = (now - ts(latest)).total_seconds() / 3600.0
+                  print("DISPATCH" if age_h >= 2.0 else "WAIT")
+          PY
+          )"
+
+          cancel_run() {
+            local run_id="$1"
+            local label="$2"
+            local code
+            code="$(curl -sS -o /tmp/cancel-${run_id}.json -w "%{http_code}" -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel")"
+            case "${code}" in
+              202|409)
+                echo "WATCHDOG: cancellation accepted/conflicted safely for ${label} run ${run_id}."
+                ;;
+              *)
+                echo "WATCHDOG: failed to cancel ${label} run ${run_id} (HTTP ${code})." >&2
+                cat "/tmp/cancel-${run_id}.json" >&2 || true
+                return 1
+                ;;
+            esac
+          }
+
+          dispatch_fresh() {
+            for attempt in 1 2 3 4; do
+              code="$(curl -sS -o /tmp/dispatch.json -w "%{http_code}" -X POST \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                -d '{"ref":"main"}' \
+                "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/soccer-9h-autonomous.yml/dispatches")"
+              case "${code}" in
+                204)
+                  echo "WATCHDOG: fresh 9H dispatch accepted (attempt ${attempt}/4)."
+                  return 0
+                  ;;
+                409|429|500|502|503|504)
+                  echo "WATCHDOG: transient dispatch response HTTP ${code}; retrying."
+                  sleep $((attempt * 4))
+                  ;;
+                *)
+                  echo "WATCHDOG: fresh 9H dispatch failed with HTTP ${code}." >&2
+                  cat /tmp/dispatch.json >&2 || true
+                  return 1
+                  ;;
+              esac
+            done
+            echo "WATCHDOG: bounded dispatch retries exhausted." >&2
+            return 1
+          }
+
+          case "${DECISION}" in
+            ACTIVE)
+              echo "WATCHDOG: immutable 9H run is executing; preserve it."
+              ;;
+            WAIT)
+              echo "WATCHDOG: current-main 9H state is healthy or not yet stale."
+              ;;
+            RESTART)
+              while IFS= read -r RUN_ID; do
+                [ -z "${RUN_ID}" ] && continue
+                cancel_run "${RUN_ID}" "stuck current-main"
+              done < <(
+                python - /tmp/9h-runs.json "${MAIN_SHA}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          payload = json.loads(Path(sys.argv[1]).read_text())
+          main_sha = sys.argv[2]
+          for run in payload.get("workflow_runs", []):
+              if run.get("head_branch") != "main":
+                  continue
+              if run.get("head_sha") != main_sha:
+                  continue
+              if run.get("status") in {"pending", "queued", "waiting", "requested"}:
+                  print(run.get("id"))
+          PY
+              )
+              dispatch_fresh
+              ;;
+            CLEAN_DISPATCH)
+              while IFS= read -r RUN_ID; do
+                [ -z "${RUN_ID}" ] && continue
+                cancel_run "${RUN_ID}" "obsolete"
+              done < <(
+                python - /tmp/9h-runs.json "${MAIN_SHA}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          payload = json.loads(Path(sys.argv[1]).read_text())
+          main_sha = sys.argv[2]
+          for run in payload.get("workflow_runs", []):
+              if run.get("head_branch") == "main" and run.get("head_sha") != main_sha:
+                  if run.get("status") in {"pending", "queued", "waiting", "requested"}:
+                      print(run.get("id"))
+          PY
+              )
+              dispatch_fresh
+              ;;
+            DISPATCH)
+              dispatch_fresh
+              ;;
+            *)
+              echo "WATCHDOG: unknown state ${DECISION}" >&2
+              exit 1
+              ;;
+          esac
