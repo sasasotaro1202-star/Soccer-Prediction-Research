@@ -221,6 +221,98 @@ def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) ->
     return d.sort_values("kickoff_utc", kind="mergesort")
 
 
+def _merge_matchday_snapshot(
+    fixtures: pd.DataFrame,
+    prediction_time: pd.Timestamp,
+    snapshot_path: str = "artifacts/future_matchday_fixtures.csv",
+) -> tuple[pd.DataFrame, str]:
+    """Overlay a recent PIT-verified matchday snapshot onto stable fixture rows."""
+    path = Path(snapshot_path)
+    if not path.is_file() or path.stat().st_size <= 0:
+        return fixtures, "ABSENT"
+
+    snapshot = pd.read_csv(path)
+    required = {
+        "match_id",
+        "matchday_available_at_utc",
+        "matchday_pit_verified",
+        "matchday_source",
+    }
+    missing = sorted(required - set(snapshot.columns))
+    if missing:
+        return fixtures, "BLOCKED_SCHEMA:" + ",".join(missing)
+
+    snapshot["match_id"] = snapshot["match_id"].astype("string").str.strip()
+    if snapshot["match_id"].isna().any() or snapshot["match_id"].eq("").any():
+        raise RuntimeError("Matchday snapshot contains missing/empty match_id values")
+    if snapshot["match_id"].duplicated().any():
+        raise RuntimeError("Matchday snapshot contains duplicate match_id values")
+
+    snapshot["matchday_available_at_utc"] = pd.to_datetime(
+        snapshot["matchday_available_at_utc"], utc=True, errors="coerce"
+    )
+    snapshot["matchday_pit_verified"] = _strict_bool(
+        snapshot["matchday_pit_verified"], "matchday_pit_verified"
+    )
+    usable = snapshot[
+        snapshot["matchday_available_at_utc"].notna()
+        & (snapshot["matchday_available_at_utc"] <= prediction_time)
+        & snapshot["matchday_pit_verified"]
+    ].copy()
+    if usable.empty:
+        return fixtures, "NO_PIT_SAFE_ROWS"
+
+    base = fixtures.copy()
+    base["match_id"] = base["match_id"].astype("string").str.strip()
+    if base["match_id"].duplicated().any():
+        raise RuntimeError("Fixture input contains duplicate match_id values")
+
+    overlay_cols = [
+        c for c in usable.columns
+        if c.startswith("matchday_") or c == "starter_status"
+    ]
+    overlay = usable[["match_id", *overlay_cols]].copy()
+
+    if "starter_status" in overlay.columns and "starter_status" in base.columns:
+        existing = base[["match_id", "starter_status"]]
+        merged_status = overlay[["match_id", "starter_status"]].merge(
+            existing, on="match_id", how="left", suffixes=("", "_existing")
+        )
+        confirmed = merged_status["starter_status"].astype("string").str.upper().isin(
+            {"ANNOUNCED", "CONFIRMED"}
+        )
+        merged_status["starter_status"] = np.where(
+            confirmed,
+            merged_status["starter_status"],
+            merged_status["starter_status_existing"],
+        )
+        overlay = overlay.drop(columns=["starter_status"]).merge(
+            merged_status, on="match_id", how="left", validate="one_to_one"
+        )
+
+    base = base.merge(
+        overlay,
+        on="match_id",
+        how="left",
+        validate="one_to_one",
+        suffixes=("", "_matchday"),
+    )
+    for column in [c for c in base.columns if c.endswith("_matchday")]:
+        root = column[:-9]
+        if root in base.columns:
+            if root == "starter_status":
+                promoted = base[column].astype("string").str.upper().isin(
+                    {"ANNOUNCED", "CONFIRMED"}
+                )
+                base[root] = np.where(promoted, base[column], base[root])
+            else:
+                base[root] = base[column].combine_first(base[root])
+            base = base.drop(columns=[column])
+        else:
+            base = base.rename(columns={column: root})
+    return base, "APPLIED"
+
+
 def run(
     fixtures_path: str = "artifacts/future_fixtures.csv",
     bundle_path: str = "artifacts/production_model.pkl",
@@ -264,6 +356,7 @@ def run(
         return _write_status(status_file, "NO_FIXTURE_INPUT", prediction_time_utc=now.isoformat(), oos_claimed=False)
 
     fixtures = pd.read_csv(p)
+    fixtures, matchday_merge_status = _merge_matchday_snapshot(fixtures, now)
     eligible = _eligible_fixtures(fixtures, now)
     if eligible.empty:
         return _write_status(
@@ -273,6 +366,7 @@ def run(
             source_rows=int(len(fixtures)),
             eligible_rows=0,
             oos_claimed=False,
+            matchday_merge_status=matchday_merge_status,
         )
 
     raw_probs = predict_bundle(bundle, eligible)
@@ -327,7 +421,7 @@ def run(
         temp_output = output_file.with_suffix(output_file.suffix + ".tmp")
         result.to_csv(temp_output, index=False)
         temp_output.replace(output_file)
-        return _write_status(status_file, "PREDICTED", prediction_time_utc=now.isoformat(), source_rows=int(len(fixtures)), eligible_rows=int(len(eligible)), prediction_rows=int(len(result)), standard_rows=int((~result["low_confidence"]).sum()), low_confidence_rows=int(result["low_confidence"].sum()), abstained_rows=int(result["abstain"].sum()), output_path=str(output_file), model_version=str(bundle["model_version"]), oos_claimed=bool(registry.get("oos_verified", False)), model_mode=model_mode)
+        return _write_status(status_file, "PREDICTED", prediction_time_utc=now.isoformat(), source_rows=int(len(fixtures)), eligible_rows=int(len(eligible)), prediction_rows=int(len(result)), standard_rows=int((~result["low_confidence"]).sum()), low_confidence_rows=int(result["low_confidence"].sum()), abstained_rows=int(result["abstain"].sum()), output_path=str(output_file), model_version=str(bundle["model_version"]), oos_claimed=bool(registry.get("oos_verified", False)), model_mode=model_mode, matchday_merge_status=matchday_merge_status)
     selected_score_method = str(bundle.get("score_method", "primary"))
     if selected_score_method == "neutral_aware":
         if "neutral_venue" not in eligible.columns:
@@ -420,6 +514,7 @@ def run(
         model_version=str(bundle["model_version"]),
         model_mode=model_mode,
         oos_claimed=bool(registry.get("oos_verified", False)),
+        matchday_merge_status=matchday_merge_status,
     )
 
 

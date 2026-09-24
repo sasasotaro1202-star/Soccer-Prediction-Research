@@ -99,9 +99,15 @@ def parse_market_odds(
         home_obj = item.get("homeTeamOdds") or {}
         away_obj = item.get("awayTeamOdds") or {}
         draw_obj = item.get("drawOdds") or item.get("drawTeamOdds") or {}
-        home = _number(home_obj.get("value") or home_obj.get("decimalValue"))
-        draw = _number(draw_obj.get("value") or draw_obj.get("decimalValue"))
-        away = _number(away_obj.get("value") or away_obj.get("decimalValue"))
+        home = _number(home_obj.get("decimalValue"))
+        draw = _number(draw_obj.get("decimalValue"))
+        away = _number(away_obj.get("decimalValue"))
+        if home is None:
+            home = _number(home_obj.get("value"))
+        if draw is None:
+            draw = _number(draw_obj.get("value"))
+        if away is None:
+            away = _number(away_obj.get("value"))
         provider = str((item.get("provider") or {}).get("name") or "ESPN")
         priority = int(_number((item.get("provider") or {}).get("priority")) or 9999)
         if home is not None and draw is not None and away is not None and min(home, draw, away) > 1.0:

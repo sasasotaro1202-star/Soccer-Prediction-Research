@@ -76,3 +76,18 @@ def test_weather_severity_is_bounded():
     severity, temp = parse_weather_severity(payload, kickoff)
     assert 0.0 <= severity <= 1.0
     assert temp == 5.0
+
+
+def test_parse_market_odds_prefers_explicit_decimal_value():
+    payload = {
+        "odds": [{
+            "provider": {"name": "explicit-decimal", "priority": 1},
+            "homeTeamOdds": {"value": 250, "decimalValue": 3.50},
+            "drawOdds": {"value": 300, "decimalValue": 3.00},
+            "awayTeamOdds": {"value": 225, "decimalValue": 2.25},
+        }]
+    }
+    odds, probs, provider = parse_market_odds(payload)
+    assert odds == (3.50, 3.00, 2.25)
+    assert provider == "explicit-decimal"
+    assert abs(sum(probs) - 1.0) < 1e-12

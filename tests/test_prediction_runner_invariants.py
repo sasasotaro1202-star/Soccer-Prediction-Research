@@ -182,3 +182,49 @@ def test_schema2_prediction_requires_provenance(tmp_path, monkeypatch):
             prediction_time="2026-09-15T11:00:00Z",
             registry_path=str(tmp_path / "registry.json"),
         )
+
+
+def test_matchday_snapshot_is_merged_only_when_pit_safe(tmp_path):
+    from src.prediction.runner import _merge_matchday_snapshot, _normalize_prediction_time
+
+    fixtures = _fixture_rows()
+    snapshot = pd.DataFrame([{
+        "match_id": "m1",
+        "matchday_available_at_utc": "2026-09-15T08:00:00Z",
+        "matchday_pit_verified": True,
+        "matchday_source": "test",
+        "starter_status": "ANNOUNCED",
+        "matchday_signal_confidence": 0.9,
+    }])
+    snapshot_path = tmp_path / "matchday.csv"
+    snapshot.to_csv(snapshot_path, index=False)
+    merged, status = _merge_matchday_snapshot(
+        fixtures,
+        _normalize_prediction_time("2026-09-15T09:00:00Z"),
+        str(snapshot_path),
+    )
+    assert status == "APPLIED"
+    assert merged.loc[0, "starter_status"] == "ANNOUNCED"
+    assert float(merged.loc[0, "matchday_signal_confidence"]) == 0.9
+
+
+def test_future_matchday_snapshot_is_not_merged(tmp_path):
+    from src.prediction.runner import _merge_matchday_snapshot, _normalize_prediction_time
+
+    fixtures = _fixture_rows()
+    snapshot = pd.DataFrame([{
+        "match_id": "m1",
+        "matchday_available_at_utc": "2026-09-15T10:00:00Z",
+        "matchday_pit_verified": True,
+        "matchday_source": "test",
+        "starter_status": "ANNOUNCED",
+    }])
+    snapshot_path = tmp_path / "matchday.csv"
+    snapshot.to_csv(snapshot_path, index=False)
+    merged, status = _merge_matchday_snapshot(
+        fixtures,
+        _normalize_prediction_time("2026-09-15T09:00:00Z"),
+        str(snapshot_path),
+    )
+    assert status == "NO_PIT_SAFE_ROWS"
+    assert "matchday_source" not in merged.columns

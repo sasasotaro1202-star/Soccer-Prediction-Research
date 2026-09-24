@@ -81,10 +81,29 @@ jobs:
               raise SystemExit(f"unexpected starter_status values: {sorted(actual_status - allowed_status)}")
           print({"status": status.get("status"), "rows": len(frame), "errors": len(status.get("errors", []))})
           PY
+      - name: Prepare PIT-safe future fixture features
+        if: success()
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m src.prediction.prepare_fixtures             --fixtures artifacts/future_matchday_fixtures.csv             --output artifacts/future_fixtures.csv
+      - name: Run current predictions when a safe model exists
+        if: success()
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          if [ -s models/current/production_model.pkl ] || [ -s models/current/validated_candidate_model.pkl ]; then
+            python -m src.prediction.runner               --fixtures artifacts/future_fixtures.csv               --output artifacts/predictions.csv               --status artifacts/prediction_status.json               --model-policy best_available
+          else
+            printf '%s\n' '{"status":"DEFERRED_NO_SAFE_MODEL","reason":"No adopted production or validated candidate model is present."}' > artifacts/prediction_status.json
+            echo "No safe model present; prediction execution deferred."
+          fi
       - name: Upload matchday intelligence artifact
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: soccer-matchday-intelligence-\${{ github.run_id }}
-          path: artifacts/future_matchday_fixtures.csv,artifacts/matchday_intelligence_status.json
+          path: artifacts/future_matchday_fixtures.csv,artifacts/matchday_intelligence_status.json,artifacts/future_fixtures.csv,artifacts/predictions.csv,artifacts/prediction_status.json
           retention-days: 2
