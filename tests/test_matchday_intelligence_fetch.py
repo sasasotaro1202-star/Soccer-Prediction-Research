@@ -210,3 +210,14 @@ def test_weather_without_timestamps_remains_unknown():
     severity, temp = parse_weather_severity({"hourly": {}}, pd.Timestamp("2026-09-25T12:00:00Z"))
     assert pd.isna(severity)
     assert pd.isna(temp)
+
+
+def test_sofascore_uses_public_api_host():
+    from src.data import matchday_intelligence_fetch as m
+    source = m.SOFASCORE_COMPETITIONS
+    assert source["Premier League"] == "EPL"
+    import inspect
+    code = inspect.getsource(m._collect_sofascore_day)
+    lineup_code = inspect.getsource(m._enrich_sofascore_lineup)
+    assert "https://api.sofascore.com/api/v1/sport/football/scheduled-events/" in code
+    assert "https://api.sofascore.com/api/v1/event/{event_id}/lineups" in lineup_code
