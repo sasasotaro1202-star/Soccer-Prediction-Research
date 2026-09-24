@@ -77,7 +77,7 @@ def test_prediction_normalizes_probabilities_independently_per_fixture():
     two["kickoff_utc"] = two["kickoff_utc"] + pd.Timedelta(days=1)
     two["feature_available_at_utc"] = two["kickoff_utc"] - pd.Timedelta(hours=1)
     candidates = pd.concat([one, two], ignore_index=True)
-    dist = predict_mom_distribution(model, candidates, prediction_time="2024-12-31T23:00:00Z")
+    dist = predict_mom_distribution(model, candidates, prediction_time=None)
     sums = dist.groupby("match_id")["probability"].sum()
     assert set(sums.index) == {"m0", "m_other"}
     assert all(abs(float(x) - 1.0) < 1e-10 for x in sums)
