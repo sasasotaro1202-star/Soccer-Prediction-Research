@@ -182,26 +182,60 @@ def _get_json(
     url: str,
     params: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], str]:
-    headers = {"User-Agent": "Soccer-Prediction-Research/1.0", "Accept": "application/json, text/plain, */*", "Accept-Language": "en-US,en;q=0.9"}
+    headers = {
+        "User-Agent": "Soccer-Prediction-Research/1.0",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
     if str(source).startswith("sofascore"):
-        headers.update({"Referer": "https://www.sofascore.com/", "Origin": "https://www.sofascore.com"})
+        headers.update({
+            "Referer": "https://www.sofascore.com/",
+            "Origin": "https://www.sofascore.com",
+        })
     elif str(source).startswith("espn"):
-        headers.update({"Referer": "https://www.espn.com/", "Origin": "https://www.espn.com"})
-    response = fetcher.get(
-        source,
-        url,
-        params=params,
-        headers=headers,
-        cache_ttl_seconds=600.0,
-    )
-    try:
-        payload = json.loads(response.body.decode("utf-8-sig"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"{source}: invalid JSON") from exc
-    if not isinstance(payload, dict):
-        raise RuntimeError(f"{source}: payload root is not an object")
-    return payload, response.metadata.retrieved_at
+        headers.update({
+            "Referer": "https://www.espn.com/",
+            "Origin": "https://www.espn.com",
+        })
 
+    candidate_urls = [url]
+    # ESPN's public site API has an alternate web hostname that can serve the
+    # same JSON resource when site.api.espn.com intermittently returns HTML.
+    if str(source).startswith("espn") and "://site.api.espn.com/" in url:
+        candidate_urls.append(
+            url.replace("://site.api.espn.com/", "://site.web.api.espn.com/")
+        )
+
+    parse_error: Exception | None = None
+    fetch_error: Exception | None = None
+    for candidate_url in dict.fromkeys(candidate_urls):
+        try:
+            response = fetcher.get(
+                source,
+                candidate_url,
+                params=params,
+                headers=headers,
+                cache_ttl_seconds=600.0,
+            )
+        except Exception as exc:
+            fetch_error = exc
+            continue
+        try:
+            payload = json.loads(response.body.decode("utf-8-sig"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            parse_error = exc
+            continue
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"{source}: payload root is not an object")
+        return payload, response.metadata.retrieved_at
+
+    if parse_error is not None:
+        raise RuntimeError(
+            f"{source}: invalid JSON across {len(dict.fromkeys(candidate_urls))} endpoint(s)"
+        ) from parse_error
+    if fetch_error is not None:
+        raise RuntimeError(f"{source}: all endpoint attempts failed") from fetch_error
+    raise RuntimeError(f"{source}: no endpoint candidates available")
 
 def parse_market_odds(
     summary: dict[str, Any],

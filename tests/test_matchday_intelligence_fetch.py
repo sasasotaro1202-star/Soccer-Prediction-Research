@@ -10,6 +10,7 @@ from src.data.matchday_intelligence_fetch import (
     parse_event_roster,
     parse_injury_impact,
     parse_market_odds,
+    _get_json,
     parse_weather_severity,
 )
 
@@ -229,3 +230,37 @@ def test_sofascore_prefers_canonical_unique_tournament_for_qualifiers():
         "uniqueTournament": {"name": "UEFA Champions League"},
     }
     assert _sofascore_competition(payload) == "UCL"
+
+
+def test_espn_json_falls_back_to_web_hostname_after_html_response():
+    from types import SimpleNamespace
+
+    class FakeFetcher:
+        def __init__(self):
+            self.calls = []
+
+        def get(self, source, url, **kwargs):
+            self.calls.append(url)
+            body = (
+                b"<!doctype html><html><body>blocked</body></html>"
+                if len(self.calls) == 1
+                else b'{"events": []}'
+            )
+            return SimpleNamespace(
+                body=body,
+                metadata=SimpleNamespace(retrieved_at="2026-09-25T12:00:00Z"),
+            )
+
+    fetcher = FakeFetcher()
+    payload, retrieved_at = _get_json(
+        fetcher,
+        "espn_scoreboard",
+        "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard",
+        {"dates": "20260925"},
+    )
+    assert payload == {"events": []}
+    assert retrieved_at == "2026-09-25T12:00:00Z"
+    assert fetcher.calls == [
+        "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard",
+        "https://site.web.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard",
+    ]
