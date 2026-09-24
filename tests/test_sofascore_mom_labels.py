@@ -155,3 +155,22 @@ def test_label_contract_does_not_treat_missing_as_negative():
     assert report["label_found"] == 0
     assert report["label_missing"] == 1
     assert report["fail_closed"] is True
+
+
+def test_mom_label_uses_best_players_summary_endpoint(monkeypatch):
+    import src.data.sofascore_mom_labels as m
+
+    class FakeResponse:
+        body = json.dumps({"playerOfTheMatch": {"player": {"id": 123, "name": "Winner"}}}).encode()
+        metadata = type("Meta", (), {"retrieved_at": "2026-09-25T13:00:00Z"})()
+
+    seen = []
+    class FakeFetcher:
+        def get(self, source, url, **kwargs):
+            seen.append(url)
+            return FakeResponse()
+
+    result = m.fetch_mom_label(987, fetcher=FakeFetcher())
+    assert result["label_found"] is True
+    assert result["player_id"] == "123"
+    assert seen == ["https://api.sofascore.com/api/v1/event/987/best-players/summary"]
