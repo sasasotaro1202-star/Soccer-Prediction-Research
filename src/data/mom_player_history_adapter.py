@@ -14,6 +14,7 @@ import pandas as pd
 
 REQUIRED_FIXTURE_COLUMNS = {"id", "date_utc", "home_team_id", "away_team_id", "goals_home", "goals_away"}
 REQUIRED_PLAYER_COLUMNS = {"fixture_id", "team_id", "player_id", "player_name"}
+REQUIRED_PLAYER_STATS_COLUMNS = {"fixture_id", "player_id"}
 REQUIRED_KNOWN_AT_COLUMNS = {"fixture_id", "known_at"}
 SOCCER_DATASET_REPOSITORY = "v-eatpizzanot/soccer-dataset"
 SOCCER_DATASET_COMMIT = "af71e692edbda9e4697ce1bda2e06b551f3a0052"
@@ -80,14 +81,17 @@ def _position_weight(value: Any) -> float:
 def _prepare_inputs(
     fixtures: pd.DataFrame,
     player_matches: pd.DataFrame,
+    player_stats: pd.DataFrame,
     match_stats: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     _require(fixtures, REQUIRED_FIXTURE_COLUMNS, "fixtures")
     _require(player_matches, REQUIRED_PLAYER_COLUMNS, "fixture_players")
+    _require(player_stats, REQUIRED_PLAYER_STATS_COLUMNS, "fixture_players_stats_flat")
     _require(match_stats, REQUIRED_KNOWN_AT_COLUMNS, "match_stats")
 
     f = fixtures.copy()
     p = player_matches.copy()
+    ps = player_stats.copy()
     s = match_stats.copy()
 
     f["id"] = pd.to_numeric(f["id"], errors="coerce")
@@ -105,11 +109,34 @@ def _prepare_inputs(
     p["player_id"] = pd.to_numeric(p["player_id"], errors="coerce")
     p["player_name"] = p["player_name"].astype("string").str.strip()
     p = p.dropna(subset=["fixture_id", "team_id", "player_id"]).copy()
-    for col in STAT_COLUMNS:
+    for col in ("minutes", "rating"):
         p[col] = _numeric(p, col)
+
+    ps["fixture_id"] = pd.to_numeric(ps["fixture_id"], errors="coerce")
+    ps["player_id"] = pd.to_numeric(ps["player_id"], errors="coerce")
+    ps = ps.dropna(subset=["fixture_id", "player_id"]).copy()
+    if ps.duplicated(["fixture_id", "player_id"]).any():
+        raise RuntimeError("fixture_players_stats_flat contains duplicate fixture/player rows")
+    flat_map = {
+        "games_minutes": "_flat_minutes",
+        "games_rating": "_flat_rating",
+        "goals_total": "goals_total",
+        "goals_assists": "goals_assists",
+        "shots_total": "shots_total",
+        "passes_key": "passes_key",
+    }
+    for src, dst in flat_map.items():
+        ps[dst] = _numeric(ps, src)
+    p = p.merge(
+        ps[["fixture_id", "player_id", *flat_map.values()]],
+        on=["fixture_id", "player_id"],
+        how="left",
+        validate="one_to_one",
+    )
+    p["minutes"] = p["minutes"].combine_first(p["_flat_minutes"])
+    p["rating"] = p["rating"].combine_first(p["_flat_rating"])
     p["position"] = p.get("position", pd.Series("", index=p.index, dtype="string")).astype("string")
     p["is_starter"] = p.get("is_starter", pd.Series(False, index=p.index)).fillna(False).astype(bool)
-    p["minutes"] = p["minutes"].fillna(0.0)
 
     s["fixture_id"] = pd.to_numeric(s["fixture_id"], errors="coerce")
     s["known_at"] = pd.to_datetime(s["known_at"], utc=True, errors="coerce")
@@ -136,6 +163,7 @@ def _prepare_inputs(
 def build_mom_feature_rows(
     fixtures: pd.DataFrame,
     player_matches: pd.DataFrame,
+    player_stats: pd.DataFrame,
     match_stats: pd.DataFrame,
     *,
     min_history_appearances: int = 3,
@@ -150,7 +178,7 @@ def build_mom_feature_rows(
     """
     if min_history_appearances < 1 or lookback_appearances < min_history_appearances:
         raise ValueError("invalid player history window")
-    f, p, _ = _prepare_inputs(fixtures, player_matches, match_stats)
+    f, p, _ = _prepare_inputs(fixtures, player_matches, player_stats, match_stats)
     fixture_known = s[["fixture_id", "known_at"]].drop_duplicates("fixture_id")
     played = f.loc[f["is_played"]].merge(
         fixture_known.rename(columns={"fixture_id": "id"}), on="id", how="left", validate="one_to_one"
