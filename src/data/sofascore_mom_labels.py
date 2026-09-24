@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
 import unicodedata
 from datetime import datetime, timezone
 from typing import Any
@@ -135,6 +136,7 @@ def fetch_mom_label(
         "retrieved_at_utc": response.metadata.retrieved_at,
         "source_content_sha256": hashlib.sha256(response.body).hexdigest(),
         "source": "sofascore_best_players_summary",
+        "cache_hit": bool(response.metadata.cache_hit),
     }
 
 
@@ -227,6 +229,7 @@ def collect_sofascore_mom_labels_tournament_season(
     max_event_delta_hours: float = DEFAULT_MAX_EVENT_DELTA_HOURS,
     retries: int = 3,
     max_event_pages: int = 200,
+    request_delay_seconds: float = 1.5,
 ) -> pd.DataFrame:
     required = {"match_id", "kickoff_utc", "home_team", "away_team"}
     missing = sorted(required - set(fixtures.columns))
@@ -239,6 +242,8 @@ def collect_sofascore_mom_labels_tournament_season(
     if d["kickoff_utc"].isna().any() or d["match_id"].eq("").any():
         raise ValueError("MOM label fixtures contain invalid match_id/kickoff_utc")
 
+    if float(request_delay_seconds) < 0 or not pd.notna(float(request_delay_seconds)):
+        raise ValueError("request_delay_seconds must be finite and non-negative")
     fetcher = ExternalFetcher(cache_dir=cache_dir, retries=retries)
     events, _ = fetch_tournament_season_events(
         tournament_id,
@@ -289,6 +294,8 @@ def collect_sofascore_mom_labels_tournament_season(
         if event_id in (None, ""):
             raise RuntimeError(f"SofaScore matched event has no id for match_id={series['match_id']!r}")
         label = fetch_mom_label(event_id, fetcher=fetcher)
+        if not label.get("cache_hit", False) and float(request_delay_seconds) > 0:
+            time.sleep(float(request_delay_seconds))
         event_time = best.get("event_kickoff_utc")
         rows.append({
             "match_id": str(series["match_id"]),
