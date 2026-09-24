@@ -210,14 +210,12 @@ def build_mom_feature_rows(
                     "player_id": str(int(player_id)),
                     "player_name": str(g["player_name"].iloc[-1]),
                     "kickoff_utc": target_kickoff,
-                    "feature_available_at_utc": g["known_at"].max(),
+                    "feature_available_at_utc": feature_available_at,
                     "pit_verified": bool((g["known_at"] < target_kickoff).all()),
                     "recent_rating_ewm": rating_ewm,
                     "recent_minutes_ewm": float(np.average(minutes, weights=weights)),
                     "recent_goals_per90_ewm": float(np.average(goals / per90_den, weights=weights)),
                     "recent_assists_per90_ewm": float(np.average(assists / per90_den, weights=weights)),
-                    "recent_xg_per90_ewm": np.nan,
-                    "recent_xa_per90_ewm": np.nan,
                     "recent_key_passes_per90_ewm": float(np.average(key_passes / per90_den, weights=weights)),
                     "recent_shots_per90_ewm": float(np.average(shots / per90_den, weights=weights)),
                     "recent_starts_rate": float(np.average(starts.astype(float), weights=weights)),
@@ -225,7 +223,7 @@ def build_mom_feature_rows(
                     "opponent_defense_strength": opponent_defense,
                     "position_attack_weight": _position_weight(position),
                     "days_rest": rest_days,
-                    "candidate_history_matches": int(len(g)),
+                    "candidate_history_matches": int(g["fixture_id"].nunique()),
                 })
 
     out = pd.DataFrame(rows)
@@ -240,9 +238,17 @@ def build_mom_feature_rows(
     }
     if not required.issubset(out.columns):
         raise RuntimeError("MOM feature schema construction failed")
+    model_features = [
+        "recent_rating_ewm", "recent_minutes_ewm", "recent_goals_per90_ewm",
+        "recent_assists_per90_ewm", "recent_key_passes_per90_ewm",
+        "recent_shots_per90_ewm", "recent_starts_rate", "team_attack_strength",
+        "opponent_defense_strength", "position_attack_weight", "days_rest",
+    ]
+    numeric = out[model_features].apply(pd.to_numeric, errors="coerce")
     out = out.loc[
         out["pit_verified"]
         & (out["feature_available_at_utc"] < out["kickoff_utc"])
+        & np.isfinite(numeric.to_numpy(dtype=float)).all(axis=1)
     ].copy()
     return out.reset_index(drop=True)
 
@@ -293,7 +299,5 @@ def mom_data_contract_report(feature_rows: pd.DataFrame) -> dict[str, Any]:
         "pit_verified_rows": int(pit.sum()),
         "matches_with_at_least_4_candidates": int((match_counts >= 4).sum()),
         "minimum_candidates": int(match_counts.min()),
-        "unknown_xg_rows": int(pd.isna(feature_rows.get("recent_xg_per90_ewm", np.nan)).sum()),
-        "unknown_xa_rows": int(pd.isna(feature_rows.get("recent_xa_per90_ewm", np.nan)).sum()),
         "fail_closed": True,
     }
