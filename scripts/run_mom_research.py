@@ -48,6 +48,8 @@ def _load_frames(start: str, end: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.D
         raise RuntimeError("duckdb is required for real-data MOM research; install it in the research environment") from exc
 
     urls = soccer_dataset_pinned_urls()
+    owner, name = SOCCER_DATASET_REPOSITORY.split("/", 1)
+    dataset_base = f"https://huggingface.co/datasets/{owner}/{name}/resolve/{SOCCER_DATASET_COMMIT}"
     con = duckdb.connect()
     try:
         try:
