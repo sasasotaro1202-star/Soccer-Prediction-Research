@@ -32,7 +32,7 @@ ESPN_LEAGUES: dict[str, str] = {
 }
 
 DETAILED_HORIZON_HOURS = 12.0
-MAX_EVENTS = 80
+MAX_EVENTS = 200
 SOFASCORE_LINEUP_ENRICH_LIMIT = 16
 FOOTBALL_DATA_FIXTURES_URL = "https://www.football-data.co.uk/fixtures.csv"
 
@@ -279,16 +279,18 @@ def parse_weather_severity(
         return 0.0, 0.0
     index = int(np.argmin(np.abs((times - kickoff).dt.total_seconds().to_numpy(dtype=float))))
 
-    def value(key: str, default: float = 0.0) -> float:
-        values = hourly.get(key) or []
-        raw = values[index] if index < len(values) else None
-        out = _number(raw)
-        return default if out is None else out
+    def value(key: str) -> float | None:
+        values = hourly.get(key)
+        if not isinstance(values, list) or index >= len(values):
+            return None
+        return _number(values[index])
 
     precip = value("precipitation_probability")
     wind = value("windspeed_10m")
-    temp = value("temperature_2m", 20.0)
+    temp = value("temperature_2m")
     code = value("weathercode")
+    if any(value is None for value in (precip, wind, temp, code)):
+        return np.nan, np.nan
     severity = (
         0.45 * float(np.clip((precip - 40.0) / 60.0, 0.0, 1.0))
         + 0.30 * float(np.clip((wind - 20.0) / 30.0, 0.0, 1.0))
@@ -296,6 +298,16 @@ def parse_weather_severity(
         + (0.10 if code >= 95 else 0.0)
     )
     return float(np.clip(severity, 0.0, 1.0)), temp
+
+
+def _fixture_key(row: dict[str, Any]) -> str:
+    """Build a cross-source fixture identity key for safe deduplication."""
+    kickoff = _ts(row.get("kickoff_utc"))
+    if kickoff is None:
+        return ""
+    home = " ".join(str(row.get("home_team", "")).strip().lower().split())
+    away = " ".join(str(row.get("away_team", "")).strip().lower().split())
+    return f"{kickoff.isoformat()}|{home}|{away}"
 
 
 def _matchday_base_row(
@@ -717,6 +729,7 @@ def collect_matchday_snapshots(
     rows: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     seen: set[str] = set()
+    seen_fixture_keys: set[str] = set()
 
     fallback_usage: list[dict[str, Any]] = []
     for day_offset in range(max(1, int(days))):
@@ -743,10 +756,15 @@ def collect_matchday_snapshots(
                 core = _event_core(event, competition)
                 if not core or core["match_id"] in seen:
                     continue
+                fixture_key = _fixture_key(core)
+                if fixture_key and fixture_key in seen_fixture_keys:
+                    continue
                 kickoff = _ts(core["kickoff_utc"])
                 if kickoff is None or kickoff <= now_ts:
                     continue
                 seen.add(core["match_id"])
+                if fixture_key:
+                    seen_fixture_keys.add(fixture_key)
 
                 row: dict[str, Any] = {
                     **core,
@@ -915,7 +933,11 @@ def collect_matchday_snapshots(
         if len(rows) >= max_events:
             break
 
-        if len(rows) == before_day_rows and len(rows) < max_events:
+        # SofaScore is a complementary coverage source, not an all-or-nothing
+        # fallback. Query it even when ESPN returned some rows so cup/friendly/UEFA
+        # events absent from ESPN are still discovered.
+        new_day_rows: list[dict[str, Any]] = []
+        if len(rows) < max_events:
             day_rows, day_errors, _ = _collect_sofascore_day(
                 fetcher,
                 day=day_start,
@@ -923,26 +945,41 @@ def collect_matchday_snapshots(
                 horizon_hours=float(horizon_hours),
                 max_events=max_events - len(rows),
             )
-            if day_rows:
-                rows.extend(day_rows)
-                fallback_usage.append({"provider": "sofascore", "date": date, "rows": len(day_rows)})
+            for row in day_rows:
+                fixture_key = _fixture_key(row)
+                if fixture_key and fixture_key in seen_fixture_keys:
+                    continue
+                if fixture_key:
+                    seen_fixture_keys.add(fixture_key)
+                new_day_rows.append(row)
+            if new_day_rows:
+                rows.extend(new_day_rows)
+                fallback_usage.append({"provider": "sofascore", "date": date, "rows": len(new_day_rows)})
             errors.extend(day_errors)
-            if not day_rows and len(rows) < max_events:
-                fd_rows, fd_errors, _ = _collect_football_data_fallback(
-                    fetcher,
-                    now_ts=now_ts,
-                    horizon_hours=float(horizon_hours),
-                    max_events=max_events - len(rows),
-                )
-                day_date = day_start.date()
-                fd_rows = [
-                    row for row in fd_rows
-                    if _ts(row["kickoff_utc"]) is not None and _ts(row["kickoff_utc"]).date() == day_date
-                ]
-                if fd_rows:
-                    rows.extend(fd_rows)
-                    fallback_usage.append({"provider": "football-data.co.uk", "date": date, "rows": len(fd_rows)})
-                errors.extend(fd_errors)
+        if not new_day_rows and len(rows) < max_events:
+            fd_rows, fd_errors, _ = _collect_football_data_fallback(
+                fetcher,
+                now_ts=now_ts,
+                horizon_hours=float(horizon_hours),
+                max_events=max_events - len(rows),
+            )
+            day_date = day_start.date()
+            fd_rows = [
+                row for row in fd_rows
+                if _ts(row["kickoff_utc"]) is not None and _ts(row["kickoff_utc"]).date() == day_date
+            ]
+            new_fd_rows: list[dict[str, Any]] = []
+            for row in fd_rows:
+                fixture_key = _fixture_key(row)
+                if fixture_key and fixture_key in seen_fixture_keys:
+                    continue
+                if fixture_key:
+                    seen_fixture_keys.add(fixture_key)
+                new_fd_rows.append(row)
+            if new_fd_rows:
+                rows.extend(new_fd_rows)
+                fallback_usage.append({"provider": "football-data.co.uk", "date": date, "rows": len(new_fd_rows)})
+            errors.extend(fd_errors)
 
     frame = pd.DataFrame(rows)
     if not frame.empty:
