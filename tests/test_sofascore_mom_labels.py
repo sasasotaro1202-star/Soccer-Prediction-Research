@@ -16,6 +16,7 @@ def test_team_normalization_is_conservative():
     assert _norm_team("Arsenal FC") == "arsenalfc"
     assert _norm_team("Paris Saint-Germain") == "parissaintgermain"
     assert _norm_team("Málaga") == "malaga"
+    assert _norm_team("鹿島アントラーズ") == "鹿島アントラーズ"
 
 
 def test_extract_player_of_match_accepts_nested_player_shape():
