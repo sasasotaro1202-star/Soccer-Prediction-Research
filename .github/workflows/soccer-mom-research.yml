@@ -10,6 +10,15 @@ on:
       - "src/data/sofascore_mom_labels.py"
       - "scripts/run_mom_research.py"
       - ".github/workflows/soccer-mom-research.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/models/mom_model.py"
+      - "src/evaluation/mom_walk_forward.py"
+      - "src/data/mom_player_history_adapter.py"
+      - "src/data/sofascore_mom_labels.py"
+      - "scripts/run_mom_research.py"
+      - ".github/workflows/soccer-mom-research.yml"
   workflow_dispatch:
     inputs:
       start:
