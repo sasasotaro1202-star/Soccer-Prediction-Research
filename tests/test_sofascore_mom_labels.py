@@ -76,7 +76,7 @@ def test_collect_labels_keeps_missing_label_as_missing(monkeypatch):
     class FakeResponse:
         def __init__(self, payload):
             self.body = json.dumps(payload).encode()
-            self.metadata = type("Meta", (), {"retrieved_at": "2026-09-25T13:00:00Z"})()
+            self.metadata = type("Meta", (), {"retrieved_at": "2026-09-25T13:00:00Z", "cache_hit": False})()
 
     class FakeFetcher:
         def __init__(self, *args, **kwargs):
@@ -174,3 +174,25 @@ def test_mom_label_uses_best_players_summary_endpoint(monkeypatch):
     assert result["label_found"] is True
     assert result["player_id"] == "123"
     assert seen == ["https://api.sofascore.com/api/v1/event/987/best-players/summary"]
+
+
+def test_request_delay_rejects_non_finite_value():
+    import src.data.sofascore_mom_labels as m
+    class FakeFetcher:
+        def __init__(self, *args, **kwargs):
+            pass
+    monkey = None
+    fixtures = pd.DataFrame([{
+        "match_id": "m1",
+        "kickoff_utc": "2026-09-25T12:00:00Z",
+        "home_team": "Home FC",
+        "away_team": "Away FC",
+    }])
+    # Invalid delay is rejected before any network call.
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        m.collect_sofascore_mom_labels_tournament_season(
+            fixtures,
+            tournament_id=17,
+            season_id=100,
+            request_delay_seconds=float("inf"),
+        )
