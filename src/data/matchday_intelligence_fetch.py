@@ -27,7 +27,6 @@ ESPN_LEAGUES: dict[str, str] = {
     "J3": "jpn.3",
     "UCL": "uefa.champions",
     "UEL": "uefa.europa",
-    "AG_M": "arg.1",
     "MLS": "usa.1",
 }
 
@@ -81,7 +80,14 @@ SOFASCORE_COMPETITIONS: dict[str, str] = {
     "International Friendly": "FRIENDLY",
     "International Friendlies": "FRIENDLY",
     "International Friendly Games": "FRIENDLY",
+    "International Friendlies Women": "INTL_W",
+    "International Friendly Games Women": "INTL_W",
     "Club Friendly": "FRIENDLY",
+    "Asian Games": "AG_M",
+    "Asian Games, Men": "AG_M",
+    "Asian Games Men": "AG_M",
+    "Asian Games, Women": "AG_W",
+    "Asian Games Women": "AG_W",
     "Club Friendly Games": "FRIENDLY",
     "Friendlies": "FRIENDLY",
     "Major League Soccer": "MLS",
