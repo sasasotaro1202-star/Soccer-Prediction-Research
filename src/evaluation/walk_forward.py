@@ -583,6 +583,7 @@ def run_walk_forward(
             feature_cols,
             context_weights,
             weights,
+            dynamic_policy=dynamic_policy,
         )
         val_probs = np.clip(val_probs, 1e-9, 1.0)
         val_probs /= val_probs.sum(axis=1, keepdims=True)
