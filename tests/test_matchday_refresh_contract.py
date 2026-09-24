@@ -8,5 +8,5 @@ def test_matchday_refresh_contract_is_read_only_and_quarter_hourly():
     assert "workflow_run:" in content
     assert 'workflows: ["Soccer 9H Autonomous Research"]' in content
     assert "contents: read" in content
-    assert "cancel-in-progress: true" in content
+    assert "cancel-in-progress: false" in content
     assert "upload-artifact@v6" in content
