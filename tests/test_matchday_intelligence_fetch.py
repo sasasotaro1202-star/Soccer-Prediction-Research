@@ -221,3 +221,11 @@ def test_sofascore_uses_public_api_host():
     lineup_code = inspect.getsource(m._enrich_sofascore_lineup)
     assert "https://api.sofascore.com/api/v1/sport/football/scheduled-events/" in code
     assert "https://api.sofascore.com/api/v1/event/{event_id}/lineups" in lineup_code
+
+
+def test_sofascore_prefers_canonical_unique_tournament_for_qualifiers():
+    payload = {
+        "tournament": {"name": "UEFA Champions League, Qualification"},
+        "uniqueTournament": {"name": "UEFA Champions League"},
+    }
+    assert _sofascore_competition(payload) == "UCL"
