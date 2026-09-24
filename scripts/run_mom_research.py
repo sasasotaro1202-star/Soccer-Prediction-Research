@@ -122,10 +122,11 @@ def _load_frames(start: str, end: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.D
         player_stats = con.execute(stats_sql).fetchdf()
 
         match_stats_sql = f"""
-            SELECT fixture_id, MIN(known_at) AS known_at
-            FROM read_parquet('{urls["match_stats"]}')
-            WHERE known_at IS NOT NULL
-            GROUP BY fixture_id
+            SELECT s.fixture_id, MIN(s.known_at) AS known_at
+            FROM read_parquet('{urls["match_stats"]}') s
+            JOIN target_fixture_ids f ON s.fixture_id = f.fixture_id
+            WHERE s.known_at IS NOT NULL
+            GROUP BY s.fixture_id
         """
         match_stats = con.execute(match_stats_sql).fetchdf()
         return fixtures, player_matches, player_stats, match_stats
