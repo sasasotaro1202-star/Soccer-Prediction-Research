@@ -119,7 +119,7 @@ def fetch_mom_label(
     *,
     fetcher: ExternalFetcher,
 ) -> dict[str, Any]:
-    url = f"{SOFASCORE_BASE}/event/{int(event_id)}/best-players-summary"
+    url = f"{SOFASCORE_BASE}/event/{int(event_id)}/best-players/summary"
     response = fetcher.get(
         "sofascore_best_players_summary",
         url,
