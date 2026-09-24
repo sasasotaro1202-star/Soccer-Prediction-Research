@@ -168,6 +168,11 @@ def apply_matchday_intelligence(
             signal_names = []
             signal_count = 0
             for group, names in _SIGNAL_GROUPS.items():
+                # Market probability/odds are fused once after the directional
+                # context adjustments below; never count the raw odds as an
+                # additional directional signal here.
+                if group == "market_odds":
+                    continue
                 if not _present_group_row(row, names):
                     continue
                 values = _validate_group(row, names, group)
