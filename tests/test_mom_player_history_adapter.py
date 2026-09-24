@@ -63,10 +63,14 @@ def test_build_mom_features_uses_only_prior_known_player_facts():
 def test_target_fixture_statistics_do_not_enter_candidate_features():
     fixtures, players, stats = _frames()
     target_id = 5
-    target_players = players.loc[players["fixture_id"] == target_id, "player_id"].tolist()
+    target_kickoff = fixtures.loc[fixtures["id"] == target_id, "date_utc"].iloc[0]
     players.loc[players["fixture_id"] == target_id, ["rating", "goals_total", "goals_assists", "shots_total", "passes_key"]] = 99
     out = build_mom_feature_rows(fixtures, players, stats, min_history_appearances=1)
-    assert (out["kickoff_utc"] < fixtures.loc[fixtures["id"] == target_id, "date_utc"].iloc[0]).all()
+    target = out.loc[out["match_id"] == str(target_id)]
+    assert not target.empty
+    assert (target["feature_available_at_utc"] < target_kickoff).all()
+    assert (target["recent_rating_ewm"] < 10).all()
+    assert (target["recent_shots_per90_ewm"] < 10).all()
 
 
 def test_label_attachment_never_converts_unmatched_target_to_negative():
