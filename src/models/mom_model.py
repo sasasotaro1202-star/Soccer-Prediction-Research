@@ -93,9 +93,9 @@ def _validate_base(frame: pd.DataFrame, *, prediction: bool = False) -> pd.DataF
     d["pit_verified"] = _strict_bool(d, "pit_verified")
 
     # A feature used for a match can never be available after that match kickoff.
-    bad_pit = d["feature_available_at_utc"] > d["kickoff_utc"]
+    bad_pit = d["feature_available_at_utc"] >= d["kickoff_utc"]
     if bool(bad_pit.any()):
-        raise RuntimeError("MOM PIT violation: feature_available_at_utc is after kickoff_utc")
+        raise RuntimeError("MOM PIT violation: feature_available_at_utc is not strictly before kickoff_utc")
 
     for column in MOM_FEATURE_COLUMNS:
         if column not in d.columns:
