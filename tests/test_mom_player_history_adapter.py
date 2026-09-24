@@ -71,13 +71,41 @@ def test_target_fixture_statistics_do_not_enter_candidate_features():
     fixtures, players, player_stats, stats = _frames()
     target_id = 5
     target_kickoff = fixtures.loc[fixtures["id"] == target_id, "date_utc"].iloc[0]
-    players.loc[players["fixture_id"] == target_id, ["rating", "goals_total", "goals_assists", "shots_total", "passes_key"]] = 99
-    out = build_mom_feature_rows(fixtures, players, player_stats, stats, min_history_appearances=1)
-    target = out.loc[out["match_id"] == str(target_id)]
-    assert not target.empty
-    assert (target["feature_available_at_utc"] < target_kickoff).all()
-    assert (target["recent_rating_ewm"] < 10).all()
-    assert (target["recent_shots_per90_ewm"] < 10).all()
+
+    before = build_mom_feature_rows(
+        fixtures, players.copy(), player_stats.copy(), stats.copy(),
+        min_history_appearances=1,
+    )
+    players_after = players.copy()
+    players_after.loc[
+        players_after["fixture_id"] == target_id,
+        ["rating", "goals_total", "goals_assists", "shots_total", "passes_key"],
+    ] = 9999
+    after = build_mom_feature_rows(
+        fixtures, players_after, player_stats.copy(), stats.copy(),
+        min_history_appearances=1,
+    )
+
+    before_target = (
+        before.loc[before["match_id"] == str(target_id)]
+        .sort_values("player_id")
+        .reset_index(drop=True)
+    )
+    after_target = (
+        after.loc[after["match_id"] == str(target_id)]
+        .sort_values("player_id")
+        .reset_index(drop=True)
+    )
+    assert not before_target.empty
+    assert list(before_target["player_id"]) == list(after_target["player_id"])
+    assert (before_target["feature_available_at_utc"] < target_kickoff).all()
+    assert (after_target["feature_available_at_utc"] < target_kickoff).all()
+    assert np.allclose(
+        before_target[list(MOM_FEATURE_COLUMNS)].to_numpy(dtype=float),
+        after_target[list(MOM_FEATURE_COLUMNS)].to_numpy(dtype=float),
+        atol=1e-12,
+        rtol=0.0,
+    )
 
 
 def test_label_attachment_never_converts_unmatched_target_to_negative():
