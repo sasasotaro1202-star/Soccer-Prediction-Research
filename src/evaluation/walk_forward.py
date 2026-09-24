@@ -8,7 +8,7 @@ from scipy.optimize import minimize, minimize_scalar
 
 from src.evaluation.metrics import classification_metrics
 from src.models.baselines import candidates
-from src.monitoring.dynamic_routing import build_drift_reference, compute_drift_scores, dynamic_route_weights, routing_risk_bucket, routing_risk_score
+from src.monitoring.dynamic_routing import build_drift_reference, compute_drift_scores, dynamic_route_weights, history_support_risk, routing_risk_bucket, routing_risk_score
 
 TARGET_ACCURACY = 0.80
 
@@ -556,6 +556,7 @@ def _routed_ensemble_proba(
         reference = dynamic_policy.get("reference")
         dynamic_feature_cols = dynamic_policy.get("feature_cols") or feature_cols
         drift_scores = compute_drift_scores(routed, reference or {}, list(dynamic_feature_cols))
+        support_scores = history_support_risk(routed, min_games=5.0, full_games=20.0)
         fallback_source = dynamic_policy.get("fallback_weights", fallback)
         fallback_vector = np.asarray([float(fallback_source.get(name, 0.0)) for name in names], dtype=float)
         effective_weights, diag = dynamic_route_weights(
@@ -566,11 +567,15 @@ def _routed_ensemble_proba(
             drift_strength=float(dynamic_policy.get("drift_strength", 0.85)),
             uncertainty_strength=float(dynamic_policy.get("uncertainty_strength", 0.75)),
             min_specialist_trust=float(dynamic_policy.get("min_specialist_trust", 0.25)),
+            support_scores=support_scores,
+            support_strength=float(dynamic_policy.get("support_strength", 0.40)),
         )
         routing_diag.update({str(k): np.asarray(v, dtype=float) for k, v in diag.items()})
         routing_diag["risk"] = routing_risk_score(
             routing_diag["drift"],
             routing_diag["uncertainty"],
+            support_scores=routing_diag.get("support", support_scores),
+            support_weight=0.15,
         )
 
     probs = np.zeros((n, 3), dtype=float)
@@ -638,6 +643,8 @@ def run_walk_forward(
             "drift_strength": 0.85,
             "uncertainty_strength": 0.75,
             "min_specialist_trust": 0.25,
+            "support_strength": 0.40,
+            "support_cols": ["home_history_support_n", "away_history_support_n"],
             "feature_cols": list(feature_cols),
             "reference": build_drift_reference(fit, feature_cols),
         }
