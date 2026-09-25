@@ -254,7 +254,13 @@ def build_mom_feature_rows(
                 g = g.sort_values(["match_kickoff_utc", "fixture_id"], kind="mergesort").tail(lookback_appearances)
                 if len(g) >= min_history_appearances:
                     diagnostics["candidate_players_with_min_history"] += 1
-                g = g.loc[g["minutes"] > 0].copy()
+                # The source has 60.1% null minutes in fixture_players. A starter
+                # row is still reliable evidence of expected participation; only
+                # bench-like rows with missing/zero minutes are excluded.
+                minutes_num = _numeric(g, "minutes")
+                starter_flag = g["is_starter"].fillna(False).astype(bool)
+                appearance_mask = (minutes_num > 0) | (starter_flag & minutes_num.isna())
+                g = g.loc[appearance_mask].copy()
                 if len(g) < min_history_appearances:
                     continue
                 diagnostics["candidate_players_with_positive_minutes"] += 1
