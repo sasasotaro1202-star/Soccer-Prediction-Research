@@ -320,6 +320,9 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
 
         available_times = [team_last_available[t] for t in (home, away) if t in team_last_available]
         row["feature_source_max_available_at_utc"] = max(available_times) if available_times else pd.NaT
+        # Outcome-free support counts are computed from already replayed historical matches.
+        row["home_history_support_n"] = float(len(team_games.get(home, ())))
+        row["away_history_support_n"] = float(len(team_games.get(away, ())))
         home_history = list(team_games[home])[-required_window:] if required_window else []
         away_history = list(team_games[away])[-required_window:] if required_window else []
         history_complete = (required_window == 0) or (len(home_history) >= required_window and len(away_history) >= required_window)
