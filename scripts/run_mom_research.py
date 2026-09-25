@@ -37,6 +37,7 @@ from src.data.fotmob_mom_labels import (
 from src.data.external_fetch import ExternalFetcher
 from src.evaluation.mom_walk_forward import (
     run_mom_walk_forward,
+    run_mom_walk_forward_calibrated_rank_consensus,
     run_mom_walk_forward_calibrated_soft_ensemble,
     split_mom_development_locked,
 )
@@ -496,6 +497,15 @@ def run(
         method="rank_consensus",
     )
     rank_consensus_summary = _summarize_metrics(rank_consensus)
+    rank_consensus_calibrated = run_mom_walk_forward_calibrated_rank_consensus(
+        labelled,
+        n_blocks=6,
+        locked_blocks=2,
+        min_train_matches=30,
+        min_calibration_matches=30,
+        prior_strength=120.0,
+    )
+    rank_consensus_calibrated_summary = _summarize_metrics(rank_consensus_calibrated)
     soft_ensemble_calibrated = run_mom_walk_forward_calibrated_soft_ensemble(
         labelled,
         n_blocks=6,
@@ -511,6 +521,7 @@ def run(
         "hist_gbdt": hist_gbdt_summary,
         "soft_ensemble_equal_weight": soft_ensemble_summary,
         "rank_consensus": rank_consensus_summary,
+        "rank_consensus_temperature_calibrated": rank_consensus_calibrated_summary,
         "soft_ensemble_temperature_calibrated": soft_ensemble_calibrated_summary,
     }
 
@@ -522,6 +533,7 @@ def run(
         "hist_gbdt": hist_gbdt_summary,
         "soft_ensemble_equal_weight": soft_ensemble_summary,
         "rank_consensus": rank_consensus_summary,
+        "rank_consensus_temperature_calibrated": rank_consensus_calibrated_summary,
         "soft_ensemble_temperature_calibrated": soft_ensemble_calibrated_summary,
     }
     # The operational output is exactly four players, so model selection must
