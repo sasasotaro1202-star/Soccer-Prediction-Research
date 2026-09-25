@@ -1,6 +1,9 @@
 name: Soccer Experience Ledger
 
 on:
+  workflow_run:
+    workflows: ["Soccer Matchday Intelligence Refresh"]
+    types: [completed]
   schedule:
     - cron: "5 */6 * * *"
   workflow_dispatch:
@@ -12,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: soccer-experience-ledger
@@ -19,11 +23,17 @@ concurrency:
 
 jobs:
   settle:
+    if: >
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - name: Checkout main
         uses: actions/checkout@v6
+        with:
+          ref: main
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
@@ -31,6 +41,35 @@ jobs:
           cache: pip
       - name: Install dependencies
         run: python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+      - name: Download matchday prediction artifact when triggered by Matchday
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v6
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          name: soccer-matchday-intelligence-${{ github.event.workflow_run.id }}
+          path: artifacts/matchday-source
+      - name: Record newly generated prediction states
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          if [ -f artifacts/matchday-source/predictions.csv ]; then
+            python -m scripts.experience_ledger record               --predictions artifacts/matchday-source/predictions.csv               --prediction-time "$(python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("artifacts/matchday-source/prediction_status.json")
+          if not p.exists():
+              print("")
+          else:
+              print(json.loads(p.read_text()).get("prediction_time_utc", ""))
+          PY
+            )"
+          elif [ -f artifacts/predictions.csv ]; then
+            python -m scripts.experience_ledger record --predictions artifacts/predictions.csv
+          else
+            echo "No prediction artifact available; nothing to record."
+          fi
       - name: Settle completed predictions and refresh metrics
         env:
           PYTHONPATH: .
@@ -50,4 +89,4 @@ jobs:
             exit 0
           fi
           git commit -m "ops: persist prediction experience and performance metrics"
-          git push origin main
+          git push origin HEAD:main
