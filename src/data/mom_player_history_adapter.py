@@ -116,6 +116,19 @@ def _prepare_inputs(
     for col in ("minutes", "rating"):
         p[col] = _numeric(p, col)
 
+    # The public fixture_players table can contain duplicate fixture/player keys.
+    # Remove only exact duplicates; conflicting duplicates are a data-quality
+    # ambiguity and must fail closed instead of selecting an arbitrary row.
+    player_key = ["fixture_id", "player_id"]
+    if p.duplicated(player_key, keep=False).any():
+        dup = p.loc[p.duplicated(player_key, keep=False)].copy()
+        non_key = [col for col in p.columns if col not in player_key]
+        if non_key:
+            conflicts = dup.groupby(player_key, dropna=False)[non_key].nunique(dropna=False)
+            if bool((conflicts > 1).any(axis=None)):
+                raise RuntimeError("fixture_players contains conflicting duplicate fixture/player rows")
+        p = p.drop_duplicates(subset=player_key, keep="first").copy()
+
     ps["fixture_id"] = pd.to_numeric(ps["fixture_id"], errors="coerce")
     ps["player_id"] = pd.to_numeric(ps["player_id"], errors="coerce")
     ps = ps.dropna(subset=["fixture_id", "player_id"]).copy()
