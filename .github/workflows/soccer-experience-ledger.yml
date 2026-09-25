@@ -31,11 +31,11 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout main
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           ref: main
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.12"
           cache: pip
@@ -43,7 +43,7 @@ jobs:
         run: python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
       - name: Download matchday prediction artifact when triggered by Matchday
         if: github.event_name == 'workflow_run'
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
         with:
           github-token: ${{ github.token }}
           run-id: ${{ github.event.workflow_run.id }}
