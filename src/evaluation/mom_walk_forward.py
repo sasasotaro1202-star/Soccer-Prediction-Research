@@ -292,6 +292,249 @@ def run_mom_walk_forward(
     return pd.DataFrame([asdict(x) for x in metrics])
 
 
+
+def _apply_matchwise_temperature(distribution: pd.DataFrame, temperature: float) -> pd.DataFrame:
+    """Apply a positive temperature to each complete match distribution."""
+    if not np.isfinite(temperature) or float(temperature) <= 0.0:
+        raise ValueError("temperature must be finite and positive")
+    d = distribution.copy()
+    p = np.clip(pd.to_numeric(d["probability"], errors="coerce").to_numpy(dtype=float), 1e-12, 1.0)
+    if not np.isfinite(p).all():
+        raise RuntimeError("MOM calibration probabilities are invalid")
+    transformed = np.empty_like(p)
+    for positions in d.groupby("match_id", sort=False).indices.values():
+        q = np.power(p[np.asarray(positions, dtype=int)], 1.0 / float(temperature))
+        total = float(q.sum())
+        if not np.isfinite(total) or total <= 0.0:
+            raise RuntimeError("MOM calibration produced an invalid match probability sum")
+        transformed[np.asarray(positions, dtype=int)] = q / total
+    d["probability"] = transformed
+    return d
+
+
+def _fit_matchwise_temperature(
+    calibration: pd.DataFrame,
+    distribution: pd.DataFrame,
+    *,
+    min_matches: int = 30,
+    prior_strength: float = 120.0,
+) -> tuple[float, bool]:
+    """Fit low-dimensional temperature on a chronological calibration slice only."""
+    truth = (
+        calibration.loc[calibration["is_motm"] == 1, ["match_id", "player_id"]]
+        .drop_duplicates("match_id")
+    )
+    groups = list(distribution.groupby("match_id", sort=False))
+    if len(groups) < int(min_matches):
+        return 1.0, False
+
+    truth_map = {str(row.match_id): str(row.player_id) for row in truth.itertuples(index=False)}
+    valid_groups = []
+    for match_id, group in groups:
+        actual = truth_map.get(str(match_id))
+        if actual is None or actual not in set(group["player_id"].astype(str)):
+            continue
+        probs = pd.to_numeric(group["probability"], errors="coerce").to_numpy(dtype=float)
+        ids = group["player_id"].astype(str).tolist()
+        if not np.isfinite(probs).all() or probs.sum() <= 0:
+            raise RuntimeError(f"MOM calibration distribution invalid for match_id={match_id!r}")
+        valid_groups.append((ids, probs, actual))
+    if len(valid_groups) < int(min_matches):
+        return 1.0, False
+
+    def loss(temperature: float) -> float:
+        total = 0.0
+        for ids, probs, actual in valid_groups:
+            q = np.power(np.clip(probs, 1e-12, 1.0), 1.0 / float(temperature))
+            q /= q.sum()
+            index = ids.index(actual)
+            total -= float(np.log(np.clip(q[index], 1e-12, 1.0)))
+        return total / float(len(valid_groups))
+
+    candidates = np.linspace(0.70, 1.60, 91)
+    values = np.asarray([loss(float(t)) for t in candidates], dtype=float)
+    best_index = int(np.argmin(values))
+    fitted = float(candidates[best_index])
+    raw_loss = float(loss(1.0))
+    if not np.isfinite(values[best_index]) or values[best_index] + 1e-6 >= raw_loss:
+        return 1.0, False
+
+    alpha = float(len(valid_groups) / (len(valid_groups) + max(float(prior_strength), 1.0)))
+    shrunk = float(1.0 + alpha * (fitted - 1.0))
+    return float(np.clip(shrunk, 0.70, 1.60)), True
+
+
+def run_mom_walk_forward_calibrated_soft_ensemble(
+    history: pd.DataFrame,
+    *,
+    n_blocks: int = 6,
+    locked_blocks: int = 2,
+    min_train_matches: int = 30,
+    calibration_fraction: float = 0.25,
+    min_calibration_matches: int = 30,
+    prior_strength: float = 120.0,
+    regularization_c: float = 0.30,
+    temperature: float = 1.0,
+    random_state: int = 42,
+) -> pd.DataFrame:
+    """Nested chronological WFO for an equal-weight MOM ensemble plus post-hoc temperature.
+
+    The temperature is fitted only on the tail of each training window, then the
+    ensemble is refit on the full training window before OOS prediction. Ranking is
+    invariant to positive temperature scaling; only probability calibration changes.
+    """
+    d = _validate_history(history)
+    match_order = (
+        d[["match_id", "kickoff_utc"]]
+        .drop_duplicates("match_id")
+        .sort_values(["kickoff_utc", "match_id"], kind="mergesort")
+        ["match_id"].astype(str).tolist()
+    )
+    blocks = _split_match_blocks(match_order, n_blocks)
+
+    metrics: list[MOMBlockMetrics] = []
+    component_methods = ("binary_logit", "conditional_logit", "hist_gbdt")
+    for block_idx in range(1, len(blocks)):
+        train_ids = [m for block in blocks[:block_idx] for m in block]
+        test_ids = blocks[block_idx]
+        if len(train_ids) < int(min_train_matches):
+            continue
+
+        calibration_count = max(
+            int(min_calibration_matches),
+            int(round(len(train_ids) * float(calibration_fraction))),
+        )
+        calibration_count = min(
+            calibration_count,
+            max(1, len(train_ids) - int(min_train_matches)),
+        )
+        fit_ids = train_ids[:-calibration_count]
+        calibration_ids = train_ids[-calibration_count:]
+        fit = d[d["match_id"].isin(fit_ids)].copy()
+        calibration = d[d["match_id"].isin(calibration_ids)].copy()
+        test = d[d["match_id"].isin(test_ids)].copy()
+
+        calibration_models = [
+            fit_mom_model(
+                fit,
+                regularization_c=regularization_c,
+                temperature=temperature,
+                min_matches=min_train_matches,
+                random_state=random_state,
+                method=component,
+            )
+            for component in component_methods
+        ]
+        calibration_parts = []
+        for match_id, group in calibration.groupby("match_id", sort=False):
+            kickoff = group["kickoff_utc"].iloc[0]
+            prediction_time = kickoff - pd.Timedelta(seconds=1)
+            pred_input = group.drop(columns=["is_motm"]).copy()
+            component_dists = [
+                predict_mom_distribution(
+                    model_bundle,
+                    pred_input,
+                    prediction_time=prediction_time,
+                )
+                for model_bundle in calibration_models
+            ]
+            merged = component_dists[0][["match_id", "player_id", "kickoff_utc", "probability"]].rename(
+                columns={"probability": "p0"}
+            )
+            for idx, component_dist in enumerate(component_dists[1:], start=1):
+                part = component_dist[["match_id", "player_id", "probability"]].rename(
+                    columns={"probability": f"p{idx}"}
+                )
+                merged = merged.merge(
+                    part,
+                    on=["match_id", "player_id"],
+                    how="outer",
+                    validate="one_to_one",
+                )
+            if merged[[f"p{i}" for i in range(len(component_methods))]].isna().any().any():
+                raise RuntimeError(f"Calibrated MOM ensemble candidate sets differ for match_id={match_id!r}")
+            merged["probability"] = merged[[f"p{i}" for i in range(len(component_methods))]].mean(axis=1)
+            total = float(merged["probability"].sum())
+            if not np.isfinite(total) or total <= 0:
+                raise RuntimeError(f"Calibrated MOM ensemble produced invalid probabilities for match_id={match_id!r}")
+            merged["probability"] /= total
+            calibration_parts.append(merged[["match_id", "player_id", "kickoff_utc", "probability"]])
+
+        calibration_distribution = pd.concat(calibration_parts, ignore_index=True)
+        fitted_temperature, used = _fit_matchwise_temperature(
+            calibration,
+            calibration_distribution,
+            min_matches=min_calibration_matches,
+            prior_strength=prior_strength,
+        )
+
+        final_models = [
+            fit_mom_model(
+                train := d[d["match_id"].isin(train_ids)].copy(),
+                regularization_c=regularization_c,
+                temperature=temperature,
+                min_matches=min_train_matches,
+                random_state=random_state,
+                method=component,
+            )
+            for component in component_methods
+        ]
+        oos_parts = []
+        for match_id, group in test.groupby("match_id", sort=False):
+            kickoff = group["kickoff_utc"].iloc[0]
+            prediction_time = kickoff - pd.Timedelta(seconds=1)
+            pred_input = group.drop(columns=["is_motm"]).copy()
+            component_dists = [
+                predict_mom_distribution(
+                    model_bundle,
+                    pred_input,
+                    prediction_time=prediction_time,
+                )
+                for model_bundle in final_models
+            ]
+            merged = component_dists[0][["match_id", "player_id", "kickoff_utc", "probability"]].rename(
+                columns={"probability": "p0"}
+            )
+            for idx, component_dist in enumerate(component_dists[1:], start=1):
+                part = component_dist[["match_id", "player_id", "probability"]].rename(
+                    columns={"probability": f"p{idx}"}
+                )
+                merged = merged.merge(
+                    part,
+                    on=["match_id", "player_id"],
+                    how="outer",
+                    validate="one_to_one",
+                )
+            probability_cols = [f"p{i}" for i in range(len(component_methods))]
+            if merged[probability_cols].isna().any().any():
+                raise RuntimeError(f"Calibrated MOM ensemble candidate sets differ for match_id={match_id!r}")
+            merged["probability"] = merged[probability_cols].mean(axis=1)
+            total = float(merged["probability"].sum())
+            if not np.isfinite(total) or total <= 0:
+                raise RuntimeError(f"Calibrated MOM ensemble produced invalid OOS probabilities for match_id={match_id!r}")
+            merged["probability"] /= total
+            oos_parts.append(merged[["match_id", "player_id", "kickoff_utc", "probability"]])
+
+        if not oos_parts:
+            continue
+        distribution = pd.concat(oos_parts, ignore_index=True)
+        distribution = _apply_matchwise_temperature(
+            distribution,
+            fitted_temperature if used else 1.0,
+        )
+        evaluated = _evaluate_predictions(test, distribution)
+        metrics.append(MOMBlockMetrics(
+            block=block_idx,
+            train_matches=len(train_ids),
+            test_matches=len(test_ids),
+            test_rows=len(test),
+            **evaluated,
+        ))
+    if not metrics:
+        raise RuntimeError("Calibrated MOM WFO produced no evaluable OOS blocks")
+    return pd.DataFrame([asdict(x) for x in metrics])
+
+
 def split_mom_development_locked(
     block_metrics: pd.DataFrame,
     *,
