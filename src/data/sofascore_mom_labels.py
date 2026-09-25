@@ -22,6 +22,7 @@ from src.data.external_fetch import ExternalFetcher
 
 
 SOFASCORE_BASE = "https://api.sofascore.com/api/v1"
+SOFASCORE_FALLBACK_BASE = "https://www.sofascore.com/api/v1"
 SOFASCORE_HEADERS = {
     "User-Agent": "SoccerPredictionResearch/1.0 MOM-label-audit",
     "Referer": "https://www.sofascore.com/",
@@ -202,14 +203,32 @@ def fetch_tournament_season_events(
     retrieval_times: list[str] = []
     seen_ids: set[str] = set()
     for page in range(max(1, int(max_pages))):
-        url = f"{SOFASCORE_BASE}/unique-tournament/{int(tournament_id)}/season/{int(season_id)}/events/last/{page}"
-        response = fetcher.get(
-            "sofascore_tournament_season_events",
-            url,
-            headers=SOFASCORE_HEADERS,
-        )
+        payload = None
+        response = None
+        errors: list[str] = []
+        for base in (SOFASCORE_BASE, SOFASCORE_FALLBACK_BASE):
+            url = f"{base}/unique-tournament/{int(tournament_id)}/season/{int(season_id)}/events/last/{page}"
+            try:
+                candidate = fetcher.get(
+                    "sofascore_tournament_season_events",
+                    url,
+                    headers=SOFASCORE_HEADERS,
+                )
+                parsed = _parse_json(candidate.body)
+                page_events = parsed.get("events")
+                if isinstance(page_events, list):
+                    response = candidate
+                    payload = parsed
+                    break
+                errors.append(f"{base}: payload missing events list")
+            except Exception as exc:
+                errors.append(f"{base}: {type(exc).__name__}: {exc}")
+        if response is None or payload is None:
+            raise RuntimeError(
+                "SofaScore season events acquisition failed on all public hosts: "
+                + " | ".join(errors)
+            )
         retrieval_times.append(response.metadata.retrieved_at)
-        payload = _parse_json(response.body)
         page_events = payload.get("events")
         if not isinstance(page_events, list):
             raise RuntimeError("SofaScore season events payload missing events list")
