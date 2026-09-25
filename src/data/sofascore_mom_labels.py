@@ -423,19 +423,19 @@ def collect_sofascore_mom_labels_tournament_season(
             # public hosts. Keep the existing date fallback as the last route;
             # if any required date is unavailable, fail closed.
             fallback_dates = sorted(
-            {
-                (ts - pd.Timedelta(days=1)).date().isoformat()
-                for ts in d["kickoff_utc"]
-            }
-            | {
-                ts.date().isoformat()
-                for ts in d["kickoff_utc"]
-            }
-            | {
-                (ts + pd.Timedelta(days=1)).date().isoformat()
-                for ts in d["kickoff_utc"]
-            }
-        )
+                {
+                    (ts - pd.Timedelta(days=1)).date().isoformat()
+                    for ts in d["kickoff_utc"]
+                }
+                | {
+                    ts.date().isoformat()
+                    for ts in d["kickoff_utc"]
+                }
+                | {
+                    (ts + pd.Timedelta(days=1)).date().isoformat()
+                    for ts in d["kickoff_utc"]
+                }
+            )
             try:
                 events, _ = fetch_scheduled_events_for_dates(
                     fallback_dates,
