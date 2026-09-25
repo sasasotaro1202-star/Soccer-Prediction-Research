@@ -254,6 +254,77 @@ def run_mom_walk_forward(
                     raise RuntimeError(f"MOM soft ensemble produced invalid probabilities for match_id={match_id!r}")
                 merged["probability"] = merged["probability"] / total
                 distributions.append(merged)
+        elif method == "rank_consensus":
+            # Fixed Borda-style rank consensus. Each component contributes only
+            # its within-match ordering; no OOS/locked data is used to tune weights.
+            # Candidate-set equality and uniqueness are enforced fail-closed.
+            component_methods = ("binary_logit", "conditional_logit", "hist_gbdt")
+            component_models = [
+                fit_mom_model(
+                    train,
+                    regularization_c=regularization_c,
+                    temperature=temperature,
+                    min_matches=min_train_matches,
+                    random_state=random_state,
+                    method=component,
+                )
+                for component in component_methods
+            ]
+            distributions = []
+            for match_id, group in test.groupby("match_id", sort=False):
+                kickoff = group["kickoff_utc"].iloc[0]
+                prediction_time = kickoff - pd.Timedelta(seconds=1)
+                pred_input = group.drop(columns=["is_motm"]).copy()
+                component_dists = [
+                    predict_mom_distribution(
+                        model_bundle,
+                        pred_input,
+                        prediction_time=prediction_time,
+                    )
+                    for model_bundle in component_models
+                ]
+                candidate_sets = []
+                for component_dist in component_dists:
+                    if component_dist.duplicated(["match_id", "player_id"]).any():
+                        raise RuntimeError(
+                            f"MOM rank consensus component contains duplicate candidates for match_id={match_id!r}"
+                        )
+                    candidate_sets.append(set(component_dist["player_id"].astype(str)))
+                if any(candidate_sets[i] != candidate_sets[0] for i in range(1, len(candidate_sets))):
+                    raise RuntimeError(f"MOM rank consensus candidate sets differ for match_id={match_id!r}")
+
+                merged = component_dists[0][["match_id", "player_id", "kickoff_utc", "probability"]].copy()
+                merged = merged.rename(columns={"probability": "p0"})
+                for idx, component_dist in enumerate(component_dists[1:], start=1):
+                    part = component_dist[["match_id", "player_id", "probability"]].copy()
+                    merged = merged.merge(
+                        part.rename(columns={"probability": f"p{idx}"}),
+                        on=["match_id", "player_id"],
+                        how="outer",
+                        validate="one_to_one",
+                    )
+                probability_cols = [f"p{i}" for i in range(len(component_methods))]
+                if merged[probability_cols].isna().any().any():
+                    raise RuntimeError(f"MOM rank consensus candidate sets differ for match_id={match_id!r}")
+                rank_scores = []
+                for col in probability_cols:
+                    ordered = merged.sort_values(
+                        [col, "player_id"],
+                        ascending=[False, True],
+                        kind="mergesort",
+                    )
+                    ranks = pd.Series(
+                        np.arange(len(ordered), 0, -1, dtype=float) / float(max(len(ordered), 1)),
+                        index=ordered.index,
+                    )
+                    rank_scores.append(ranks.reindex(merged.index).to_numpy(dtype=float))
+                merged["probability"] = np.mean(np.stack(rank_scores, axis=0), axis=0)
+                total = float(merged["probability"].sum())
+                if not np.isfinite(total) or total <= 0:
+                    raise RuntimeError(f"MOM rank consensus produced invalid probabilities for match_id={match_id!r}")
+                merged["probability"] /= total
+                distributions.append(merged[["match_id", "player_id", "kickoff_utc", "probability"]])
+
         else:
             model = fit_mom_model(
                 train,
