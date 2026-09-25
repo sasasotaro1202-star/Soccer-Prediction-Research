@@ -603,6 +603,20 @@ def run(
         report.get("label_source", {}).get("research_only_proxy", False)
     )
     report["label_contract"] = label_report
+
+    # A post-match proxy is useful for architecture experiments, but it is not
+    # a valid substitute for the actual MOM target. Never turn proxy labels into
+    # apparent OOS evidence for a competition without a verified MOM label source.
+    if bool(label_report["research_only_proxy"]):
+        report["status"] = "DEFERRED_RESEARCH_ONLY_PROXY_LABELS"
+        report["oos_evaluated"] = False
+        report["defer_reason"] = "Actual post-match MOM labels unavailable from verified public providers."
+        (root / "mom_research_report.json").write_text(
+            json.dumps(report, indent=2, ensure_ascii=False, default=str),
+            encoding="utf-8",
+        )
+        return 0
+
     if int(label_report.get("label_found", 0)) < 100:
         report["status"] = "DEFERRED_INSUFFICIENT_MOM_LABELS"
         (root / "mom_research_report.json").write_text(
