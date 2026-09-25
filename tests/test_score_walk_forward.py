@@ -50,6 +50,15 @@ def test_score_walk_forward_produces_multiple_pit_safe_blocks():
         "negative_binomial_over_2_5_brier",
         "negative_binomial_btts_logloss",
         "negative_binomial_btts_brier",
+        "mean_score_risk",
+        "high_risk_score_n",
+        "high_risk_score_share",
+        "high_risk_score_logloss",
+        "high_risk_top3_score_hit_rate",
+        "high_risk_over_2_5_logloss",
+        "high_risk_over_2_5_brier",
+        "high_risk_btts_logloss",
+        "high_risk_btts_brier",
     ):
         assert result[col].notna().all()
 
@@ -62,3 +71,10 @@ def test_score_walk_forward_requires_result_publication_time():
         assert "source_available_at_utc" in str(exc)
     else:
         raise AssertionError("score OOS must fail closed without publication-time evidence")
+
+
+def test_score_risk_diagnostics_are_bounded():
+    result = run_score_walk_forward(_rows(), min_train=10, oos_block=5)
+    assert result["mean_score_risk"].between(0.0, 1.0).all()
+    assert result["high_risk_score_share"].between(0.0, 1.0).all()
+    assert (result["high_risk_score_n"] >= 0).all()
