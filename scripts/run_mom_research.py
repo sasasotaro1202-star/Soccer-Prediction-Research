@@ -155,76 +155,92 @@ def _build_dataset_rating_proxy_labels(
     target_fixtures: pd.DataFrame,
     player_stats: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Build a research-only label from post-match dataset rating.
+    """Build a research-only post-match performance proxy label.
 
-    This is explicitly not an official MOM label. It is an outcome-only proxy
-    used only to test whether the pre-match player-ranking architecture has
-    measurable signal when the external MOM endpoint is unavailable.
+    Priority is deterministic:
+    1) highest provider rating when available;
+    2) otherwise goals, assists, key passes, shots, minutes.
+    This label is never treated as an official MOM award and is never production-safe.
     """
-    required = {"fixture_id", "player_id", "rating", "minutes", "player_name"}
+    required = {"fixture_id", "player_id", "player_name"}
     missing = sorted(required - set(player_matches.columns))
     if missing:
         raise RuntimeError(f"Proxy MOM labels missing player columns: {missing}")
 
     p = player_matches.copy()
-    p["fixture_id"] = pd.to_numeric(p["fixture_id"], errors="coerce")
-    p["player_id"] = pd.to_numeric(p["player_id"], errors="coerce")
-    p["rating"] = pd.to_numeric(p["rating"], errors="coerce")
-    p["minutes"] = pd.to_numeric(p["minutes"], errors="coerce")
+    for col in ("fixture_id", "player_id"):
+        p[col] = pd.to_numeric(p[col], errors="coerce")
+    for col in ("rating", "minutes"):
+        if col not in p.columns:
+            p[col] = np.nan
+        p[col] = pd.to_numeric(p[col], errors="coerce")
 
-    # In the pinned dataset, detailed player ratings/minutes may live in the
-    # flat stats table while fixture_players carries the identity/name.
-    if player_stats is not None:
+    if player_stats is not None and {"fixture_id", "player_id"}.issubset(player_stats.columns):
         ps = player_stats.copy()
-        if {"fixture_id", "player_id"}.issubset(ps.columns):
-            ps["fixture_id"] = pd.to_numeric(ps["fixture_id"], errors="coerce")
-            ps["player_id"] = pd.to_numeric(ps["player_id"], errors="coerce")
-            if "games_rating" in ps.columns:
-                stats_rating = pd.to_numeric(ps["games_rating"], errors="coerce")
-                rating_frame = ps.assign(_stats_rating_value=stats_rating)[
-                    ["fixture_id", "player_id", "_stats_rating_value"]
-                ]
-                p = p.merge(
-                    rating_frame,
-                    on=["fixture_id", "player_id"],
-                    how="left",
-                    validate="one_to_one",
-                )
-                p["rating"] = p["rating"].combine_first(p["_stats_rating_value"])
-                p = p.drop(columns=["_stats_rating_value"])
-    p = p.dropna(subset=["fixture_id", "player_id", "rating"]).copy()
+        for col in ("fixture_id", "player_id"):
+            ps[col] = pd.to_numeric(ps[col], errors="coerce")
+        select_cols = ["fixture_id", "player_id"]
+        for col in ("games_rating", "games_minutes", "goals_total", "goals_assists", "passes_key", "shots_total"):
+            if col in ps.columns:
+                select_cols.append(col)
+        ps = ps[select_cols].copy()
+        if ps.duplicated(["fixture_id", "player_id"]).any():
+            raise RuntimeError("Proxy MOM player stats contain duplicate fixture/player rows")
+        p = p.merge(ps, on=["fixture_id", "player_id"], how="left", validate="one_to_one")
+        if "games_rating" in p.columns:
+            p["rating"] = p["rating"].combine_first(pd.to_numeric(p["games_rating"], errors="coerce"))
+        if "games_minutes" in p.columns:
+            p["minutes"] = p["minutes"].combine_first(pd.to_numeric(p["games_minutes"], errors="coerce"))
+
+    for col in ("goals_total", "goals_assists", "passes_key", "shots_total"):
+        if col not in p.columns:
+            p[col] = np.nan
+        p[col] = pd.to_numeric(p[col], errors="coerce")
+
     p = p.merge(
         target_fixtures[["id"]].rename(columns={"id": "fixture_id"}),
         on="fixture_id",
         how="inner",
         validate="many_to_one",
     )
+    p = p.dropna(subset=["fixture_id", "player_id"]).copy()
     if p.empty:
-        raise RuntimeError("No target player ratings available for proxy MOM labels")
+        raise RuntimeError("No target player rows available for proxy MOM labels")
 
     rows: list[dict[str, Any]] = []
     for fixture_id, g in p.groupby("fixture_id", sort=True):
-        g = g.sort_values(
-            ["rating", "minutes", "player_id"],
-            ascending=[False, False, True],
-            kind="mergesort",
-        )
-        winner = g.iloc[0]
+        has_rating = np.isfinite(g["rating"].to_numpy(dtype=float))
+        if has_rating.any():
+            g = g.loc[has_rating].sort_values(
+                ["rating", "minutes", "player_id"],
+                ascending=[False, False, True],
+                kind="mergesort",
+            )
+            winner = g.iloc[0]
+            source = "dataset_rating_top_performer_proxy"
+        else:
+            for col in ("goals_total", "goals_assists", "passes_key", "shots_total", "minutes"):
+                g[col] = g[col].fillna(-np.inf)
+            g = g.sort_values(
+                ["goals_total", "goals_assists", "passes_key", "shots_total", "minutes", "player_id"],
+                ascending=[False, False, False, False, False, True],
+                kind="mergesort",
+            )
+            winner = g.iloc[0]
+            source = "dataset_boxscore_top_performer_proxy"
         rows.append({
             "match_id": str(int(fixture_id)),
             "label_status": "LABEL_FOUND",
-            "event_id": f"dataset-rating-proxy:{int(fixture_id)}",
+            "event_id": f"dataset-performance-proxy:{int(fixture_id)}",
             "player_id": str(int(winner["player_id"])),
             "player_name": str(winner["player_name"]),
-            "label_source": "dataset_rating_top_performer_proxy",
+            "label_source": source,
             "label_retrieved_at_utc": "",
             "event_kickoff_utc": "",
             "event_match_delta_hours": None,
             "source_content_sha256": "",
         })
     return pd.DataFrame(rows)
-
-
 
 def _summarize_metrics(metrics: pd.DataFrame) -> dict[str, Any]:
     dev, locked = split_mom_development_locked(metrics, locked_blocks=2)
