@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -10,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from src.prediction.model_bundle import load_bundle, predict_bundle
-from src.prediction.active_model import resolve_active_production_paths, resolve_best_available_paths
+from src.prediction.active_model import resolve_active_production_paths, resolve_best_available_paths, resolve_best_available_paths_with_remote
 from src.prediction.secondary_outputs import predict_mom_candidates, predict_score_candidates, predict_score_markets
 from src.prediction.matchday_intelligence import apply_matchday_intelligence
 from src.data.competition_sources import TARGET_COMPETITIONS
@@ -341,7 +342,14 @@ def run(
         and registry_path == "artifacts/model_registry.json"
     )
     if model_policy == "best_available" and standard_paths:
-        bundle_path, registry_path, model_mode = resolve_best_available_paths()
+        try:
+            bundle_path, registry_path, model_mode = resolve_best_available_paths()
+        except RuntimeError:
+            repository = os.environ.get(
+                "SOCCER_PRODUCTION_REPOSITORY",
+                "sasasotaro1202-star/Soccer-Prediction-Research",
+            )
+            bundle_path, registry_path, model_mode = resolve_best_available_paths_with_remote(repository)
         registry = load_best_available_model(registry_path)
     else:
         # Explicit caller paths are preserved. This keeps isolated validation runs
