@@ -239,25 +239,24 @@ def run(
         )
         return 0
 
-    # Use the season-scoped event index directly. This avoids the daily scheduled-events
-    # endpoint, which has returned challenge/empty payloads in Actions. The season ID is
-    # explicit and versioned in the research configuration.
+    # Use the public daily scheduled-events index to locate historical fixtures.
+    # This path is already covered by deterministic tests and avoids the unstable
+    # tournament-season events endpoint. Only the matched event's post-match
+    # playerOfTheMatch field is read as the outcome label.
     report["label_source"] = {
-        "source": "sofascore_tournament_season_events_best_players_summary",
+        "source": "sofascore_scheduled_events_best_players_summary",
         "tournament_id": int(tournament_id),
         "season_id": int(season_id),
-        "season_index": "explicit_pinned_public_season_id",
+        "matching": "team_identity_and_kickoff_proximity",
+        "pit_role": "outcome_only"
     }
 
-    labels = collect_sofascore_mom_labels_tournament_season(
+    labels = collect_sofascore_mom_labels(
         target_fixtures[["id", "date_utc", "home_team", "away_team"]].rename(
             columns={"id": "match_id", "date_utc": "kickoff_utc"}
         ),
-        tournament_id=int(tournament_id),
-        season_id=int(season_id),
         cache_dir=str(root / "cache"),
         retries=3,
-        max_event_pages=12,
     )
     labels.to_csv(root / "mom_labels.csv", index=False)
     label_report = label_data_contract_report(labels)
