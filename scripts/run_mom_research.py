@@ -390,6 +390,12 @@ def run(
             )
             labels, reconciliation = reconcile_fotmob_player_ids(labels, features)
             report["player_reconciliation"] = reconciliation
+            if "reconciliation_method" in labels.columns:
+                report["player_reconciliation"]["methods"] = (
+                    labels.loc[labels["label_status"].eq("LABEL_FOUND"), "reconciliation_method"]
+                    .value_counts(dropna=False)
+                    .to_dict()
+                )
             report["label_source"] = {
                 "source": "fotmob_match_details_player_of_the_match",
                 "research_only_proxy": False,
@@ -397,7 +403,7 @@ def run(
                 "league_id": int(DEFAULT_FOTMOB_LEAGUE_ID),
                 "season": str(DEFAULT_FOTMOB_SEASON),
                 "matching": "team_identity_and_kickoff_proximity",
-                "player_mapping": "exact_normalized_name_with_single_candidate_required",
+                "player_mapping": "conservative_exact_name_aliases_with_unique_candidate_required",
                 "pit_role": "outcome_only",
                 "fallback_reason": f"{type(sofa_exc).__name__}: {sofa_exc}",
             }
@@ -465,19 +471,31 @@ def run(
     )
     binary_summary = _summarize_metrics(binary)
     conditional_summary = _summarize_metrics(conditional)
+    hist_gbdt = run_mom_walk_forward(
+        labelled,
+        n_blocks=6,
+        locked_blocks=2,
+        min_train_matches=30,
+        method="hist_gbdt",
+    )
+    hist_gbdt_summary = _summarize_metrics(hist_gbdt)
     report["models"] = {
         "binary_logit": binary_summary,
         "conditional_logit": conditional_summary,
+        "hist_gbdt": hist_gbdt_summary,
     }
 
     # Development-only selection. Locked blocks are intentionally not inspected
     # for this choice; they remain a post-selection generalization check.
-    bll = binary_summary["development_mean"]["logloss"]
-    cll = conditional_summary["development_mean"]["logloss"]
-    if cll + 1e-9 < bll:
-        selected = "conditional_logit"
-    else:
-        selected = "binary_logit"
+    model_summaries = {
+        "binary_logit": binary_summary,
+        "conditional_logit": conditional_summary,
+        "hist_gbdt": hist_gbdt_summary,
+    }
+    selected = min(
+        model_summaries,
+        key=lambda name: float(model_summaries[name]["development_mean"]["logloss"]),
+    )
     report["development_selection"] = {
         "selected_method": selected,
         "locked_blocks_untouched_for_selection": True,
