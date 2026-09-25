@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from src.data.external_fetch import ExternalFetcher
 from src.data.sofascore_mom_labels import fetch_mom_label
+from src.evaluation.metrics import classification_metrics
 
 LEDGER = Path("data/experience/prediction_ledger.csv")
 METRICS = Path("artifacts/experience_metrics.csv")
@@ -72,7 +73,19 @@ def record_prediction_file(predictions_path: str, prediction_time: str | None = 
     for c in ["p_home","p_draw","p_away","score_1_probability","score_2_probability","score_3_probability",
               "mom_1_probability","mom_2_probability","mom_3_probability","mom_4_probability"]:
         if c in incoming:
-            incoming[c] = pd.to_numeric(incoming[c], errors="coerce").round(5)
+            incoming[c] = pd.to_numeric(incoming[c], errors="coerce")
+    probs = incoming[["p_home","p_draw","p_away"]].to_numpy(dtype=float)
+    if not np.isfinite(probs).all() or np.any(probs < 0):
+        raise RuntimeError("prediction ledger received non-finite or negative 1X2 probabilities")
+    sums = probs.sum(axis=1)
+    if np.any(sums <= 0) or np.any(np.abs(sums - 1.0) > 1e-3):
+        raise RuntimeError("prediction ledger received 1X2 probabilities whose row sums are not within 1e-3 of 1")
+    probs = probs / sums[:, None]
+    incoming[["p_home","p_draw","p_away"]] = np.round(probs, 5)
+    for c in ["score_1_probability","score_2_probability","score_3_probability",
+              "mom_1_probability","mom_2_probability","mom_3_probability","mom_4_probability"]:
+        if c in incoming:
+            incoming[c] = incoming[c].round(5)
     incoming["fixture_key"] = incoming.apply(lambda r: _key(r["kickoff_utc"],r["home_team"],r["away_team"]), axis=1)
     incoming["prediction_state_id"] = incoming.apply(_hash_state, axis=1)
     existing = _read(LEDGER)
@@ -238,6 +251,35 @@ def settle_predictions(days_back=14):
     return {"status":"SETTLED","settled":settled,"pending_after":int(ledger["actual_result"].isna().sum()),
             "retrieval_at_utc":retrieval,"metrics_rows":metrics}
 
+def _proper_score_metrics(frame: pd.DataFrame) -> dict[str, Any]:
+    required = {"p_home", "p_draw", "p_away", "actual_result"}
+    if not required.issubset(frame.columns):
+        return {}
+    d = frame[["p_home", "p_draw", "p_away", "actual_result"]].copy()
+    d["actual_result"] = d["actual_result"].map({"H": 0, "D": 1, "A": 2})
+    for c in ("p_home", "p_draw", "p_away"):
+        d[c] = pd.to_numeric(d[c], errors="coerce")
+    d = d.dropna(subset=["actual_result", "p_home", "p_draw", "p_away"])
+    if d.empty:
+        return {}
+    p = d[["p_home", "p_draw", "p_away"]].to_numpy(dtype=float)
+    y = d["actual_result"].to_numpy(dtype=int)
+    valid = np.isfinite(p).all(axis=1) & (p >= 0).all(axis=1) & (p.sum(axis=1) > 0)
+    if not valid.any():
+        return {}
+    p = p[valid]
+    y = y[valid]
+    p /= p.sum(axis=1, keepdims=True)
+    metrics = classification_metrics(y, p)
+    return {
+        "logloss": round(float(metrics["logloss"]), 6),
+        "brier": round(float(metrics["brier"]), 6),
+        "rps": round(float(metrics["rps"]), 6),
+        "ece": round(float(metrics["ece"]), 6),
+        "probability_rows": int(len(y)),
+    }
+
+
 def compute_metrics(ledger=None):
     if ledger is None: ledger=_read(LEDGER)
     METRICS.parent.mkdir(parents=True,exist_ok=True)
@@ -254,6 +296,7 @@ def compute_metrics(ledger=None):
            "1x2_accuracy_pct":round(pd.to_numeric(x["correct_1x2"],errors="coerce").mean()*100,4),
            "score_top1_accuracy_pct":round(pd.to_numeric(x["score_top1_hit"],errors="coerce").mean()*100,4),
            "score_top3_accuracy_pct":round(pd.to_numeric(x["score_top3_hit"],errors="coerce").mean()*100,4)}
+        r.update(_proper_score_metrics(x))
         for col,name in [("over_2_5_correct","over_2_5_accuracy_pct"),("btts_correct","btts_accuracy_pct"),
                          ("mom_top1_hit","mom_top1_accuracy_pct"),("mom_top4_hit","mom_top4_accuracy_pct")]:
             vals=pd.to_numeric(x[col],errors="coerce").dropna() if col in x else pd.Series(dtype=float)
