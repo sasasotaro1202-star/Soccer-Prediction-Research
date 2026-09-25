@@ -28,6 +28,12 @@ from src.data.sofascore_mom_labels import (
     collect_sofascore_mom_labels_tournament_season,
     label_data_contract_report,
 )
+from src.data.fotmob_mom_labels import (
+    DEFAULT_FOTMOB_LEAGUE_ID,
+    DEFAULT_FOTMOB_SEASON,
+    collect_fotmob_mom_labels,
+    reconcile_fotmob_player_ids,
+)
 from src.data.external_fetch import ExternalFetcher
 from src.evaluation.mom_walk_forward import (
     run_mom_walk_forward,
@@ -368,22 +374,51 @@ def run(
             "pit_role": "outcome_only",
             "max_event_pages": 60,
         }
-    except RuntimeError as exc:
-        # External MOM labels are currently unavailable in the public Actions
-        # environment. Fall back to an explicit post-match rating proxy so the
-        # ranking architecture can still be evaluated. This proxy is never
-        # eligible for production adoption.
-        labels = _build_dataset_rating_proxy_labels(
-            player_matches,
-            target_fixtures,
-            player_stats=player_stats,
-        )
-        report["label_source"] = {
-            "source": "dataset_rating_top_performer_proxy",
-            "research_only_proxy": True,
-            "production_safe": False,
-            "fallback_reason": f"{type(exc).__name__}: {exc}",
-        }
+    except RuntimeError as sofa_exc:
+        # Use a second independent public provider before falling back to a
+        # post-match performance proxy. FotMob's matchDetails exposes
+        # content.matchFacts.playerOfTheMatch, but its player ids are provider-
+        # specific and must be reconciled against the PIT-safe candidate rows.
+        try:
+            labels = collect_fotmob_mom_labels(
+                label_fixtures,
+                league_id=DEFAULT_FOTMOB_LEAGUE_ID,
+                season=DEFAULT_FOTMOB_SEASON,
+                cache_dir=str(root / "cache"),
+                retries=3,
+                request_delay_seconds=0.25,
+            )
+            labels, reconciliation = reconcile_fotmob_player_ids(labels, features)
+            report["player_reconciliation"] = reconciliation
+            report["label_source"] = {
+                "source": "fotmob_match_details_player_of_the_match",
+                "research_only_proxy": False,
+                "production_safe": False,
+                "league_id": int(DEFAULT_FOTMOB_LEAGUE_ID),
+                "season": str(DEFAULT_FOTMOB_SEASON),
+                "matching": "team_identity_and_kickoff_proximity",
+                "player_mapping": "exact_normalized_name_with_single_candidate_required",
+                "pit_role": "outcome_only",
+                "fallback_reason": f"{type(sofa_exc).__name__}: {sofa_exc}",
+            }
+        except RuntimeError as fotmob_exc:
+            # External MOM labels are unavailable from both public providers.
+            # Keep the explicit post-match performance proxy for architecture
+            # research only; it is never production-safe.
+            labels = _build_dataset_rating_proxy_labels(
+                player_matches,
+                target_fixtures,
+                player_stats=player_stats,
+            )
+            report["label_source"] = {
+                "source": "dataset_rating_top_performer_proxy",
+                "research_only_proxy": True,
+                "production_safe": False,
+                "fallback_reason": (
+                    f"sofascore={type(sofa_exc).__name__}: {sofa_exc}; "
+                    f"fotmob={type(fotmob_exc).__name__}: {fotmob_exc}"
+                ),
+            }
     labels.to_csv(root / "mom_labels.csv", index=False)
     label_report = label_data_contract_report(labels)
     label_report["research_only_proxy"] = bool(
