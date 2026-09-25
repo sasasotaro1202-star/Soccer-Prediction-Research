@@ -37,6 +37,13 @@ def _score_block_metrics(
     over25_brier = []
     btts_logloss = []
     btts_brier = []
+    risk_scores = []
+    risk_exact_losses = []
+    risk_top3_hits = []
+    risk_over25_logloss = []
+    risk_over25_brier = []
+    risk_btts_logloss = []
+    risk_btts_brier = []
 
     for row in block.itertuples(index=False):
         actual_h = int(row.home_goals)
@@ -61,6 +68,14 @@ def _score_block_metrics(
         exact_losses.append(-math.log(max(actual_prob, 1e-12)))
 
         ranked = sorted(dist, key=lambda x: (-float(x[2]), int(x[0]), int(x[1])))
+        top_probs = [float(x[2]) for x in ranked[:2]]
+        entropy = -sum(
+            float(np.clip(p, 1e-12, 1.0)) * math.log(float(np.clip(p, 1e-12, 1.0)))
+            for _, _, p in dist
+        ) / max(math.log(len(dist)), 1e-12)
+        margin_risk = 1.0 - float(np.clip((top_probs[0] - top_probs[1]) if len(top_probs) >= 2 else top_probs[0], 0.0, 1.0))
+        score_risk = float(np.clip(0.60 * entropy + 0.40 * margin_risk, 0.0, 1.0))
+        risk_scores.append(score_risk)
         top3 = {(int(h), int(a)) for h, a, _ in ranked[:3]}
         top4 = {(int(h), int(a)) for h, a, _ in ranked[:4]}
         exact_hits += int((actual_h, actual_a) == (int(ranked[0][0]), int(ranked[0][1])))
@@ -83,8 +98,16 @@ def _score_block_metrics(
         over25_brier.append((p_over25 - y_over25) ** 2)
         btts_logloss.append(_binary_logloss(y_btts, p_btts))
         btts_brier.append((p_btts - y_btts) ** 2)
+        if score_risk >= 0.66:
+            risk_exact_losses.append(-math.log(max(actual_prob, 1e-12)))
+            risk_top3_hits.append(int((actual_h, actual_a) in top3))
+            risk_over25_logloss.append(over25_logloss[-1])
+            risk_over25_brier.append(over25_brier[-1])
+            risk_btts_logloss.append(btts_logloss[-1])
+            risk_btts_brier.append(btts_brier[-1])
 
     n = max(1, len(block))
+    high_n = len(risk_exact_losses)
     return {
         "n": float(len(block)),
         "score_logloss": float(np.mean(exact_losses)),
@@ -98,6 +121,15 @@ def _score_block_metrics(
         "over_2_5_brier": float(np.mean(over25_brier)),
         "btts_logloss": float(np.mean(btts_logloss)),
         "btts_brier": float(np.mean(btts_brier)),
+        "mean_score_risk": float(np.mean(risk_scores)) if risk_scores else float("nan"),
+        "high_risk_score_n": float(high_n),
+        "high_risk_score_share": float(high_n / n),
+        "high_risk_score_logloss": float(np.mean(risk_exact_losses)) if risk_exact_losses else float("nan"),
+        "high_risk_top3_score_hit_rate": float(np.mean(risk_top3_hits)) if risk_top3_hits else float("nan"),
+        "high_risk_over_2_5_logloss": float(np.mean(risk_over25_logloss)) if risk_over25_logloss else float("nan"),
+        "high_risk_over_2_5_brier": float(np.mean(risk_over25_brier)) if risk_over25_brier else float("nan"),
+        "high_risk_btts_logloss": float(np.mean(risk_btts_logloss)) if risk_btts_logloss else float("nan"),
+        "high_risk_btts_brier": float(np.mean(risk_btts_brier)) if risk_btts_brier else float("nan"),
     }
 
 
