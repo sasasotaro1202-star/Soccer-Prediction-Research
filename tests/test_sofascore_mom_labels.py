@@ -282,3 +282,41 @@ def test_round_event_fallback_fails_closed_on_missing_payload():
         m.fetch_tournament_season_events_by_rounds(
             17, 61627, fetcher=FakeFetcher(), max_rounds=2, request_delay_seconds=0
         )
+
+
+def test_resolve_unique_tournament_id_uses_exact_name_and_category():
+    from src.data.sofascore_mom_labels import resolve_unique_tournament_id
+    tournaments = [
+        {"id": 17, "name": "Premier League", "slug": "premier-league", "category": {"name": "England"}},
+        {"id": 8, "name": "Premier League", "slug": "premier-league", "category": {"name": "Other"}},
+    ]
+    assert resolve_unique_tournament_id(
+        tournaments,
+        names=["Premier League"],
+        category_names=["England"],
+    ) == 17
+
+
+def test_resolve_unique_tournament_id_is_fail_closed_on_ambiguity():
+    from src.data.sofascore_mom_labels import resolve_unique_tournament_id
+    tournaments = [
+        {"id": 17, "name": "Premier League", "category": {"name": "England"}},
+        {"id": 18, "name": "Premier League", "category": {"name": "Scotland"}},
+    ]
+    with pytest.raises(RuntimeError, match="ambiguous"):
+        resolve_unique_tournament_id(tournaments, names=["Premier League"])
+
+
+def test_extract_unique_tournaments_accepts_grouped_payload():
+    from src.data.sofascore_mom_labels import _extract_unique_tournaments
+    payload = {
+        "groups": [
+            {
+                "uniqueTournaments": [
+                    {"id": 17, "name": "Premier League", "category": {"name": "England"}}
+                ]
+            }
+        ]
+    }
+    result = _extract_unique_tournaments(payload)
+    assert [x["id"] for x in result] == [17]
