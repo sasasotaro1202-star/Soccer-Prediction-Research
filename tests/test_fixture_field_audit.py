@@ -83,3 +83,9 @@ def test_reconciliation_flags_duplicate_rows_without_double_counting_source():
     out = source_reconciliation(h)
     assert out.iloc[0].source_count == 1
     assert out.iloc[0].duplicate_source_identity is True
+
+
+def test_target_scope_is_not_hardcoded_to_legacy_count():
+    from src.data.competition_sources import TARGET_COMPETITIONS
+    assert len(TARGET_COMPETITIONS) == len(set(TARGET_COMPETITIONS))
+    assert len(TARGET_COMPETITIONS) > 15
