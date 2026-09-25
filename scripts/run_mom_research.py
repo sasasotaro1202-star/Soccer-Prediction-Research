@@ -24,6 +24,7 @@ from src.data.mom_player_history_adapter import (
 )
 from src.data.sofascore_mom_labels import (
     collect_sofascore_mom_labels,
+    collect_sofascore_mom_labels_tournament_season,
     label_data_contract_report,
 )
 from src.data.external_fetch import ExternalFetcher
@@ -37,6 +38,9 @@ DEFAULT_TOURNAMENT_ID = 17  # Premier League
 DEFAULT_SEASON_START_YEAR = 2024
 DEFAULT_START = "2024-08-01"
 DEFAULT_END = "2025-06-01"
+# Verified public SofaScore season identifier for Premier League 24/25.
+# Keep this explicit for PIT/reproducibility; do not discover it from a challenge-prone endpoint.
+DEFAULT_SOFASCORE_SEASON_ID = 61627
 
 
 def _load_frames(
@@ -181,6 +185,7 @@ def run(
     end: str = DEFAULT_END,
     season_start_year: int = DEFAULT_SEASON_START_YEAR,
     tournament_id: int = DEFAULT_TOURNAMENT_ID,
+    season_id: int = DEFAULT_SOFASCORE_SEASON_ID,
     output_dir: str = "artifacts/mom_research",
 ) -> int:
     root = Path(output_dir)
@@ -196,6 +201,7 @@ def run(
         "target": {
             "tournament_id": int(tournament_id),
             "season_start_year": int(season_start_year),
+            "season_id": int(season_id),
             "start": start,
             "end": end,
             "history_start": None,
@@ -233,20 +239,25 @@ def run(
         )
         return 0
 
-    # Avoid the tournament-season endpoint: it is currently challenge-protected.
-    # Matchday scheduled-events are sufficient to identify each fixture, then the
-    # post-match best-players summary provides the MOM label.
+    # Use the season-scoped event index directly. This avoids the daily scheduled-events
+    # endpoint, which has returned challenge/empty payloads in Actions. The season ID is
+    # explicit and versioned in the research configuration.
     report["label_source"] = {
-        "source": "sofascore_scheduled_events_best_players_summary",
-        "season_index": "bypassed_due_to_public_api_challenge",
+        "source": "sofascore_tournament_season_events_best_players_summary",
+        "tournament_id": int(tournament_id),
+        "season_id": int(season_id),
+        "season_index": "explicit_pinned_public_season_id",
     }
 
-    labels = collect_sofascore_mom_labels(
+    labels = collect_sofascore_mom_labels_tournament_season(
         target_fixtures[["id", "date_utc", "home_team", "away_team"]].rename(
             columns={"id": "match_id", "date_utc": "kickoff_utc"}
         ),
+        tournament_id=int(tournament_id),
+        season_id=int(season_id),
         cache_dir=str(root / "cache"),
         retries=3,
+        max_event_pages=12,
     )
     labels.to_csv(root / "mom_labels.csv", index=False)
     label_report = label_data_contract_report(labels)
@@ -324,6 +335,7 @@ def main() -> int:
     parser.add_argument("--end", default=DEFAULT_END)
     parser.add_argument("--season-start-year", type=int, default=DEFAULT_SEASON_START_YEAR)
     parser.add_argument("--tournament-id", type=int, default=DEFAULT_TOURNAMENT_ID)
+    parser.add_argument("--season-id", type=int, default=DEFAULT_SOFASCORE_SEASON_ID)
     parser.add_argument("--output-dir", default="artifacts/mom_research")
     args = parser.parse_args()
     return run(
@@ -331,6 +343,7 @@ def main() -> int:
         end=args.end,
         season_start_year=args.season_start_year,
         tournament_id=args.tournament_id,
+        season_id=args.season_id,
         output_dir=args.output_dir,
     )
 
