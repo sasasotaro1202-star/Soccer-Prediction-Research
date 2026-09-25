@@ -79,6 +79,7 @@ jobs:
           if [ -f artifacts/pit_competition_breakdown.json ]; then cp artifacts/pit_competition_breakdown.json artifacts/9h/phase1/pit_competition_breakdown.json; fi
           if [ -f artifacts/pit_preflight_manifest.json ]; then cp artifacts/pit_preflight_manifest.json artifacts/9h/phase1/pit_preflight_manifest.json; fi
           if [ -f artifacts/pit_replay_features.csv ]; then cp artifacts/pit_replay_features.csv artifacts/9h/phase1/pit_replay_features.csv; fi
+          if [ -f artifacts/task_scope_matrix.json ]; then cp artifacts/task_scope_matrix.json artifacts/9h/phase1/task_scope_matrix.json; fi
           TARGET_SHA="$(git rev-parse HEAD)"
           printf '{"phase":"phase1_gate","head_sha":"%s","workflow_sha":"%s","completion_step":"${{ steps.completion.outcome }}"}\n' "$TARGET_SHA" "$GITHUB_SHA" > artifacts/9h/phase1/phase_status.json
       - name: Enforce strict completion gate before expensive research
@@ -194,6 +195,7 @@ jobs:
           cp artifacts/9h/phase1/pit_competition_breakdown.json artifacts/pit_competition_breakdown.json
           cp artifacts/9h/phase1/pit_preflight_manifest.json artifacts/pit_preflight_manifest.json
           cp artifacts/9h/phase1/pit_replay_features.csv artifacts/pit_replay_features.csv
+          cp artifacts/9h/phase1/task_scope_matrix.json artifacts/task_scope_matrix.json
           printf '%s\n' '{"exit_code":0,"passed":true,"source":"phase1_pit_handoff"}' > artifacts/audit_status.json
       - name: Rebuild audit artifacts before research when handoff unavailable
         if: env.PIT_PHASE1_HANDOFF != 'true'
