@@ -155,6 +155,112 @@ def fetch_mom_label(
     }
 
 
+
+
+def _extract_unique_tournaments(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract tournament records from known SofaScore list response wrappers."""
+    found: list[dict[str, Any]] = []
+    seen: set[tuple[int, str]] = set()
+
+    def walk(value: Any) -> None:
+        if isinstance(value, dict):
+            if "uniqueTournaments" in value and isinstance(value["uniqueTournaments"], list):
+                for item in value["uniqueTournaments"]:
+                    if isinstance(item, dict):
+                        try:
+                            tid = int(item["id"])
+                        except (TypeError, ValueError, KeyError):
+                            tid = None
+                        name = str(item.get("name") or "").strip()
+                        if tid is not None and name:
+                            key = (tid, name)
+                            if key not in seen:
+                                seen.add(key)
+                                found.append(item)
+            for child in value.values():
+                if isinstance(child, (dict, list)):
+                    walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    walk(payload)
+    return found
+
+
+def fetch_unique_football_tournaments(
+    *,
+    fetcher: ExternalFetcher,
+) -> tuple[list[dict[str, Any]], str]:
+    """Fetch the public football tournament registry without assuming fixed IDs."""
+    endpoints = (
+        f"{SOFASCORE_BASE}/sport/football/unique-tournaments",
+        f"{SOFASCORE_BASE}/config/unique-tournaments/en/football",
+        f"{SOFASCORE_FALLBACK_BASE}/sport/football/unique-tournaments",
+    )
+    errors: list[str] = []
+    for url in endpoints:
+        try:
+            response = fetcher.get(
+                "sofascore_unique_football_tournaments",
+                url,
+                headers=SOFASCORE_HEADERS,
+            )
+            payload = _parse_json(response.body)
+            tournaments = _extract_unique_tournaments(payload)
+            if tournaments:
+                return tournaments, response.metadata.retrieved_at
+            errors.append(f"{url}: tournament list empty")
+        except Exception as exc:
+            errors.append(f"{url}: {type(exc).__name__}: {exc}")
+    raise RuntimeError(
+        "SofaScore football tournament discovery failed on all public endpoints: "
+        + " | ".join(errors)
+    )
+
+
+def resolve_unique_tournament_id(
+    tournaments: list[dict[str, Any]],
+    *,
+    names: list[str] | tuple[str, ...],
+    category_names: list[str] | tuple[str, ...] = (),
+) -> int:
+    """Resolve one tournament ID using exact normalized names, then category context."""
+    requested = {_norm_team(name) for name in names if str(name).strip()}
+    if not requested:
+        raise ValueError("at least one tournament name is required")
+    category_requested = {_norm_team(name) for name in category_names if str(name).strip()}
+
+    candidates: list[dict[str, Any]] = []
+    for tournament in tournaments:
+        try:
+            tid = int(tournament["id"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        name = _norm_team(tournament.get("name"))
+        slug = _norm_team(tournament.get("slug"))
+        if name not in requested and slug not in requested:
+            continue
+        candidates.append(tournament)
+
+    if category_requested and len(candidates) > 1:
+        preferred = []
+        for tournament in candidates:
+            category = tournament.get("category")
+            category_name = _norm_team(category.get("name")) if isinstance(category, dict) else ""
+            if category_name in category_requested:
+                preferred.append(tournament)
+        if preferred:
+            candidates = preferred
+
+    ids = sorted({int(x["id"]) for x in candidates if str(x.get("id", "")).strip()})
+    if len(ids) != 1:
+        raise RuntimeError(
+            f"SofaScore tournament lookup is ambiguous or missing: names={sorted(requested)} ids={ids}"
+        )
+    return ids[0]
+
+
 def fetch_unique_tournament_seasons(
     tournament_id: int,
     *,
