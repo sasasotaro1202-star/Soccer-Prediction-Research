@@ -175,17 +175,172 @@ def _extract_potm(payload: dict[str, Any]) -> tuple[str, str, str]:
     return str(player_id or ""), name, team_name
 
 
+
+def fetch_fotmob_all_leagues(
+    *,
+    fetcher: ExternalFetcher,
+) -> tuple[list[dict[str, Any]], str]:
+    """Fetch FotMob's public league directory for exact competition resolution."""
+    url = f"{FOTMOB_BASE}/allLeagues"
+    response = fetcher.get(
+        "fotmob_all_leagues",
+        url,
+        headers=FOTMOB_HEADERS,
+    )
+    payload = _parse_json(response.body)
+    entries: list[dict[str, Any]] = []
+    for key, source in (
+        ("international", "international"),
+        ("countries", "countries"),
+    ):
+        value = payload.get(key)
+        if not isinstance(value, list):
+            continue
+        for country in value:
+            if key == "international":
+                if isinstance(country, dict):
+                    entries.append({**country, "directory_source": source})
+                continue
+            if not isinstance(country, dict):
+                continue
+            country_name = str(country.get("name") or "").strip()
+            ccode3 = str(country.get("ccode") or country.get("ccode3") or "").strip().upper()
+            leagues = country.get("leagues")
+            if not isinstance(leagues, list):
+                continue
+            for league in leagues:
+                if not isinstance(league, dict):
+                    continue
+                entries.append({
+                    **league,
+                    "country": country_name,
+                    "ccode3": ccode3,
+                    "directory_source": source,
+                })
+    if not entries:
+        raise RuntimeError("FotMob allLeagues response contained no competition records")
+    return entries, response.metadata.retrieved_at
+
+
+def resolve_fotmob_league_id(
+    entries: list[dict[str, Any]],
+    *,
+    names: list[str] | tuple[str, ...],
+    region: str = "",
+) -> tuple[int, str | None, dict[str, Any]]:
+    """Resolve one league by exact normalized name plus country/region context.
+
+    No fuzzy matching is permitted. Ambiguous or missing directory entries fail closed.
+    """
+    requested = {_norm_text(name) for name in names if str(name).strip()}
+    if not requested:
+        raise ValueError("at least one FotMob competition name is required")
+    candidates: list[dict[str, Any]] = []
+    for entry in entries:
+        try:
+            league_id = int(entry.get("id"))
+        except (TypeError, ValueError):
+            continue
+        name = _norm_text(entry.get("name"))
+        if name in requested:
+            candidates.append(entry | {"_resolved_id": league_id})
+
+    region_norm = _norm_text(region)
+    if region_norm and region_norm not in {"europe", "global"}:
+        country_matches = [
+            x for x in candidates
+            if _norm_text(x.get("country")) == region_norm
+        ]
+        if country_matches:
+            candidates = country_matches
+
+    unique_ids = sorted({int(x["_resolved_id"]) for x in candidates})
+    if len(unique_ids) != 1:
+        raise RuntimeError(
+            f"FotMob league lookup is ambiguous or missing: names={sorted(requested)} "
+            f"region={region!r} ids={unique_ids}"
+        )
+    selected = next(x for x in candidates if int(x["_resolved_id"]) == unique_ids[0])
+    ccode3 = str(selected.get("ccode3") or "").strip().upper() or None
+    return unique_ids[0], ccode3, {
+        "name": str(selected.get("name") or ""),
+        "country": str(selected.get("country") or ""),
+        "ccode3": ccode3,
+        "directory_source": str(selected.get("directory_source") or ""),
+    }
+
+
+def fetch_fotmob_league_seasons(
+    *,
+    league_id: int,
+    ccode3: str | None = None,
+    fetcher: ExternalFetcher,
+) -> tuple[list[dict[str, Any]], str]:
+    """Fetch the season registry for a resolved FotMob league."""
+    url = f"{FOTMOB_BASE}/leagues"
+    params: dict[str, Any] = {"id": int(league_id)}
+    if ccode3:
+        params["ccode3"] = str(ccode3).upper()
+    response = fetcher.get(
+        "fotmob_league_seasons",
+        url,
+        params=params,
+        headers=FOTMOB_HEADERS,
+    )
+    payload = _parse_json(response.body)
+    seasons = payload.get("seasons")
+    if not isinstance(seasons, list):
+        raise RuntimeError("FotMob league response missing seasons list")
+    out = [x for x in seasons if isinstance(x, dict)]
+    if not out:
+        raise RuntimeError(f"FotMob league {league_id} has no season records")
+    return out, response.metadata.retrieved_at
+
+
+def resolve_fotmob_season(
+    seasons: list[dict[str, Any]],
+    season_start_year: int,
+) -> str:
+    """Select one historical season without guessing between ambiguous records."""
+    year = str(int(season_start_year))
+    preferred = f"{year}/{int(season_start_year) + 1}"
+    exact: list[str] = []
+    year_matches: list[str] = []
+    for season in seasons:
+        raw_id = str(season.get("id") or "").strip()
+        raw_name = str(season.get("name") or "").strip()
+        for value in (raw_id, raw_name):
+            if not value:
+                continue
+            if value == preferred:
+                exact.append(value)
+            if year in value:
+                year_matches.append(value)
+    exact = sorted(set(exact))
+    if len(exact) == 1:
+        return exact[0]
+    year_matches = sorted(set(year_matches))
+    if len(year_matches) != 1:
+        raise RuntimeError(
+            f"FotMob season lookup is ambiguous or missing for {season_start_year}: {year_matches}"
+        )
+    return year_matches[0]
+
 def fetch_fotmob_league_matches(
     *,
     league_id: int,
     season: str,
+    ccode3: str | None = None,
     fetcher: ExternalFetcher,
 ) -> tuple[list[dict[str, Any]], str]:
     url = f"{FOTMOB_BASE}/leagues"
+    params: dict[str, Any] = {"id": int(league_id), "season": str(season)}
+    if ccode3:
+        params["ccode3"] = str(ccode3).upper()
     response = fetcher.get(
         "fotmob_league_matches",
         url,
-        params={"id": int(league_id), "ccode3": "ENG", "season": str(season)},
+        params=params,
         headers=FOTMOB_HEADERS,
     )
     payload = _parse_json(response.body)
@@ -227,6 +382,7 @@ def collect_fotmob_mom_labels(
     *,
     league_id: int = DEFAULT_FOTMOB_LEAGUE_ID,
     season: str = DEFAULT_FOTMOB_SEASON,
+    ccode3: str | None = None,
     cache_dir: str = "cache/external",
     max_match_delta_hours: float = DEFAULT_MAX_MATCH_DELTA_HOURS,
     retries: int = 3,
@@ -253,6 +409,7 @@ def collect_fotmob_mom_labels(
     matches, league_retrieved_at = fetch_fotmob_league_matches(
         league_id=int(league_id),
         season=str(season),
+        ccode3=ccode3,
         fetcher=fetcher,
     )
 
