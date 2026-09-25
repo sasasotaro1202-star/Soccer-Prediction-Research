@@ -31,6 +31,7 @@ from src.data.sofascore_mom_labels import (
     fetch_unique_football_tournaments,
     resolve_unique_tournament_id,
     discover_unique_tournament_from_scheduled_events,
+    discover_unique_season_from_scheduled_events,
     fetch_unique_tournament_seasons,
     select_season_id,
     label_data_contract_report,
@@ -143,9 +144,29 @@ def _resolve_sofascore_scope(
             meta["event_discovery"] = discovery_meta
     meta["tournament_id"] = int(tournament_id)
     if season_id is None:
-        seasons, retrieved_at = fetch_unique_tournament_seasons(int(tournament_id), fetcher=fetcher)
-        season_id = select_season_id(seasons, int(season_start_year))
-        meta["season_registry_retrieved_at_utc"] = retrieved_at
+        try:
+            seasons, retrieved_at = fetch_unique_tournament_seasons(
+                int(tournament_id), fetcher=fetcher
+            )
+            season_id = select_season_id(seasons, int(season_start_year))
+            meta["season_registry_retrieved_at_utc"] = retrieved_at
+        except (RuntimeError, ValueError) as registry_exc:
+            if not discovery_dates_utc:
+                raise RuntimeError(
+                    "Registry season discovery failed and event-based fallback has no fixture dates: "
+                    f"{type(registry_exc).__name__}: {registry_exc}"
+                ) from registry_exc
+            season_id, season_meta = discover_unique_season_from_scheduled_events(
+                discovery_dates_utc,
+                tournament_id=int(tournament_id),
+                season_start_year=int(season_start_year),
+                fetcher=fetcher,
+                max_dates=5,
+            )
+            meta["season_discovery"] = season_meta
+            meta["season_registry_fallback_reason"] = (
+                f"{type(registry_exc).__name__}: {registry_exc}"
+            )
     meta["season_id"] = int(season_id)
     return int(tournament_id), int(season_id), meta
 
