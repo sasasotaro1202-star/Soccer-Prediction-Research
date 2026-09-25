@@ -10,6 +10,7 @@ from src.data.sofascore_mom_labels import (
     fetch_unique_football_tournaments,
     resolve_unique_tournament_id,
     discover_unique_tournament_from_scheduled_events,
+    discover_unique_season_from_scheduled_events,
     collect_sofascore_mom_labels,
     fetch_tournament_season_events_by_rounds,
     label_data_contract_report,
@@ -386,3 +387,35 @@ def test_event_based_tournament_discovery_fails_closed_on_single_observation():
             fetcher=FakeFetcher(),
             max_dates=2,
         )
+
+
+
+def test_event_based_season_discovery_requires_two_dates():
+    class Response:
+        def __init__(self, payload):
+            self.body = json.dumps(payload).encode()
+            self.metadata = type("Meta", (), {"retrieved_at": "2026-09-25T13:00:00Z"})()
+
+    class FakeFetcher:
+        def get(self, source, url, **kwargs):
+            date = url.rsplit("/", 1)[-1]
+            season = (
+                {"id": 61627, "name": "2024/2025", "year": 2024}
+                if date in {"2024-08-01", "2025-05-31"}
+                else {"id": 99999, "name": "2023/2024", "year": 2023}
+            )
+            return Response({"events": [{
+                "id": 1,
+                "uniqueTournament": {"id": 17, "name": "Premier League"},
+                "season": season,
+            }]})
+
+    tid, meta = discover_unique_season_from_scheduled_events(
+        ["2024-08-01", "2025-01-01", "2025-05-31"],
+        tournament_id=17,
+        season_start_year=2024,
+        fetcher=FakeFetcher(),
+        max_dates=3,
+    )
+    assert tid == 61627
+    assert meta["independent_date_count"] == 2
