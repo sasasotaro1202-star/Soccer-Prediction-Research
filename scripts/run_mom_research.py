@@ -150,6 +150,60 @@ def _load_frames(
         con.close()
 
 
+def _build_dataset_rating_proxy_labels(
+    player_matches: pd.DataFrame,
+    target_fixtures: pd.DataFrame,
+) -> pd.DataFrame:
+    """Build a research-only label from post-match dataset rating.
+
+    This is explicitly not an official MOM label. It is an outcome-only proxy
+    used only to test whether the pre-match player-ranking architecture has
+    measurable signal when the external MOM endpoint is unavailable.
+    """
+    required = {"fixture_id", "player_id", "rating", "minutes", "player_name"}
+    missing = sorted(required - set(player_matches.columns))
+    if missing:
+        raise RuntimeError(f"Proxy MOM labels missing player columns: {missing}")
+
+    p = player_matches.copy()
+    p["fixture_id"] = pd.to_numeric(p["fixture_id"], errors="coerce")
+    p["player_id"] = pd.to_numeric(p["player_id"], errors="coerce")
+    p["rating"] = pd.to_numeric(p["rating"], errors="coerce")
+    p["minutes"] = pd.to_numeric(p["minutes"], errors="coerce")
+    p = p.dropna(subset=["fixture_id", "player_id", "rating"]).copy()
+    p = p.merge(
+        target_fixtures[["id"]].rename(columns={"id": "fixture_id"}),
+        on="fixture_id",
+        how="inner",
+        validate="many_to_one",
+    )
+    if p.empty:
+        raise RuntimeError("No target player ratings available for proxy MOM labels")
+
+    rows: list[dict[str, Any]] = []
+    for fixture_id, g in p.groupby("fixture_id", sort=True):
+        g = g.sort_values(
+            ["rating", "minutes", "player_id"],
+            ascending=[False, False, True],
+            kind="mergesort",
+        )
+        winner = g.iloc[0]
+        rows.append({
+            "match_id": str(int(fixture_id)),
+            "label_status": "LABEL_FOUND",
+            "event_id": f"dataset-rating-proxy:{int(fixture_id)}",
+            "player_id": str(int(winner["player_id"])),
+            "player_name": str(winner["player_name"]),
+            "label_source": "dataset_rating_top_performer_proxy",
+            "label_retrieved_at_utc": "",
+            "event_kickoff_utc": "",
+            "event_match_delta_hours": None,
+            "source_content_sha256": "",
+        })
+    return pd.DataFrame(rows)
+
+
+
 def _summarize_metrics(metrics: pd.DataFrame) -> dict[str, Any]:
     dev, locked = split_mom_development_locked(metrics, locked_blocks=2)
     dev_mean = {
@@ -251,18 +305,45 @@ def run(
         "max_event_pages": 60,
     }
 
-    labels = collect_sofascore_mom_labels_tournament_season(
-        target_fixtures[["id", "date_utc", "home_team", "away_team"]].rename(
-            columns={"id": "match_id", "date_utc": "kickoff_utc"}
-        ),
-        tournament_id=int(tournament_id),
-        season_id=int(season_id),
-        cache_dir=str(root / "cache"),
-        retries=3,
-        max_event_pages=60,
+    label_fixtures = target_fixtures[["id", "date_utc", "home_team", "away_team"]].rename(
+        columns={"id": "match_id", "date_utc": "kickoff_utc"}
     )
+    try:
+        labels = collect_sofascore_mom_labels_tournament_season(
+            label_fixtures,
+            tournament_id=int(tournament_id),
+            season_id=int(season_id),
+            cache_dir=str(root / "cache"),
+            retries=3,
+            max_event_pages=60,
+        )
+        report["label_source"] = {
+            "source": "sofascore_tournament_season_events_best_players_summary",
+            "research_only_proxy": False,
+            "production_safe": False,
+            "tournament_id": int(tournament_id),
+            "season_id": int(season_id),
+            "matching": "team_identity_and_kickoff_proximity",
+            "pit_role": "outcome_only",
+            "max_event_pages": 60,
+        }
+    except RuntimeError as exc:
+        # External MOM labels are currently unavailable in the public Actions
+        # environment. Fall back to an explicit post-match rating proxy so the
+        # ranking architecture can still be evaluated. This proxy is never
+        # eligible for production adoption.
+        labels = _build_dataset_rating_proxy_labels(player_matches, target_fixtures)
+        report["label_source"] = {
+            "source": "dataset_rating_top_performer_proxy",
+            "research_only_proxy": True,
+            "production_safe": False,
+            "fallback_reason": f"{type(exc).__name__}: {exc}",
+        }
     labels.to_csv(root / "mom_labels.csv", index=False)
     label_report = label_data_contract_report(labels)
+    label_report["research_only_proxy"] = bool(
+        report.get("label_source", {}).get("research_only_proxy", False)
+    )
     report["label_contract"] = label_report
     if int(label_report.get("label_found", 0)) < 100:
         report["status"] = "DEFERRED_INSUFFICIENT_MOM_LABELS"
