@@ -485,10 +485,6 @@ def run(
     report["target"]["season_id"] = int(season_id)
     report["scope_resolution"] = scope_meta
     target_fixtures = fixtures.loc[
-        report["status"] = "DEFERRED_NO_COMPETITION_FIXTURES"
-        (root / "mom_research_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
-        return 0
-    target_fixtures = fixtures.loc[
         (pd.to_datetime(fixtures["date_utc"], utc=True) >= pd.Timestamp(start, tz="UTC"))
         & (pd.to_datetime(fixtures["date_utc"], utc=True) < pd.Timestamp(end, tz="UTC"))
     ].copy()
