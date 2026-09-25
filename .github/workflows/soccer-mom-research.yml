@@ -1,0 +1,168 @@
+name: Soccer MOM Research
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/models/mom_model.py"
+      - "src/evaluation/mom_walk_forward.py"
+      - "src/data/mom_player_history_adapter.py"
+      - "src/data/sofascore_mom_labels.py"
+      - "src/data/fotmob_mom_labels.py"
+      - "src/data/competition_catalog.py"
+      - "src/data/competition_sources.py"
+      - "scripts/run_mom_research.py"
+      - "tests/test_mom_model.py"
+      - "tests/test_mom_walk_forward.py"
+      - "tests/test_sofascore_mom_labels.py"
+      - ".github/workflows/soccer-mom-research.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/models/mom_model.py"
+      - "src/evaluation/mom_walk_forward.py"
+      - "src/data/mom_player_history_adapter.py"
+      - "src/data/sofascore_mom_labels.py"
+      - "src/data/fotmob_mom_labels.py"
+      - "src/data/competition_catalog.py"
+      - "src/data/competition_sources.py"
+      - "scripts/run_mom_research.py"
+      - "tests/test_mom_model.py"
+      - "tests/test_mom_walk_forward.py"
+      - "tests/test_sofascore_mom_labels.py"
+      - ".github/workflows/soccer-mom-research.yml"
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "UTC start date for bounded MOM research"
+        required: false
+        default: "2024-08-01"
+        type: string
+      end:
+        description: "UTC end date for bounded MOM research"
+        required: false
+        default: "2025-06-01"
+        type: string
+      season_start_year:
+        description: "Research season start year"
+        required: false
+        default: "2024"
+        type: string
+  schedule:
+    - cron: "17 5 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    name: MOM — ${{ matrix.competition }}
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        competition:
+          - EPL
+          - AG_M
+          - AG_W
+          - ERE
+          - LL
+          - SA
+          - BL1
+          - J1
+          - J2
+          - J3
+          - FL1
+          - UCL
+          - UEL
+          - UECL
+          - UEFA_SUPER_CUP
+          - UEFA_YOUTH_LEAGUE
+          - UWCL
+          - UWEC
+          - UEFA_EURO_M
+          - UEFA_EURO_QUALI_M
+          - UEFA_NATIONS_LEAGUE_M
+          - UEFA_EURO_W
+          - UEFA_EURO_QUALI_W
+          - UEFA_NATIONS_LEAGUE_W
+          - UEFA_U21
+          - UEFA_U19
+          - UEFA_U17
+          - UEFA_WU19
+          - UEFA_WU17
+          - UEFA_REGIONS_CUP
+          - EMP_CUP
+          - INTL_M
+          - INTL_W
+          - U23_M
+          - U18_M
+    concurrency:
+      group: soccer-mom-research-${{ github.event.pull_request.head.sha || github.sha }}-${{ matrix.competition }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Checkout exact source commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact source commit
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
+          echo "Verified source SHA: $ACTUAL_SHA"
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 5))
+          done
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 duckdb
+
+      - name: Run deterministic tests
+        env:
+          PYTHONHASHSEED: "0"
+          PYTHONPATH: "."
+        run: python -m pytest -q
+
+      - name: Run bounded real-data MOM research
+        env:
+          PYTHONHASHSEED: "0"
+          PYTHONPATH: "."
+        run: |
+          set -euo pipefail
+          mkdir -p "artifacts/mom_research/${{ matrix.competition }}"
+          python scripts/run_mom_research.py             --competition-code "${{ matrix.competition }}"             --start "${{ inputs.start || '2024-08-01' }}"             --end "${{ inputs.end || '2025-06-01' }}"             --season-start-year "${{ inputs.season_start_year || '2024' }}"             --output-dir "artifacts/mom_research/${{ matrix.competition }}"
+
+      - name: Verify MOM research report exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "artifacts/mom_research/${{ matrix.competition }}/mom_research_report.json"
+
+      - name: Upload MOM research artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: soccer-mom-research-${{ github.run_id }}-${{ matrix.competition }}
+          path: "artifacts/mom_research/${{ matrix.competition }}/"
+          retention-days: 7
+          if-no-files-found: error
