@@ -48,10 +48,54 @@ permissions:
 
 concurrency:
   group: soccer-mom-research-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.start || '2024-08-01' }}-${{ inputs.end || '2025-06-01' }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact source commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact source commit
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
+          echo "Verified source SHA: $ACTUAL_SHA"
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 5))
+          done
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 duckdb
+
+      - name: Run deterministic tests
+        env:
+          PYTHONHASHSEED: "0"
+        run: python -m pytest -q
+
   research:
+    needs: preflight
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -128,11 +172,6 @@ jobs:
             sleep $((attempt * 5))
           done
           python -m pip install --disable-pip-version-check --retries 8 --timeout 90 duckdb
-
-      - name: Run deterministic tests
-        env:
-          PYTHONHASHSEED: "0"
-        run: python -m pytest -q
 
       - name: Run bounded real-data MOM research
         env:
