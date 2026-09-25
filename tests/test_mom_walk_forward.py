@@ -4,6 +4,7 @@ import pytest
 
 from src.evaluation.mom_walk_forward import (
     run_mom_walk_forward,
+    run_mom_walk_forward_calibrated_soft_ensemble,
     split_mom_development_locked,
 )
 from src.models.mom_model import MOM_FEATURE_COLUMNS
@@ -100,6 +101,18 @@ def test_mom_wfo_accepts_fixed_weight_soft_ensemble():
         n_blocks=6,
         min_train_matches=5,
         method="soft_ensemble",
+    )
+    assert len(metrics) >= 3
+    assert np.isfinite(metrics[["top1_hit_rate", "top4_hit_rate", "mrr", "ndcg_at_4", "logloss", "brier", "ece"]].to_numpy()).all()
+
+
+def test_mom_calibrated_soft_ensemble_is_wfo_and_finite():
+    metrics = run_mom_walk_forward_calibrated_soft_ensemble(
+        _rows(18),
+        n_blocks=6,
+        min_train_matches=5,
+        min_calibration_matches=3,
+        prior_strength=12.0,
     )
     assert len(metrics) >= 3
     assert np.isfinite(metrics[["top1_hit_rate", "top4_hit_rate", "mrr", "ndcg_at_4", "logloss", "brier", "ece"]].to_numpy()).all()
