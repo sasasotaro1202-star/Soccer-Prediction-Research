@@ -194,27 +194,43 @@ def routing_risk_score(
     uncertainty_scores: np.ndarray | list[float],
     *,
     drift_weight: float = 0.55,
+    support_scores: np.ndarray | list[float] | None = None,
+    support_weight: float = 0.0,
 ) -> np.ndarray:
-    """Combine covariate drift and predictive uncertainty for calibration only.
-
-    This score is deliberately outcome-free. It is not a performance estimate; it
-    is a prediction-time risk index used to select a conservative recalibration
-    temperature. Keeping it separate from the routing weights prevents the
-    calibration layer from changing the specialist/global trust policy itself.
-    """
+    """Combine drift, predictive uncertainty, and optional sparse-history risk."""
     drift = np.asarray(drift_scores, dtype=float)
     uncertainty = np.asarray(uncertainty_scores, dtype=float)
     if drift.shape != uncertainty.shape:
-        raise ValueError("drift_scores and uncertainty_scores shape mismatch")
+        raise ValueError("routing risk inputs shape mismatch")
     if not np.isfinite(drift).all() or not np.isfinite(uncertainty).all():
         raise ValueError("routing risk inputs must be finite")
     if (drift < 0).any() or (uncertainty < 0).any():
         raise ValueError("routing risk inputs must be non-negative")
     if not np.isfinite(drift_weight) or not 0.0 <= float(drift_weight) <= 1.0:
         raise ValueError("drift_weight must be within [0, 1]")
+    if not np.isfinite(support_weight) or not 0.0 <= float(support_weight) <= 1.0:
+        raise ValueError("support_weight must be within [0, 1]")
+    if float(support_weight) > 0.0 and support_scores is None:
+        raise ValueError("support_scores are required when support_weight is positive")
     d = np.clip(drift, 0.0, 1.0)
     u = np.clip(uncertainty, 0.0, 1.0)
-    return np.clip(float(drift_weight) * d + (1.0 - float(drift_weight)) * u, 0.0, 1.0)
+    if support_scores is None:
+        support = np.zeros_like(d)
+    else:
+        support = np.asarray(support_scores, dtype=float)
+        if support.shape != d.shape:
+            raise ValueError("support_scores shape mismatch")
+        if not np.isfinite(support).all() or (support < 0).any():
+            raise ValueError("support_scores must be finite and non-negative")
+        support = np.clip(support, 0.0, 1.0)
+    remaining = 1.0 - float(support_weight)
+    return np.clip(
+        remaining * float(drift_weight) * d
+        + remaining * (1.0 - float(drift_weight)) * u
+        + float(support_weight) * support,
+        0.0,
+        1.0,
+    )
 
 
 def routing_risk_bucket(
