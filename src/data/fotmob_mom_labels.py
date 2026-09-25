@@ -374,34 +374,86 @@ def reconcile_fotmob_player_ids(
         raise ValueError(f"MOM features missing reconciliation columns: {missing_features}")
 
     out = labels.copy()
-    candidate_map: dict[tuple[str, str], list[str]] = {}
+    candidate_map: dict[tuple[str, str], set[str]] = {}
+    global_name_map: dict[str, set[str]] = {}
+    match_player_ids: dict[str, set[str]] = {}
+
+    # Keep both a match-local map and a global exact-name map. The global map is
+    # only a fallback: the resolved player must also exist in the target match.
+    # This permits provider/display-name drift across matches without fuzzy guesses.
     for row in feature_rows.itertuples(index=False):
         match_id = str(row.match_id)
+        player_id = str(row.player_id)
+        match_player_ids.setdefault(match_id, set()).add(player_id)
         for name_key in _player_name_keys(row.player_name):
-            candidate_map.setdefault((match_id, name_key), []).append(str(row.player_id))
+            candidate_map.setdefault((match_id, name_key), set()).add(player_id)
+            global_name_map.setdefault(name_key, set()).add(player_id)
 
     resolved = 0
     missing = 0
     ambiguous = 0
     out["player_id"] = ""
+
+    # Pass 1: original strict same-match name/alias resolution.
     for idx, row in out.iterrows():
         if str(row["label_status"]) != "LABEL_FOUND":
             continue
         candidates: set[str] = set()
         for name_key in _player_name_keys(row["player_name"]):
-            candidates.update(
-                candidate_map.get((str(row["match_id"]), name_key), [])
-            )
-        candidates = set(candidates)
+            candidates.update(candidate_map.get((str(row["match_id"]), name_key), set()))
         if len(candidates) == 1:
             out.at[idx, "player_id"] = next(iter(candidates))
             resolved += 1
-        elif len(candidates) == 0:
-            out.at[idx, "label_status"] = "PLAYER_NOT_RECONCILED"
-            missing += 1
-        else:
+        elif len(candidates) > 1:
             out.at[idx, "label_status"] = "AMBIGUOUS_PLAYER_NAME"
             ambiguous += 1
+
+    # Build provider-ID mappings only from already-resolved labels. This avoids
+    # allowing an unresolved label to teach the system its own identity.
+    provider_to_player: dict[str, set[str]] = {}
+    for row in out.itertuples(index=False):
+        if str(row.label_status) != "LABEL_FOUND":
+            continue
+        provider_id = str(getattr(row, "player_provider_id", "") or "").strip()
+        player_id = str(getattr(row, "player_id", "") or "").strip()
+        if provider_id and player_id:
+            provider_to_player.setdefault(provider_id, set()).add(player_id)
+
+    # Pass 2: a global provider-ID or globally unique exact-name/alias fallback
+    # is accepted only when the candidate player is present in that target match.
+    for idx, row in out.iterrows():
+        if str(row["label_status"]) != "LABEL_FOUND" or str(row.get("player_id", "")):
+            continue
+        match_id = str(row["match_id"])
+        allowed_ids = match_player_ids.get(match_id, set())
+        provider_id = str(row.get("player_provider_id", "") or "").strip()
+
+        provider_candidates = {
+            pid for pid in provider_to_player.get(provider_id, set())
+            if pid in allowed_ids
+        }
+        if len(provider_candidates) == 1:
+            out.at[idx, "player_id"] = next(iter(provider_candidates))
+            resolved += 1
+            continue
+        if len(provider_candidates) > 1:
+            out.at[idx, "label_status"] = "AMBIGUOUS_PLAYER_NAME"
+            ambiguous += 1
+            continue
+
+        name_candidates: set[str] = set()
+        for name_key in _player_name_keys(row["player_name"]):
+            name_candidates.update(global_name_map.get(name_key, set()))
+        name_candidates &= allowed_ids
+        if len(name_candidates) == 1:
+            out.at[idx, "player_id"] = next(iter(name_candidates))
+            resolved += 1
+        elif len(name_candidates) > 1:
+            out.at[idx, "label_status"] = "AMBIGUOUS_PLAYER_NAME"
+            ambiguous += 1
+        else:
+            out.at[idx, "label_status"] = "PLAYER_NOT_RECONCILED"
+            missing += 1
 
     return out, {
         "resolved": resolved,
