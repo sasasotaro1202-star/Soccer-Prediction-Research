@@ -108,6 +108,17 @@ def _prepare_inputs(
     f["is_played"] = f["is_played"].astype(bool)
     f = f.dropna(subset=["id", "date_utc", "home_team_id", "away_team_id"]).copy()
 
+    # Fixture IDs must identify one event. Public data can repeat exact rows;
+    # merge those, but never choose silently between conflicting event records.
+    if f.duplicated(["id"], keep=False).any():
+        dup = f.loc[f.duplicated(["id"], keep=False)].copy()
+        non_key = [col for col in f.columns if col != "id"]
+        if non_key:
+            conflicts = dup.groupby(["id"], dropna=False)[non_key].nunique(dropna=False)
+            if bool((conflicts > 1).any(axis=None)):
+                raise RuntimeError("fixtures contains conflicting duplicate fixture IDs")
+        f = f.drop_duplicates(subset=["id"], keep="first").copy()
+
     p["fixture_id"] = pd.to_numeric(p["fixture_id"], errors="coerce")
     p["team_id"] = pd.to_numeric(p["team_id"], errors="coerce")
     p["player_id"] = pd.to_numeric(p["player_id"], errors="coerce")
