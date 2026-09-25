@@ -9,6 +9,7 @@ from src.data.sofascore_mom_labels import (
     _norm_team,
     fetch_unique_football_tournaments,
     resolve_unique_tournament_id,
+    discover_unique_tournament_from_scheduled_events,
     collect_sofascore_mom_labels,
     fetch_tournament_season_events_by_rounds,
     label_data_contract_report,
@@ -313,3 +314,75 @@ def test_tournament_registry_extraction_fails_closed_without_list(monkeypatch):
 
     with pytest.raises(RuntimeError, match="discovery failed"):
         fetch_unique_football_tournaments(fetcher=FakeFetcher())
+
+
+def test_event_based_tournament_discovery_requires_two_dates_and_exact_name():
+    import src.data.sofascore_mom_labels as m
+
+    class Response:
+        def __init__(self, payload):
+            self.body = json.dumps(payload).encode()
+            self.metadata = type("Meta", (), {"retrieved_at": "2026-09-25T13:00:00Z"})()
+
+    class FakeFetcher:
+        def __init__(self):
+            self.calls = []
+
+        def get(self, source, url, **kwargs):
+            self.calls.append(url)
+            date = url.rsplit("/", 1)[-1]
+            if date in {"2024-08-01", "2025-05-31"}:
+                payload = {"events": [{
+                    "id": 100 + len(self.calls),
+                    "uniqueTournament": {
+                        "id": 17,
+                        "name": "Premier League",
+                        "slug": "premier-league",
+                        "category": {"name": "England"},
+                    },
+                }]}
+            else:
+                payload = {"events": [{
+                    "id": 200 + len(self.calls),
+                    "uniqueTournament": {
+                        "id": 999,
+                        "name": "Premier League 2",
+                        "slug": "premier-league-2",
+                        "category": {"name": "England"},
+                    },
+                }]}
+            return Response(payload)
+
+    tid, meta = discover_unique_tournament_from_scheduled_events(
+        ["2024-08-01", "2025-01-01", "2025-05-31"],
+        names=["Premier League"],
+        category_names=["England"],
+        fetcher=FakeFetcher(),
+        max_dates=3,
+    )
+    assert tid == 17
+    assert meta["independent_date_count"] == 2
+
+
+def test_event_based_tournament_discovery_fails_closed_on_single_observation():
+    class Response:
+        body = json.dumps({"events": [{
+            "uniqueTournament": {
+                "id": 17,
+                "name": "Premier League",
+                "category": {"name": "England"},
+            }
+        }]}).encode()
+        metadata = type("Meta", (), {"retrieved_at": "2026-09-25T13:00:00Z"})()
+
+    class FakeFetcher:
+        def get(self, source, url, **kwargs):
+            return Response()
+
+    with pytest.raises(RuntimeError, match="ambiguous or insufficiently repeated"):
+        discover_unique_tournament_from_scheduled_events(
+            ["2024-08-01"],
+            names=["Premier League"],
+            fetcher=FakeFetcher(),
+            max_dates=2,
+        )
