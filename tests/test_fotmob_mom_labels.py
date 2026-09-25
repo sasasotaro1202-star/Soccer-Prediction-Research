@@ -80,6 +80,24 @@ def test_reconcile_fotmob_player_ids_requires_exact_single_candidate():
     assert report == {"resolved": 1, "not_reconciled": 1, "ambiguous": 0}
 
 
+def test_reconcile_fotmob_player_ids_supports_initial_and_compound_surname_aliases():
+    labels = pd.DataFrame(
+        [
+            {"match_id": "m1", "label_status": "LABEL_FOUND", "player_name": "Danny Welbeck"},
+            {"match_id": "m2", "label_status": "LABEL_FOUND", "player_name": "Emile Smith Rowe"},
+        ]
+    )
+    features = pd.DataFrame(
+        [
+            {"match_id": "m1", "player_id": "101", "player_name": "D. Welbeck"},
+            {"match_id": "m2", "player_id": "202", "player_name": "E. Smith Rowe"},
+        ]
+    )
+    out, report = reconcile_fotmob_player_ids(labels, features)
+    assert out["player_id"].tolist() == ["101", "202"]
+    assert report == {"resolved": 2, "not_reconciled": 0, "ambiguous": 0}
+
+
 def test_reconcile_fotmob_player_ids_fails_closed_on_ambiguous_name():
     labels = pd.DataFrame(
         [{"match_id": "m1", "label_status": "LABEL_FOUND", "player_name": "Alex"}]
