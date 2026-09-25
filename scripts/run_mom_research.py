@@ -328,7 +328,7 @@ def run(
         player_matches,
         player_stats,
         match_stats,
-        min_history_appearances=3,
+        min_history_appearances=1,
         lookback_appearances=10,
     )
     feature_report = mom_data_contract_report(features)
