@@ -88,3 +88,29 @@ def test_compute_metrics_status_contains_monitoring_summary(tmp_path, monkeypatc
     assert "summary" in status
     assert status["summary"]["all"]["n"] == 2
     assert "logloss" in status["summary"]["all"]
+
+
+def test_compute_metrics_rejects_invalid_actual_result_label(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+
+    monkeypatch.setattr(mod, "METRICS", tmp_path / "metrics.csv")
+    monkeypatch.setattr(mod, "STATUS", tmp_path / "status.json")
+    ledger = pd.DataFrame([
+        {"kickoff_utc":"2026-09-01T10:00:00Z","actual_result":"HOME","p_home":0.8,"p_draw":0.1,"p_away":0.1,
+         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"model_version":"v1","competition":"EPL"},
+    ])
+    with pytest.raises(RuntimeError, match="invalid actual_result labels"):
+        mod.compute_metrics(ledger)
+
+
+def test_compute_metrics_rejects_invalid_probability_row(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+
+    monkeypatch.setattr(mod, "METRICS", tmp_path / "metrics.csv")
+    monkeypatch.setattr(mod, "STATUS", tmp_path / "status.json")
+    ledger = pd.DataFrame([
+        {"kickoff_utc":"2026-09-01T10:00:00Z","actual_result":"H","p_home":1.2,"p_draw":-0.1,"p_away":0.0,
+         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"model_version":"v1","competition":"EPL"},
+    ])
+    with pytest.raises(RuntimeError, match="invalid 1X2 probability rows"):
+        mod.compute_metrics(ledger)
