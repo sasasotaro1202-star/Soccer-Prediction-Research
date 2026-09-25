@@ -179,3 +179,47 @@ def test_collect_fotmob_mom_labels_matches_and_extracts_potm(monkeypatch):
     assert out.loc[0, "label_status"] == "LABEL_FOUND"
     assert out.loc[0, "event_id"] == "123"
     assert out.loc[0, "player_provider_id"] == "456"
+
+
+def test_reconcile_fotmob_player_ids_uses_safe_global_name_fallback_only_when_target_player_exists():
+    labels = pd.DataFrame([
+        {"match_id": "m1", "label_status": "LABEL_FOUND", "player_name": "A. Player", "player_provider_id": ""},
+        {"match_id": "m2", "label_status": "LABEL_FOUND", "player_name": "A. Player", "player_provider_id": ""},
+    ])
+    features = pd.DataFrame([
+        {"match_id": "m0", "player_id": "101", "player_name": "Alex Player"},
+        {"match_id": "m1", "player_id": "101", "player_name": "A. Player"},
+        {"match_id": "m2", "player_id": "202", "player_name": "A. Player"},
+    ])
+    out, report = reconcile_fotmob_player_ids(labels, features)
+    assert out.loc[0, "player_id"] == "101"
+    assert out.loc[1, "player_id"] == "202"
+    assert report == {"resolved": 2, "not_reconciled": 0, "ambiguous": 0}
+
+
+def test_reconcile_fotmob_player_ids_uses_verified_provider_id_fallback():
+    labels = pd.DataFrame([
+        {"match_id": "m1", "label_status": "LABEL_FOUND", "player_name": "New Display Name", "player_provider_id": "456"},
+        {"match_id": "m2", "label_status": "LABEL_FOUND", "player_name": "Known Name", "player_provider_id": "456"},
+    ])
+    features = pd.DataFrame([
+        {"match_id": "m1", "player_id": "101", "player_name": "Dataset Alias"},
+        {"match_id": "m2", "player_id": "101", "player_name": "Known Name"},
+    ])
+    out, report = reconcile_fotmob_player_ids(labels, features)
+    assert out.loc[0, "player_id"] == "101"
+    assert report == {"resolved": 2, "not_reconciled": 0, "ambiguous": 0}
+
+
+def test_reconcile_fotmob_player_ids_keeps_global_name_ambiguity_fail_closed():
+    labels = pd.DataFrame([
+        {"match_id": "m1", "label_status": "LABEL_FOUND", "player_name": "Alex Player", "player_provider_id": ""}
+    ])
+    features = pd.DataFrame([
+        {"match_id": "m0", "player_id": "101", "player_name": "Alex Player"},
+        {"match_id": "m0", "player_id": "202", "player_name": "Alex Player"},
+        {"match_id": "m1", "player_id": "303", "player_name": "Other"},
+    ])
+    out, report = reconcile_fotmob_player_ids(labels, features)
+    assert out.loc[0, "label_status"] == "PLAYER_NOT_RECONCILED"
+    assert report == {"resolved": 0, "not_reconciled": 1, "ambiguous": 0}
