@@ -337,6 +337,29 @@ def collect_fotmob_mom_labels(
     return out
 
 
+def _player_name_keys(value: Any) -> set[str]:
+    """Build conservative exact-name aliases for provider/display-name drift.
+
+    Besides the full normalized name, support the common dataset convention
+    "F. Surname" while retaining all surname tokens for compound surnames.
+    No fuzzy distance is used here.
+    """
+    raw = str(value or "").strip()
+    if not raw:
+        return set()
+    tokens = [t for t in raw.split() if t]
+    out = {_norm_text(raw)}
+    if len(tokens) >= 2:
+        first = _norm_text(tokens[0])
+        initial = first[:1]
+        if initial:
+            for suffix_len in range(1, min(3, len(tokens) - 1) + 1):
+                surname = "".join(_norm_text(t) for t in tokens[-suffix_len:])
+                if surname:
+                    out.add(initial + surname)
+    return {x for x in out if x}
+
+
 def reconcile_fotmob_player_ids(
     labels: pd.DataFrame,
     feature_rows: pd.DataFrame,
@@ -353,8 +376,9 @@ def reconcile_fotmob_player_ids(
     out = labels.copy()
     candidate_map: dict[tuple[str, str], list[str]] = {}
     for row in feature_rows.itertuples(index=False):
-        key = (str(row.match_id), _norm_text(row.player_name))
-        candidate_map.setdefault(key, []).append(str(row.player_id))
+        match_id = str(row.match_id)
+        for name_key in _player_name_keys(row.player_name):
+            candidate_map.setdefault((match_id, name_key), []).append(str(row.player_id))
 
     resolved = 0
     missing = 0
@@ -363,10 +387,14 @@ def reconcile_fotmob_player_ids(
     for idx, row in out.iterrows():
         if str(row["label_status"]) != "LABEL_FOUND":
             continue
-        key = (str(row["match_id"]), _norm_text(row["player_name"]))
-        candidates = sorted(set(candidate_map.get(key, [])))
+        candidates: set[str] = set()
+        for name_key in _player_name_keys(row["player_name"]):
+            candidates.update(
+                candidate_map.get((str(row["match_id"]), name_key), [])
+            )
+        candidates = set(candidates)
         if len(candidates) == 1:
-            out.at[idx, "player_id"] = candidates[0]
+            out.at[idx, "player_id"] = next(iter(candidates))
             resolved += 1
         elif len(candidates) == 0:
             out.at[idx, "label_status"] = "PLAYER_NOT_RECONCILED"
