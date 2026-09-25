@@ -63,6 +63,39 @@ jobs:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
         run: python -m src.data.fixture_field_audit
+      - name: Build audit gate artifact
+        id: audit_gate
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("artifacts/audit_summary.json")
+          if not p.exists():
+              raise SystemExit("audit_summary.json missing")
+          summary = json.loads(p.read_text(encoding="utf-8"))
+          reasons = []
+          if summary.get("audit_execution_ok") is not True:
+              reasons.append("audit_execution_ok=false")
+          if int(summary.get("duplicate_source_rows", 0)) != 0:
+              reasons.append("duplicate_source_rows!=0")
+          if int(summary.get("collision_rows", 0)) != 0:
+              reasons.append("collision_rows!=0")
+          if int(summary.get("team_mapping_invalid_rows", 0)) != 0:
+              reasons.append("team_mapping_invalid_rows!=0")
+          if summary.get("coverage_scope_complete") is not True:
+              reasons.append("coverage_scope_complete=false")
+          payload = {
+              "full_gate_passed": not reasons,
+              "blocking_reasons": reasons,
+              "pit_publication_time_gate": bool(summary.get("pit_publication_time_gate", False)),
+          }
+          Path("artifacts/audit_gate.json").write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+          )
+          if reasons:
+              raise SystemExit("AUDIT GATE FAILED: " + "; ".join(reasons))
+          PY
       - name: Run strict completion gate
         id: completion
         env:
@@ -79,6 +112,7 @@ jobs:
           if [ -f artifacts/pit_competition_breakdown.json ]; then cp artifacts/pit_competition_breakdown.json artifacts/9h/phase1/pit_competition_breakdown.json; fi
           if [ -f artifacts/pit_preflight_manifest.json ]; then cp artifacts/pit_preflight_manifest.json artifacts/9h/phase1/pit_preflight_manifest.json; fi
           if [ -f artifacts/pit_replay_features.csv ]; then cp artifacts/pit_replay_features.csv artifacts/9h/phase1/pit_replay_features.csv; fi
+          if [ -f artifacts/audit_gate.json ]; then cp artifacts/audit_gate.json artifacts/9h/phase1/audit_gate.json; fi
           if [ -f artifacts/task_scope_matrix.json ]; then cp artifacts/task_scope_matrix.json artifacts/9h/phase1/task_scope_matrix.json; fi
           TARGET_SHA="$(git rev-parse HEAD)"
           printf '{"phase":"phase1_gate","head_sha":"%s","workflow_sha":"%s","completion_step":"${{ steps.completion.outcome }}"}\n' "$TARGET_SHA" "$GITHUB_SHA" > artifacts/9h/phase1/phase_status.json
@@ -155,13 +189,15 @@ jobs:
           root = Path("artifacts/9h/phase1")
           status = json.loads((root / "phase_status.json").read_text(encoding="utf-8")) if (root / "phase_status.json").exists() else {}
           gate = json.loads((root / "completion_gate.json").read_text(encoding="utf-8")) if (root / "completion_gate.json").exists() else {}
+          audit_gate = json.loads((root / "audit_gate.json").read_text(encoding="utf-8")) if (root / "audit_gate.json").exists() else {}
           features = root / "pit_replay_features.csv"
           valid = (
               status.get("workflow_sha") == os.environ.get("GITHUB_SHA")
               and status.get("head_sha") == os.environ.get("GITHUB_SHA")
               and status.get("completion_step") == "success"
               and gate.get("full_gate_passed") is True
-              and gate.get("pit_publication_time_gate") is True
+              and audit_gate.get("full_gate_passed") is True
+              and audit_gate.get("pit_publication_time_gate") is True
               and features.is_file()
               and features.stat().st_size > 0
           )
@@ -196,6 +232,7 @@ jobs:
           cp artifacts/9h/phase1/pit_preflight_manifest.json artifacts/pit_preflight_manifest.json
           cp artifacts/9h/phase1/pit_replay_features.csv artifacts/pit_replay_features.csv
           cp artifacts/9h/phase1/task_scope_matrix.json artifacts/task_scope_matrix.json
+          cp artifacts/9h/phase1/audit_gate.json artifacts/audit_gate.json
           printf '%s\n' '{"exit_code":0,"passed":true,"source":"phase1_pit_handoff"}' > artifacts/audit_status.json
       - name: Rebuild audit artifacts before research when handoff unavailable
         if: env.PIT_PHASE1_HANDOFF != 'true'
