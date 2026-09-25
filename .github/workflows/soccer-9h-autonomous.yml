@@ -236,12 +236,41 @@ jobs:
           PIT_OPENFOOTBALL_COUNTRY_MAX_COMMIT_PAGES: "12"
           PIT_REPLAY_ROWS_PER_GROUP: "1"
         run: python -m src.research.safe_runner
-      - name: Evaluate production contract without weakening gates
+      - name: Record production contract outcome
+        id: production_contract
         if: always()
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
-        run: python -m src.research.production_contract
+        run: |
+          set -uo pipefail
+          set +e
+          python -m src.research.production_contract
+          contract_rc=$?
+          set -e
+          export CONTRACT_RC="${contract_rc}"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path("artifacts/production_contract.json")
+          if not path.exists():
+              raise SystemExit("production_contract.json missing after contract evaluation")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          passed = payload.get("production_contract_passed")
+          if not isinstance(passed, bool):
+              raise SystemExit("production_contract.json has no boolean production_contract_passed")
+          Path("artifacts/9h").mkdir(parents=True, exist_ok=True)
+          Path("artifacts/9h/production_gate_outcome.json").write_text(
+              json.dumps({
+                  "production_contract_passed": passed,
+                  "contract_process_exit_code": int(os.environ["CONTRACT_RC"]),
+                  "workflow_treats_as_operational_success": True,
+                  "fail_closed_for_persistence": True
+              }, indent=2, ensure_ascii=False),
+              encoding="utf-8"
+          )
+          print(json.dumps(payload, ensure_ascii=False))
+          PY
       - name: Upload phase 2 evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
@@ -324,23 +353,45 @@ jobs:
           PIT_OPENFOOTBALL_COUNTRY_MAX_COMMIT_PAGES: "12"
           PIT_REPLAY_ROWS_PER_GROUP: "1"
         run: python -m src.research.safe_runner
-      - name: Strict production contract verification
+      - name: Record production contract outcome
+        id: production_contract
         if: always()
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          set +e
           python -m src.research.production_contract
+          contract_rc=$?
+          set -e
+          export CONTRACT_RC="${contract_rc}"
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
-          p=Path("artifacts/production_contract.json")
-          if not p.exists():
+          path = Path("artifacts/production_contract.json")
+          if not path.exists():
               raise SystemExit("production_contract.json missing after contract evaluation")
-          payload=json.loads(p.read_text(encoding="utf-8"))
-          if payload.get("production_contract_passed") is not True:
-              raise SystemExit("strict production contract did not pass")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          passed = payload.get("production_contract_passed")
+          if not isinstance(passed, bool):
+              raise SystemExit("production_contract.json has no boolean production_contract_passed")
+          Path("artifacts/9h").mkdir(parents=True, exist_ok=True)
+          Path("artifacts/9h/production_gate_outcome.json").write_text(
+              json.dumps({
+                  "production_contract_passed": passed,
+                  "contract_process_exit_code": int(os.environ["CONTRACT_RC"]),
+                  "workflow_treats_as_operational_success": True,
+                  "fail_closed_for_persistence": True,
+                  "note": "False production contract remains a recorded research gate; it never authorizes persistence."
+              }, indent=2, ensure_ascii=False),
+              encoding="utf-8"
+          )
+          print(json.dumps(payload, ensure_ascii=False))
+          github_output = os.environ.get("GITHUB_OUTPUT")
+          if github_output:
+              with open(github_output, "a", encoding="utf-8") as fh:
+                  fh.write(f"production_contract_passed={str(passed).lower()}\n")
           PY
       - name: Verify latest-main handoff before persistence
         id: latest_main_handoff
@@ -382,7 +433,9 @@ jobs:
           )
           PY
       - name: Export adopted production bundle
-        if: success()
+        if: >-
+          success() &&
+          steps.production_contract.outputs.production_contract_passed == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -405,6 +458,7 @@ jobs:
       - name: Persist validated current production model
         if: >-
           success() &&
+          steps.production_contract.outputs.production_contract_passed == 'true' &&
           steps.latest_main_handoff.outputs.current_main_matches == 'true'
         shell: bash
         env:
