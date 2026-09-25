@@ -314,9 +314,27 @@ def compute_metrics(ledger=None):
     for model,x in d.groupby("model_version",dropna=False): emit("model",x,str(model))
     for comp,x in d.groupby("competition",dropna=False): emit("competition",x,str(comp))
     _write_csv(METRICS,pd.DataFrame(rows))
+    summary = {}
+    for scope in ("all", "30d", "7d"):
+        match = next((r for r in rows if r.get("scope") == scope and not r.get("segment")), None)
+        if match is not None:
+            summary[scope] = {
+                key: match.get(key)
+                for key in (
+                    "n",
+                    "1x2_accuracy_pct",
+                    "logloss",
+                    "brier",
+                    "rps",
+                    "ece",
+                    "probability_rows",
+                )
+                if key in match
+            }
     STATUS.parent.mkdir(parents=True,exist_ok=True)
     STATUS.write_text(json.dumps({"status":"OK","settled_predictions":len(d),"ledger_rows":len(ledger),
-                                  "generated_at_utc":_now().isoformat(),"metrics_file":str(METRICS)},indent=2),encoding="utf-8")
+                                  "generated_at_utc":_now().isoformat(),"metrics_file":str(METRICS),
+                                  "summary":summary},indent=2),encoding="utf-8")
     return len(rows)
 
 def main():
