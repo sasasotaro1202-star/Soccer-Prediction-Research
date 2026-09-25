@@ -370,6 +370,39 @@ jobs:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
         run: python -m src.data.fixture_field_audit
+      - name: Build independent Phase 3 audit gate artifact
+        id: phase3_audit_gate
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("artifacts/audit_summary.json")
+          if not p.exists():
+              raise SystemExit("audit_summary.json missing")
+          summary = json.loads(p.read_text(encoding="utf-8"))
+          reasons = []
+          if summary.get("audit_execution_ok") is not True:
+              reasons.append("audit_execution_ok=false")
+          if int(summary.get("duplicate_source_rows", 0)) != 0:
+              reasons.append("duplicate_source_rows!=0")
+          if int(summary.get("collision_rows", 0)) != 0:
+              reasons.append("collision_rows!=0")
+          if int(summary.get("team_mapping_invalid_rows", 0)) != 0:
+              reasons.append("team_mapping_invalid_rows!=0")
+          if summary.get("coverage_scope_complete") is not True:
+              reasons.append("coverage_scope_complete=false")
+          payload = {
+              "full_gate_passed": not reasons,
+              "blocking_reasons": reasons,
+              "pit_publication_time_gate": bool(summary.get("pit_publication_time_gate", False)),
+          }
+          Path("artifacts/audit_gate.json").write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+          )
+          if reasons:
+              raise SystemExit("AUDIT GATE FAILED: " + "; ".join(reasons))
+          PY
       - name: Re-run PIT/completion diagnostics
         id: phase3_audit
         env:
