@@ -87,6 +87,9 @@ def run_with_retries() -> int:
             "runner": {"status": "SKIPPED_AFTER_PREFLIGHT_FAILURE", "exit_code": 1},
             "oos_claimed": False,
         })
+        # A strict preflight block remains an explicit non-zero outcome.
+        # The blocking evidence is preserved so recovery can distinguish gate rejection
+        # from an engine crash without converting the failure into success.
         return 1
 
     errors: list[str] = []
