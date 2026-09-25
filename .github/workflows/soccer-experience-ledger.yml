@@ -83,7 +83,15 @@ jobs:
           set -euo pipefail
           git config user.name "soccer-experience-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/experience/prediction_ledger.csv artifacts/experience_metrics.csv artifacts/experience_status.json
+          for path in \
+            data/experience/prediction_ledger.csv \
+            artifacts/experience_metrics.csv \
+            artifacts/experience_status.json
+          do
+            if [ -e "$path" ]; then
+              git add -- "$path"
+            fi
+          done
           if git diff --cached --quiet; then
             echo "No experience changes to commit."
             exit 0
