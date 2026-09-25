@@ -180,25 +180,18 @@ def _build_dataset_rating_proxy_labels(
             ps["fixture_id"] = pd.to_numeric(ps["fixture_id"], errors="coerce")
             ps["player_id"] = pd.to_numeric(ps["player_id"], errors="coerce")
             if "games_rating" in ps.columns:
-                p["_stats_rating"] = pd.to_numeric(
-                    p["rating"], errors="coerce"
-                )
                 stats_rating = pd.to_numeric(ps["games_rating"], errors="coerce")
-                ps = ps.assign(_stats_rating_value=stats_rating)[
+                rating_frame = ps.assign(_stats_rating_value=stats_rating)[
                     ["fixture_id", "player_id", "_stats_rating_value"]
                 ]
                 p = p.merge(
-                    ps,
+                    rating_frame,
                     on=["fixture_id", "player_id"],
                     how="left",
                     validate="one_to_one",
                 )
                 p["rating"] = p["rating"].combine_first(p["_stats_rating_value"])
                 p = p.drop(columns=["_stats_rating_value"])
-            if "games_minutes" in ps.columns:
-                # Re-read the source stats because the previous select may have
-                # removed games_minutes from the temporary frame.
-                pass
     p = p.dropna(subset=["fixture_id", "player_id", "rating"]).copy()
     p = p.merge(
         target_fixtures[["id"]].rename(columns={"id": "fixture_id"}),
