@@ -294,6 +294,86 @@ def fetch_tournament_season_events(
     return events, max(retrieval_times)
 
 
+def fetch_tournament_season_events_by_rounds(
+    tournament_id: int,
+    season_id: int,
+    *,
+    fetcher: ExternalFetcher,
+    max_rounds: int = 50,
+    request_delay_seconds: float = 1.5,
+) -> tuple[list[dict[str, Any]], str]:
+    """Fallback for seasons whose paginated events endpoint is unavailable.
+
+    Each numbered round is acquired independently. Any failed round aborts the
+    fallback rather than silently accepting partial coverage.
+    """
+    rounds = max(1, int(max_rounds))
+    delay = float(request_delay_seconds)
+    if not math.isfinite(delay) or delay < 0:
+        raise ValueError("request_delay_seconds must be finite and non-negative")
+
+    events: list[dict[str, Any]] = []
+    retrieval_times: list[str] = []
+    seen_ids: set[str] = set()
+    consecutive_empty = 0
+
+    for round_number in range(1, rounds + 1):
+        errors: list[str] = []
+        round_events: list[dict[str, Any]] | None = None
+        response = None
+        for base in (SOFASCORE_BASE, SOFASCORE_FALLBACK_BASE):
+            url = (
+                f"{base}/unique-tournament/{int(tournament_id)}/season/"
+                f"{int(season_id)}/events/round/{int(round_number)}"
+            )
+            try:
+                candidate = fetcher.get(
+                    "sofascore_tournament_round_events",
+                    url,
+                    headers=SOFASCORE_HEADERS,
+                )
+                parsed = _parse_json(candidate.body)
+                extracted = _extract_events_list(parsed)
+                if isinstance(extracted, list):
+                    round_events = extracted
+                    response = candidate
+                    break
+                errors.append(f"{base}: payload missing events list")
+            except Exception as exc:
+                errors.append(f"{base}: {type(exc).__name__}: {exc}")
+        if response is None or round_events is None:
+            raise RuntimeError(
+                f"SofaScore round {round_number} acquisition failed on all public hosts: "
+                + " | ".join(errors)
+            )
+
+        retrieval_times.append(response.metadata.retrieved_at)
+        if not round_events:
+            consecutive_empty += 1
+            if events and consecutive_empty >= 3:
+                break
+        else:
+            consecutive_empty = 0
+            for event in round_events:
+                if not isinstance(event, dict) or event.get("id") in (None, ""):
+                    continue
+                event_id = str(event["id"])
+                if event_id in seen_ids:
+                    continue
+                seen_ids.add(event_id)
+                events.append(event)
+
+        if delay > 0 and round_number < rounds:
+            time.sleep(delay)
+
+    if not events:
+        raise RuntimeError(
+            f"SofaScore round event acquisition returned no events for "
+            f"tournament={tournament_id} season={season_id}"
+        )
+    return events, max(retrieval_times)
+
+
 def collect_sofascore_mom_labels_tournament_season(
     fixtures: pd.DataFrame,
     *,
@@ -329,11 +409,20 @@ def collect_sofascore_mom_labels_tournament_season(
         )
         event_source = "tournament_season_events"
     except RuntimeError as primary_exc:
-        # The season-page endpoint can serve an HTML/challenge-shaped JSON envelope
-        # even when the daily schedule endpoint remains usable. Fall back only after
-        # the complete season acquisition fails, and fail closed if any date cannot
-        # be retrieved.
-        fallback_dates = sorted(
+        try:
+            events, _ = fetch_tournament_season_events_by_rounds(
+                tournament_id,
+                season_id,
+                fetcher=fetcher,
+                max_rounds=50,
+                request_delay_seconds=delay,
+            )
+            event_source = "tournament_round_events_fallback"
+        except Exception as round_exc:
+            # The season and round endpoints can both be unavailable on some
+            # public hosts. Keep the existing date fallback as the last route;
+            # if any required date is unavailable, fail closed.
+            fallback_dates = sorted(
             {
                 (ts - pd.Timedelta(days=1)).date().isoformat()
                 for ts in d["kickoff_utc"]
@@ -347,18 +436,20 @@ def collect_sofascore_mom_labels_tournament_season(
                 for ts in d["kickoff_utc"]
             }
         )
-        try:
-            events, _ = fetch_scheduled_events_for_dates(
-                fallback_dates,
-                fetcher=fetcher,
-                request_delay_seconds=delay,
-            )
-            event_source = "scheduled_events_fallback"
-        except Exception as fallback_exc:
-            raise RuntimeError(
-                "SofaScore MOM event acquisition failed via season and scheduled-date paths: "
-                f"season={primary_exc}; fallback={type(fallback_exc).__name__}: {fallback_exc}"
-            ) from fallback_exc
+            try:
+                events, _ = fetch_scheduled_events_for_dates(
+                    fallback_dates,
+                    fetcher=fetcher,
+                    request_delay_seconds=delay,
+                )
+                event_source = "scheduled_events_fallback"
+            except Exception as fallback_exc:
+                raise RuntimeError(
+                    "SofaScore MOM event acquisition failed via season, round, and "
+                    "scheduled-date paths: "
+                    f"season={primary_exc}; round={type(round_exc).__name__}: {round_exc}; "
+                    f"fallback={type(fallback_exc).__name__}: {fallback_exc}"
+                ) from fallback_exc
 
     rows: list[dict[str, Any]] = []
     for fixture in d.itertuples(index=False):
