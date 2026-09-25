@@ -282,3 +282,29 @@ def test_round_event_fallback_fails_closed_on_missing_payload():
         m.fetch_tournament_season_events_by_rounds(
             17, 61627, fetcher=FakeFetcher(), max_rounds=2, request_delay_seconds=0
         )
+
+
+def test_fetch_tournament_seasons_falls_back_to_public_www_host():
+    import src.data.sofascore_mom_labels as m
+
+    class Response:
+        def __init__(self, payload):
+            self.body = json.dumps(payload).encode()
+            self.metadata = type("Meta", (), {"retrieved_at": "2026-09-25T13:00:00Z", "cache_hit": False})()
+
+    class FakeFetcher:
+        def __init__(self):
+            self.calls = []
+
+        def get(self, source, url, **kwargs):
+            self.calls.append(url)
+            if url.startswith("https://api.sofascore.com/"):
+                return Response({"unexpected": []})
+            return Response({"seasons": [{"id": 61627, "name": "Premier League 24/25", "year": "24/25"}]})
+
+    fetcher = FakeFetcher()
+    seasons, retrieved = m.fetch_unique_tournament_seasons(17, fetcher=fetcher)
+    assert seasons[0]["id"] == 61627
+    assert len(fetcher.calls) == 2
+    assert fetcher.calls[1].startswith("https://www.sofascore.com/api/v1/")
+    assert retrieved == "2026-09-25T13:00:00Z"
