@@ -78,6 +78,7 @@ jobs:
           if [ -f artifacts/audit_summary.json ]; then cp artifacts/audit_summary.json artifacts/9h/phase1/audit_summary.json; fi
           if [ -f artifacts/pit_competition_breakdown.json ]; then cp artifacts/pit_competition_breakdown.json artifacts/9h/phase1/pit_competition_breakdown.json; fi
           if [ -f artifacts/pit_preflight_manifest.json ]; then cp artifacts/pit_preflight_manifest.json artifacts/9h/phase1/pit_preflight_manifest.json; fi
+          if [ -f artifacts/pit_replay_features.csv ]; then cp artifacts/pit_replay_features.csv artifacts/9h/phase1/pit_replay_features.csv; fi
           TARGET_SHA="$(git rev-parse HEAD)"
           printf '{"phase":"phase1_gate","head_sha":"%s","workflow_sha":"%s","completion_step":"${{ steps.completion.outcome }}"}\n' "$TARGET_SHA" "$GITHUB_SHA" > artifacts/9h/phase1/phase_status.json
       - name: Enforce strict completion gate before expensive research
@@ -136,6 +137,35 @@ jobs:
             sleep $((attempt * 5))
           done
           exit 1
+      - name: Download Phase 1 PIT handoff
+        uses: actions/download-artifact@v6
+        with:
+          name: soccer-9h-phase1-${{ github.run_id }}
+          path: artifacts/9h/phase1
+      - name: Validate Phase 1 PIT handoff
+        id: pit_handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_ENV"
+          import json
+          import os
+          from pathlib import Path
+          root = Path("artifacts/9h/phase1")
+          status = json.loads((root / "phase_status.json").read_text(encoding="utf-8")) if (root / "phase_status.json").exists() else {}
+          gate = json.loads((root / "completion_gate.json").read_text(encoding="utf-8")) if (root / "completion_gate.json").exists() else {}
+          features = root / "pit_replay_features.csv"
+          valid = (
+              status.get("workflow_sha") == os.environ.get("GITHUB_SHA")
+              and status.get("head_sha") == os.environ.get("GITHUB_SHA")
+              and status.get("completion_step") == "success"
+              and gate.get("full_gate_passed") is True
+              and gate.get("pit_publication_time_gate") is True
+              and features.is_file()
+              and features.stat().st_size > 0
+          )
+          print(f"PIT_PHASE1_HANDOFF={'true' if valid else 'false'}")
+          PY
       - name: Run full tests again on exact commit
         id: research_tests
         env:
@@ -154,7 +184,19 @@ jobs:
           passed = os.environ.get("TEST_OUTCOME") == "success"
           Path("artifacts/test_status.json").write_text(json.dumps({"exit_code": 0 if passed else 1, "passed": passed}), encoding="utf-8")
           PY
-      - name: Rebuild audit artifacts before research
+      - name: Reuse validated Phase 1 PIT artifacts
+        if: env.PIT_PHASE1_HANDOFF == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          cp artifacts/9h/phase1/completion_gate.json artifacts/completion_gate.json
+          cp artifacts/9h/phase1/audit_summary.json artifacts/audit_summary.json
+          cp artifacts/9h/phase1/pit_competition_breakdown.json artifacts/pit_competition_breakdown.json
+          cp artifacts/9h/phase1/pit_preflight_manifest.json artifacts/pit_preflight_manifest.json
+          cp artifacts/9h/phase1/pit_replay_features.csv artifacts/pit_replay_features.csv
+          printf '%s\n' '{"exit_code":0,"passed":true,"source":"phase1_pit_handoff"}' > artifacts/audit_status.json
+      - name: Rebuild audit artifacts before research when handoff unavailable
+        if: env.PIT_PHASE1_HANDOFF != 'true'
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
