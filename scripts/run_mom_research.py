@@ -64,7 +64,8 @@ DEFAULT_SOFASCORE_SEASON_ID = 61627
 # dynamic and are still resolved through the tournament seasons endpoint.
 SOFASCORE_STATIC_TOURNAMENT_IDS = {
     "EPL": 17, "ERE": 37, "LL": 8, "SA": 23, "BL1": 35, "FL1": 34,
-    "J1": 196, "UCL": 7, "UEL": 679, "UECL": 17015,
+    "J1": 196, "J2": 402, "UCL": 7, "UEL": 679, "UECL": 17015,
+    "UEFA_NATIONS_LEAGUE_M": 10783,
     "UEFA_SUPER_CUP": 465, "UEFA_YOUTH_LEAGUE": 2132, "UWCL": 696,
 }
 
