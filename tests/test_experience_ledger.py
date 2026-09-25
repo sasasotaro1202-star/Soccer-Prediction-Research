@@ -114,3 +114,34 @@ def test_compute_metrics_rejects_invalid_probability_row(tmp_path, monkeypatch):
     ])
     with pytest.raises(RuntimeError, match="invalid 1X2 probability rows"):
         mod.compute_metrics(ledger)
+
+
+def test_metric_deltas_compare_previous_status(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+    monkeypatch.setattr(mod, "STATUS", tmp_path / "status.json")
+    previous = {"summary": {"all": {"1x2_accuracy_pct": 50.0, "logloss": 1.0, "brier": 0.5, "rps": 0.3, "ece": 0.1}}}
+    current = {"summary": {"all": {"1x2_accuracy_pct": 52.0, "logloss": 0.9, "brier": 0.5, "rps": 0.25, "ece": 0.08}}}
+    assert mod._status_metric_deltas(previous, current) == {
+        "all": {"1x2_accuracy_pct": 2.0, "logloss": -0.1, "rps": -0.05, "ece": -0.02}
+    }
+
+
+def test_compute_metrics_persists_metric_deltas(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+    metrics_path = tmp_path / "metrics.csv"
+    status_path = tmp_path / "status.json"
+    monkeypatch.setattr(mod, "METRICS", metrics_path)
+    monkeypatch.setattr(mod, "STATUS", status_path)
+    status_path.write_text(
+        '{"status":"OK","summary":{"all":{"1x2_accuracy_pct":50.0,"logloss":1.0,"brier":0.5,"rps":0.3,"ece":0.1}}}',
+        encoding="utf-8",
+    )
+    ledger = pd.DataFrame([
+        {"kickoff_utc":"2026-09-01T10:00:00Z","actual_result":"H","p_home":0.8,"p_draw":0.1,"p_away":0.1,
+         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"model_version":"v1","competition":"EPL"},
+        {"kickoff_utc":"2026-09-02T10:00:00Z","actual_result":"D","p_home":0.1,"p_draw":0.8,"p_away":0.1,
+         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"model_version":"v1","competition":"EPL"},
+    ])
+    mod.compute_metrics(ledger)
+    status = json.loads(status_path.read_text())
+    assert status["metric_deltas_vs_previous"]["all"]["1x2_accuracy_pct"] == 50.0
