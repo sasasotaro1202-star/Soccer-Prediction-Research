@@ -173,7 +173,7 @@ jobs:
           done
           exit 1
       - name: Download Phase 1 PIT handoff
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
         with:
           name: soccer-9h-phase1-${{ github.run_id }}
           path: artifacts/9h/phase1
