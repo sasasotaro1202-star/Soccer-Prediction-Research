@@ -171,10 +171,7 @@ def test_status_command_publishes_zero_state(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "STATUS", tmp_path / "status.json")
     monkeypatch.setattr(sys, "argv", ["experience_ledger", "status"])
 
-    with pytest.raises(SystemExit) as exc:
-        mod.main()
-
-    assert exc.value.code == 0
+    assert mod.main() is None
     status = json.loads((tmp_path / "status.json").read_text(encoding="utf-8"))
     assert status["status"] == "NO_SETTLED_PREDICTIONS"
     assert status["summary"]["all"]["n"] == 0
