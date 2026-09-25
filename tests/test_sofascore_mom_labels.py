@@ -8,6 +8,7 @@ from src.data.sofascore_mom_labels import (
     _extract_player_of_match,
     _norm_team,
     collect_sofascore_mom_labels,
+    fetch_tournament_season_events_by_rounds,
     label_data_contract_report,
 )
 
@@ -230,3 +231,54 @@ def test_fetch_season_events_stops_after_empty_page(monkeypatch):
     assert [x["id"] for x in events] == [1, 2]
     assert len(fetcher.calls) == 3
     assert retrieved == "2026-09-25T13:00:00Z"
+
+
+def test_round_event_fallback_collects_until_consecutive_empty_rounds(monkeypatch):
+    import src.data.sofascore_mom_labels as m
+
+    class Response:
+        def __init__(self, payload):
+            self.body = json.dumps(payload).encode()
+            self.metadata = type(
+                "Meta", (), {"retrieved_at": "2026-09-25T13:00:00Z", "cache_hit": False}
+            )()
+
+    class FakeFetcher:
+        def __init__(self):
+            self.calls = []
+
+        def get(self, source, url, **kwargs):
+            self.calls.append(url)
+            round_number = int(url.rsplit("/", 1)[-1])
+            payload = (
+                {"events": [{"id": 101}, {"id": 102}]}
+                if round_number == 1
+                else {"events": []}
+            )
+            return Response(payload)
+
+    fetcher = FakeFetcher()
+    events, retrieved = fetch_tournament_season_events_by_rounds(
+        17, 61627, fetcher=fetcher, max_rounds=10, request_delay_seconds=0
+    )
+    assert [x["id"] for x in events] == [101, 102]
+    assert len(fetcher.calls) == 4
+    assert all("/events/round/" in url for url in fetcher.calls)
+    assert retrieved == "2026-09-25T13:00:00Z"
+
+
+def test_round_event_fallback_fails_closed_on_missing_payload():
+    import src.data.sofascore_mom_labels as m
+
+    class Response:
+        body = json.dumps({"unexpected": []}).encode()
+        metadata = type("Meta", (), {"retrieved_at": "2026-09-25T13:00:00Z"})()
+
+    class FakeFetcher:
+        def get(self, source, url, **kwargs):
+            return Response()
+
+    with pytest.raises(RuntimeError, match="round 1 acquisition failed"):
+        m.fetch_tournament_season_events_by_rounds(
+            17, 61627, fetcher=FakeFetcher(), max_rounds=2, request_delay_seconds=0
+        )
