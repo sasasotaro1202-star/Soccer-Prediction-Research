@@ -253,6 +253,21 @@ def build_mom_feature_rows(
             float(fixture.home_team_id): float(fixture.away_team_id),
             float(fixture.away_team_id): float(fixture.home_team_id),
         }
+        prior_player_rows = p.loc[
+            (p["match_kickoff_utc"] < target_kickoff)
+            & (p["known_at"] < target_kickoff)
+        ].copy()
+        if not prior_player_rows.empty:
+            latest_team_by_player = (
+                prior_player_rows
+                .sort_values(["player_id", "match_kickoff_utc", "fixture_id"], kind="mergesort")
+                .drop_duplicates("player_id", keep="last")
+                .set_index("player_id")["team_id"]
+                .to_dict()
+            )
+        else:
+            latest_team_by_player = {}
+
         for team_id, opponent_id in sides.items():
             prior_team_matches = [
                 x for x in team_goals.get(team_id, [])
@@ -273,6 +288,10 @@ def build_mom_feature_rows(
                 & (p["match_kickoff_utc"] < target_kickoff)
                 & (p["known_at"] < target_kickoff)
             ].copy()
+            if latest_team_by_player:
+                candidate_players = candidate_players.loc[
+                    candidate_players["player_id"].map(latest_team_by_player).eq(team_id)
+                ].copy()
             diagnostics["candidate_players_before_minutes"] += int(candidate_players["player_id"].nunique())
             for player_id, g in candidate_players.groupby("player_id", sort=False):
                 g = g.sort_values(["match_kickoff_utc", "fixture_id"], kind="mergesort").tail(lookback_appearances)
