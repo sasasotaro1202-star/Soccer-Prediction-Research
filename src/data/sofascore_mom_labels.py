@@ -354,6 +354,78 @@ def resolve_unique_tournament_id(
     return ids[0]
 
 
+def discover_unique_season_from_scheduled_events(
+    dates_utc: list[str],
+    *,
+    tournament_id: int,
+    season_start_year: int,
+    fetcher: ExternalFetcher,
+    max_dates: int = 5,
+) -> tuple[int, dict[str, Any]]:
+    """Resolve a season id from exact scheduled-event tournament/season objects."""
+    sample_dates = _sample_discovery_dates(dates_utc, max_dates=max_dates)
+    wanted_year = str(int(season_start_year))
+    observations: list[dict[str, Any]] = []
+    errors: list[str] = []
+
+    for date_utc in sample_dates:
+        try:
+            events, retrieved_at = fetch_scheduled_events_for_date(date_utc, fetcher=fetcher)
+        except Exception as exc:
+            errors.append(f"{date_utc}: {type(exc).__name__}: {exc}")
+            continue
+
+        ids_seen_on_date: set[int] = set()
+        for event in events:
+            tournament = event.get("uniqueTournament")
+            if not isinstance(tournament, dict):
+                continue
+            try:
+                event_tournament_id = int(tournament.get("id"))
+            except (TypeError, ValueError):
+                continue
+            if event_tournament_id != int(tournament_id):
+                continue
+            season = event.get("season")
+            if not isinstance(season, dict):
+                continue
+            raw_name = str(season.get("name") or "").strip()
+            raw_year = str(season.get("year") or "").strip()
+            if wanted_year not in raw_name and raw_year != wanted_year:
+                continue
+            try:
+                season_id = int(season["id"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            ids_seen_on_date.add(season_id)
+        if len(ids_seen_on_date) == 1:
+            season_id = next(iter(ids_seen_on_date))
+            observations.append({
+                "date_utc": date_utc,
+                "season_id": season_id,
+                "season_start_year": int(season_start_year),
+                "retrieved_at_utc": retrieved_at,
+            })
+
+    counts = pd.Series([x["season_id"] for x in observations], dtype="int64").value_counts()
+    candidate_ids = [int(season_id) for season_id, count in counts.items() if int(count) >= 2]
+    if len(candidate_ids) != 1:
+        detail = " | ".join(errors) if errors else "no exact season observations"
+        raise RuntimeError(
+            "SofaScore event-based season discovery is ambiguous or insufficiently repeated: "
+            f"tournament={int(tournament_id)} season_start_year={int(season_start_year)} "
+            f"sample_dates={sample_dates} observations={observations}; {detail}"
+        )
+    season_id = candidate_ids[0]
+    used = [x for x in observations if int(x["season_id"]) == season_id]
+    return season_id, {
+        "method": "SCHEDULED_EVENTS_SEASON_FALLBACK",
+        "sample_dates_utc": sample_dates,
+        "observations": used,
+        "independent_date_count": len(used),
+    }
+
+
 def fetch_unique_tournament_seasons(
     tournament_id: int,
     *,
