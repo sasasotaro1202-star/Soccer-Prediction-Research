@@ -492,12 +492,26 @@ def run(
         "conditional_logit": conditional_summary,
         "hist_gbdt": hist_gbdt_summary,
     }
-    selected = min(
-        model_summaries,
-        key=lambda name: float(model_summaries[name]["development_mean"]["logloss"]),
-    )
+    # The operational output is exactly four players, so model selection must
+    # optimize the ranking task itself rather than an unrelated per-row probability
+    # objective. The rule is fixed before looking at locked blocks:
+    #   1) maximize development Top-4 hit rate;
+    #   2) break ties with MRR;
+    #   3) break remaining ties with lower LogLoss.
+    # Locked blocks remain score-only generalization evidence.
+    selection_scores = {
+        name: (
+            float(summary["development_mean"]["top4_hit_rate"]),
+            float(summary["development_mean"]["mrr"]),
+            -float(summary["development_mean"]["logloss"]),
+        )
+        for name, summary in model_summaries.items()
+    }
+    selected = max(selection_scores, key=selection_scores.get)
     report["development_selection"] = {
         "selected_method": selected,
+        "selection_objective": "development_top4_hit_rate_then_mrr_then_logloss",
+        "selection_scores": selection_scores,
         "locked_blocks_untouched_for_selection": True,
     }
     report["status"] = "RESEARCH_EVALUATED"
