@@ -357,3 +357,82 @@ def test_matchday_lineup_signal_uses_confirmed_availability_burden_not_fixed_zer
     assert updated["matchday_lineup_missing_count_away"] == 0
     assert updated["matchday_lineup_impact_home"] > updated["matchday_lineup_impact_away"]
     assert updated["matchday_lineup_impact_away"] == 0.50
+
+
+def test_sofascore_lineup_candidate_snapshot_excludes_match_statistics():
+    from src.data.matchday_intelligence_fetch import _extract_pit_safe_lineup_players
+
+    payload = {
+        "players": [
+            {
+                "starter": True,
+                "substitute": False,
+                "position": "F",
+                "player": {"id": 101, "name": "Starter"},
+                "statistics": {"rating": 9.9, "goals": 3},
+            },
+            {
+                "starter": False,
+                "substitute": True,
+                "position": "D",
+                "player": {"id": 202, "name": "Bench"},
+                "statistics": {"rating": 8.8},
+            },
+        ]
+    }
+    result = _extract_pit_safe_lineup_players(payload)
+    assert [x["player_id"] for x in result] == ["101", "202"]
+    assert result[0]["role"] == "STARTER"
+    assert result[1]["role"] == "SUBSTITUTE"
+    assert "statistics" not in result[0]
+    assert "statistics" not in result[1]
+
+
+def test_sofascore_lineup_enrichment_persists_candidate_identity_json():
+    import src.data.matchday_intelligence_fetch as m
+
+    row = m._matchday_base_row(
+        match_id="m-lineup-json",
+        kickoff=pd.Timestamp("2026-09-25T12:00:00Z"),
+        home_team="A",
+        away_team="B",
+        competition="EPL",
+        source="sofascore",
+        available_at="2026-09-25T10:00:00Z",
+    )
+    row["sofascore_event_id"] = "12345"
+
+    class Fetcher:
+        def get(self, *args, **kwargs):
+            raise RuntimeError("not used")
+
+    original = m._get_json
+    try:
+        m._get_json = lambda *args, **kwargs: ({
+            "confirmed": True,
+            "home": {
+                "players": [
+                    {"starter": True, "player": {"id": str(i), "name": f"H{i}"}, "statistics": {"rating": 9}}
+                    for i in range(11)
+                ],
+                "missingPlayers": [],
+            },
+            "away": {
+                "players": [
+                    {"starter": True, "player": {"id": str(i), "name": f"A{i}"}, "statistics": {"rating": 9}}
+                    for i in range(11, 22)
+                ],
+                "missingPlayers": [],
+            },
+        }, "2026-09-25T11:00:00Z")
+        updated, _ = m._enrich_sofascore_lineup(Fetcher(), row)
+    finally:
+        m._get_json = original
+
+    import json
+    home = json.loads(updated["matchday_lineup_players_home_json"])
+    away = json.loads(updated["matchday_lineup_players_away_json"])
+    assert len(home) == 11
+    assert len(away) == 11
+    assert all("statistics" not in x for x in home + away)
+    assert updated["starter_status"] == "ANNOUNCED"
