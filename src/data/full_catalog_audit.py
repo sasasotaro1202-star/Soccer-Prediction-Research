@@ -10,13 +10,13 @@ REPO = Path(__file__).resolve().parents[2]
 TIMEOUT = 15
 
 DIRECT_SOURCE_URLS = {
-    "EPL":"https://www.football-data.co.uk/mmz4281/2526/E0.csv",
-    "CHA":"https://www.football-data.co.uk/mmz4281/2526/CH.csv",
-    "BL1":"https://www.football-data.co.uk/mmz4281/2526/D1.csv",
-    "SA":"https://www.football-data.co.uk/mmz4281/2526/I1.csv",
-    "LL":"https://www.football-data.co.uk/mmz4281/2526/SP1.csv",
-    "FL1":"https://www.football-data.co.uk/mmz4281/2526/F1.csv",
-    "ERE":"https://www.football-data.co.uk/mmz4281/2526/N1.csv",
+    "EPL":"https://www.football-data.co.uk/mmz4281/2627/E0.csv",
+    "CHA":"https://www.football-data.co.uk/mmz4281/2627/CH.csv",
+    "BL1":"https://www.football-data.co.uk/mmz4281/2627/D1.csv",
+    "SA":"https://www.football-data.co.uk/mmz4281/2627/I1.csv",
+    "LL":"https://www.football-data.co.uk/mmz4281/2627/SP1.csv",
+    "FL1":"https://www.football-data.co.uk/mmz4281/2627/F1.csv",
+    "ERE":"https://www.football-data.co.uk/mmz4281/2627/N1.csv",
     "AG_M":"https://www.olympics.com/en/news/football-asian-games-2026-schedule-results-standings-complete-list",
     "AG_W":"https://www.olympics.com/en/news/football-asian-games-2026-schedule-results-standings-complete-list",
     "J1":"https://data.j-league.or.jp/SFMS01/search",
