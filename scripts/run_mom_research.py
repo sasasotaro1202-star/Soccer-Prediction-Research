@@ -58,6 +58,16 @@ DEFAULT_END = "2025-06-01"
 # Keep this explicit for PIT/reproducibility; do not discover it from a challenge-prone endpoint.
 DEFAULT_SOFASCORE_SEASON_ID = 61627
 
+# Stable SofaScore unique-tournament IDs are used before registry discovery.
+# These public URL identifiers are versioned here so a transient discovery
+# endpoint failure cannot block recurring competitions. Season IDs remain
+# dynamic and are still resolved through the tournament seasons endpoint.
+SOFASCORE_STATIC_TOURNAMENT_IDS = {
+    "EPL": 17, "ERE": 37, "LL": 8, "SA": 23, "BL1": 35, "FL1": 34,
+    "J1": 196, "UCL": 7, "UEL": 679, "UECL": 17015,
+    "UEFA_SUPER_CUP": 465, "UEFA_YOUTH_LEAGUE": 2132, "UWCL": 696,
+}
+
 DATASET_NAME_ALIASES = {
     "EPL": ("Premier League",), "ERE": ("Eredivisie",), "LL": ("LaLiga", "La Liga"),
     "SA": ("Serie A",), "BL1": ("Bundesliga",), "FL1": ("Ligue 1",),
@@ -116,32 +126,38 @@ def _resolve_sofascore_scope(
         "tournament_discovery": "DYNAMIC_EXACT_NAME",
     }
     if tournament_id is None:
-        registry_error: Exception | None = None
-        try:
-            tournaments, retrieved_at = fetch_unique_football_tournaments(fetcher=fetcher)
-            tournament_id = resolve_unique_tournament_id(
-                tournaments,
-                names=names,
-                category_names=category_names,
-            )
-            meta["tournament_registry_retrieved_at_utc"] = retrieved_at
-        except (RuntimeError, ValueError) as exc:
-            registry_error = exc
-            if not discovery_dates_utc:
-                raise RuntimeError(
-                    "Registry tournament discovery failed and event-based fallback has no fixture dates: "
-                    f"{type(exc).__name__}: {exc}"
-                ) from exc
-            tournament_id, discovery_meta = discover_unique_tournament_from_scheduled_events(
-                discovery_dates_utc,
-                names=names,
-                category_names=category_names,
-                fetcher=fetcher,
-                max_dates=5,
-            )
-            meta["tournament_discovery"] = "DYNAMIC_EVENT_UNIQUE_TOURNAMENT_FALLBACK"
-            meta["registry_fallback_reason"] = f"{type(registry_error).__name__}: {registry_error}"
-            meta["event_discovery"] = discovery_meta
+        static_id = SOFASCORE_STATIC_TOURNAMENT_IDS.get(str(competition_code))
+        if static_id is not None:
+            tournament_id = int(static_id)
+            meta["tournament_discovery"] = "STATIC_VERSIONED_PUBLIC_ID"
+            meta["tournament_id_source_url"] = f"https://www.sofascore.com/football/tournament/{int(tournament_id)}"
+        else:
+            registry_error: Exception | None = None
+            try:
+                tournaments, retrieved_at = fetch_unique_football_tournaments(fetcher=fetcher)
+                tournament_id = resolve_unique_tournament_id(
+                    tournaments,
+                    names=names,
+                    category_names=category_names,
+                )
+                meta["tournament_registry_retrieved_at_utc"] = retrieved_at
+            except (RuntimeError, ValueError) as exc:
+                registry_error = exc
+                if not discovery_dates_utc:
+                    raise RuntimeError(
+                        "Registry tournament discovery failed and event-based fallback has no fixture dates: "
+                        f"{type(exc).__name__}: {exc}"
+                    ) from exc
+                tournament_id, discovery_meta = discover_unique_tournament_from_scheduled_events(
+                    discovery_dates_utc,
+                    names=names,
+                    category_names=category_names,
+                    fetcher=fetcher,
+                    max_dates=5,
+                )
+                meta["tournament_discovery"] = "DYNAMIC_EVENT_UNIQUE_TOURNAMENT_FALLBACK"
+                meta["registry_fallback_reason"] = f"{type(registry_error).__name__}: {registry_error}"
+                meta["event_discovery"] = discovery_meta
     meta["tournament_id"] = int(tournament_id)
     if season_id is None:
         try:
