@@ -1,4 +1,7 @@
+from datetime import datetime, timezone
+
 from src.data.fixture_field_audit import TARGET_COMPETITIONS, COMPETITION_NAMES, coverage_matrix
+from src.data.full_catalog_audit import _current_football_data_season_code
 import pandas as pd
 
 
@@ -36,3 +39,10 @@ def test_missing_is_not_real_zero():
     row = matrix[(matrix["competition"] == "EPL") & (matrix["season"] == "2024/25") & (matrix["field"] == "home_goals")]
     assert row.iloc[0]["status"] == "UNAVAILABLE"
     assert row.iloc[0]["matched_count"] == 0
+
+
+def test_current_football_data_season_code_switches_at_august_boundary():
+    july = datetime(2026, 7, 31, tzinfo=timezone.utc)
+    august = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    assert _current_football_data_season_code(july) == "2526"
+    assert _current_football_data_season_code(august) == "2627"
