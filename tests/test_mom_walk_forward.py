@@ -4,6 +4,7 @@ import pytest
 
 from src.evaluation.mom_walk_forward import (
     run_mom_walk_forward,
+    run_mom_walk_forward_calibrated_rank_consensus,
     run_mom_walk_forward_calibrated_soft_ensemble,
     split_mom_development_locked,
 )
@@ -116,6 +117,22 @@ def test_mom_calibrated_soft_ensemble_is_wfo_and_finite():
     )
     assert len(metrics) >= 3
     assert np.isfinite(metrics[["top1_hit_rate", "top4_hit_rate", "mrr", "ndcg_at_4", "logloss", "brier", "ece"]].to_numpy()).all()
+
+def test_mom_calibrated_rank_consensus_is_wfo_and_finite():
+    metrics = run_mom_walk_forward_calibrated_rank_consensus(
+        _rows(24),
+        n_blocks=6,
+        min_train_matches=5,
+        min_calibration_matches=2,
+        prior_strength=12.0,
+    )
+    assert len(metrics) >= 3
+    assert np.isfinite(
+        metrics[
+            ["top1_hit_rate", "top4_hit_rate", "mrr", "ndcg_at_4", "logloss", "brier", "ece"]
+        ].to_numpy()
+    ).all()
+
 
 
 
