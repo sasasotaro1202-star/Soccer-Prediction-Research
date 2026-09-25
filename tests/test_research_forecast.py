@@ -6,6 +6,11 @@ from src.prediction.research_forecast import verify
 def test_research_forecast_verification_accepts_full_contract(tmp_path):
     path = tmp_path / "forecast.csv"
     pd.DataFrame([{
+        "match_id": "test-1",
+        "kickoff_utc": "2030-01-01T12:00:00+00:00",
+        "competition": "EPL",
+        "home_team": "Home FC",
+        "away_team": "Away FC",
         "home_win_probability": 0.50,
         "draw_probability": 0.20,
         "away_win_probability": 0.30,
