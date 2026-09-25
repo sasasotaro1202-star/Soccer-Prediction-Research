@@ -256,6 +256,11 @@ def _proper_score_metrics(frame: pd.DataFrame) -> dict[str, Any]:
     if not required.issubset(frame.columns):
         return {}
     d = frame[["p_home", "p_draw", "p_away", "actual_result"]].copy()
+    d["actual_result"] = d["actual_result"].astype("string").str.strip().str.upper()
+    invalid_labels = d["actual_result"].notna() & ~d["actual_result"].isin({"H", "D", "A"})
+    if invalid_labels.any():
+        bad = sorted(d.loc[invalid_labels, "actual_result"].astype(str).unique().tolist())[:10]
+        raise RuntimeError(f"experience metrics received invalid actual_result labels: {bad}")
     d["actual_result"] = d["actual_result"].map({"H": 0, "D": 1, "A": 2})
     for c in ("p_home", "p_draw", "p_away"):
         d[c] = pd.to_numeric(d[c], errors="coerce")
@@ -264,11 +269,11 @@ def _proper_score_metrics(frame: pd.DataFrame) -> dict[str, Any]:
         return {}
     p = d[["p_home", "p_draw", "p_away"]].to_numpy(dtype=float)
     y = d["actual_result"].to_numpy(dtype=int)
-    valid = np.isfinite(p).all(axis=1) & (p >= 0).all(axis=1) & (p.sum(axis=1) > 0)
-    if not valid.any():
-        return {}
-    p = p[valid]
-    y = y[valid]
+    invalid_probs = (~np.isfinite(p).all(axis=1)) | (p < 0).any(axis=1) | (p.sum(axis=1) <= 0)
+    if invalid_probs.any():
+        raise RuntimeError(
+            f"experience metrics received {int(invalid_probs.sum())} invalid 1X2 probability rows"
+        )
     p /= p.sum(axis=1, keepdims=True)
     metrics = classification_metrics(y, p)
     return {
