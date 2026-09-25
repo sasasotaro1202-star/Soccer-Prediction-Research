@@ -67,3 +67,25 @@ def test_compute_metrics_includes_proper_probability_scores(tmp_path, monkeypatc
     assert float(row["rps"]) >= 0
     assert float(row["ece"]) >= 0
     assert int(row["probability_rows"]) == 3
+
+
+def test_record_normalizes_tiny_probability_rounding(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+    ledger = tmp_path / "ledger.csv"
+    predictions = tmp_path / "predictions.csv"
+    monkeypatch.setattr(mod, "LEDGER", ledger)
+    pd.DataFrame([{
+        "match_id": "espn:rounding",
+        "kickoff_utc": "2026-09-26T11:00:00Z",
+        "home_team": "A",
+        "away_team": "B",
+        "competition": "EPL",
+        "p_home": 0.33333,
+        "p_draw": 0.33333,
+        "p_away": 0.33334,
+        "model_version": "v1",
+    }]).to_csv(predictions, index=False)
+    result = mod.record_prediction_file(str(predictions))
+    assert result["added"] == 1
+    row = pd.read_csv(ledger).iloc[0]
+    assert float(row["p_home"]) + float(row["p_draw"]) + float(row["p_away"]) == pytest.approx(1.0, abs=1e-5)
