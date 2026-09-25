@@ -574,6 +574,8 @@ def _routed_ensemble_proba(
         routing_diag["risk"] = routing_risk_score(
             routing_diag["drift"],
             routing_diag["uncertainty"],
+            support_scores=routing_diag.get("support"),
+            support_weight=float(dynamic_policy.get("support_risk_weight", 0.0)),
         )
 
     probs = np.zeros((n, 3), dtype=float)
@@ -642,6 +644,7 @@ def run_walk_forward(
             "uncertainty_strength": 0.75,
             "min_specialist_trust": 0.25,
             "support_strength": 0.40,
+            "support_risk_weight": 0.15,
             "support_cols": ["home_history_support_n", "away_history_support_n"],
             "feature_cols": list(feature_cols),
             "reference": build_drift_reference(fit, feature_cols),
