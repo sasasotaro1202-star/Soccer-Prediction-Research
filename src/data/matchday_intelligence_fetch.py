@@ -399,6 +399,9 @@ def _matchday_base_row(
         "matchday_lineup_impact_away": np.nan,
         "matchday_lineup_missing_count_home": np.nan,
         "matchday_lineup_missing_count_away": np.nan,
+        # PIT-safe candidate identity only; post-match statistics are deliberately excluded.
+        "matchday_lineup_players_home_json": "",
+        "matchday_lineup_players_away_json": "",
         "matchday_weather_penalty_home": np.nan,
         "matchday_weather_penalty_away": np.nan,
         "matchday_rest_diff_hours": np.nan,
@@ -582,6 +585,35 @@ def _sofascore_missing_impact(items: list[dict[str, Any]] | None) -> tuple[float
     return float(np.clip(total / 4.0, 0.0, 1.0)), severe
 
 
+def _extract_pit_safe_lineup_players(group: Any) -> list[dict[str, Any]]:
+    """Keep only player identity/role fields from a pre-kickoff lineup payload.
+
+    Match statistics are intentionally discarded because the same endpoint contains
+    post-match performance fields. This snapshot is for candidate eligibility only.
+    """
+    if not isinstance(group, dict):
+        return []
+    players = group.get("players") or []
+    out: list[dict[str, Any]] = []
+    for item in players:
+        if not isinstance(item, dict):
+            continue
+        player = item.get("player") if isinstance(item.get("player"), dict) else {}
+        player_id = player.get("id") or item.get("playerId")
+        if player_id in (None, ""):
+            continue
+        role = "STARTER" if item.get("starter") is True or item.get("substitute") is False else "SUBSTITUTE"
+        position = item.get("position") or player.get("position") or ""
+        out.append({
+            "player_id": str(player_id),
+            "name": str(player.get("name") or ""),
+            "position": str(position),
+            "role": role,
+        })
+    out.sort(key=lambda x: (x["role"] != "STARTER", x["position"], x["player_id"]))
+    return out
+
+
 def _enrich_sofascore_lineup(fetcher: ExternalFetcher, row: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     event_id = str(row.get("sofascore_event_id") or "")
     if not event_id:
@@ -593,6 +625,12 @@ def _enrich_sofascore_lineup(fetcher: ExternalFetcher, row: dict[str, Any]) -> t
     )
     retrieval_times = [at]
     confirmed = payload.get("confirmed") is True
+    for side in ("home", "away"):
+        row[f"matchday_lineup_players_{side}_json"] = json.dumps(
+            _extract_pit_safe_lineup_players(payload.get(side) or {}),
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
     counts: dict[str, int] = {}
     for side in ("home", "away"):
         group = payload.get(side) or {}

@@ -10,21 +10,31 @@ on:
 permissions:
   contents: read
 
-# Main-branch CI is intentionally re-runnable on the exact latest commit for final verification.
-
+# Keep exact-commit verification from being cancelled by a later push on the same PR.
+# Long-running research has its own concurrency group.
 concurrency:
-  # CI is disposable; keep only the newest verification for each ref to prevent stale queue buildup.
-  # Long-running 9H research uses a separate concurrency group and is never cancelled by this policy.
-  group: soccer-ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: soccer-ci-${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
 
 jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout
+      - name: Checkout exact source commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact source commit
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
+          echo "Verified source SHA: $ACTUAL_SHA"
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
