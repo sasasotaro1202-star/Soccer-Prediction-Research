@@ -487,6 +487,14 @@ def run(
         method="soft_ensemble",
     )
     soft_ensemble_summary = _summarize_metrics(soft_ensemble)
+    rank_consensus = run_mom_walk_forward(
+        labelled,
+        n_blocks=6,
+        locked_blocks=2,
+        min_train_matches=30,
+        method="rank_consensus",
+    )
+    rank_consensus_summary = _summarize_metrics(rank_consensus)
     soft_ensemble_calibrated = run_mom_walk_forward_calibrated_soft_ensemble(
         labelled,
         n_blocks=6,
@@ -501,6 +509,7 @@ def run(
         "conditional_logit": conditional_summary,
         "hist_gbdt": hist_gbdt_summary,
         "soft_ensemble_equal_weight": soft_ensemble_summary,
+        "rank_consensus": rank_consensus_summary,
         "soft_ensemble_temperature_calibrated": soft_ensemble_calibrated_summary,
     }
 
@@ -511,6 +520,7 @@ def run(
         "conditional_logit": conditional_summary,
         "hist_gbdt": hist_gbdt_summary,
         "soft_ensemble_equal_weight": soft_ensemble_summary,
+        "rank_consensus": rank_consensus_summary,
         "soft_ensemble_temperature_calibrated": soft_ensemble_calibrated_summary,
     }
     # The operational output is exactly four players, so model selection must
@@ -536,7 +546,7 @@ def run(
         "locked_blocks_untouched_for_selection": True,
     }
     report["status"] = "RESEARCH_EVALUATED"
-    report["calibration_status"] = "NOT_YET_CALIBRATED"
+    report["calibration_status"] = "CANDIDATE_CALIBRATION_EVALUATED"
     report["production_adopted"] = False
     (root / "mom_research_report.json").write_text(
         json.dumps(report, indent=2, ensure_ascii=False, default=str),
