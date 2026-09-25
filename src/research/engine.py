@@ -431,7 +431,8 @@ def run(out_dir: str = "artifacts") -> dict:
         encoding="utf-8",
     )
 
-    wf, selections = run_walk_forward(feats, _model_features(feats))
+    case_output_path = out / "oos_case_diagnostics.csv"
+    wf, selections = run_walk_forward(feats, _model_features(feats), case_output_path=str(case_output_path))
     oos_temporal = _oos_temporal_integrity(wf, locked_blocks=2)
     (out / "oos_temporal_integrity.json").write_text(
         json.dumps(oos_temporal, indent=2, ensure_ascii=False, default=str),
