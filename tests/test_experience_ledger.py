@@ -146,3 +146,17 @@ def test_compute_metrics_persists_metric_deltas(tmp_path, monkeypatch):
     mod.compute_metrics(ledger)
     status = json.loads(status_path.read_text())
     assert status["metric_deltas_vs_previous"]["all"]["1x2_accuracy_pct"] == 50.0
+
+def test_compute_metrics_publishes_zero_state_status(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+
+    metrics_path = tmp_path / "metrics.csv"
+    status_path = tmp_path / "status.json"
+    monkeypatch.setattr(mod, "METRICS", metrics_path)
+    monkeypatch.setattr(mod, "STATUS", status_path)
+
+    mod.compute_metrics(pd.DataFrame())
+    status = json.loads(status_path.read_text())
+    assert status["status"] == "NO_SETTLED_PREDICTIONS"
+    assert status["summary"]["all"]["n"] == 0
+    assert status["summary"]["all"]["probability_rows"] == 0
