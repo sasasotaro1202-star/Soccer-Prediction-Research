@@ -27,3 +27,18 @@ def test_research_forecast_verification_accepts_full_contract(tmp_path):
     }]).to_csv(path, index=False)
 
     assert verify(str(path))["status"] == "VERIFIED"
+
+
+def test_research_forecast_verification_accepts_empty_target_set(tmp_path):
+    from src.prediction.research_forecast import FORECAST_COLUMNS
+
+    path = tmp_path / "forecast.csv"
+    pd.DataFrame(columns=FORECAST_COLUMNS).to_csv(path, index=False)
+
+    assert verify(str(path)) == {
+        "status": "VERIFIED",
+        "rows": 0,
+        "empty_target_set": True,
+    }
+
+
