@@ -1,0 +1,14 @@
+{
+  "status": "NO_SETTLED_PREDICTIONS",
+  "settled_predictions": 0,
+  "ledger_rows": 0,
+  "generated_at_utc": "2026-09-25T21:27:40.746609+00:00",
+  "metrics_file": "artifacts/experience_metrics.csv",
+  "summary": {
+    "all": {
+      "n": 0,
+      "probability_rows": 0
+    }
+  },
+  "metric_deltas_vs_previous": {}
+}

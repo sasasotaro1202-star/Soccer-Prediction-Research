@@ -1,0 +1,2 @@
+scope,n,status,1x2_accuracy_pct,logloss,brier,rps,ece,probability_rows
+all,0,NO_SETTLED_PREDICTIONS,,,,,,0
