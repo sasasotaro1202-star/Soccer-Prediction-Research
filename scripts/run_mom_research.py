@@ -14,6 +14,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from src.data.competition_catalog import COMPETITION_CATALOG
+from src.data.competition_sources import TARGET_COMPETITIONS
 from src.data.mom_player_history_adapter import (
     SOCCER_DATASET_COMMIT,
     SOCCER_DATASET_LICENSE,
@@ -26,6 +28,10 @@ from src.data.mom_player_history_adapter import (
 from src.data.sofascore_mom_labels import (
     collect_sofascore_mom_labels,
     collect_sofascore_mom_labels_tournament_season,
+    fetch_unique_football_tournaments,
+    resolve_unique_tournament_id,
+    fetch_unique_tournament_seasons,
+    select_season_id,
     label_data_contract_report,
 )
 from src.data.fotmob_mom_labels import (
@@ -50,10 +56,81 @@ DEFAULT_END = "2025-06-01"
 DEFAULT_SOFASCORE_SEASON_ID = 61627
 
 
+DATASET_NAME_ALIASES = {
+    "EPL": ("Premier League",),
+    "ERE": ("Eredivisie",),
+    "LL": ("LaLiga", "La Liga"),
+    "SA": ("Serie A",),
+    "BL1": ("Bundesliga",),
+    "FL1": ("Ligue 1",),
+    "J1": ("J1 League", "J.League"),
+    "J2": ("J2 League", "J.League 2"),
+    "J3": ("J3 League", "J.League 3"),
+    "UCL": ("UEFA Champions League", "Champions League"),
+    "UEL": ("UEFA Europa League", "Europa League"),
+    "UECL": ("UEFA Conference League", "Conference League"),
+    "UEFA_SUPER_CUP": ("UEFA Super Cup",),
+    "UEFA_YOUTH_LEAGUE": ("UEFA Youth League",),
+    "UWCL": ("UEFA Women's Champions League", "Women's Champions League"),
+    "UWEC": ("UEFA Women's Europa Cup", "Women's Europa League"),
+    "UEFA_EURO_M": ("European Championship", "UEFA European Championship"),
+    "UEFA_EURO_QUALI_M": ("European Championship Qualification", "UEFA European Qualifiers"),
+    "UEFA_NATIONS_LEAGUE_M": ("UEFA Nations League",),
+    "UEFA_EURO_W": ("Women's European Championship", "UEFA Women's European Championship"),
+    "UEFA_EURO_QUALI_W": ("Women's European Championship Qualification", "UEFA Women's European Qualifiers"),
+    "UEFA_NATIONS_LEAGUE_W": ("UEFA Women's Nations League", "Women's Nations League"),
+    "UEFA_U21": ("UEFA European Under-21 Championship", "European U-21 Championship"),
+    "UEFA_U19": ("UEFA European Under-19 Championship",),
+    "UEFA_U17": ("UEFA European Under-17 Championship",),
+    "UEFA_WU19": ("UEFA Women's Under-19 Championship",),
+    "UEFA_WU17": ("UEFA Women's Under-17 Championship",),
+    "UEFA_REGIONS_CUP": ("UEFA Regions' Cup",),
+    "EMP_CUP": ("Emperor's Cup", "Emperor's Cup JFA All Japan Football Championship"),
+    "INTL_M": ("Friendlies", "International Friendlies"),
+    "INTL_W": ("Women's Friendlies", "International Friendlies Women"),
+    "U23_M": ("International U23", "U-23"),
+    "U18_M": ("International U18", "U-18"),
+    "AG_M": ("Asian Games",),
+    "AG_W": ("Asian Games",),
+}
+
+
+def _competition_spec(code: str):
+    code = str(code).strip()
+    if code not in TARGET_COMPETITIONS:
+        raise ValueError(f"Unsupported active competition code: {code!r}")
+    matches = [x for x in COMPETITION_CATALOG if x.code == code]
+    if len(matches) != 1:
+        raise RuntimeError(f"Competition catalog is inconsistent for {code!r}")
+    return matches[0]
+
+
+def _sql_quote(value: str) -> str:
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def _resolve_dataset_league_ids(con, dataset_base: str, competition_code: str) -> tuple[list[int], list[dict[str, Any]]]:
+    spec = _competition_spec(competition_code)
+    names = list(dict.fromkeys((spec.name, *DATASET_NAME_ALIASES.get(competition_code, ()))))
+    values = ", ".join(_sql_quote(x.lower()) for x in names)
+    rows = con.execute(
+        f"SELECT id, name, country, api_football_id FROM read_parquet('{dataset_base}/leagues.parquet') WHERE lower(name) IN ({values}) ORDER BY id"
+    ).fetchdf()
+    if rows.empty:
+        return [], []
+    records = rows.to_dict(orient="records")
+    region = str(spec.region).strip().lower()
+    preferred = [x for x in records if str(x.get("country") or "").strip().lower() == region]
+    selected = preferred if preferred else records
+    ids = [int(x) for x in pd.to_numeric(pd.Series([x["id"] for x in selected]), errors="coerce").dropna().astype(int)]
+    return ids, records
+
+
 def _load_frames(
     start: str,
     end: str,
     *,
+    competition_code: str,
     history_start: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     try:
@@ -83,6 +160,10 @@ def _load_frames(
             # below is the authoritative check.
             pass
 
+        league_ids, league_records = _resolve_dataset_league_ids(con, dataset_base, competition_code)
+        if not league_ids:
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), league_records
+        id_values = ", ".join(str(x) for x in league_ids)
         fixture_sql = f"""
             SELECT
                 f.id,
@@ -101,9 +182,7 @@ def _load_frames(
               ON f.home_team_id = ht.id
             JOIN read_parquet('{dataset_base}/teams.parquet') away_team_ref
               ON f.away_team_id = away_team_ref.id
-            WHERE l.api_football_id = 39
-              AND lower(l.name) = 'premier league'
-              AND lower(l.country) = 'england'
+            WHERE f.league_id IN ({id_values})
               AND f.is_played = TRUE
               AND CAST(f.date_utc AS TIMESTAMP) >= TIMESTAMP '{history_start_ts.strftime("%Y-%m-%d %H:%M:%S")}'
               AND CAST(f.date_utc AS TIMESTAMP) < TIMESTAMP '{target_end.strftime("%Y-%m-%d %H:%M:%S")}'
@@ -111,9 +190,7 @@ def _load_frames(
         """
         fixtures = con.execute(fixture_sql).fetchdf()
         if fixtures.empty:
-            raise RuntimeError("No EPL fixtures found in the pinned dataset window")
-
-        con.register("target_fixture_ids", fixtures[["id"]].rename(columns={"id": "fixture_id"}))
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), league_records
 
         player_sql = f"""
             SELECT
@@ -154,7 +231,7 @@ def _load_frames(
             GROUP BY s.fixture_id
         """
         match_stats = con.execute(match_stats_sql).fetchdf()
-        return fixtures, player_matches, player_stats, match_stats
+        return fixtures, player_matches, player_stats, match_stats, league_records
     finally:
         con.close()
 
