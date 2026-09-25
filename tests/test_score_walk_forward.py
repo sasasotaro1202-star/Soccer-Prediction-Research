@@ -53,12 +53,6 @@ def test_score_walk_forward_produces_multiple_pit_safe_blocks():
         "mean_score_risk",
         "high_risk_score_n",
         "high_risk_score_share",
-        "high_risk_score_logloss",
-        "high_risk_top3_score_hit_rate",
-        "high_risk_over_2_5_logloss",
-        "high_risk_over_2_5_brier",
-        "high_risk_btts_logloss",
-        "high_risk_btts_brier",
     ):
         assert result[col].notna().all()
 
@@ -78,3 +72,14 @@ def test_score_risk_diagnostics_are_bounded():
     assert result["mean_score_risk"].between(0.0, 1.0).all()
     assert result["high_risk_score_share"].between(0.0, 1.0).all()
     assert (result["high_risk_score_n"] >= 0).all()
+    for _, row in result.iterrows():
+        high_n = int(row["high_risk_score_n"])
+        if high_n > 0:
+            assert 0.0 <= float(row["high_risk_score_logloss"])
+            assert 0.0 <= float(row["high_risk_top3_score_hit_rate"]) <= 1.0
+            assert 0.0 <= float(row["high_risk_over_2_5_logloss"])
+            assert 0.0 <= float(row["high_risk_over_2_5_brier"]) <= 1.0
+            assert 0.0 <= float(row["high_risk_btts_logloss"])
+            assert 0.0 <= float(row["high_risk_btts_brier"]) <= 1.0
+        else:
+            assert pd.isna(row["high_risk_score_logloss"])
