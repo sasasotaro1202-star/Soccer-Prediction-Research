@@ -76,17 +76,20 @@ def _timestamp_from_match(obj: dict[str, Any]) -> pd.Timestamp | None:
     for value in candidates:
         if value in (None, ""):
             continue
+        # Numeric epochs must be interpreted explicitly; pandas otherwise treats
+        # bare integers as nanoseconds, which can silently map real fixtures to 1970.
+        try:
+            numeric = float(value)
+            if math.isfinite(numeric):
+                unit = "ms" if abs(numeric) > 10_000_000_000 else "s"
+                ts = pd.to_datetime(numeric, unit=unit, utc=True, errors="coerce")
+                if not pd.isna(ts):
+                    return ts
+        except (TypeError, ValueError, OverflowError):
+            pass
         ts = pd.to_datetime(value, utc=True, errors="coerce")
         if not pd.isna(ts):
             return ts
-        try:
-            numeric = float(value)
-            unit = "ms" if abs(numeric) > 10_000_000_000 else "s"
-            ts = pd.to_datetime(numeric, unit=unit, utc=True, errors="coerce")
-            if not pd.isna(ts):
-                return ts
-        except (TypeError, ValueError, OverflowError):
-            continue
     return None
 
 
