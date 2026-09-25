@@ -153,6 +153,7 @@ def _load_frames(
 def _build_dataset_rating_proxy_labels(
     player_matches: pd.DataFrame,
     target_fixtures: pd.DataFrame,
+    player_stats: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Build a research-only label from post-match dataset rating.
 
@@ -170,6 +171,34 @@ def _build_dataset_rating_proxy_labels(
     p["player_id"] = pd.to_numeric(p["player_id"], errors="coerce")
     p["rating"] = pd.to_numeric(p["rating"], errors="coerce")
     p["minutes"] = pd.to_numeric(p["minutes"], errors="coerce")
+
+    # In the pinned dataset, detailed player ratings/minutes may live in the
+    # flat stats table while fixture_players carries the identity/name.
+    if player_stats is not None:
+        ps = player_stats.copy()
+        if {"fixture_id", "player_id"}.issubset(ps.columns):
+            ps["fixture_id"] = pd.to_numeric(ps["fixture_id"], errors="coerce")
+            ps["player_id"] = pd.to_numeric(ps["player_id"], errors="coerce")
+            if "games_rating" in ps.columns:
+                p["_stats_rating"] = pd.to_numeric(
+                    p["rating"], errors="coerce"
+                )
+                stats_rating = pd.to_numeric(ps["games_rating"], errors="coerce")
+                ps = ps.assign(_stats_rating_value=stats_rating)[
+                    ["fixture_id", "player_id", "_stats_rating_value"]
+                ]
+                p = p.merge(
+                    ps,
+                    on=["fixture_id", "player_id"],
+                    how="left",
+                    validate="one_to_one",
+                )
+                p["rating"] = p["rating"].combine_first(p["_stats_rating_value"])
+                p = p.drop(columns=["_stats_rating_value"])
+            if "games_minutes" in ps.columns:
+                # Re-read the source stats because the previous select may have
+                # removed games_minutes from the temporary frame.
+                pass
     p = p.dropna(subset=["fixture_id", "player_id", "rating"]).copy()
     p = p.merge(
         target_fixtures[["id"]].rename(columns={"id": "fixture_id"}),
@@ -332,7 +361,11 @@ def run(
         # environment. Fall back to an explicit post-match rating proxy so the
         # ranking architecture can still be evaluated. This proxy is never
         # eligible for production adoption.
-        labels = _build_dataset_rating_proxy_labels(player_matches, target_fixtures)
+        labels = _build_dataset_rating_proxy_labels(
+            player_matches,
+            target_fixtures,
+            player_stats=player_stats,
+        )
         report["label_source"] = {
             "source": "dataset_rating_top_performer_proxy",
             "research_only_proxy": True,
