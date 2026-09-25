@@ -24,3 +24,5 @@ def test_scope_summary_is_consistent():
     assert s["competitions"] == 35
     assert s["tasks"] == 5
     assert s["task_cells"] == 175
+    assert s["score_choices_per_match"] == 3
+    assert s["mom_choices_per_match"] == 4
