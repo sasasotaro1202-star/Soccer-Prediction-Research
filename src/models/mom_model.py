@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
+from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -205,6 +206,48 @@ class MissingnessAwareMOMTransformer:
         return self.fit(frame, y).transform(frame)
 
 
+class HistGBTMOM:
+    """Nonlinear research challenger using the same PIT-safe feature contract."""
+
+    def __init__(self, *, random_state: int = 42):
+        self.random_state = int(random_state)
+
+    def fit(self, frame: pd.DataFrame, y: np.ndarray) -> "HistGBTMOM":
+        self.transformer_ = MissingnessAwareMOMTransformer()
+        x = self.transformer_.fit_transform(frame[list(MOM_FEATURE_COLUMNS)])
+        labels = np.asarray(y, dtype=int)
+        positive = int(labels.sum())
+        negative = int(len(labels) - positive)
+        if positive <= 0 or negative <= 0:
+            raise RuntimeError("HistGBD MOM training requires both positive and negative classes")
+        n = float(len(labels))
+        weights = np.where(
+            labels == 1,
+            n / (2.0 * positive),
+            n / (2.0 * negative),
+        )
+        self.model_ = HistGradientBoostingClassifier(
+            loss="log_loss",
+            learning_rate=0.04,
+            max_iter=250,
+            max_leaf_nodes=15,
+            min_samples_leaf=30,
+            l2_regularization=1.0,
+            random_state=self.random_state,
+        )
+        self.model_.fit(x, labels, sample_weight=weights)
+        return self
+
+    def decision_function(self, frame: pd.DataFrame) -> np.ndarray:
+        x = self.transformer_.transform(frame[list(MOM_FEATURE_COLUMNS)])
+        probs = self.model_.predict_proba(x)[:, 1]
+        probs = np.clip(np.asarray(probs, dtype=float), 1e-9, 1.0 - 1e-9)
+        logits = np.log(probs / (1.0 - probs))
+        if not np.isfinite(logits).all():
+            raise RuntimeError("HistGBD MOM model produced non-finite logits")
+        return logits
+
+
 class ConditionalMOMLogit:
     """Conditional-choice model: exactly one MOM winner per fixture.
 
@@ -326,12 +369,21 @@ def fit_mom_model(
             )),
         ])
         model.fit(d[list(MOM_FEATURE_COLUMNS)], y)
+    elif method == "hist_gbdt":
+        model = HistGBTMOM(random_state=random_state)
+        model.fit(d, y)
     else:
         raise ValueError("Unsupported MOM training method")
 
     meta = MOMModelMetadata(
         schema_version=1,
-        method="pit_player_form_conditional_logit" if method == "conditional_logit" else "pit_player_form_logistic_softmax",
+        method=(
+            "pit_player_form_conditional_logit"
+            if method == "conditional_logit"
+            else "pit_player_form_hist_gbdt"
+            if method == "hist_gbdt"
+            else "pit_player_form_logistic_softmax"
+        ),
         feature_columns=MOM_FEATURE_COLUMNS,
         training_rows=int(len(d)),
         training_matches=match_count,
