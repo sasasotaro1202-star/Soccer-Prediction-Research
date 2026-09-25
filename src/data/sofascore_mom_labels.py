@@ -293,6 +293,11 @@ def discover_unique_tournament_from_scheduled_events(
         )
 
     candidate_ids = [int(tid) for tid, count in counts.items() if int(count) >= 2]
+    # Singleton competitions (for example a one-match super cup) can only
+    # provide one independent fixture date. Accept that case only when the
+    # exact tournament name/slug resolves to one id and no competing id exists.
+    if not candidate_ids and len(sample_dates) == 1 and len(counts) == 1:
+        candidate_ids = [int(counts.index[0])]
     if category_requested and len(candidate_ids) > 1:
         preferred = [
             tid for tid in candidate_ids
@@ -409,6 +414,8 @@ def discover_unique_season_from_scheduled_events(
 
     counts = pd.Series([x["season_id"] for x in observations], dtype="int64").value_counts()
     candidate_ids = [int(season_id) for season_id, count in counts.items() if int(count) >= 2]
+    if not candidate_ids and len(sample_dates) == 1 and len(counts) == 1:
+        candidate_ids = [int(counts.index[0])]
     if len(candidate_ids) != 1:
         detail = " | ".join(errors) if errors else "no exact season observations"
         raise RuntimeError(
