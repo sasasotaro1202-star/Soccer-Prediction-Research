@@ -367,18 +367,21 @@ def test_event_based_tournament_discovery_requires_two_dates_and_exact_name():
 
 def test_event_based_tournament_discovery_fails_closed_when_multiple_dates_do_not_repeat():
     class Response:
-        body = json.dumps({"events": [{
-            "uniqueTournament": {
-                "id": 17,
-                "name": "Premier League",
-                "category": {"name": "England"},
-            }
-        }]}).encode()
-        metadata = type("Meta", (), {"retrieved_at": "2026-09-25T13:00:00Z"})()
+        def __init__(self, tournament_id):
+            self.body = json.dumps({"events": [{
+                "uniqueTournament": {
+                    "id": tournament_id,
+                    "name": "Premier League",
+                    "category": {"name": "England"},
+                }
+            }]}).encode()
+            self.metadata = type("Meta", (), {"retrieved_at": "2026-09-25T13:00:00Z"})()
 
     class FakeFetcher:
         def get(self, source, url, **kwargs):
-            return Response()
+            date = url.rsplit("/", 1)[-1]
+            tournament_id = 17 if date == "2024-08-01" else 18
+            return Response(tournament_id)
 
     with pytest.raises(RuntimeError, match="ambiguous or insufficiently repeated"):
         discover_unique_tournament_from_scheduled_events(
