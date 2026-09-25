@@ -103,6 +103,31 @@ def mean_js_disagreement(model_probabilities: dict[str, np.ndarray]) -> tuple[np
     return np.clip(disagreement, 0.0, 1.0), mixture
 
 
+def history_support_risk(
+    frame: pd.DataFrame,
+    *,
+    home_col: str = "home_history_support_n",
+    away_col: str = "away_history_support_n",
+    min_games: float = 5.0,
+    full_games: float = 20.0,
+) -> np.ndarray:
+    """Outcome-free risk score for sparse historical support."""
+    if not np.isfinite(min_games) or not np.isfinite(full_games) or min_games < 0 or full_games <= min_games:
+        raise ValueError("history support thresholds are invalid")
+    if home_col not in frame.columns or away_col not in frame.columns:
+        return np.zeros(len(frame), dtype=float)
+    home = pd.to_numeric(frame[home_col], errors="coerce").to_numpy(dtype=float)
+    away = pd.to_numeric(frame[away_col], errors="coerce").to_numpy(dtype=float)
+    if home.shape != away.shape:
+        raise ValueError("history support columns have different lengths")
+    support = np.minimum(home, away)
+    missing = ~np.isfinite(support)
+    scaled = (np.clip(support, min_games, full_games) - min_games) / (full_games - min_games)
+    risk = 1.0 - scaled
+    risk[missing] = 1.0
+    return np.clip(risk, 0.0, 1.0)
+
+
 def dynamic_route_weights(
     base_weight_matrix: np.ndarray,
     fallback_weights: np.ndarray | list[float],
@@ -112,6 +137,8 @@ def dynamic_route_weights(
     drift_strength: float = 0.85,
     uncertainty_strength: float = 0.75,
     min_specialist_trust: float = 0.25,
+    support_scores: np.ndarray | None = None,
+    support_strength: float = 0.40,
 ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
     """Move contextual weights toward the global fallback when risk rises."""
     base = np.asarray(base_weight_matrix, dtype=float)
@@ -141,7 +168,17 @@ def dynamic_route_weights(
         raise ValueError("uncertainty_strength must be within [0, 3]")
     if not np.isfinite(min_specialist_trust) or not 0.05 <= float(min_specialist_trust) <= 0.95:
         raise ValueError("min_specialist_trust must be within [0.05, 0.95]")
-    trust = np.exp(-float(drift_strength) * drift - float(uncertainty_strength) * uncertainty)
+    support = np.asarray(support_scores if support_scores is not None else np.zeros(len(base), dtype=float), dtype=float)
+    if support.shape != drift.shape or not np.isfinite(support).all() or (support < 0).any():
+        raise ValueError("support_scores are invalid")
+    if not np.isfinite(support_strength) or not 0.0 <= float(support_strength) <= 3.0:
+        raise ValueError("support_strength must be within [0, 3]")
+    support = np.clip(support, 0.0, 1.0)
+    trust = np.exp(
+        -float(drift_strength) * drift
+        - float(uncertainty_strength) * uncertainty
+        - float(support_strength) * support
+    )
     trust = np.clip(trust, float(min_specialist_trust), 1.0)
     dynamic = fallback[None, :] + trust[:, None] * (base - fallback[None, :])
     dynamic = np.clip(dynamic, 0.0, None)
@@ -149,7 +186,7 @@ def dynamic_route_weights(
     if np.any(sums <= 0) or not np.isfinite(sums).all():
         raise ValueError("Dynamic routing produced invalid weights")
     dynamic /= sums
-    return dynamic, {"trust": trust, "uncertainty": uncertainty, "entropy": entropy, "disagreement": disagreement, "drift": drift}
+    return dynamic, {"trust": trust, "uncertainty": uncertainty, "entropy": entropy, "disagreement": disagreement, "drift": drift, "support": support}
 
 
 def routing_risk_score(
