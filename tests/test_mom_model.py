@@ -213,8 +213,8 @@ def test_dataset_performance_proxy_uses_flat_stats_when_rating_is_missing():
     from scripts.run_mom_research import _build_dataset_rating_proxy_labels
 
     player_matches = pd.DataFrame([
-        {"fixture_id": 20, "player_id": 11, "player_name": "A", "rating": np.nan, "minutes": 90},
-        {"fixture_id": 20, "player_id": 12, "player_name": "B", "rating": np.nan, "minutes": 80},
+        {"fixture_id": 20, "player_id": 11, "player_name": "A", "rating": float("nan"), "minutes": 90},
+        {"fixture_id": 20, "player_id": 12, "player_name": "B", "rating": float("nan"), "minutes": 80},
     ])
     player_stats = pd.DataFrame([
         {"fixture_id": 20, "player_id": 11, "games_rating": np.nan, "games_minutes": 90,
