@@ -609,6 +609,7 @@ def run_walk_forward(
     validation_frac: float = 0.2,
     oos_block: int | None = None,
     random_state: int = 42,
+    case_output_path: str | None = None,
 ):
     """Chronological PIT-safe walk-forward with disjoint selection/calibration validation."""
     if oos_block is None:
@@ -620,6 +621,7 @@ def run_walk_forward(
         raise ValueError(f"Not enough PIT-verified rows: {len(d)}; need at least {min_train + oos_block}")
 
     results, selected = [], []
+    case_rows = []
     start = _advance_past_same_kickoff(d, min_train)
     while start < len(d):
         oos_end = _advance_past_same_kickoff(d, min(start + oos_block, len(d)))
@@ -757,6 +759,32 @@ def run_walk_forward(
             risk_temperature_modifiers,
         )
 
+        if case_output_path:
+            labels = np.asarray([0, 1, 2], dtype=int)
+            pred = np.argmax(probs, axis=1)
+            ordered = np.sort(probs, axis=1)
+            confidence = ordered[:, -1]
+            margin = ordered[:, -1] - ordered[:, -2]
+            risk = np.asarray(oos_risk_diag.get('risk', np.zeros(len(oos))), dtype=float)
+            for row_idx, (_, row) in enumerate(oos.reset_index(drop=True).iterrows()):
+                case_rows.append({
+                    'match_id': str(row['match_id']),
+                    'oos_start': str(oos['kickoff_utc'].min()),
+                    'competition': str(row.get('competition', '')),
+                    'season_start': str(row.get('season_start', '')),
+                    'kickoff_utc': str(row['kickoff_utc']),
+                    'actual': int(row['target']),
+                    'prediction': int(pred[row_idx]),
+                    'correct': bool(pred[row_idx] == int(row['target'])),
+                    'p_home': float(probs[row_idx, 0]),
+                    'p_draw': float(probs[row_idx, 1]),
+                    'p_away': float(probs[row_idx, 2]),
+                    'confidence': float(confidence[row_idx]),
+                    'margin': float(margin[row_idx]),
+                    'risk_score': float(risk[row_idx]),
+                    'risk_bucket': str(routing_risk_bucket(np.asarray([risk[row_idx]]))[0]),
+                })
+
         candidate_metrics = classification_metrics(oos.target.astype(int), probs)
         baseline_metrics = classification_metrics(
             oos.target.astype(int),
@@ -783,4 +811,9 @@ def run_walk_forward(
         })
         start = oos_end
 
+    if case_output_path:
+        case_file = pd.DataFrame(case_rows)
+        if case_file.empty:
+            raise RuntimeError('case diagnostics requested but no OOS case rows were produced')
+        case_file.to_csv(case_output_path, index=False)
     return pd.DataFrame(results), pd.DataFrame(selected)
