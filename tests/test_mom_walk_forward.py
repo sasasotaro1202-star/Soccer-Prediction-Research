@@ -92,3 +92,14 @@ def test_mom_wfo_accepts_conditional_logit_method():
     )
     assert len(metrics) >= 3
     assert np.isfinite(metrics[["top1_hit_rate", "top4_hit_rate", "mrr", "ndcg_at_4", "logloss", "brier", "ece"]].to_numpy()).all()
+
+
+def test_mom_wfo_accepts_fixed_weight_soft_ensemble():
+    metrics = run_mom_walk_forward(
+        _rows(18),
+        n_blocks=6,
+        min_train_matches=5,
+        method="soft_ensemble",
+    )
+    assert len(metrics) >= 3
+    assert np.isfinite(metrics[["top1_hit_rate", "top4_hit_rate", "mrr", "ndcg_at_4", "logloss", "brier", "ece"]].to_numpy()).all()
