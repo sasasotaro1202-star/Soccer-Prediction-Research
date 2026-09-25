@@ -1,0 +1,102 @@
+name: Soccer Daily Research Forecast
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "5,35 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soccer-daily-research-forecast
+  cancel-in-progress: false
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cache raw soccer data
+        uses: actions/cache@v5
+        with:
+          path: data/raw
+          key: soccer-raw-${{ runner.os }}-${{ hashFiles('src/data/football_data.py', 'src/data/jleague_adapter.py', 'src/data/openfootball_adapter.py') }}
+          restore-keys: soccer-raw-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+
+      - name: Collect current fixtures
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m src.data.matchday_intelligence_fetch             --days 2             --horizon-hours 36             --max-events 200             --output artifacts/future_matchday_fixtures.csv             --status artifacts/matchday_intelligence_status.json
+
+      - name: Generate GitHub research forecast
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m src.prediction.research_forecast             --fixtures artifacts/future_matchday_fixtures.csv             --output artifacts/daily_research_predictions.csv             --status artifacts/daily_research_prediction_status.json             --verify
+
+      - name: Verify output contract
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import pandas as pd
+          df = pd.read_csv("artifacts/daily_research_predictions.csv")
+          required = {
+              "home_team", "away_team", "result_prediction",
+              "home_win_probability", "draw_probability", "away_win_probability",
+              "score_1", "score_1_probability",
+              "score_2", "score_2_probability",
+              "score_3", "score_3_probability",
+              "mom_1_player", "mom_1_probability",
+              "mom_2_player", "mom_2_probability",
+              "mom_3_player", "mom_3_probability",
+              "mom_4_player", "mom_4_probability",
+          }
+          missing = sorted(required - set(df.columns))
+          if missing:
+              raise SystemExit(f"missing required forecast fields: {missing}")
+          for _, row in df.iterrows():
+              one_x_two = [
+                  float(row["home_win_probability"]),
+                  float(row["draw_probability"]),
+                  float(row["away_win_probability"]),
+              ]
+              if abs(sum(one_x_two) - 1.0) > 1e-6:
+                  raise SystemExit("1X2 probability sum invariant failed")
+              if str(row["mom_status"]).startswith("PREDICTED"):
+                  mom = [float(row[f"mom_{n}_probability"]) for n in range(1, 5)]
+                  if abs(sum(mom) - 1.0) > 1e-6:
+                      raise SystemExit("MOM probability sum invariant failed")
+          print({"status": "VERIFIED", "rows": len(df)})
+          PY
+
+      - name: Upload GitHub forecast artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: soccer-daily-research-forecast-${{ github.run_id }}
+          path: |
+            artifacts/future_matchday_fixtures.csv
+            artifacts/matchday_intelligence_status.json
+            artifacts/daily_research_predictions.csv
+            artifacts/daily_research_prediction_status.json
+          retention-days: 3
