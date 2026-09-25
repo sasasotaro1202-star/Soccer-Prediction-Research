@@ -1,0 +1,134 @@
+name: Soccer MOM Research
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/models/mom_model.py"
+      - "src/evaluation/mom_walk_forward.py"
+      - "src/data/mom_player_history_adapter.py"
+      - "src/data/sofascore_mom_labels.py"
+      - "src/data/fotmob_mom_labels.py"
+      - "scripts/run_mom_research.py"
+      - "tests/test_fotmob_mom_labels.py"
+      - ".github/workflows/soccer-mom-research.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/models/mom_model.py"
+      - "src/evaluation/mom_walk_forward.py"
+      - "src/data/mom_player_history_adapter.py"
+      - "src/data/sofascore_mom_labels.py"
+      - "src/data/fotmob_mom_labels.py"
+      - "scripts/run_mom_research.py"
+      - "tests/test_fotmob_mom_labels.py"
+      - ".github/workflows/soccer-mom-research.yml"
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "UTC start date for bounded MOM research"
+        required: false
+        default: "2024-08-01"
+        type: string
+      end:
+        description: "UTC end date for bounded MOM research"
+        required: false
+        default: "2025-06-01"
+        type: string
+      season_start_year:
+        description: "SofaScore season start year"
+        required: false
+        default: "2024"
+        type: string
+      tournament_id:
+        description: "SofaScore unique tournament id"
+        required: false
+        default: "17"
+        type: string
+      season_id:
+        description: "Pinned SofaScore season id"
+        required: false
+        default: "61627"
+        type: string
+  schedule:
+    - cron: "17 5 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soccer-mom-research-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Checkout exact source commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact source commit
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
+          echo "Verified source SHA: $ACTUAL_SHA"
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 5))
+          done
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 duckdb
+
+      - name: Run deterministic tests
+        env:
+          PYTHONHASHSEED: "0"
+        run: python -m pytest -q
+
+      - name: Run bounded real-data MOM research
+        env:
+          PYTHONHASHSEED: "0"
+          PYTHONPATH: "."
+        run: |
+          mkdir -p artifacts
+          python scripts/run_mom_research.py \
+            --start "${{ inputs.start || '2024-08-01' }}" \
+            --end "${{ inputs.end || '2025-06-01' }}" \
+            --season-start-year "${{ inputs.season_start_year || '2024' }}" \
+            --tournament-id "${{ inputs.tournament_id || '17' }}" \
+            --season-id "${{ inputs.season_id || '61627' }}" \
+            --output-dir artifacts/mom_research
+
+      - name: Verify MOM research report exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/mom_research/mom_research_report.json
+
+      - name: Upload MOM research artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: soccer-mom-research-${{ github.run_id }}
+          path: artifacts/mom_research/
+          retention-days: 7
+          if-no-files-found: error
