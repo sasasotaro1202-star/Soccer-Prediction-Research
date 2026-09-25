@@ -20,7 +20,7 @@ on:
     - cron: "7,22,37,52 * * * *"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: soccer-matchday-intelligence
@@ -111,6 +111,29 @@ jobs:
             printf '%s\n' '{"status":"DEFERRED_NO_SAFE_MODEL","reason":"No adopted production or validated candidate model is present."}' > artifacts/prediction_status.json
             echo "No safe model present; prediction execution deferred."
           fi
+      - name: Persist prediction experience snapshot
+        if: success()
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m scripts.experience_ledger record --predictions artifacts/predictions.csv --prediction-time "$(python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("artifacts/prediction_status.json")
+          print(json.loads(p.read_text()).get("prediction_time_utc", ""))
+          PY
+          )"
+          git config user.name "soccer-experience-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/experience/prediction_ledger.csv
+          if git diff --cached --quiet; then
+            echo "No new prediction states to persist."
+          else
+            git commit -m "ops: persist prediction experience snapshot"
+            git push origin main
+          fi
+
       - name: Upload matchday intelligence artifact
         if: always()
         uses: actions/upload-artifact@v6
