@@ -131,3 +131,52 @@ def test_contract_reports_deferred_without_candidates():
     report = mom_data_contract_report(pd.DataFrame())
     assert report["status"] == "DEFERRED_NO_PIT_PLAYER_DATA"
     assert report["matches"] == 0
+
+
+def test_match_relative_features_are_fixture_local_and_pre_match_only():
+    fixtures, players, player_stats, stats = _frames()
+    out = build_mom_feature_rows(
+        fixtures,
+        players.copy(),
+        player_stats.copy(),
+        stats.copy(),
+        min_history_appearances=1,
+        lookback_appearances=5,
+    )
+    assert not out.empty
+    relative_cols = [
+        "match_relative_rating",
+        "match_relative_minutes",
+        "match_relative_goals_per90",
+        "match_relative_assists_per90",
+        "match_relative_key_passes_per90",
+        "match_relative_shots_per90",
+        "match_relative_starts_rate",
+        "match_relative_history_depth",
+    ]
+    assert set(relative_cols).issubset(out.columns)
+    for match_id, group in out.groupby("match_id", sort=False):
+        for col in relative_cols:
+            values = pd.to_numeric(group[col], errors="coerce")
+            assert values.notna().all()
+            assert (values.between(0.0, 1.0)).all()
+    target_id = "5"
+    before = out.loc[out["match_id"] == target_id].sort_values("player_id").reset_index(drop=True)
+    players_after = players.copy()
+    players_after.loc[players_after["fixture_id"] == 5, ["rating", "goals_total", "goals_assists", "shots_total", "passes_key"]] = 9999
+    after = build_mom_feature_rows(
+        fixtures,
+        players_after,
+        player_stats.copy(),
+        stats.copy(),
+        min_history_appearances=1,
+        lookback_appearances=5,
+    )
+    after = after.loc[after["match_id"] == target_id].sort_values("player_id").reset_index(drop=True)
+    assert np.allclose(
+        before[relative_cols].to_numpy(dtype=float),
+        after[relative_cols].to_numpy(dtype=float),
+        atol=1e-12,
+        rtol=0.0,
+        equal_nan=True,
+    )
