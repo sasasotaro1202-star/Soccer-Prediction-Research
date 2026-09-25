@@ -24,6 +24,9 @@ def test_requires_four_eligible_players():
         select_mom_candidates(["p1", "p2", "p3"], [1, 1, 1])
 
 
-def test_rejects_duplicate_player_ids_within_fixture():
-    with pytest.raises(ValueError):
-        select_mom_candidates(["p1", "p1", "p2", "p3"], [0.4, 0.3, 0.2, 0.1])
+def test_rejects_duplicate_player_ids():
+    with pytest.raises(ValueError, match="must be unique"):
+        select_mom_candidates(
+            ["p1", "p1", "p2", "p3", "p4"],
+            [0.30, 0.20, 0.15, 0.10, 0.05],
+        )
