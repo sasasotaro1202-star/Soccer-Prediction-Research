@@ -511,6 +511,7 @@ def run(
         "soft_ensemble_equal_weight": soft_ensemble_summary,
         "rank_consensus": rank_consensus_summary,
         "soft_ensemble_temperature_calibrated": soft_ensemble_calibrated_summary,
+        "rank_consensus": rank_consensus_summary,
     }
 
     # Development-only selection. Locked blocks are intentionally not inspected
@@ -545,7 +546,7 @@ def run(
         "locked_blocks_untouched_for_selection": True,
     }
     report["status"] = "RESEARCH_EVALUATED"
-    report["calibration_status"] = "NOT_YET_CALIBRATED"
+    report["calibration_status"] = "CANDIDATE_CALIBRATION_EVALUATED"
     report["production_adopted"] = False
     (root / "mom_research_report.json").write_text(
         json.dumps(report, indent=2, ensure_ascii=False, default=str),
