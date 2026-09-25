@@ -194,6 +194,7 @@ def test_feature_names_are_outcome_free():
 
 
 def test_dataset_rating_proxy_label_is_explicit_and_outcome_only():
+    import numpy as np
     from scripts.run_mom_research import _build_dataset_rating_proxy_labels
 
     player_matches = pd.DataFrame([
@@ -210,6 +211,7 @@ def test_dataset_rating_proxy_label_is_explicit_and_outcome_only():
 
 
 def test_dataset_performance_proxy_uses_flat_stats_when_rating_is_missing():
+    import numpy as np
     from scripts.run_mom_research import _build_dataset_rating_proxy_labels
 
     player_matches = pd.DataFrame([
