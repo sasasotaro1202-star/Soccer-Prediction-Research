@@ -66,7 +66,9 @@ def record_prediction_file(predictions_path: str, prediction_time: str | None = 
     if missing:
         raise RuntimeError(f"prediction ledger input missing required columns: {missing}")
     incoming = incoming.copy()
-    incoming["prediction_recorded_at_utc"] = pd.Timestamp(prediction_time, tz="UTC") if prediction_time else _now()
+    incoming["prediction_recorded_at_utc"] = (pd.to_datetime(prediction_time, utc=True, errors="coerce") if prediction_time else _now())
+    if pd.isna(incoming["prediction_recorded_at_utc"]).all():
+        incoming["prediction_recorded_at_utc"] = _now()
     for c in ["p_home","p_draw","p_away","score_1_probability","score_2_probability","score_3_probability",
               "mom_1_probability","mom_2_probability","mom_3_probability","mom_4_probability"]:
         if c in incoming:
@@ -191,8 +193,11 @@ def settle_predictions(days_back=14):
     now=_now(); cutoff=now-pd.Timedelta(days=max(1,int(days_back)))
     ledger["kickoff_utc"]=pd.to_datetime(ledger["kickoff_utc"],utc=True,errors="coerce")
     if "actual_result" not in ledger: ledger["actual_result"]=pd.NA
-    pending=ledger[ledger["kickoff_utc"].notna() & (ledger["kickoff_utc"]<=now) &
-                   (ledger["kickoff_utc"]>=cutoff) & ledger["actual_result"].isna()].copy()
+    pending_mask = ledger["kickoff_utc"].notna() & (ledger["kickoff_utc"]<=now) & (ledger["kickoff_utc"]>=cutoff)
+    outcome_pending = ledger["actual_result"].isna()
+    mom_pending = ledger.get("mom_settlement_status", pd.Series(pd.NA, index=ledger.index)).astype("string").ne("OFFICIAL")
+    has_mom = ledger.get("mom_1_player_id", pd.Series(pd.NA, index=ledger.index)).notna()
+    pending=ledger[pending_mask & (outcome_pending | (mom_pending & has_mom))].copy()
     if pending.empty:
         compute_metrics(ledger); return {"status":"NOTHING_TO_SETTLE","settled":0,"pending":0}
     dates=sorted(set(pending["kickoff_utc"].dt.strftime("%Y-%m-%d").tolist()))
