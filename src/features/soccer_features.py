@@ -51,7 +51,11 @@ def _summarize(games: deque, window: int) -> dict[str, float]:
                 "gf_ewma": np.nan, "ga_ewma": np.nan, "gd_ewma": np.nan,
                 "points_ewma": np.nan, "gd_std": np.nan, "home_rate": np.nan,
                 "goal_total_avg": np.nan, "clean_sheet_rate": np.nan,
-                "failed_to_score_rate": np.nan}
+                "failed_to_score_rate": np.nan,
+                "home_venue_games": 0.0, "home_venue_gf": np.nan, "home_venue_ga": np.nan,
+                "home_venue_win_rate": np.nan, "home_venue_draw_rate": np.nan, "home_venue_loss_rate": np.nan,
+                "away_venue_games": 0.0, "away_venue_gf": np.nan, "away_venue_ga": np.nan,
+                "away_venue_win_rate": np.nan, "away_venue_draw_rate": np.nan, "away_venue_loss_rate": np.nan}
         base.update({f"{k}_avg": np.nan for k in STAT_KEYS})
         base.update({f"{k}_ewma": np.nan for k in STAT_KEYS})
         return base
@@ -73,6 +77,35 @@ def _summarize(games: deque, window: int) -> dict[str, float]:
         "clean_sheet_rate": float(np.mean([g == 0 for g in ga])),
         "failed_to_score_rate": float(np.mean([g == 0 for g in gf])),
     }
+
+    home_recent = [x for x in recent if x["venue"] == "H"]
+    away_recent = [x for x in recent if x["venue"] == "A"]
+
+    def _venue_summary(items: list[dict]) -> tuple[float, float, float, float, float, float, float]:
+        if not items:
+            return 0.0, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
+        venue_gf = [float(x["gf"]) for x in items]
+        venue_ga = [float(x["ga"]) for x in items]
+        venue_pts = [int(x["points"]) for x in items]
+        n = float(len(items))
+        return (
+            n,
+            float(np.mean(venue_gf)),
+            float(np.mean(venue_ga)),
+            float(np.mean([p == 3 for p in venue_pts])),
+            float(np.mean([p == 1 for p in venue_pts])),
+            float(np.mean([p == 0 for p in venue_pts])),
+            float(np.mean([g + a for g, a in zip(venue_gf, venue_ga)])),
+        )
+
+    h_n, h_gf, h_ga, h_win, h_draw, h_loss, _ = _venue_summary(home_recent)
+    a_n, a_gf, a_ga, a_win, a_draw, a_loss, _ = _venue_summary(away_recent)
+    out.update({
+        "home_venue_games": h_n, "home_venue_gf": h_gf, "home_venue_ga": h_ga,
+        "home_venue_win_rate": h_win, "home_venue_draw_rate": h_draw, "home_venue_loss_rate": h_loss,
+        "away_venue_games": a_n, "away_venue_gf": a_gf, "away_venue_ga": a_ga,
+        "away_venue_win_rate": a_win, "away_venue_draw_rate": a_draw, "away_venue_loss_rate": a_loss,
+    })
     for k in STAT_KEYS:
         vals = [x.get(k, np.nan) for x in recent]
         out[f"{k}_avg"] = float(np.nanmean(vals)) if any(pd.notna(v) for v in vals) else np.nan
