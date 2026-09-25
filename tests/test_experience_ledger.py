@@ -68,3 +68,23 @@ def test_compute_metrics_includes_proper_probability_scores(tmp_path, monkeypatc
     assert float(row["rps"]) >= 0
     assert float(row["ece"]) >= 0
     assert int(row["probability_rows"]) == 3
+
+
+def test_compute_metrics_status_contains_monitoring_summary(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+    metrics_path = tmp_path / "metrics.csv"
+    status_path = tmp_path / "status.json"
+    monkeypatch.setattr(mod, "METRICS", metrics_path)
+    monkeypatch.setattr(mod, "STATUS", status_path)
+    ledger = pd.DataFrame([
+        {"kickoff_utc":"2026-09-01T10:00:00Z","actual_result":"H","p_home":0.8,"p_draw":0.1,"p_away":0.1,
+         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"model_version":"v1","competition":"EPL"},
+        {"kickoff_utc":"2026-09-02T10:00:00Z","actual_result":"D","p_home":0.1,"p_draw":0.8,"p_away":0.1,
+         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"model_version":"v1","competition":"EPL"},
+    ])
+    mod.compute_metrics(ledger)
+    import json
+    status = json.loads(status_path.read_text())
+    assert "summary" in status
+    assert status["summary"]["all"]["n"] == 2
+    assert "logloss" in status["summary"]["all"]
