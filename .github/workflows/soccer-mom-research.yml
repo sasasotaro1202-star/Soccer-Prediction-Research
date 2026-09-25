@@ -41,6 +41,11 @@ on:
         required: false
         default: "17"
         type: string
+      season_id:
+        description: "Pinned SofaScore season id"
+        required: false
+        default: "61627"
+        type: string
   schedule:
     - cron: "17 5 * * *"
 
@@ -106,6 +111,7 @@ jobs:
             --end "${{ inputs.end || '2025-06-01' }}" \
             --season-start-year "${{ inputs.season_start_year || '2024' }}" \
             --tournament-id "${{ inputs.tournament_id || '17' }}" \
+            --season-id "${{ inputs.season_id || '61627' }}" \
             --output-dir artifacts/mom_research
 
       - name: Verify MOM research report exists
