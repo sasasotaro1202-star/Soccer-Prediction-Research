@@ -393,6 +393,7 @@ jobs:
               with open(github_output, "a", encoding="utf-8") as fh:
                   fh.write(f"production_contract_passed={str(passed).lower()}\n")
           PY
+          exit "${contract_rc}"
       - name: Verify latest-main handoff before persistence
         id: latest_main_handoff
         if: always()
