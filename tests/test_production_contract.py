@@ -6,6 +6,7 @@ import numpy as np
 from sklearn.dummy import DummyClassifier
 
 from src.research.production_contract import evaluate_production_contract, write_contract_result
+from src.research.task_scope import build_task_scope_matrix
 
 
 def _write(path, value):
@@ -61,6 +62,7 @@ def _minimal_passing_artifacts(tmp_path):
         },
     })
     _write(tmp_path / "candidate_lock.json", {"locked_oos_untouched": True, "locked_oos_blocks": 2})
+    (tmp_path / "task_scope_matrix.json").write_text(json.dumps(build_task_scope_matrix()), encoding="utf-8")
     _write(tmp_path / "calibration_gate.json", {"status": "PASS", "temperature": 1.0, "calibration_rows": 120, "locked_oos_used_for_calibration": False})
     _write(tmp_path / "adoption_decision.json", {
         "status": "ADOPT",
