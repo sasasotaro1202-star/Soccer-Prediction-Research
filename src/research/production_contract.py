@@ -28,6 +28,7 @@ REQUIRED_ARTIFACTS = (
     "oos_temporal_integrity.json",
     "score_oos_temporal_integrity.json",
     "calibration_gate.json",
+    "task_scope_matrix.json",
 )
 PROVENANCE_ARTIFACTS = (
     "production_model.pkl",
@@ -61,6 +62,34 @@ def _csv_nonempty(root: Path, name: str) -> bool:
     if not path.exists() or path.stat().st_size == 0: return False
     try: return len(path.read_text(encoding="utf-8").splitlines()) >= 2
     except Exception: return False
+
+
+def _valid_task_scope_matrix(root: Path) -> bool:
+    path = root / "task_scope_matrix.json"
+    if not path.is_file() or path.stat().st_size <= 0:
+        return False
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    if not isinstance(value, list) or len(value) != 175:
+        return False
+    seen: set[tuple[str, str]] = set()
+    required_counts = {"Score": 3, "MOM": 4, "1X2": 1, "O/U": 2, "BTTS": 2}
+    for row in value:
+        if not isinstance(row, dict):
+            return False
+        competition = str(row.get("competition", "")).strip()
+        task = str(row.get("task", "")).strip()
+        key = (competition, task)
+        if not competition or task not in required_counts or key in seen:
+            return False
+        if int(row.get("output_count", -1)) != required_counts[task]:
+            return False
+        if row.get("production_eligible") is not False:
+            return False
+        seen.add(key)
+    return len(seen) == 175
 
 
 def _file_nonempty(root: Path, name: str) -> bool:
@@ -125,6 +154,7 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
     else:
         for name in REQUIRED_GATES:
             if gate_map.get(name) is not True: failures.append(name)
+    if not _valid_task_scope_matrix(root): failures.append("artifact:task_scope_matrix.json")
     for filename in REQUIRED_ARTIFACTS:
         if filename.endswith(".csv"):
             if not _csv_nonempty(root, filename): failures.append(f"artifact:{filename}")
