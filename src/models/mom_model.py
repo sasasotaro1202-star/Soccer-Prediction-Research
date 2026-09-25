@@ -32,6 +32,14 @@ MOM_FEATURE_COLUMNS = (
     "opponent_defense_strength",
     "position_attack_weight",
     "days_rest",
+    "match_relative_rating",
+    "match_relative_minutes",
+    "match_relative_goals_per90",
+    "match_relative_assists_per90",
+    "match_relative_key_passes_per90",
+    "match_relative_shots_per90",
+    "match_relative_starts_rate",
+    "match_relative_history_depth",
 )
 
 MOM_REQUIRED_COLUMNS = {
