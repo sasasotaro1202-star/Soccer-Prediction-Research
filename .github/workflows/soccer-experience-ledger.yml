@@ -77,6 +77,15 @@ jobs:
         run: |
           set -euo pipefail
           python -m scripts.experience_ledger settle --days-back "$DAYS_BACK"
+      - name: Generate durable experience status
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m scripts.experience_ledger status
+          test -s artifacts/experience_status.json
+          test -s artifacts/experience_metrics.csv
+
       - name: Publish experience metrics to job summary
         if: always()
         shell: bash
