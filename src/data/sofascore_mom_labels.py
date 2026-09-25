@@ -16,6 +16,7 @@ import unicodedata
 from datetime import datetime, timezone
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from src.data.external_fetch import ExternalFetcher
@@ -152,6 +153,283 @@ def fetch_mom_label(
         "source_content_sha256": hashlib.sha256(response.body).hexdigest(),
         "source": "sofascore_best_players_summary",
         "cache_hit": bool(getattr(response.metadata, "cache_hit", False)),
+    }
+
+
+def _extract_unique_tournaments(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+    seen: set[tuple[int, str]] = set()
+
+    def walk(value: Any) -> None:
+        if isinstance(value, dict):
+            items = value.get("uniqueTournaments")
+            if isinstance(items, list):
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    try:
+                        tid = int(item["id"])
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                    name = str(item.get("name") or "").strip()
+                    if name and (tid, name) not in seen:
+                        seen.add((tid, name))
+                        found.append(item)
+            for child in value.values():
+                if isinstance(child, (dict, list)):
+                    walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    walk(payload)
+    return found
+
+
+def fetch_unique_football_tournaments(*, fetcher: ExternalFetcher) -> tuple[list[dict[str, Any]], str]:
+    endpoints = (
+        f"{SOFASCORE_BASE}/sport/football/unique-tournaments",
+        f"{SOFASCORE_BASE}/config/unique-tournaments/en/football",
+        f"{SOFASCORE_FALLBACK_BASE}/sport/football/unique-tournaments",
+    )
+    errors: list[str] = []
+    for url in endpoints:
+        try:
+            response = fetcher.get("sofascore_unique_football_tournaments", url, headers=SOFASCORE_HEADERS)
+            tournaments = _extract_unique_tournaments(_parse_json(response.body))
+            if tournaments:
+                return tournaments, response.metadata.retrieved_at
+            errors.append(f"{url}: tournament list empty")
+        except Exception as exc:
+            errors.append(f"{url}: {type(exc).__name__}: {exc}")
+    raise RuntimeError("SofaScore football tournament discovery failed on all public endpoints: " + " | ".join(errors))
+
+
+def _sample_discovery_dates(dates_utc: list[str], *, max_dates: int = 5) -> list[str]:
+    """Choose deterministic, well-spread dates for event-based tournament discovery."""
+    values = sorted({str(x)[:10] for x in dates_utc if str(x).strip()})
+    if not values:
+        raise ValueError("at least one discovery date is required")
+    limit = max(2, int(max_dates))
+    if len(values) <= limit:
+        return values
+    indices = np.linspace(0, len(values) - 1, num=limit, dtype=int).tolist()
+    return [values[i] for i in indices]
+
+
+def discover_unique_tournament_from_scheduled_events(
+    dates_utc: list[str],
+    *,
+    names: list[str] | tuple[str, ...],
+    fetcher: ExternalFetcher,
+    category_names: list[str] | tuple[str, ...] = (),
+    max_dates: int = 5,
+) -> tuple[int, dict[str, Any]]:
+    """Resolve a tournament id from exact uniqueTournament objects in date-scoped events.
+
+    The registry-wide tournament endpoint can be unavailable in hosted runners.
+    This fallback uses real scheduled-event payloads on deterministic sample dates,
+    requires exact normalized tournament-name/slug matching, and accepts an id only
+    when the same id is observed on at least two independent dates.
+    """
+    requested = {_norm_team(name) for name in names if str(name).strip()}
+    category_requested = {_norm_team(name) for name in category_names if str(name).strip()}
+    if not requested:
+        raise ValueError("at least one tournament name is required")
+    sample_dates = _sample_discovery_dates(dates_utc, max_dates=max_dates)
+
+    observations: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for date_utc in sample_dates:
+        try:
+            events, retrieved_at = fetch_scheduled_events_for_date(date_utc, fetcher=fetcher)
+        except Exception as exc:
+            errors.append(f"{date_utc}: {type(exc).__name__}: {exc}")
+            continue
+
+        matches: list[tuple[int, str, str]] = []
+        for event in events:
+            tournament = event.get("uniqueTournament")
+            if not isinstance(tournament, dict):
+                continue
+            raw_name = str(tournament.get("name") or "").strip()
+            raw_slug = str(tournament.get("slug") or "").strip()
+            norm_name = _norm_team(raw_name)
+            norm_slug = _norm_team(raw_slug)
+            if norm_name not in requested and norm_slug not in requested:
+                continue
+            try:
+                tid = int(tournament["id"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            category = tournament.get("category")
+            category_name = (
+                _norm_team(category.get("name"))
+                if isinstance(category, dict)
+                else ""
+            )
+            matches.append((tid, raw_name, category_name))
+
+        by_id: dict[int, tuple[str, str]] = {}
+        for tid, raw_name, category_name in matches:
+            if tid not in by_id:
+                by_id[tid] = (raw_name, category_name)
+        if len(by_id) == 1:
+            tid, (raw_name, category_name) = next(iter(by_id.items()))
+            observations.append({
+                "date_utc": date_utc,
+                "tournament_id": tid,
+                "name": raw_name,
+                "category": category_name,
+                "retrieved_at_utc": retrieved_at,
+            })
+
+    counts = pd.Series([x["tournament_id"] for x in observations], dtype="int64").value_counts()
+    if counts.empty:
+        detail = " | ".join(errors) if errors else "no exact tournament observations"
+        raise RuntimeError(
+            "SofaScore event-based tournament discovery failed: "
+            f"dates={sample_dates}; {detail}"
+        )
+
+    candidate_ids = [int(tid) for tid, count in counts.items() if int(count) >= 2]
+    # Singleton competitions (for example a one-match super cup) can only
+    # provide one independent fixture date. Accept that case only when the
+    # exact tournament name/slug resolves to one id and no competing id exists.
+    if not candidate_ids and len(sample_dates) == 1 and len(counts) == 1:
+        candidate_ids = [int(counts.index[0])]
+    if category_requested and len(candidate_ids) > 1:
+        preferred = [
+            tid for tid in candidate_ids
+            if any(
+                obs["tournament_id"] == tid and obs["category"] in category_requested
+                for obs in observations
+            )
+        ]
+        if preferred:
+            candidate_ids = preferred
+    if len(candidate_ids) != 1:
+        raise RuntimeError(
+            "SofaScore event-based tournament discovery is ambiguous or insufficiently repeated: "
+            f"observations={observations}"
+        )
+
+    tournament_id = candidate_ids[0]
+    used = [x for x in observations if int(x["tournament_id"]) == tournament_id]
+    return tournament_id, {
+        "method": "SCHEDULED_EVENTS_UNIQUE_TOURNAMENT",
+        "sample_dates_utc": sample_dates,
+        "observations": used,
+        "independent_date_count": len(used),
+        "category_filter": sorted(category_requested),
+    }
+
+
+def resolve_unique_tournament_id(
+    tournaments: list[dict[str, Any]],
+    *,
+    names: list[str] | tuple[str, ...],
+    category_names: list[str] | tuple[str, ...] = (),
+) -> int:
+    requested = {_norm_team(name) for name in names if str(name).strip()}
+    category_requested = {_norm_team(name) for name in category_names if str(name).strip()}
+    if not requested:
+        raise ValueError("at least one tournament name is required")
+    candidates: list[dict[str, Any]] = []
+    for tournament in tournaments:
+        tid = tournament.get("id")
+        try:
+            int(tid)
+        except (TypeError, ValueError):
+            continue
+        if _norm_team(tournament.get("name")) in requested or _norm_team(tournament.get("slug")) in requested:
+            candidates.append(tournament)
+    if category_requested and len(candidates) > 1:
+        preferred = []
+        for tournament in candidates:
+            category = tournament.get("category")
+            category_name = _norm_team(category.get("name")) if isinstance(category, dict) else ""
+            if category_name in category_requested:
+                preferred.append(tournament)
+        if preferred:
+            candidates = preferred
+    ids = sorted({int(x["id"]) for x in candidates})
+    if len(ids) != 1:
+        raise RuntimeError(f"SofaScore tournament lookup is ambiguous or missing: names={sorted(requested)} ids={ids}")
+    return ids[0]
+
+
+def discover_unique_season_from_scheduled_events(
+    dates_utc: list[str],
+    *,
+    tournament_id: int,
+    season_start_year: int,
+    fetcher: ExternalFetcher,
+    max_dates: int = 5,
+) -> tuple[int, dict[str, Any]]:
+    """Resolve a season id from exact scheduled-event tournament/season objects."""
+    sample_dates = _sample_discovery_dates(dates_utc, max_dates=max_dates)
+    wanted_year = str(int(season_start_year))
+    observations: list[dict[str, Any]] = []
+    errors: list[str] = []
+
+    for date_utc in sample_dates:
+        try:
+            events, retrieved_at = fetch_scheduled_events_for_date(date_utc, fetcher=fetcher)
+        except Exception as exc:
+            errors.append(f"{date_utc}: {type(exc).__name__}: {exc}")
+            continue
+
+        ids_seen_on_date: set[int] = set()
+        for event in events:
+            tournament = event.get("uniqueTournament")
+            if not isinstance(tournament, dict):
+                continue
+            try:
+                event_tournament_id = int(tournament.get("id"))
+            except (TypeError, ValueError):
+                continue
+            if event_tournament_id != int(tournament_id):
+                continue
+            season = event.get("season")
+            if not isinstance(season, dict):
+                continue
+            raw_name = str(season.get("name") or "").strip()
+            raw_year = str(season.get("year") or "").strip()
+            if wanted_year not in raw_name and raw_year != wanted_year:
+                continue
+            try:
+                season_id = int(season["id"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            ids_seen_on_date.add(season_id)
+        if len(ids_seen_on_date) == 1:
+            season_id = next(iter(ids_seen_on_date))
+            observations.append({
+                "date_utc": date_utc,
+                "season_id": season_id,
+                "season_start_year": int(season_start_year),
+                "retrieved_at_utc": retrieved_at,
+            })
+
+    counts = pd.Series([x["season_id"] for x in observations], dtype="int64").value_counts()
+    candidate_ids = [int(season_id) for season_id, count in counts.items() if int(count) >= 2]
+    if not candidate_ids and len(sample_dates) == 1 and len(counts) == 1:
+        candidate_ids = [int(counts.index[0])]
+    if len(candidate_ids) != 1:
+        detail = " | ".join(errors) if errors else "no exact season observations"
+        raise RuntimeError(
+            "SofaScore event-based season discovery is ambiguous or insufficiently repeated: "
+            f"tournament={int(tournament_id)} season_start_year={int(season_start_year)} "
+            f"sample_dates={sample_dates} observations={observations}; {detail}"
+        )
+    season_id = candidate_ids[0]
+    used = [x for x in observations if int(x["season_id"]) == season_id]
+    return season_id, {
+        "method": "SCHEDULED_EVENTS_SEASON_FALLBACK",
+        "sample_dates_utc": sample_dates,
+        "observations": used,
+        "independent_date_count": len(used),
     }
 
 
