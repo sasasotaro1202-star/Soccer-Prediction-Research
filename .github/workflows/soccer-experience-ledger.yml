@@ -77,6 +77,30 @@ jobs:
         run: |
           set -euo pipefail
           python -m scripts.experience_ledger settle --days-back "$DAYS_BACK"
+      - name: Publish experience metrics to job summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -s artifacts/experience_status.json ]; then
+            echo "## Soccer performance" >> "$GITHUB_STEP_SUMMARY"
+            echo "No durable experience status was generated in this run." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          status = json.loads(Path("artifacts/experience_status.json").read_text(encoding="utf-8"))
+          summary = status.get("summary") or {}
+          deltas = status.get("metric_deltas_vs_previous") or {}
+          print("## Soccer performance")
+          for scope in ("all", "30d", "7d"):
+              row = summary.get(scope)
+              if not isinstance(row, dict): continue
+              print(f"- **{scope}**: n={row.get('n', 0)}, 1X2={row.get('1x2_accuracy_pct', 'NA')}%, LogLoss={row.get('logloss', 'NA')}, Brier={row.get('brier', 'NA')}, RPS={row.get('rps', 'NA')}, ECE={row.get('ece', 'NA')}")
+              if scope in deltas: print(f"  - **changed vs previous**: {deltas[scope]}")
+          if not deltas: print("- **No metric change vs previous durable status detected.**")
+          PY
       - name: Commit durable experience
         shell: bash
         run: |
