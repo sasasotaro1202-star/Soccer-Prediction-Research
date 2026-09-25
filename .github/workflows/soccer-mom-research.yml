@@ -8,7 +8,9 @@ on:
       - "src/evaluation/mom_walk_forward.py"
       - "src/data/mom_player_history_adapter.py"
       - "src/data/sofascore_mom_labels.py"
+      - "src/data/fotmob_mom_labels.py"
       - "scripts/run_mom_research.py"
+      - "tests/test_fotmob_mom_labels.py"
       - ".github/workflows/soccer-mom-research.yml"
   pull_request:
     branches: [main]
@@ -17,7 +19,9 @@ on:
       - "src/evaluation/mom_walk_forward.py"
       - "src/data/mom_player_history_adapter.py"
       - "src/data/sofascore_mom_labels.py"
+      - "src/data/fotmob_mom_labels.py"
       - "scripts/run_mom_research.py"
+      - "tests/test_fotmob_mom_labels.py"
       - ".github/workflows/soccer-mom-research.yml"
   workflow_dispatch:
     inputs:
