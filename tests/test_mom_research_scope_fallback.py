@@ -24,6 +24,8 @@ def test_scope_resolver_uses_event_fallbacks_when_registries_fail(monkeypatch):
             "independent_date_count": 2,
         }
 
+    # Force the registry/event fallback path under test; production keeps the verified static ID fast path.
+    monkeypatch.delitem(runner.SOFASCORE_STATIC_TOURNAMENT_IDS, "EPL", raising=False)
     monkeypatch.setattr(runner, "fetch_unique_football_tournaments", registry_tournaments)
     monkeypatch.setattr(runner, "discover_unique_tournament_from_scheduled_events", event_tournament)
     monkeypatch.setattr(runner, "fetch_unique_tournament_seasons", registry_seasons)
