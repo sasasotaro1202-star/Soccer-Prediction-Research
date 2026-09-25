@@ -25,6 +25,7 @@ from src.data.pit_jleague_2020_github import apply_jleague_2020_github_pit
 from src.data.pit_footballcsv_espana import apply_footballcsv_espana_pit
 from src.data.pit_footballcsv_weekly import apply_footballcsv_weekly_pit
 from src.data.pit_footballcsv_italy import apply_footballcsv_italy_pit
+from src.research.task_scope import build_task_scope_matrix
 
 SEASONS = [f"{y}/{str(y + 1)[-2:]}" for y in range(2010, 2026)]
 CANONICAL_SOURCES = {
@@ -498,6 +499,9 @@ def run_completion_gate(artifact_dir: str = "artifacts") -> dict:
         result["blocking_reasons"].append(f"PIT replay preflight failed: {pit_preflight_error}")
     elif not pit_gate:
         result["blocking_reasons"].append("insufficient PIT-verified replay rows using explicit archived publication evidence")
+    (root / "task_scope_matrix.json").write_text(
+        json.dumps(build_task_scope_matrix(), indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     serialized = json.dumps(result, indent=2, ensure_ascii=False, default=str)
     (root / "completion_gate.json").write_text(serialized, encoding="utf-8")
     # Research consumes a distinct audit-gate artifact. It is intentionally derived
