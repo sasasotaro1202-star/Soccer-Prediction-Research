@@ -419,5 +419,10 @@ def main():
     sub.add_parser("metrics"); args=p.parse_args()
     if args.command=="record": print(json.dumps(record_prediction_file(args.predictions,args.prediction_time),ensure_ascii=False,default=str))
     elif args.command=="settle": print(json.dumps(settle_predictions(args.days_back),ensure_ascii=False,default=str))
-    else: print(json.dumps({"status":"METRICS","rows":compute_metrics()},ensure_ascii=False,default=str))
+    elif args.command=="metrics": print(json.dumps({"status":"METRICS","rows":compute_metrics()},ensure_ascii=False,default=str))
+    else:
+        rows = compute_metrics()
+        if not STATUS.is_file() or STATUS.stat().st_size == 0:
+            raise RuntimeError("experience status was not generated")
+        print(json.dumps({"status":"STATUS","rows":rows,"status_file":str(STATUS)},ensure_ascii=False,default=str))
 if __name__=="__main__": raise SystemExit(main())
