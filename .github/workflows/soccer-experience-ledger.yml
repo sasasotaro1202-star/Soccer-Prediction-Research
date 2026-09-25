@@ -1,0 +1,53 @@
+name: Soccer Experience Ledger
+
+on:
+  schedule:
+    - cron: "5 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      days_back:
+        description: "Completed-match history window to settle"
+        required: false
+        default: "14"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soccer-experience-ledger
+  cancel-in-progress: false
+
+jobs:
+  settle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+      - name: Settle completed predictions and refresh metrics
+        env:
+          PYTHONPATH: .
+          DAYS_BACK: ${{ inputs.days_back || '14' }}
+        run: |
+          set -euo pipefail
+          python -m scripts.experience_ledger settle --days-back "$DAYS_BACK"
+      - name: Commit durable experience
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "soccer-experience-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/experience/prediction_ledger.csv artifacts/experience_metrics.csv artifacts/experience_status.json
+          if git diff --cached --quiet; then
+            echo "No experience changes to commit."
+            exit 0
+          fi
+          git commit -m "ops: persist prediction experience and performance metrics"
+          git push origin main
