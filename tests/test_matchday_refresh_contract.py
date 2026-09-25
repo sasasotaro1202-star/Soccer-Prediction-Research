@@ -1,4 +1,10 @@
 from pathlib import Path
+import re
+
+
+def _has_immutable_action_pin(workflow: str, action: str) -> bool:
+    pattern = rf"uses:\s+{re.escape(action)}@[0-9a-f]{{40}}(?:\s|$)"
+    return re.search(pattern, workflow) is not None
 
 
 def test_matchday_refresh_contract_is_read_only_and_quarter_hourly():
@@ -9,6 +15,6 @@ def test_matchday_refresh_contract_is_read_only_and_quarter_hourly():
     assert 'workflows: ["Soccer 9H Autonomous Research"]' in content
     assert "contents: read" in content
     assert "cancel-in-progress: false" in content
-    assert "upload-artifact@v6" in content
+    assert _has_immutable_action_pin(content, "actions/upload-artifact")
     assert "path: |" in content
     assert "artifacts/future_matchday_fixtures.csv" in content
