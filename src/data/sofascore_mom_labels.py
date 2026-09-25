@@ -155,6 +155,89 @@ def fetch_mom_label(
     }
 
 
+def _extract_unique_tournaments(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+    seen: set[tuple[int, str]] = set()
+
+    def walk(value: Any) -> None:
+        if isinstance(value, dict):
+            items = value.get("uniqueTournaments")
+            if isinstance(items, list):
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    try:
+                        tid = int(item["id"])
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                    name = str(item.get("name") or "").strip()
+                    if name and (tid, name) not in seen:
+                        seen.add((tid, name))
+                        found.append(item)
+            for child in value.values():
+                if isinstance(child, (dict, list)):
+                    walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    walk(payload)
+    return found
+
+
+def fetch_unique_football_tournaments(*, fetcher: ExternalFetcher) -> tuple[list[dict[str, Any]], str]:
+    endpoints = (
+        f"{SOFASCORE_BASE}/sport/football/unique-tournaments",
+        f"{SOFASCORE_BASE}/config/unique-tournaments/en/football",
+        f"{SOFASCORE_FALLBACK_BASE}/sport/football/unique-tournaments",
+    )
+    errors: list[str] = []
+    for url in endpoints:
+        try:
+            response = fetcher.get("sofascore_unique_football_tournaments", url, headers=SOFASCORE_HEADERS)
+            tournaments = _extract_unique_tournaments(_parse_json(response.body))
+            if tournaments:
+                return tournaments, response.metadata.retrieved_at
+            errors.append(f"{url}: tournament list empty")
+        except Exception as exc:
+            errors.append(f"{url}: {type(exc).__name__}: {exc}")
+    raise RuntimeError("SofaScore football tournament discovery failed on all public endpoints: " + " | ".join(errors))
+
+
+def resolve_unique_tournament_id(
+    tournaments: list[dict[str, Any]],
+    *,
+    names: list[str] | tuple[str, ...],
+    category_names: list[str] | tuple[str, ...] = (),
+) -> int:
+    requested = {_norm_team(name) for name in names if str(name).strip()}
+    category_requested = {_norm_team(name) for name in category_names if str(name).strip()}
+    if not requested:
+        raise ValueError("at least one tournament name is required")
+    candidates: list[dict[str, Any]] = []
+    for tournament in tournaments:
+        tid = tournament.get("id")
+        try:
+            int(tid)
+        except (TypeError, ValueError):
+            continue
+        if _norm_team(tournament.get("name")) in requested or _norm_team(tournament.get("slug")) in requested:
+            candidates.append(tournament)
+    if category_requested and len(candidates) > 1:
+        preferred = []
+        for tournament in candidates:
+            category = tournament.get("category")
+            category_name = _norm_team(category.get("name")) if isinstance(category, dict) else ""
+            if category_name in category_requested:
+                preferred.append(tournament)
+        if preferred:
+            candidates = preferred
+    ids = sorted({int(x["id"]) for x in candidates})
+    if len(ids) != 1:
+        raise RuntimeError(f"SofaScore tournament lookup is ambiguous or missing: names={sorted(requested)} ids={ids}")
+    return ids[0]
+
+
 def fetch_unique_tournament_seasons(
     tournament_id: int,
     *,

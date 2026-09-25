@@ -14,6 +14,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from src.data.competition_catalog import COMPETITION_CATALOG
+from src.data.competition_sources import TARGET_COMPETITIONS
 from src.data.mom_player_history_adapter import (
     SOCCER_DATASET_COMMIT,
     SOCCER_DATASET_LICENSE,
@@ -26,6 +28,10 @@ from src.data.mom_player_history_adapter import (
 from src.data.sofascore_mom_labels import (
     collect_sofascore_mom_labels,
     collect_sofascore_mom_labels_tournament_season,
+    fetch_unique_football_tournaments,
+    resolve_unique_tournament_id,
+    fetch_unique_tournament_seasons,
+    select_season_id,
     label_data_contract_report,
 )
 from src.data.fotmob_mom_labels import (
@@ -50,11 +56,68 @@ DEFAULT_END = "2025-06-01"
 # Keep this explicit for PIT/reproducibility; do not discover it from a challenge-prone endpoint.
 DEFAULT_SOFASCORE_SEASON_ID = 61627
 
+DATASET_NAME_ALIASES = {
+    "EPL": ("Premier League",), "ERE": ("Eredivisie",), "LL": ("LaLiga", "La Liga"),
+    "SA": ("Serie A",), "BL1": ("Bundesliga",), "FL1": ("Ligue 1",),
+    "J1": ("J1 League", "J.League"), "J2": ("J2 League", "J.League 2"), "J3": ("J3 League", "J.League 3"),
+    "UCL": ("UEFA Champions League", "Champions League"), "UEL": ("UEFA Europa League", "Europa League"), "UECL": ("UEFA Conference League", "Conference League"),
+    "UEFA_SUPER_CUP": ("UEFA Super Cup",), "UEFA_YOUTH_LEAGUE": ("UEFA Youth League",),
+    "UWCL": ("UEFA Women's Champions League", "Women's Champions League"), "UWEC": ("UEFA Women's Europa Cup", "Women's Europa League"),
+    "UEFA_EURO_M": ("European Championship", "UEFA European Championship"), "UEFA_EURO_QUALI_M": ("European Championship Qualification", "UEFA European Qualifiers"),
+    "UEFA_NATIONS_LEAGUE_M": ("UEFA Nations League",), "UEFA_EURO_W": ("Women's European Championship", "UEFA Women's European Championship"),
+    "UEFA_EURO_QUALI_W": ("Women's European Championship Qualification", "UEFA Women's European Qualifiers"), "UEFA_NATIONS_LEAGUE_W": ("UEFA Women's Nations League", "Women's Nations League"),
+    "UEFA_U21": ("UEFA European Under-21 Championship", "European U-21 Championship"), "UEFA_U19": ("UEFA European Under-19 Championship",), "UEFA_U17": ("UEFA European Under-17 Championship",),
+    "UEFA_WU19": ("UEFA Women's Under-19 Championship",), "UEFA_WU17": ("UEFA Women's Under-17 Championship",), "UEFA_REGIONS_CUP": ("UEFA Regions' Cup",),
+    "EMP_CUP": ("Emperor's Cup", "Japan FA Cup"), "INTL_M": ("Friendlies", "International Friendlies", "International Friendly"), "INTL_W": ("Women's Friendlies", "International Friendlies Women"),
+    "U23_M": ("International U23", "U-23"), "U18_M": ("International U18", "U-18"), "AG_M": ("Asian Games", "Asian Games Men"), "AG_W": ("Asian Games", "Asian Games Women"),
+}
+
+
+def _competition_spec(code: str):
+    code = str(code).strip()
+    if code not in TARGET_COMPETITIONS:
+        raise ValueError(f"Unsupported active competition code: {code!r}")
+    matches = [x for x in COMPETITION_CATALOG if x.code == code]
+    if len(matches) != 1:
+        raise RuntimeError(f"Competition catalog is inconsistent for {code!r}")
+    return matches[0]
+
+
+def _resolve_dataset_league_ids(con, dataset_base: str, competition_code: str) -> list[int]:
+    spec = _competition_spec(competition_code)
+    names = list(dict.fromkeys((spec.name, *DATASET_NAME_ALIASES.get(competition_code, ()))))
+    values = ", ".join("'" + str(x).replace("'", "''").lower() + "'" for x in names)
+    rows = con.execute(f"SELECT id, name, country FROM read_parquet('{dataset_base}/leagues.parquet') WHERE lower(name) IN ({values}) ORDER BY id").fetchdf()
+    if rows.empty:
+        return []
+    records = rows.to_dict(orient="records")
+    region = str(spec.region).strip().lower()
+    preferred = [x for x in records if str(x.get("country") or "").strip().lower() == region]
+    selected = preferred if preferred else records
+    return [int(x) for x in pd.to_numeric(pd.Series([x["id"] for x in selected]), errors="coerce").dropna().astype(int)]
+
+
+def _resolve_sofascore_scope(competition_code: str, season_start_year: int, *, tournament_id: int | None, season_id: int | None, fetcher: ExternalFetcher) -> tuple[int, int, dict[str, Any]]:
+    spec = _competition_spec(competition_code)
+    meta: dict[str, Any] = {"competition": competition_code, "tournament_discovery": "DYNAMIC_EXACT_NAME"}
+    if tournament_id is None:
+        tournaments, retrieved_at = fetch_unique_football_tournaments(fetcher=fetcher)
+        tournament_id = resolve_unique_tournament_id(tournaments, names=[str(spec.name), *DATASET_NAME_ALIASES.get(competition_code, ())], category_names=[str(spec.region), str(spec.competition_type)])
+        meta["tournament_registry_retrieved_at_utc"] = retrieved_at
+    meta["tournament_id"] = int(tournament_id)
+    if season_id is None:
+        seasons, retrieved_at = fetch_unique_tournament_seasons(int(tournament_id), fetcher=fetcher)
+        season_id = select_season_id(seasons, int(season_start_year))
+        meta["season_registry_retrieved_at_utc"] = retrieved_at
+    meta["season_id"] = int(season_id)
+    return int(tournament_id), int(season_id), meta
+
 
 def _load_frames(
     start: str,
     end: str,
     *,
+    competition_code: str = "EPL",
     history_start: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     try:
@@ -84,6 +147,11 @@ def _load_frames(
             # below is the authoritative check.
             pass
 
+        league_ids = _resolve_dataset_league_ids(con, dataset_base, competition_code)
+        if not league_ids:
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        league_ids_sql = ", ".join(str(x) for x in league_ids)
+
         fixture_sql = f"""
             SELECT
                 f.id,
@@ -102,9 +170,7 @@ def _load_frames(
               ON f.home_team_id = ht.id
             JOIN read_parquet('{dataset_base}/teams.parquet') away_team_ref
               ON f.away_team_id = away_team_ref.id
-            WHERE l.api_football_id = 39
-              AND lower(l.name) = 'premier league'
-              AND lower(l.country) = 'england'
+            WHERE f.league_id IN ({league_ids_sql})
               AND f.is_played = TRUE
               AND CAST(f.date_utc AS TIMESTAMP) >= TIMESTAMP '{history_start_ts.strftime("%Y-%m-%d %H:%M:%S")}'
               AND CAST(f.date_utc AS TIMESTAMP) < TIMESTAMP '{target_end.strftime("%Y-%m-%d %H:%M:%S")}'
@@ -112,7 +178,7 @@ def _load_frames(
         """
         fixtures = con.execute(fixture_sql).fetchdf()
         if fixtures.empty:
-            raise RuntimeError("No EPL fixtures found in the pinned dataset window")
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
         con.register("target_fixture_ids", fixtures[["id"]].rename(columns={"id": "fixture_id"}))
 
@@ -286,24 +352,27 @@ def run(
     start: str = DEFAULT_START,
     end: str = DEFAULT_END,
     season_start_year: int = DEFAULT_SEASON_START_YEAR,
-    tournament_id: int = DEFAULT_TOURNAMENT_ID,
-    season_id: int = DEFAULT_SOFASCORE_SEASON_ID,
+    competition_code: str = "EPL",
+    tournament_id: int | None = None,
+    season_id: int | None = None,
     output_dir: str = "artifacts/mom_research",
 ) -> int:
     root = Path(output_dir)
     root.mkdir(parents=True, exist_ok=True)
+    spec = _competition_spec(competition_code)
     report: dict[str, Any] = {
         "status": "STARTING",
         "production_adopted": False,
+        "competition": {"code": str(competition_code), "name": str(spec.name), "region": str(spec.region), "type": str(spec.competition_type)},
         "dataset": {
             "repository": SOCCER_DATASET_REPOSITORY,
             "commit": SOCCER_DATASET_COMMIT,
             "license": SOCCER_DATASET_LICENSE,
         },
         "target": {
-            "tournament_id": int(tournament_id),
+            "tournament_id": None,
             "season_start_year": int(season_start_year),
-            "season_id": int(season_id),
+            "season_id": None,
             "start": start,
             "end": end,
             "history_start": None,
@@ -312,17 +381,41 @@ def run(
 
     history_start = (pd.Timestamp(start) - pd.Timedelta(days=370)).strftime("%Y-%m-%d")
     report["target"]["history_start"] = history_start
+    fetcher = ExternalFetcher(cache_dir=str(root / "cache"), retries=3)
+    try:
+        tournament_id, season_id, scope_meta = _resolve_sofascore_scope(
+            competition_code,
+            int(season_start_year),
+            tournament_id=tournament_id,
+            season_id=season_id,
+            fetcher=fetcher,
+        )
+    except (RuntimeError, ValueError) as exc:
+        report["status"] = "DEFERRED_SCOPE_RESOLUTION"
+        report["scope_resolution_error"] = f"{type(exc).__name__}: {exc}"
+        (root / "mom_research_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+        return 0
+    report["target"]["tournament_id"] = int(tournament_id)
+    report["target"]["season_id"] = int(season_id)
+    report["scope_resolution"] = scope_meta
     fixtures, player_matches, player_stats, match_stats = _load_frames(
         start,
         end,
+        competition_code=competition_code,
         history_start=history_start,
     )
+    if fixtures.empty:
+        report["status"] = "DEFERRED_NO_COMPETITION_FIXTURES"
+        (root / "mom_research_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+        return 0
     target_fixtures = fixtures.loc[
         (pd.to_datetime(fixtures["date_utc"], utc=True) >= pd.Timestamp(start, tz="UTC"))
         & (pd.to_datetime(fixtures["date_utc"], utc=True) < pd.Timestamp(end, tz="UTC"))
     ].copy()
     if target_fixtures.empty:
-        raise RuntimeError("No target EPL fixtures found after history expansion")
+        report["status"] = "DEFERRED_NO_TARGET_FIXTURES"
+        (root / "mom_research_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+        return 0
     features = build_mom_feature_rows(
         fixtures,
         player_matches,
@@ -381,6 +474,8 @@ def run(
         # content.matchFacts.playerOfTheMatch, but its player ids are provider-
         # specific and must be reconciled against the PIT-safe candidate rows.
         try:
+            if str(competition_code) != "EPL":
+                raise RuntimeError("FotMob fallback is pinned to EPL; other competitions remain SofaScore/proxy only")
             labels = collect_fotmob_mom_labels(
                 label_fixtures,
                 league_id=DEFAULT_FOTMOB_LEAGUE_ID,
@@ -551,14 +646,16 @@ def main() -> int:
     parser.add_argument("--start", default=DEFAULT_START)
     parser.add_argument("--end", default=DEFAULT_END)
     parser.add_argument("--season-start-year", type=int, default=DEFAULT_SEASON_START_YEAR)
-    parser.add_argument("--tournament-id", type=int, default=DEFAULT_TOURNAMENT_ID)
-    parser.add_argument("--season-id", type=int, default=DEFAULT_SOFASCORE_SEASON_ID)
+    parser.add_argument("--competition-code", default="EPL")
+    parser.add_argument("--tournament-id", type=int, default=None)
+    parser.add_argument("--season-id", type=int, default=None)
     parser.add_argument("--output-dir", default="artifacts/mom_research")
     args = parser.parse_args()
     return run(
         start=args.start,
         end=args.end,
         season_start_year=args.season_start_year,
+        competition_code=args.competition_code,
         tournament_id=args.tournament_id,
         season_id=args.season_id,
         output_dir=args.output_dir,

@@ -7,6 +7,8 @@ from src.data.sofascore_mom_labels import (
     _event_candidates,
     _extract_player_of_match,
     _norm_team,
+    fetch_unique_football_tournaments,
+    resolve_unique_tournament_id,
     collect_sofascore_mom_labels,
     fetch_tournament_season_events_by_rounds,
     label_data_contract_report,
@@ -282,3 +284,32 @@ def test_round_event_fallback_fails_closed_on_missing_payload():
         m.fetch_tournament_season_events_by_rounds(
             17, 61627, fetcher=FakeFetcher(), max_rounds=2, request_delay_seconds=0
         )
+
+
+def test_tournament_resolver_is_exact_and_category_aware():
+    tournaments = [
+        {"id": 1, "name": "Premier League", "category": {"name": "England"}},
+        {"id": 2, "name": "Premier League", "category": {"name": "Other"}},
+    ]
+    assert resolve_unique_tournament_id(
+        tournaments,
+        names=["Premier League"],
+        category_names=["England"],
+    ) == 1
+    with pytest.raises(RuntimeError, match="ambiguous or missing"):
+        resolve_unique_tournament_id(tournaments, names=["Premier League"])
+
+
+def test_tournament_registry_extraction_fails_closed_without_list(monkeypatch):
+    import src.data.sofascore_mom_labels as m
+
+    class Response:
+        body = json.dumps({"unexpected": []}).encode()
+        metadata = type("Meta", (), {"retrieved_at": "2026-09-25T13:00:00Z"})()
+
+    class FakeFetcher:
+        def get(self, source, url, **kwargs):
+            return Response()
+
+    with pytest.raises(RuntimeError, match="discovery failed"):
+        fetch_unique_football_tournaments(fetcher=FakeFetcher())

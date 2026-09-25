@@ -40,16 +40,6 @@ on:
         required: false
         default: "2024"
         type: string
-      tournament_id:
-        description: "SofaScore unique tournament id"
-        required: false
-        default: "17"
-        type: string
-      season_id:
-        description: "Pinned SofaScore season id"
-        required: false
-        default: "61627"
-        type: string
   schedule:
     - cron: "17 5 * * *"
 
@@ -57,11 +47,51 @@ permissions:
   contents: read
 
 concurrency:
-  group: soccer-mom-research-${{ github.event.pull_request.head.sha || github.sha }}
+  group: soccer-mom-research-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.start || '2024-08-01' }}-${{ inputs.end || '2025-06-01' }}
   cancel-in-progress: false
 
 jobs:
   research:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        competition:
+          - EPL
+          - AG_M
+          - AG_W
+          - ERE
+          - LL
+          - SA
+          - BL1
+          - J1
+          - J2
+          - J3
+          - FL1
+          - UCL
+          - UEL
+          - UECL
+          - UEFA_SUPER_CUP
+          - UEFA_YOUTH_LEAGUE
+          - UWCL
+          - UWEC
+          - UEFA_EURO_M
+          - UEFA_EURO_QUALI_M
+          - UEFA_NATIONS_LEAGUE_M
+          - UEFA_EURO_W
+          - UEFA_EURO_QUALI_W
+          - UEFA_NATIONS_LEAGUE_W
+          - UEFA_U21
+          - UEFA_U19
+          - UEFA_U17
+          - UEFA_WU19
+          - UEFA_WU17
+          - UEFA_REGIONS_CUP
+          - EMP_CUP
+          - INTL_M
+          - INTL_W
+          - U23_M
+          - U18_M
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
@@ -109,26 +139,25 @@ jobs:
           PYTHONHASHSEED: "0"
           PYTHONPATH: "."
         run: |
-          mkdir -p artifacts
+          mkdir -p "artifacts/mom_research/${{ matrix.competition }}"
           python scripts/run_mom_research.py \
             --start "${{ inputs.start || '2024-08-01' }}" \
             --end "${{ inputs.end || '2025-06-01' }}" \
             --season-start-year "${{ inputs.season_start_year || '2024' }}" \
-            --tournament-id "${{ inputs.tournament_id || '17' }}" \
-            --season-id "${{ inputs.season_id || '61627' }}" \
-            --output-dir artifacts/mom_research
+            --competition-code "${{ matrix.competition }}" \
+            --output-dir "artifacts/mom_research/${{ matrix.competition }}"
 
       - name: Verify MOM research report exists
         shell: bash
         run: |
           set -euo pipefail
-          test -s artifacts/mom_research/mom_research_report.json
+          test -s "artifacts/mom_research/${{ matrix.competition }}/mom_research_report.json"
 
       - name: Upload MOM research artifacts
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: soccer-mom-research-${{ github.run_id }}
-          path: artifacts/mom_research/
+          name: soccer-mom-research-${{ github.run_id }}-${{ matrix.competition }}
+          path: "artifacts/mom_research/${{ matrix.competition }}/"
           retention-days: 7
           if-no-files-found: error
