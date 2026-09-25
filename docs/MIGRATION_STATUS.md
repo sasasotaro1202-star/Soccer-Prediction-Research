@@ -23,7 +23,7 @@ This repository is the research-controlled soccer system. The legacy production 
 | Legacy workflows | MERGE/RETIRE gradually | Do not run duplicate research loops after parity is proven |
 
 ## Current implementation
-1. Competition contract for 15 fixed competitions.
+1. Active competition contract for all 35 declared target competitions/leagues; each target is audited even when a source is currently unavailable.
 2. Football-Data historical acquisition adapter for seven mapped competitions.
 3. Coverage matrix with explicit unavailable status for unmapped competitions.
 4. PIT gate that refuses to substitute retrieval time for source availability time.
@@ -37,6 +37,7 @@ This repository is the research-controlled soccer system. The legacy production 
 12. Research Engine V9 runner and locked same-OOS comparator.
 13. V12 advisory wrapper; V12 has no promotion authority.
 14. GitHub Actions automated research cycle.
+15. MOM research candidate remains research-only until chronological OOS, Top-4 ranking performance, calibration, robustness, and locked-holdout evidence pass.
 
 ## Current blocker
 The current Football-Data adapter intentionally records `source_available_at_utc` as unknown. Therefore the Research Engine must report `BLOCKED` for PIT/OOS/adoption until source availability can be proven or a source adapter with auditable publication timestamps is added.
