@@ -191,3 +191,19 @@ def test_conditional_mom_model_uses_fixture_level_choice_structure():
 def test_feature_names_are_outcome_free():
     forbidden = {"motm", "player_of_the_match", "final", "result", "match_rating"}
     assert not any(any(token in c.lower() for token in forbidden) for c in MOM_FEATURE_COLUMNS)
+
+
+def test_dataset_rating_proxy_label_is_explicit_and_outcome_only():
+    from scripts.run_mom_research import _build_dataset_rating_proxy_labels
+
+    player_matches = pd.DataFrame([
+        {"fixture_id": 10, "player_id": 1, "player_name": "A", "rating": 7.1, "minutes": 90},
+        {"fixture_id": 10, "player_id": 2, "player_name": "B", "rating": 7.8, "minutes": 80},
+        {"fixture_id": 10, "player_id": 3, "player_name": "C", "rating": 7.8, "minutes": 70},
+    ])
+    target_fixtures = pd.DataFrame([{"id": 10}])
+    labels = _build_dataset_rating_proxy_labels(player_matches, target_fixtures)
+    assert labels.loc[0, "label_status"] == "LABEL_FOUND"
+    assert labels.loc[0, "label_source"] == "dataset_rating_top_performer_proxy"
+    assert labels.loc[0, "player_id"] == "2"
+    assert labels.loc[0, "event_id"] == "dataset-rating-proxy:10"
