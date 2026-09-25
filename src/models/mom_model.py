@@ -151,20 +151,52 @@ class MissingnessAwareMOMTransformer:
 
     def fit(self, frame: pd.DataFrame, y: Any = None) -> "MissingnessAwareMOMTransformer":
         x = frame[list(MOM_FEATURE_COLUMNS)].apply(pd.to_numeric, errors="coerce")
-        self.medians_ = x.median(axis=0, skipna=True).to_numpy(dtype=float)
-        if not np.isfinite(self.medians_).all():
-            bad = [c for c, v in zip(MOM_FEATURE_COLUMNS, self.medians_) if not np.isfinite(v)]
-            raise RuntimeError(f"MOM imputation cannot learn medians for all-missing features: {bad}")
+        values = x.to_numpy(dtype=float)
+        observed_any = np.isfinite(values).any(axis=0)
+
+        # A feature that is completely absent in a chronological training slice
+        # cannot have a data-derived imputation value. Do not invent a zero or
+        # other arbitrary performance value: retain its missingness flag but
+        # suppress the unavailable value channel for that fitted model.
+        self.active_mask_ = observed_any.astype(bool)
+        medians = np.full(len(MOM_FEATURE_COLUMNS), np.nan, dtype=float)
+        if bool(self.active_mask_.any()):
+            medians[self.active_mask_] = np.nanmedian(
+                values[:, self.active_mask_], axis=0
+            )
+        self.medians_ = medians
+        self.inactive_feature_columns_ = tuple(
+            col for col, active in zip(MOM_FEATURE_COLUMNS, self.active_mask_) if not active
+        )
         return self
 
     def transform(self, frame: pd.DataFrame) -> np.ndarray:
-        if not hasattr(self, "medians_"):
+        if not hasattr(self, "medians_") or not hasattr(self, "active_mask_"):
             raise RuntimeError("MOM imputer is not fitted")
         x = frame[list(MOM_FEATURE_COLUMNS)].apply(pd.to_numeric, errors="coerce")
         values = x.to_numpy(dtype=float)
         missing = ~np.isfinite(values)
-        filled = np.where(missing, self.medians_[None, :], values)
-        out = np.concatenate([filled, missing.astype(float)], axis=1)
+
+        active = self.active_mask_
+        if bool(active.any()):
+            active_values = values[:, active]
+            active_missing = missing[:, active]
+            active_medians = self.medians_[active]
+            filled_active = np.where(
+                active_missing,
+                active_medians[None, :],
+                active_values,
+            )
+            value_channel = filled_active
+            if not np.isfinite(value_channel).all():
+                raise RuntimeError("MOM imputation produced non-finite active feature values")
+        else:
+            value_channel = np.empty((len(values), 0), dtype=float)
+
+        # Always retain an explicit missingness channel for every original
+        # feature. Inactive features therefore contribute only their observed/
+        # missing status, never a fabricated performance value.
+        out = np.concatenate([value_channel, missing.astype(float)], axis=1)
         if not np.isfinite(out).all():
             raise RuntimeError("MOM imputation produced non-finite features")
         return out
