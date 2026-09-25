@@ -67,7 +67,7 @@ DATASET_NAME_ALIASES = {
     "UEFA_EURO_QUALI_W": ("Women's European Championship Qualification", "UEFA Women's European Qualifiers"), "UEFA_NATIONS_LEAGUE_W": ("UEFA Women's Nations League", "Women's Nations League"),
     "UEFA_U21": ("UEFA European Under-21 Championship", "European U-21 Championship"), "UEFA_U19": ("UEFA European Under-19 Championship",), "UEFA_U17": ("UEFA European Under-17 Championship",),
     "UEFA_WU19": ("UEFA Women's Under-19 Championship",), "UEFA_WU17": ("UEFA Women's Under-17 Championship",), "UEFA_REGIONS_CUP": ("UEFA Regions' Cup",),
-    "EMP_CUP": ("Emperor's Cup", "Japan FA Cup"), "INTL_M": ("Friendies", "International Friendlies", "International Friendly"), "INTL_W": ("Women's Friendlies", "International Friendlies Women"),
+    "EMP_CUP": ("Emperor's Cup", "Japan FA Cup"), "INTL_M": ("Friendlies", "International Friendlies", "International Friendly"), "INTL_W": ("Women's Friendlies", "International Friendlies Women"),
     "U23_M": ("International U23", "U-23"), "U18_M": ("International U18", "U-18"), "AG_M": ("Asian Games", "Asian Games Men"), "AG_W": ("Asian Games", "Asian Games Women"),
 }
 
