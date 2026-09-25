@@ -479,10 +479,19 @@ def run(
         method="hist_gbdt",
     )
     hist_gbdt_summary = _summarize_metrics(hist_gbdt)
+    soft_ensemble = run_mom_walk_forward(
+        labelled,
+        n_blocks=6,
+        locked_blocks=2,
+        min_train_matches=30,
+        method="soft_ensemble",
+    )
+    soft_ensemble_summary = _summarize_metrics(soft_ensemble)
     report["models"] = {
         "binary_logit": binary_summary,
         "conditional_logit": conditional_summary,
         "hist_gbdt": hist_gbdt_summary,
+        "soft_ensemble_equal_weight": soft_ensemble_summary,
     }
 
     # Development-only selection. Locked blocks are intentionally not inspected
@@ -491,6 +500,7 @@ def run(
         "binary_logit": binary_summary,
         "conditional_logit": conditional_summary,
         "hist_gbdt": hist_gbdt_summary,
+        "soft_ensemble_equal_weight": soft_ensemble_summary,
     }
     # The operational output is exactly four players, so model selection must
     # optimize the ranking task itself rather than an unrelated per-row probability
