@@ -23,9 +23,7 @@ from src.data.mom_player_history_adapter import (
     soccer_dataset_pinned_urls,
 )
 from src.data.sofascore_mom_labels import (
-    collect_sofascore_mom_labels_tournament_season,
-    fetch_unique_tournament_seasons,
-    select_season_id,
+    collect_sofascore_mom_labels,
     label_data_contract_report,
 )
 from src.data.external_fetch import ExternalFetcher
@@ -235,25 +233,20 @@ def run(
         )
         return 0
 
-    label_fetcher = ExternalFetcher(cache_dir=str(root / "cache"), retries=3)
-    seasons, season_retrieved_at = fetch_unique_tournament_seasons(
-        tournament_id,
-        fetcher=label_fetcher,
-    )
-    season_id = select_season_id(seasons, season_start_year)
-    report["target"]["season_id"] = int(season_id)
+    # Avoid the tournament-season endpoint: it is currently challenge-protected.
+    # Matchday scheduled-events are sufficient to identify each fixture, then the
+    # post-match best-players summary provides the MOM label.
     report["label_source"] = {
-        "source": "sofascore_best_players_summary",
-        "season_index_retrieved_at": season_retrieved_at,
+        "source": "sofascore_scheduled_events_best_players_summary",
+        "season_index": "bypassed_due_to_public_api_challenge",
     }
 
-    labels = collect_sofascore_mom_labels_tournament_season(
-        target_fixtures[["id", "date_utc", "home_team", "away_team"]].rename(columns={"id": "match_id", "date_utc": "kickoff_utc"}),
-        tournament_id=tournament_id,
-        season_id=season_id,
+    labels = collect_sofascore_mom_labels(
+        target_fixtures[["id", "date_utc", "home_team", "away_team"]].rename(
+            columns={"id": "match_id", "date_utc": "kickoff_utc"}
+        ),
         cache_dir=str(root / "cache"),
         retries=3,
-        max_event_pages=80,
     )
     labels.to_csv(root / "mom_labels.csv", index=False)
     label_report = label_data_contract_report(labels)
