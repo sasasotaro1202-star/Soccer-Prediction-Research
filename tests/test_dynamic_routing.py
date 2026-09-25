@@ -43,3 +43,13 @@ def test_routing_risk_score_and_bucket_are_bounded():
     assert np.all((scores >= 0.0) & (scores <= 1.0))
     buckets = routing_risk_bucket(scores)
     assert list(buckets) == ["LOW", "MEDIUM", "HIGH"]
+
+
+def test_routing_risk_support_is_optional_and_bounded():
+    drift = np.asarray([0.0, 0.5])
+    uncertainty = np.asarray([0.2, 0.2])
+    legacy = routing_risk_score(drift, uncertainty)
+    candidate = routing_risk_score(drift, uncertainty, support_scores=np.asarray([0.0, 1.0]), support_weight=0.15)
+    assert np.all((candidate >= 0.0) & (candidate <= 1.0))
+    assert np.isclose(candidate[0], legacy[0] * 0.85)
+    assert candidate[1] > legacy[1]
