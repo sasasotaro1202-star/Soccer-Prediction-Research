@@ -16,6 +16,36 @@ from src.data.matchday_intelligence_fetch import ESPN_LEAGUES
 from src.evaluation.score import score_distribution
 
 
+FORECAST_COLUMNS = (
+    "match_id",
+    "kickoff_utc",
+    "competition",
+    "home_team",
+    "away_team",
+    "home_win_probability",
+    "draw_probability",
+    "away_win_probability",
+    "result_prediction",
+    "result_prediction_probability",
+    "score_1",
+    "score_1_probability",
+    "score_2",
+    "score_2_probability",
+    "score_3",
+    "score_3_probability",
+    "mom_status",
+    "mom_method",
+    "mom_1_player",
+    "mom_1_probability",
+    "mom_2_player",
+    "mom_2_probability",
+    "mom_3_player",
+    "mom_3_probability",
+    "mom_4_player",
+    "mom_4_probability",
+)
+
+
 POSITION_PRIOR = {
     "F": 1.00, "FW": 1.00, "ST": 1.00, "CF": 1.00,
     "AM": 0.92, "W": 0.90, "M": 0.82, "MF": 0.82,
@@ -191,6 +221,27 @@ def run(fixtures_path: str, output_path: str, status_path: str, prediction_time:
     ].copy()
     fixtures = fixtures.sort_values(["kickoff_utc", "match_id"], kind="mergesort").reset_index(drop=True)
 
+    # A valid fail-closed cycle may legitimately contain no target fixtures
+    # (for example, when the live acquisition window only contains unsupported
+    # competitions). Preserve the output schema and avoid unnecessary history
+    # loading so verification can distinguish "0 targets" from a broken run.
+    if fixtures.empty:
+        result = pd.DataFrame(columns=FORECAST_COLUMNS)
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        result.to_csv(output_path, index=False)
+        status = {
+            "status": "NO_TARGET_FIXTURES",
+            "prediction_time_utc": now.isoformat(),
+            "rows": 0,
+            "model": "chronological_goal_rate_baseline_70pct_plus_market_30pct_when_available",
+            "production_model_used": False,
+            "production_adoption_bypassed": False,
+            "mom_policy": "research_only_roster_position_prior",
+            "mom_predicted_rows": 0,
+        }
+        Path(status_path).write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
+        return status
+
     history, _ = load_available_history()
     model = _fit_goal_rates(history, now)
     session = requests.Session()
@@ -235,7 +286,7 @@ def run(fixtures_path: str, output_path: str, status_path: str, prediction_time:
             out[f"mom_{rank}_probability"] = float(moms[rank - 1][1]) if len(moms) >= rank else np.nan
         rows.append(out)
 
-    result = pd.DataFrame(rows)
+    result = pd.DataFrame(rows, columns=FORECAST_COLUMNS)
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(output_path, index=False)
     status = {
@@ -254,7 +305,13 @@ def run(fixtures_path: str, output_path: str, status_path: str, prediction_time:
 
 def verify(path: str) -> dict[str, Any]:
     df = pd.read_csv(path)
+    required = set(FORECAST_COLUMNS)
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise RuntimeError(f"forecast output missing required columns: {missing}")
     errors: list[str] = []
+    if df.empty:
+        return {"status": "VERIFIED", "rows": 0, "empty_target_set": True}
     for idx, row in df.iterrows():
         probs = np.asarray([
             float(row["home_win_probability"]),
