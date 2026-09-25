@@ -206,4 +206,24 @@ def test_dataset_rating_proxy_label_is_explicit_and_outcome_only():
     assert labels.loc[0, "label_status"] == "LABEL_FOUND"
     assert labels.loc[0, "label_source"] == "dataset_rating_top_performer_proxy"
     assert labels.loc[0, "player_id"] == "2"
-    assert labels.loc[0, "event_id"] == "dataset-rating-proxy:10"
+    assert labels.loc[0, "event_id"] == "dataset-performance-proxy:10"
+
+
+def test_dataset_performance_proxy_uses_flat_stats_when_rating_is_missing():
+    from scripts.run_mom_research import _build_dataset_rating_proxy_labels
+
+    player_matches = pd.DataFrame([
+        {"fixture_id": 20, "player_id": 11, "player_name": "A", "rating": np.nan, "minutes": 90},
+        {"fixture_id": 20, "player_id": 12, "player_name": "B", "rating": np.nan, "minutes": 80},
+    ])
+    player_stats = pd.DataFrame([
+        {"fixture_id": 20, "player_id": 11, "games_rating": np.nan, "games_minutes": 90,
+         "goals_total": 0, "goals_assists": 1, "passes_key": 4, "shots_total": 2},
+        {"fixture_id": 20, "player_id": 12, "games_rating": np.nan, "games_minutes": 80,
+         "goals_total": 1, "goals_assists": 0, "passes_key": 1, "shots_total": 3},
+    ])
+    labels = _build_dataset_rating_proxy_labels(
+        player_matches, pd.DataFrame([{"id": 20}]), player_stats=player_stats
+    )
+    assert labels.loc[0, "player_id"] == "12"
+    assert labels.loc[0, "label_source"] == "dataset_boxscore_top_performer_proxy"
