@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.data.fixture_field_audit import TARGET_COMPETITIONS, coverage_matrix, field_audit, fixture_audit, source_reconciliation
+from src.data.fixture_field_audit import TARGET_COMPETITIONS, AuditConfig, _scope_accounting, coverage_matrix, field_audit, fixture_audit, source_reconciliation
 
 
 def sample_history():
@@ -89,3 +89,16 @@ def test_target_scope_is_not_hardcoded_to_legacy_count():
     from src.data.competition_sources import TARGET_COMPETITIONS
     assert len(TARGET_COMPETITIONS) == len(set(TARGET_COMPETITIONS))
     assert len(TARGET_COMPETITIONS) > 15
+
+
+def test_scope_accounting_is_explicit_and_normalises_season_labels():
+    acquisition = pd.DataFrame([
+        {"competition": TARGET_COMPETITIONS[0], "season": str(2024)},
+        {"competition": "NOT_A_TARGET", "season": "2024/25"},
+    ])
+    accounted, missing = _scope_accounting(
+        acquisition,
+        AuditConfig(start_year=2024, end_year=2024),
+    )
+    assert accounted == 1
+    assert missing == len(TARGET_COMPETITIONS) - 1
