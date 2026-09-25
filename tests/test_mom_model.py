@@ -194,7 +194,6 @@ def test_feature_names_are_outcome_free():
 
 
 def test_dataset_rating_proxy_label_is_explicit_and_outcome_only():
-    import numpy as np
     from scripts.run_mom_research import _build_dataset_rating_proxy_labels
 
     player_matches = pd.DataFrame([
@@ -219,9 +218,9 @@ def test_dataset_performance_proxy_uses_flat_stats_when_rating_is_missing():
         {"fixture_id": 20, "player_id": 12, "player_name": "B", "rating": float("nan"), "minutes": 80},
     ])
     player_stats = pd.DataFrame([
-        {"fixture_id": 20, "player_id": 11, "games_rating": np.nan, "games_minutes": 90,
+        {"fixture_id": 20, "player_id": 11, "games_rating": float("nan"), "games_minutes": 90,
          "goals_total": 0, "goals_assists": 1, "passes_key": 4, "shots_total": 2},
-        {"fixture_id": 20, "player_id": 12, "games_rating": np.nan, "games_minutes": 80,
+        {"fixture_id": 20, "player_id": 12, "games_rating": float("nan"), "games_minutes": 80,
          "goals_total": 1, "goals_assists": 0, "passes_key": 1, "shots_total": 3},
     ])
     labels = _build_dataset_rating_proxy_labels(
