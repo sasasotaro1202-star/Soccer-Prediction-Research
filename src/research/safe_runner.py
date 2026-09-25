@@ -84,13 +84,13 @@ def run_with_retries() -> int:
                 "completion_gate_passed": bool(gate and gate.get("full_gate_passed", False)),
                 "audit_gate_passed": bool(audit_gate and audit_gate.get("full_gate_passed", False)),
             },
-            "runner": {"status": "SKIPPED_AFTER_PREFLIGHT_FAILURE", "exit_code": 0},
+            "runner": {"status": "SKIPPED_AFTER_PREFLIGHT_FAILURE", "exit_code": 1},
             "oos_claimed": False,
         })
-        # A strict preflight block is an expected research state, not an execution failure.
-        # The blocking evidence is preserved in run_status.json so downstream gates can
-        # distinguish a safe deferral from an operational crash.
-        return 0
+        # A strict preflight block remains an explicit non-zero outcome.
+        # The blocking evidence is preserved so recovery can distinguish gate rejection
+        # from an engine crash without converting the failure into success.
+        return 1
 
     errors: list[str] = []
 
