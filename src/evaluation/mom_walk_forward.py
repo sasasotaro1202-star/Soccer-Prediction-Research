@@ -606,6 +606,181 @@ def run_mom_walk_forward_calibrated_soft_ensemble(
     return pd.DataFrame([asdict(x) for x in metrics])
 
 
+def run_mom_walk_forward_calibrated_rank_consensus(
+    history: pd.DataFrame,
+    *,
+    n_blocks: int = 6,
+    locked_blocks: int = 2,
+    min_train_matches: int = 30,
+    calibration_fraction: float = 0.25,
+    min_calibration_matches: int = 30,
+    prior_strength: float = 120.0,
+    regularization_c: float = 0.30,
+    temperature: float = 1.0,
+    random_state: int = 42,
+) -> pd.DataFrame:
+    """Nested chronological WFO for fixed rank consensus plus post-hoc temperature.
+
+    The component rankings are fixed and untuned; temperature is fitted only on
+    the chronological calibration tail and applied after full-train refitting.
+    """
+    d = _validate_history(history)
+    match_order = (
+        d[["match_id", "kickoff_utc"]]
+        .drop_duplicates("match_id")
+        .sort_values(["kickoff_utc", "match_id"], kind="mergesort")
+        ["match_id"].astype(str).tolist()
+    )
+    blocks = _split_match_blocks(match_order, n_blocks)
+    metrics: list[MOMBlockMetrics] = []
+    component_methods = ("binary_logit", "conditional_logit", "hist_gbdt")
+
+    def rank_consensus_distribution(component_dists: list[pd.DataFrame]) -> pd.DataFrame:
+        if len(component_dists) != len(component_methods):
+            raise RuntimeError("Calibrated MOM rank consensus has an unexpected component count")
+        candidate_sets = []
+        for component_dist in component_dists:
+            if component_dist.duplicated(["match_id", "player_id"]).any():
+                raise RuntimeError("Calibrated MOM rank consensus contains duplicate candidates")
+            candidate_sets.append(set(component_dist["player_id"].astype(str)))
+        if any(candidate_sets[i] != candidate_sets[0] for i in range(1, len(candidate_sets))):
+            raise RuntimeError("Calibrated MOM rank consensus candidate sets differ")
+        merged = component_dists[0][["match_id", "player_id", "kickoff_utc", "probability"]].rename(
+            columns={"probability": "p0"}
+        )
+        for idx, component_dist in enumerate(component_dists[1:], start=1):
+            part = component_dist[["match_id", "player_id", "probability"]].rename(
+                columns={"probability": f"p{idx}"}
+            )
+            merged = merged.merge(
+                part,
+                on=["match_id", "player_id"],
+                how="outer",
+                validate="one_to_one",
+            )
+        probability_cols = [f"p{i}" for i in range(len(component_methods))]
+        if merged[probability_cols].isna().any().any():
+            raise RuntimeError("Calibrated MOM rank consensus candidate sets differ")
+        rank_scores = []
+        for col in probability_cols:
+            ordered = merged.sort_values(
+                [col, "player_id"],
+                ascending=[False, True],
+                kind="mergesort",
+            )
+            ranks = pd.Series(
+                np.arange(len(ordered), 0, -1, dtype=float) / float(max(len(ordered), 1)),
+                index=ordered.index,
+            )
+            rank_scores.append(ranks.reindex(merged.index).to_numpy(dtype=float))
+        merged["probability"] = np.mean(np.stack(rank_scores, axis=0), axis=0)
+        total = float(merged["probability"].sum())
+        if not np.isfinite(total) or total <= 0:
+            raise RuntimeError("Calibrated MOM rank consensus produced invalid probabilities")
+        merged["probability"] /= total
+        return merged[["match_id", "player_id", "kickoff_utc", "probability"]]
+
+    for block_idx in range(1, len(blocks)):
+        train_ids = [m for block in blocks[:block_idx] for m in block]
+        test_ids = blocks[block_idx]
+        if len(train_ids) < int(min_train_matches):
+            continue
+
+        calibration_count = max(
+            int(min_calibration_matches),
+            int(round(len(train_ids) * float(calibration_fraction))),
+        )
+        calibration_count = min(
+            calibration_count,
+            max(1, len(train_ids) - int(min_train_matches)),
+        )
+        fit_ids = train_ids[:-calibration_count]
+        calibration_ids = train_ids[-calibration_count:]
+        fit = d[d["match_id"].isin(fit_ids)].copy()
+        calibration = d[d["match_id"].isin(calibration_ids)].copy()
+        train = d[d["match_id"].isin(train_ids)].copy()
+        test = d[d["match_id"].isin(test_ids)].copy()
+
+        calibration_models = [
+            fit_mom_model(
+                fit,
+                regularization_c=regularization_c,
+                temperature=temperature,
+                min_matches=min_train_matches,
+                random_state=random_state,
+                method=component,
+            )
+            for component in component_methods
+        ]
+        calibration_parts = []
+        for match_id, group in calibration.groupby("match_id", sort=False):
+            kickoff = group["kickoff_utc"].iloc[0]
+            prediction_time = kickoff - pd.Timedelta(seconds=1)
+            pred_input = group.drop(columns=["is_motm"]).copy()
+            component_dists = [
+                predict_mom_distribution(
+                    model_bundle,
+                    pred_input,
+                    prediction_time=prediction_time,
+                )
+                for model_bundle in calibration_models
+            ]
+            calibration_parts.append(rank_consensus_distribution(component_dists))
+        if not calibration_parts:
+            continue
+        calibration_distribution = pd.concat(calibration_parts, ignore_index=True)
+        fitted_temperature, used = _fit_matchwise_temperature(
+            calibration,
+            calibration_distribution,
+            min_matches=min_calibration_matches,
+            prior_strength=prior_strength,
+        )
+
+        final_models = [
+            fit_mom_model(
+                train,
+                regularization_c=regularization_c,
+                temperature=temperature,
+                min_matches=min_train_matches,
+                random_state=random_state,
+                method=component,
+            )
+            for component in component_methods
+        ]
+        oos_parts = []
+        for match_id, group in test.groupby("match_id", sort=False):
+            kickoff = group["kickoff_utc"].iloc[0]
+            prediction_time = kickoff - pd.Timedelta(seconds=1)
+            pred_input = group.drop(columns=["is_motm"]).copy()
+            component_dists = [
+                predict_mom_distribution(
+                    model_bundle,
+                    pred_input,
+                    prediction_time=prediction_time,
+                )
+                for model_bundle in final_models
+            ]
+            oos_parts.append(rank_consensus_distribution(component_dists))
+        if not oos_parts:
+            continue
+        distribution = pd.concat(oos_parts, ignore_index=True)
+        distribution = _apply_matchwise_temperature(
+            distribution,
+            fitted_temperature if used else 1.0,
+        )
+        evaluated = _evaluate_predictions(test, distribution)
+        metrics.append(MOMBlockMetrics(
+            block=block_idx,
+            train_matches=len(train_ids),
+            test_matches=len(test_ids),
+            test_rows=len(test),
+            **evaluated,
+        ))
+    if not metrics:
+        raise RuntimeError("Calibrated MOM rank-consensus WFO produced no evaluable OOS blocks")
+    return pd.DataFrame([asdict(x) for x in metrics])
+
+
 def split_mom_development_locked(
     block_metrics: pd.DataFrame,
     *,
