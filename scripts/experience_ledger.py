@@ -285,6 +285,30 @@ def _proper_score_metrics(frame: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+def _status_metric_deltas(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    """Compare monitoring summaries and retain only finite numeric changes."""
+    out: dict[str, Any] = {}
+    previous_summary = previous.get("summary") if isinstance(previous, dict) else {}
+    current_summary = current.get("summary") if isinstance(current, dict) else {}
+    if not isinstance(previous_summary, dict) or not isinstance(current_summary, dict):
+        return out
+    for scope in ("all", "30d", "7d"):
+        old = previous_summary.get(scope)
+        new = current_summary.get(scope)
+        if not isinstance(old, dict) or not isinstance(new, dict):
+            continue
+        delta: dict[str, float] = {}
+        for key in ("1x2_accuracy_pct", "logloss", "brier", "rps", "ece"):
+            try:
+                ov = float(old[key]); nv = float(new[key])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if np.isfinite(ov) and np.isfinite(nv) and ov != nv:
+                delta[key] = round(nv - ov, 6)
+        if delta:
+            out[scope] = delta
+    return out
+
 def compute_metrics(ledger=None):
     if ledger is None: ledger=_read(LEDGER)
     METRICS.parent.mkdir(parents=True,exist_ok=True)
@@ -336,10 +360,20 @@ def compute_metrics(ledger=None):
                 )
                 if key in match
             }
+    previous_status: dict[str, Any] = {}
+    if STATUS.is_file() and STATUS.stat().st_size:
+        try:
+            loaded = json.loads(STATUS.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                previous_status = loaded
+        except (OSError, json.JSONDecodeError):
+            previous_status = {}
+    current_status = {"status":"OK","settled_predictions":len(d),"ledger_rows":len(ledger),
+                      "generated_at_utc":_now().isoformat(),"metrics_file":str(METRICS),
+                      "summary":summary}
+    current_status["metric_deltas_vs_previous"] = _status_metric_deltas(previous_status, current_status)
     STATUS.parent.mkdir(parents=True,exist_ok=True)
-    STATUS.write_text(json.dumps({"status":"OK","settled_predictions":len(d),"ledger_rows":len(ledger),
-                                  "generated_at_utc":_now().isoformat(),"metrics_file":str(METRICS),
-                                  "summary":summary},indent=2),encoding="utf-8")
+    STATUS.write_text(json.dumps(current_status,indent=2),encoding="utf-8")
     return len(rows)
 
 def main():
