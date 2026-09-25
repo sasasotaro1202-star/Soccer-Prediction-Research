@@ -356,6 +356,26 @@ def build_mom_feature_rows(
                 })
 
     out = pd.DataFrame(rows)
+    if not out.empty:
+        # Ranking is evaluated within each fixture. Convert the most informative
+        # continuous form signals into match-relative percentiles so the model
+        # can distinguish the strongest candidate even when league/team scales
+        # drift. This transformation uses only pre-match candidate features.
+        relative_sources = {
+            "recent_rating_ewm": "match_relative_rating",
+            "recent_minutes_ewm": "match_relative_minutes",
+            "recent_goals_per90_ewm": "match_relative_goals_per90",
+            "recent_assists_per90_ewm": "match_relative_assists_per90",
+            "recent_key_passes_per90_ewm": "match_relative_key_passes_per90",
+            "recent_shots_per90_ewm": "match_relative_shots_per90",
+            "recent_starts_rate": "match_relative_starts_rate",
+            "candidate_history_matches": "match_relative_history_depth",
+        }
+        for source, target in relative_sources.items():
+            values = pd.to_numeric(out[source], errors="coerce")
+            out[target] = values.groupby(out["match_id"], sort=False).rank(
+                method="average", pct=True
+            )
     if out.empty:
         raise RuntimeError(
             "No PIT-safe MOM candidate rows could be constructed; "
