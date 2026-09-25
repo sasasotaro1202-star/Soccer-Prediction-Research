@@ -54,6 +54,19 @@ def test_fit_uses_only_pit_verified_rows_and_records_metadata():
     assert tuple(model["metadata"]["feature_columns"]) == MOM_FEATURE_COLUMNS
 
 
+def test_fit_supports_hist_gbdt_research_challenger():
+    model = fit_mom_model(_rows(8), min_matches=5, method="hist_gbdt")
+    candidates = _rows(1).drop(columns=["is_motm"])
+    dist = predict_mom_distribution(
+        model,
+        candidates,
+        prediction_time=pd.Timestamp("2025-01-01T00:00:00Z") - pd.Timedelta(minutes=1),
+    )
+    assert len(dist) == 6
+    assert np.isfinite(dist["probability"]).all()
+    assert float(dist["probability"].sum()) == pytest.approx(1.0, abs=1e-10)
+
+
 def test_prediction_is_full_distribution_and_top4_is_exactly_four():
     model = fit_mom_model(_rows(6), min_matches=5)
     candidates = _rows(1).drop(columns=["is_motm"])
