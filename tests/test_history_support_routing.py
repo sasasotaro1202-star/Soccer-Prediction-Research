@@ -8,16 +8,19 @@ from src.monitoring.dynamic_routing import (
 )
 
 
-def test_history_support_risk_is_high_when_either_team_is_sparse():
+def test_history_support_risk_is_high_when_support_is_below_full_history():
     frame = pd.DataFrame({
         "home_history_support_n": [0, 5, 20, 30],
         "away_history_support_n": [2, 10, 25, 40],
     })
     risk = history_support_risk(frame)
+    # The risk is governed by the weaker team's support and linearly decays
+    # from 1.0 at min_games=5 to 0.0 at full_games=20.
     assert np.isclose(risk[0], 1.0)
-    assert np.isclose(risk[1], 0.0)
+    assert np.isclose(risk[1], 1.0)
     assert np.isclose(risk[2], 0.0)
-    assert 0.0 < risk[3] < 1.0
+    assert np.isclose(risk[3], 0.0)
+    assert np.all(np.diff(risk) <= 0.0)
 
 
 def test_dynamic_routing_uses_sparse_support_conservatively():
