@@ -37,6 +37,7 @@ from src.data.fotmob_mom_labels import (
 from src.data.external_fetch import ExternalFetcher
 from src.evaluation.mom_walk_forward import (
     run_mom_walk_forward,
+    run_mom_walk_forward_calibrated_soft_ensemble,
     split_mom_development_locked,
 )
 
