@@ -362,24 +362,32 @@ def run(
     start: str = DEFAULT_START,
     end: str = DEFAULT_END,
     season_start_year: int = DEFAULT_SEASON_START_YEAR,
-    tournament_id: int = DEFAULT_TOURNAMENT_ID,
-    season_id: int = DEFAULT_SOFASCORE_SEASON_ID,
+    competition_code: str = "EPL",
+    tournament_id: int | None = None,
+    season_id: int | None = None,
     output_dir: str = "artifacts/mom_research",
 ) -> int:
     root = Path(output_dir)
     root.mkdir(parents=True, exist_ok=True)
+    spec = _competition_spec(competition_code)
     report: dict[str, Any] = {
         "status": "STARTING",
         "production_adopted": False,
+        "competition": {
+            "code": str(competition_code),
+            "name": str(spec.name),
+            "region": str(spec.region),
+            "type": str(spec.competition_type),
+        },
         "dataset": {
             "repository": SOCCER_DATASET_REPOSITORY,
             "commit": SOCCER_DATASET_COMMIT,
             "license": SOCCER_DATASET_LICENSE,
         },
         "target": {
-            "tournament_id": int(tournament_id),
+            "tournament_id": int(tournament_id) if tournament_id is not None else None,
             "season_start_year": int(season_start_year),
-            "season_id": int(season_id),
+            "season_id": int(season_id) if season_id is not None else None,
             "start": start,
             "end": end,
             "history_start": None,
@@ -388,17 +396,27 @@ def run(
 
     history_start = (pd.Timestamp(start) - pd.Timedelta(days=370)).strftime("%Y-%m-%d")
     report["target"]["history_start"] = history_start
-    fixtures, player_matches, player_stats, match_stats = _load_frames(
+    fixtures, player_matches, player_stats, match_stats, league_records = _load_frames(
         start,
         end,
+        competition_code=str(competition_code),
         history_start=history_start,
     )
+    report["dataset"]["resolved_leagues"] = league_records
+    if fixtures.empty:
+        report["status"] = "DEFERRED_DATASET_LEAGUE_OR_FIXTURE_UNAVAILABLE"
+        report["reason"] = "No matching pinned-dataset league or fixture rows were found for this active competition and research window."
+        (root / "mom_research_report.json").write_text(
+            json.dumps(report, indent=2, ensure_ascii=False, default=str),
+            encoding="utf-8",
+        )
+        return 0
     target_fixtures = fixtures.loc[
         (pd.to_datetime(fixtures["date_utc"], utc=True) >= pd.Timestamp(start, tz="UTC"))
         & (pd.to_datetime(fixtures["date_utc"], utc=True) < pd.Timestamp(end, tz="UTC"))
     ].copy()
     if target_fixtures.empty:
-        raise RuntimeError("No target EPL fixtures found after history expansion")
+        raise RuntimeError(f"No target {competition_code} fixtures found after history expansion")
     features = build_mom_feature_rows(
         fixtures,
         player_matches,
@@ -417,9 +435,53 @@ def run(
         )
         return 0
 
-    # Locate historical events directly through the pinned tournament/season
-    # event index. This avoids the daily schedule endpoint's WAF/payload drift
-    # and uses the already-resolved season_id for a deterministic historical scope.
+    # Resolve public SofaScore tournament/season IDs dynamically for the active
+    # competition unless explicit IDs are supplied for a reproducibility experiment.
+    if tournament_id is None:
+        try:
+            registry, registry_retrieved_at = fetch_unique_football_tournaments(fetcher=ExternalFetcher())
+            aliases = [str(spec.name), *DATASET_NAME_ALIASES.get(str(competition_code), ())]
+            tournament_id = resolve_unique_tournament_id(
+                registry,
+                names=aliases,
+                category_names=[str(spec.region)],
+            )
+            report["tournament_registry"] = {
+                "retrieved_at_utc": registry_retrieved_at,
+                "resolved_by": "exact_normalized_name_then_category",
+            }
+        except Exception as exc:
+            report["status"] = "DEFERRED_TOURNAMENT_DISCOVERY"
+            report["reason"] = f"{type(exc).__name__}: {exc}"
+            (root / "mom_research_report.json").write_text(
+                json.dumps(report, indent=2, ensure_ascii=False, default=str),
+                encoding="utf-8",
+            )
+            return 0
+    if season_id is None:
+        try:
+            seasons, season_registry_retrieved_at = fetch_unique_tournament_seasons(
+                int(tournament_id),
+                fetcher=ExternalFetcher(),
+            )
+            season_id = select_season_id(seasons, int(season_start_year))
+            report["season_registry"] = {
+                "retrieved_at_utc": season_registry_retrieved_at,
+                "resolved_by": "unique_season_year_match",
+            }
+        except Exception as exc:
+            report["status"] = "DEFERRED_SEASON_DISCOVERY"
+            report["reason"] = f"{type(exc).__name__}: {exc}"
+            (root / "mom_research_report.json").write_text(
+                json.dumps(report, indent=2, ensure_ascii=False, default=str),
+                encoding="utf-8",
+            )
+            return 0
+
+    report["target"]["tournament_id"] = int(tournament_id)
+    report["target"]["season_id"] = int(season_id)
+
+    # Locate historical events through the resolved tournament/season event index.
     report["label_source"] = {
         "source": "sofascore_tournament_season_events_best_players_summary",
         "tournament_id": int(tournament_id),
@@ -457,6 +519,8 @@ def run(
         # content.matchFacts.playerOfTheMatch, but its player ids are provider-
         # specific and must be reconciled against the PIT-safe candidate rows.
         try:
+            if str(competition_code) != "EPL":
+                raise RuntimeError("FotMob fallback is mapped only for EPL; non-EPL remains SofaScore-only.")
             labels = collect_fotmob_mom_labels(
                 label_fixtures,
                 league_id=DEFAULT_FOTMOB_LEAGUE_ID,
@@ -606,14 +670,16 @@ def main() -> int:
     parser.add_argument("--start", default=DEFAULT_START)
     parser.add_argument("--end", default=DEFAULT_END)
     parser.add_argument("--season-start-year", type=int, default=DEFAULT_SEASON_START_YEAR)
-    parser.add_argument("--tournament-id", type=int, default=DEFAULT_TOURNAMENT_ID)
-    parser.add_argument("--season-id", type=int, default=DEFAULT_SOFASCORE_SEASON_ID)
+    parser.add_argument("--competition-code", default="EPL")
+    parser.add_argument("--tournament-id", type=int, default=None)
+    parser.add_argument("--season-id", type=int, default=None)
     parser.add_argument("--output-dir", default="artifacts/mom_research")
     args = parser.parse_args()
     return run(
         start=args.start,
         end=args.end,
         season_start_year=args.season_start_year,
+        competition_code=args.competition_code,
         tournament_id=args.tournament_id,
         season_id=args.season_id,
         output_dir=args.output_dir,
