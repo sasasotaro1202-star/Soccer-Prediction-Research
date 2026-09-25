@@ -160,3 +160,21 @@ def test_compute_metrics_publishes_zero_state_status(tmp_path, monkeypatch):
     assert status["status"] == "NO_SETTLED_PREDICTIONS"
     assert status["summary"]["all"]["n"] == 0
     assert status["summary"]["all"]["probability_rows"] == 0
+
+
+def test_status_command_publishes_zero_state(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+    import sys
+
+    monkeypatch.setattr(mod, "LEDGER", tmp_path / "ledger.csv")
+    monkeypatch.setattr(mod, "METRICS", tmp_path / "metrics.csv")
+    monkeypatch.setattr(mod, "STATUS", tmp_path / "status.json")
+    monkeypatch.setattr(sys, "argv", ["experience_ledger", "status"])
+
+    with pytest.raises(SystemExit) as exc:
+        mod.main()
+
+    assert exc.value.code == 0
+    status = json.loads((tmp_path / "status.json").read_text(encoding="utf-8"))
+    assert status["status"] == "NO_SETTLED_PREDICTIONS"
+    assert status["summary"]["all"]["n"] == 0
