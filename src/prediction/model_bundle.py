@@ -228,6 +228,7 @@ def train_and_save_bundle(
         "path": str(p),
         "model_version": model_version,
         "data_snapshot_id": data_snapshot_id,
+        "feature_cols": list(feature_cols),
         "fit_rows": int(len(d)),
         "fit_end": str(d["kickoff_utc"].max()),
         "feature_count": len(feature_cols),

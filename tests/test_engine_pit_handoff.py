@@ -20,6 +20,7 @@ def test_load_preflight_pit_features_reuses_gate_features_and_attaches_outcomes(
             "match_id": ["m1", "m2"],
             "home_goals": [2, 0],
             "away_goals": [1, 1],
+            "source_available_at_utc": ["2023-12-31T00:00:00Z", "2024-01-01T00:00:00Z"],
         }
     )
 
@@ -51,3 +52,28 @@ def test_load_preflight_pit_features_rejects_missing_outcome_identity(tmp_path):
 
     with pytest.raises((pd.errors.MergeError, RuntimeError)):
         _load_preflight_pit_features(tmp_path, history)
+
+
+
+def test_load_preflight_pit_features_restores_source_publication_time(tmp_path):
+    pd.DataFrame(
+        {
+            "match_id": ["m1"],
+            "kickoff_utc": ["2024-01-01T12:00:00Z"],
+            "prediction_cutoff_at_utc": ["2024-01-01T11:00:00Z"],
+            "pit_verified": [True],
+            "elo_diff": [10.0],
+        }
+    ).to_csv(tmp_path / "pit_replay_features.csv", index=False)
+
+    history = pd.DataFrame(
+        {
+            "match_id": ["m1"],
+            "home_goals": [2],
+            "away_goals": [1],
+            "source_available_at_utc": ["2023-12-31T00:00:00Z"],
+        }
+    )
+
+    result = _load_preflight_pit_features(tmp_path, history)
+    assert result["source_available_at_utc"].iloc[0] == pd.Timestamp("2023-12-31T00:00:00Z")

@@ -175,8 +175,30 @@ def _load_preflight_pit_features(out: Path, history: pd.DataFrame) -> pd.DataFra
     if outcomes["match_id"].isna().any() or outcomes["match_id"].duplicated().any():
         raise RuntimeError("Historical outcome table has missing/duplicate match_id values")
 
+    if "source_available_at_utc" not in history.columns:
+        raise RuntimeError(
+            "Historical PIT evidence handoff is missing source_available_at_utc"
+        )
+    pit_timing = history[["match_id", "source_available_at_utc"]].copy()
+    pit_timing["source_available_at_utc"] = pd.to_datetime(
+        pit_timing["source_available_at_utc"], utc=True, errors="coerce"
+    )
+    if pit_timing["source_available_at_utc"].isna().any():
+        raise RuntimeError(
+            "Historical PIT evidence handoff contains invalid source_available_at_utc"
+        )
+
+    # build_match_features focuses on model features and may omit publication
+    # evidence metadata. Restore the authoritative PIT timestamp from the same
+    # preflight-enriched history before downstream OOS consumers see the frame.
+    features = features.drop(columns=["source_available_at_utc"], errors="ignore")
     merged = features.merge(
         outcomes,
+        on="match_id",
+        how="left",
+        validate="one_to_one",
+    ).merge(
+        pit_timing,
         on="match_id",
         how="left",
         validate="one_to_one",
@@ -642,6 +664,7 @@ def run(out_dir: str = "artifacts") -> dict:
                     "routing_policy": model_bundle.get("routing_policy"),
                 },
                 training_end=model_bundle.get("fit_end"),
+                feature_cols=_model_features(feats),
                 calibration={
                     "temperature": model_bundle.get("temperature"),
                     "score_method": model_bundle.get("score_method", "primary"),

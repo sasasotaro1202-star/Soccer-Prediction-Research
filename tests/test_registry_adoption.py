@@ -16,8 +16,10 @@ def test_adopted_registry_record_is_persisted_as_active(tmp_path):
         adoption_status="ADOPT",
         parameters={"weights": {"logistic": 1.0}},
         calibration={"temperature": 1.0},
+        feature_cols=["elo_diff", "form_5"],
     )
     assert record["adoption_status"] == "ADOPT"
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["adoption_status"] == "ADOPT"
+    assert payload["feature_cols"] == ["elo_diff", "form_5"]
     assert load_champion(str(path))["model_version"] == "v1"
