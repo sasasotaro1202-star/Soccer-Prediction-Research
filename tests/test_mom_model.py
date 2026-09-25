@@ -40,6 +40,14 @@ def _rows(n_matches=6):
                     "opponent_defense_strength": 1.0,
                     "position_attack_weight": 1.0 if p < 4 else 0.7,
                     "days_rest": 6.0,
+                    "match_relative_rating": (6 - p) / 6,
+                    "match_relative_minutes": (6 - p) / 6,
+                    "match_relative_goals_per90": (6 - p) / 6,
+                    "match_relative_assists_per90": (6 - p) / 6,
+                    "match_relative_key_passes_per90": (6 - p) / 6,
+                    "match_relative_shots_per90": (6 - p) / 6,
+                    "match_relative_starts_rate": (6 - p) / 6,
+                    "match_relative_history_depth": 1.0,
                 }
             )
     return pd.DataFrame(rows)
