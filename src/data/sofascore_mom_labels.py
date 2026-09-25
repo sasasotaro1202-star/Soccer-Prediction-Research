@@ -160,17 +160,34 @@ def fetch_unique_tournament_seasons(
     *,
     fetcher: ExternalFetcher,
 ) -> tuple[list[dict[str, Any]], str]:
-    url = f"{SOFASCORE_BASE}/unique-tournament/{int(tournament_id)}/seasons"
-    response = fetcher.get(
-        "sofascore_tournament_seasons",
-        url,
-        headers=SOFASCORE_HEADERS,
+    """Fetch tournament seasons with a public-host fallback."""
+    endpoints = (
+        f"{SOFASCORE_BASE}/unique-tournament/{int(tournament_id)}/seasons",
+        f"{SOFASCORE_FALLBACK_BASE}/unique-tournament/{int(tournament_id)}/seasons",
     )
-    payload = _parse_json(response.body)
-    seasons = payload.get("seasons")
-    if not isinstance(seasons, list):
-        raise RuntimeError("SofaScore seasons payload missing seasons list")
-    return [x for x in seasons if isinstance(x, dict)], response.metadata.retrieved_at
+    errors: list[str] = []
+    for url in endpoints:
+        try:
+            response = fetcher.get(
+                "sofascore_tournament_seasons",
+                url,
+                headers=SOFASCORE_HEADERS,
+            )
+            payload = _parse_json(response.body)
+            seasons = payload.get("seasons")
+            if not isinstance(seasons, list):
+                errors.append(f"{url}: payload missing seasons list")
+                continue
+            if not seasons:
+                errors.append(f"{url}: season list empty")
+                continue
+            return [x for x in seasons if isinstance(x, dict)], response.metadata.retrieved_at
+        except Exception as exc:
+            errors.append(f"{url}: {type(exc).__name__}: {exc}")
+    raise RuntimeError(
+        "SofaScore tournament season discovery failed on all public hosts: "
+        + " | ".join(errors)
+    )
 
 
 def select_season_id(
