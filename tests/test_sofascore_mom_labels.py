@@ -365,7 +365,7 @@ def test_event_based_tournament_discovery_requires_two_dates_and_exact_name():
     assert meta["independent_date_count"] == 2
 
 
-def test_event_based_tournament_discovery_fails_closed_on_single_observation():
+def test_event_based_tournament_discovery_fails_closed_when_multiple_dates_do_not_repeat():
     class Response:
         body = json.dumps({"events": [{
             "uniqueTournament": {
@@ -382,7 +382,7 @@ def test_event_based_tournament_discovery_fails_closed_on_single_observation():
 
     with pytest.raises(RuntimeError, match="ambiguous or insufficiently repeated"):
         discover_unique_tournament_from_scheduled_events(
-            ["2024-08-01"],
+            ["2024-08-01", "2025-01-01"],
             names=["Premier League"],
             fetcher=FakeFetcher(),
             max_dates=2,
@@ -419,3 +419,28 @@ def test_event_based_season_discovery_requires_two_dates():
     )
     assert tid == 61627
     assert meta["independent_date_count"] == 2
+
+
+def test_event_based_tournament_discovery_accepts_exact_singleton_competition():
+    class Response:
+        body = json.dumps({"events": [{
+            "uniqueTournament": {
+                "id": 700,
+                "name": "UEFA Super Cup",
+                "category": {"name": "Europe"},
+            }
+        }]}).encode()
+        metadata = type("Meta", (), {"retrieved_at": "2026-09-25T13:00:00Z"})()
+
+    class FakeFetcher:
+        def get(self, source, url, **kwargs):
+            return Response()
+
+    tid, meta = discover_unique_tournament_from_scheduled_events(
+        ["2024-08-14"],
+        names=["UEFA Super Cup"],
+        fetcher=FakeFetcher(),
+        max_dates=2,
+    )
+    assert tid == 700
+    assert meta["independent_date_count"] == 1
