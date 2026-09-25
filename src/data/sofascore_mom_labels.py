@@ -192,6 +192,47 @@ def select_season_id(
     return matches[0][0]
 
 
+def _extract_events_list(payload: dict[str, Any]) -> list[dict[str, Any]] | None:
+    """Accept known SofaScore wrappers without weakening fail-closed semantics."""
+    direct = payload.get("events")
+    if isinstance(direct, list):
+        return [x for x in direct if isinstance(x, dict)]
+    nested = payload.get("data")
+    if isinstance(nested, dict) and isinstance(nested.get("events"), list):
+        return [x for x in nested["events"] if isinstance(x, dict)]
+    return None
+
+
+def fetch_scheduled_events_for_dates(
+    dates_utc: list[str],
+    *,
+    fetcher: ExternalFetcher,
+    request_delay_seconds: float = 0.0,
+) -> tuple[list[dict[str, Any]], str]:
+    """Build a complete date-scoped event index, failing closed on any date fetch error."""
+    delay = float(request_delay_seconds)
+    if not math.isfinite(delay) or delay < 0:
+        raise ValueError("request_delay_seconds must be finite and non-negative")
+    events: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    retrieved: list[str] = []
+    for idx, date_utc in enumerate(sorted(set(dates_utc))):
+        event_list, retrieved_at = fetch_scheduled_events_for_date(date_utc, fetcher=fetcher)
+        retrieved.append(retrieved_at)
+        for event in event_list:
+            event_id = str(event.get("id") or "").strip()
+            if event_id and event_id in seen_ids:
+                continue
+            if event_id:
+                seen_ids.add(event_id)
+            events.append(event)
+        if delay > 0 and idx + 1 < len(set(dates_utc)):
+            time.sleep(delay)
+    if not events:
+        raise RuntimeError("SofaScore scheduled-events fallback returned no events")
+    return events, max(retrieved)
+
+
 def fetch_tournament_season_events(
     tournament_id: int,
     season_id: int,
@@ -215,7 +256,7 @@ def fetch_tournament_season_events(
                     headers=SOFASCORE_HEADERS,
                 )
                 parsed = _parse_json(candidate.body)
-                page_events = parsed.get("events")
+                page_events = _extract_events_list(parsed)
                 if isinstance(page_events, list):
                     response = candidate
                     payload = parsed
@@ -229,7 +270,7 @@ def fetch_tournament_season_events(
                 + " | ".join(errors)
             )
         retrieval_times.append(response.metadata.retrieved_at)
-        page_events = payload.get("events")
+        page_events = _extract_events_list(payload)
         if not isinstance(page_events, list):
             raise RuntimeError("SofaScore season events payload missing events list")
         if not page_events:
@@ -279,12 +320,45 @@ def collect_sofascore_mom_labels_tournament_season(
     if not math.isfinite(delay) or delay < 0:
         raise ValueError("request_delay_seconds must be finite and non-negative")
     fetcher = ExternalFetcher(cache_dir=cache_dir, retries=retries)
-    events, _ = fetch_tournament_season_events(
-        tournament_id,
-        season_id,
-        fetcher=fetcher,
-        max_pages=max_event_pages,
-    )
+    try:
+        events, _ = fetch_tournament_season_events(
+            tournament_id,
+            season_id,
+            fetcher=fetcher,
+            max_pages=max_event_pages,
+        )
+        event_source = "tournament_season_events"
+    except RuntimeError as primary_exc:
+        # The season-page endpoint can serve an HTML/challenge-shaped JSON envelope
+        # even when the daily schedule endpoint remains usable. Fall back only after
+        # the complete season acquisition fails, and fail closed if any date cannot
+        # be retrieved.
+        fallback_dates = sorted(
+            {
+                (ts - pd.Timedelta(days=1)).date().isoformat()
+                for ts in d["kickoff_utc"]
+            }
+            | {
+                ts.date().isoformat()
+                for ts in d["kickoff_utc"]
+            }
+            | {
+                (ts + pd.Timedelta(days=1)).date().isoformat()
+                for ts in d["kickoff_utc"]
+            }
+        )
+        try:
+            events, _ = fetch_scheduled_events_for_dates(
+                fallback_dates,
+                fetcher=fetcher,
+                request_delay_seconds=delay,
+            )
+            event_source = "scheduled_events_fallback"
+        except Exception as fallback_exc:
+            raise RuntimeError(
+                "SofaScore MOM event acquisition failed via season and scheduled-date paths: "
+                f"season={primary_exc}; fallback={type(fallback_exc).__name__}: {fallback_exc}"
+            ) from fallback_exc
 
     rows: list[dict[str, Any]] = []
     for fixture in d.itertuples(index=False):
