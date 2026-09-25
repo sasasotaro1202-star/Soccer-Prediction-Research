@@ -9,6 +9,7 @@ from src.models.mom_model import (
     fit_mom_model,
     predict_mom_distribution,
     select_mom_top4_from_distribution,
+    MissingnessAwareMOMTransformer,
 )
 
 
@@ -140,6 +141,15 @@ def test_prediction_fails_closed_when_feature_is_future_at_prediction_time():
             prediction_time="2024-12-31T23:30:00Z",
         )
 
+
+def test_all_missing_feature_is_not_fabricated_and_is_tracked():
+    d = _rows(8)
+    d["recent_goals_per90_ewm"] = np.nan
+    transformer = MissingnessAwareMOMTransformer()
+    x = transformer.fit_transform(d[list(MOM_FEATURE_COLUMNS)])
+    assert "recent_goals_per90_ewm" in transformer.inactive_feature_columns_
+    assert x.shape[1] == len(MOM_FEATURE_COLUMNS) * 2 - 1
+    assert np.isfinite(x).all()
 
 def test_missing_feature_values_are_imputed_without_zeroing():
     d = _rows(8)
