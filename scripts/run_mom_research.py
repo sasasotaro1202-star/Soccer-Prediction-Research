@@ -522,6 +522,7 @@ def run(
         "hist_gbdt": hist_gbdt_summary,
         "soft_ensemble_equal_weight": soft_ensemble_summary,
         "soft_ensemble_temperature_calibrated": soft_ensemble_calibrated_summary,
+        "rank_consensus": rank_consensus_summary,
     }
     # The operational output is exactly four players, so model selection must
     # optimize the ranking task itself rather than an unrelated per-row probability
