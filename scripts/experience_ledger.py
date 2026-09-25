@@ -313,11 +313,47 @@ def compute_metrics(ledger=None):
     if ledger is None: ledger=_read(LEDGER)
     METRICS.parent.mkdir(parents=True,exist_ok=True)
     if ledger.empty:
-        pd.DataFrame([{"scope":"all","n":0,"status":"NO_SETTLED_PREDICTIONS"}]).to_csv(METRICS,index=False); return 1
+        pd.DataFrame([{"scope":"all","n":0,"status":"NO_SETTLED_PREDICTIONS",
+                       "1x2_accuracy_pct":None,"logloss":None,"brier":None,"rps":None,"ece":None,
+                       "probability_rows":0}]).to_csv(METRICS,index=False)
+        current_status = {
+            "status": "NO_SETTLED_PREDICTIONS",
+            "settled_predictions": 0,
+            "ledger_rows": 0,
+            "generated_at_utc": _now().isoformat(),
+            "metrics_file": str(METRICS),
+            "summary": {"all": {"n": 0, "probability_rows": 0}},
+            "metric_deltas_vs_previous": {},
+        }
+        STATUS.parent.mkdir(parents=True, exist_ok=True)
+        STATUS.write_text(json.dumps(current_status, indent=2), encoding="utf-8")
+        return 1
     d=ledger.copy(); d["kickoff_utc"]=pd.to_datetime(d["kickoff_utc"],utc=True,errors="coerce")
     d=d[d["actual_result"].notna()].copy()
     if d.empty:
-        pd.DataFrame([{"scope":"all","n":0,"status":"NO_SETTLED_PREDICTIONS"}]).to_csv(METRICS,index=False); return 1
+        pd.DataFrame([{"scope":"all","n":0,"status":"NO_SETTLED_PREDICTIONS",
+                       "1x2_accuracy_pct":None,"logloss":None,"brier":None,"rps":None,"ece":None,
+                       "probability_rows":0}]).to_csv(METRICS,index=False)
+        previous_status: dict[str, Any] = {}
+        if STATUS.is_file() and STATUS.stat().st_size:
+            try:
+                loaded = json.loads(STATUS.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    previous_status = loaded
+            except (OSError, json.JSONDecodeError):
+                previous_status = {}
+        current_status = {
+            "status": "NO_SETTLED_PREDICTIONS",
+            "settled_predictions": 0,
+            "ledger_rows": len(ledger),
+            "generated_at_utc": _now().isoformat(),
+            "metrics_file": str(METRICS),
+            "summary": {"all": {"n": 0, "probability_rows": 0}},
+        }
+        current_status["metric_deltas_vs_previous"] = _status_metric_deltas(previous_status, current_status)
+        STATUS.parent.mkdir(parents=True, exist_ok=True)
+        STATUS.write_text(json.dumps(current_status, indent=2), encoding="utf-8")
+        return 1
     rows=[]
     def emit(scope,x,label=""):
         if x.empty:return
