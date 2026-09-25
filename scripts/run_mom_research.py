@@ -30,6 +30,7 @@ from src.data.sofascore_mom_labels import (
     collect_sofascore_mom_labels_tournament_season,
     fetch_unique_football_tournaments,
     resolve_unique_tournament_id,
+    discover_unique_tournament_from_scheduled_events,
     fetch_unique_tournament_seasons,
     select_season_id,
     label_data_contract_report,
@@ -97,13 +98,49 @@ def _resolve_dataset_league_ids(con, dataset_base: str, competition_code: str) -
     return [int(x) for x in pd.to_numeric(pd.Series([x["id"] for x in selected]), errors="coerce").dropna().astype(int)]
 
 
-def _resolve_sofascore_scope(competition_code: str, season_start_year: int, *, tournament_id: int | None, season_id: int | None, fetcher: ExternalFetcher) -> tuple[int, int, dict[str, Any]]:
+def _resolve_sofascore_scope(
+    competition_code: str,
+    season_start_year: int,
+    *,
+    tournament_id: int | None,
+    season_id: int | None,
+    fetcher: ExternalFetcher,
+    discovery_dates_utc: list[str] | None = None,
+) -> tuple[int, int, dict[str, Any]]:
     spec = _competition_spec(competition_code)
-    meta: dict[str, Any] = {"competition": competition_code, "tournament_discovery": "DYNAMIC_EXACT_NAME"}
+    names = [str(spec.name), *DATASET_NAME_ALIASES.get(competition_code, ())]
+    category_names = [str(spec.region), str(spec.competition_type)]
+    meta: dict[str, Any] = {
+        "competition": competition_code,
+        "tournament_discovery": "DYNAMIC_EXACT_NAME",
+    }
     if tournament_id is None:
-        tournaments, retrieved_at = fetch_unique_football_tournaments(fetcher=fetcher)
-        tournament_id = resolve_unique_tournament_id(tournaments, names=[str(spec.name), *DATASET_NAME_ALIASES.get(competition_code, ())], category_names=[str(spec.region), str(spec.competition_type)])
-        meta["tournament_registry_retrieved_at_utc"] = retrieved_at
+        registry_error: Exception | None = None
+        try:
+            tournaments, retrieved_at = fetch_unique_football_tournaments(fetcher=fetcher)
+            tournament_id = resolve_unique_tournament_id(
+                tournaments,
+                names=names,
+                category_names=category_names,
+            )
+            meta["tournament_registry_retrieved_at_utc"] = retrieved_at
+        except (RuntimeError, ValueError) as exc:
+            registry_error = exc
+            if not discovery_dates_utc:
+                raise RuntimeError(
+                    "Registry tournament discovery failed and event-based fallback has no fixture dates: "
+                    f"{type(exc).__name__}: {exc}"
+                ) from exc
+            tournament_id, discovery_meta = discover_unique_tournament_from_scheduled_events(
+                discovery_dates_utc,
+                names=names,
+                category_names=category_names,
+                fetcher=fetcher,
+                max_dates=5,
+            )
+            meta["tournament_discovery"] = "DYNAMIC_EVENT_UNIQUE_TOURNAMENT_FALLBACK"
+            meta["registry_fallback_reason"] = f"{type(registry_error).__name__}: {registry_error}"
+            meta["event_discovery"] = discovery_meta
     meta["tournament_id"] = int(tournament_id)
     if season_id is None:
         seasons, retrieved_at = fetch_unique_tournament_seasons(int(tournament_id), fetcher=fetcher)
@@ -382,22 +419,9 @@ def run(
     history_start = (pd.Timestamp(start) - pd.Timedelta(days=370)).strftime("%Y-%m-%d")
     report["target"]["history_start"] = history_start
     fetcher = ExternalFetcher(cache_dir=str(root / "cache"), retries=3)
-    try:
-        tournament_id, season_id, scope_meta = _resolve_sofascore_scope(
-            competition_code,
-            int(season_start_year),
-            tournament_id=tournament_id,
-            season_id=season_id,
-            fetcher=fetcher,
-        )
-    except (RuntimeError, ValueError) as exc:
-        report["status"] = "DEFERRED_SCOPE_RESOLUTION"
-        report["scope_resolution_error"] = f"{type(exc).__name__}: {exc}"
-        (root / "mom_research_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
-        return 0
-    report["target"]["tournament_id"] = int(tournament_id)
-    report["target"]["season_id"] = int(season_id)
-    report["scope_resolution"] = scope_meta
+
+    # Load the pinned fixture data before resolving the SofaScore tournament id.
+    # This gives the event-based fallback deterministic real fixture dates.
     fixtures, player_matches, player_stats, match_stats = _load_frames(
         start,
         end,
@@ -405,6 +429,41 @@ def run(
         history_start=history_start,
     )
     if fixtures.empty:
+        report["status"] = "DEFERRED_NO_COMPETITION_FIXTURES"
+        (root / "mom_research_report.json").write_text(
+            json.dumps(report, indent=2, ensure_ascii=False, default=str),
+            encoding="utf-8",
+        )
+        return 0
+
+    discovery_dates = (
+        pd.to_datetime(fixtures["date_utc"], utc=True, errors="coerce")
+        .dropna()
+        .dt.strftime("%Y-%m-%d")
+        .drop_duplicates()
+        .tolist()
+    )
+    try:
+        tournament_id, season_id, scope_meta = _resolve_sofascore_scope(
+            competition_code,
+            int(season_start_year),
+            tournament_id=tournament_id,
+            season_id=season_id,
+            fetcher=fetcher,
+            discovery_dates_utc=discovery_dates,
+        )
+    except (RuntimeError, ValueError) as exc:
+        report["status"] = "DEFERRED_SCOPE_RESOLUTION"
+        report["scope_resolution_error"] = f"{type(exc).__name__}: {exc}"
+        (root / "mom_research_report.json").write_text(
+            json.dumps(report, indent=2, ensure_ascii=False, default=str),
+            encoding="utf-8",
+        )
+        return 0
+    report["target"]["tournament_id"] = int(tournament_id)
+    report["target"]["season_id"] = int(season_id)
+    report["scope_resolution"] = scope_meta
+    target_fixtures = fixtures.loc[
         report["status"] = "DEFERRED_NO_COMPETITION_FIXTURES"
         (root / "mom_research_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
         return 0
