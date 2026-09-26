@@ -25,6 +25,11 @@ from sklearn.preprocessing import StandardScaler
 from src.evaluation.metrics import classification_metrics
 from src.models.baselines import candidates
 
+try:
+    from lightgbm import LGBMClassifier
+except Exception:
+    LGBMClassifier = None
+
 
 EXCLUDE = {
     "match_id", "competition", "season", "season_start", "kickoff_utc",
@@ -33,8 +38,22 @@ EXCLUDE = {
     "source_available_at_utc", "source_retrieved_at_utc", "retrieved_at_utc",
     "pit_evidence_url", "capture_digest",
 }
-MODEL_NAMES = ("logistic", "elo_logistic", "recency_logistic", "extra_trees", "hist_gb")
+MODEL_NAMES = ("logistic", "elo_logistic", "recency_logistic", "extra_trees", "hist_gb", "lgbm")
 ARCHES = tuple("ABCDEFGHIJ")
+
+
+def _strict_bool_series(s: pd.Series) -> pd.Series:
+    allowed = {"true": True, "1": True, "yes": True, "false": False, "0": False, "no": False}
+    parsed = []
+    for value in s.tolist():
+        if isinstance(value, (bool, np.bool_)):
+            parsed.append(bool(value))
+            continue
+        key = str(value).strip().casefold()
+        if key not in allowed:
+            raise ValueError(f"unknown pit_verified value: {value!r}")
+        parsed.append(allowed[key])
+    return pd.Series(parsed, index=s.index, dtype=bool)
 
 
 def _safe_probs(p: np.ndarray) -> np.ndarray:
@@ -311,8 +330,13 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
     df = pd.read_csv(features_path)
     if df.empty or "pit_verified" not in df.columns:
         return {"status": "BLOCKED", "reason": "missing PIT feature handoff", "oos_claimed": False}
-    df["pit_verified"] = df["pit_verified"].astype(bool)
+    try:
+        df["pit_verified"] = _strict_bool_series(df["pit_verified"])
+    except ValueError as exc:
+        return {"status": "BLOCKED", "reason": f"pit_verified_parse_failure:{exc}", "oos_claimed": False}
     df = df[df["pit_verified"]].copy()
+    if LGBMClassifier is None:
+        return {"status": "BLOCKED", "reason": "LightGBM dependency unavailable; required comparison model missing", "oos_claimed": False}
     if df.empty:
         return {"status": "BLOCKED", "reason": "zero PIT-verified rows", "oos_claimed": False}
     if not {"target", "kickoff_utc"}.issubset(df.columns):
@@ -352,11 +376,22 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
         y_train = train.target.astype(int).to_numpy()
         y_test = test.target.astype(int).to_numpy()
         models = candidates(random_state=42)
+        models["lgbm"] = LGBMClassifier(
+            n_estimators=250,
+            learning_rate=0.035,
+            num_leaves=15,
+            min_child_samples=30,
+            reg_lambda=2.0,
+            random_state=42,
+            verbosity=-1,
+        )
         probs = {}
         for name in MODEL_NAMES:
             model = models[name]
-            model.fit(x_train if name == "logistic" else train[feature_cols], y_train)
-            probs[name] = _safe_probs(model.predict_proba(x_test if name == "logistic" else test[feature_cols]))
+            fit_x = x_train if name == "logistic" else train[feature_cols]
+            test_x = x_test if name == "logistic" else test[feature_cols]
+            model.fit(fit_x, y_train)
+            probs[name] = _safe_probs(model.predict_proba(test_x))
 
         state, _ = _block_features(probs, x_test, x_train)
         # Predictability = a PIT-safe meta-model trained only on prior OOS rows.
@@ -482,6 +517,8 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
         "oos_claimed": True,
         "production_changed": False,
         "model_set": MODEL_NAMES,
+        "lightgbm_required": True,
+        "lightgbm_available": True,
         "rows": int(len(df)),
         "feature_count": int(len(feature_cols)),
         "oos_blocks": int(n_blocks),
