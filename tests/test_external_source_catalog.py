@@ -89,6 +89,13 @@ def test_identity_and_video_benchmark_sources_are_not_match_time_features_by_def
     assert get_source("wikidata_football").pit_default.startswith("REFERENCE_GRAPH")
 
 
+def test_large_archives_and_public_domain_world_data_are_catalogued():
+    assert get_source("schochastics_football_data").source_class == "archive"
+    assert get_source("international_results_cc0").source_class == "archive"
+    assert get_source("fjelstul_english_football").source_class == "archive"
+    assert get_source("footballcsv_world").source_class == "fixture_data"
+
+
 def test_national_team_strength_sources_are_catalogued_separately():
     assert get_source("world_football_elo").source_class == "rating"
     assert get_source("fifa_world_ranking").source_class == "rating"
