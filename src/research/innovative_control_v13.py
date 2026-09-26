@@ -606,7 +606,10 @@ def evaluate_ablation(
         "baseline": base,
         "plus_disagreement": safe_probs((1 - 0.20 * disagree[:, None]) * base + 0.20 * disagree[:, None] * ensemble),
         "plus_predictability": safe_probs((0.70 + 0.30 * pred[:, None]) * ensemble + (0.30 - 0.30 * pred[:, None]) * base),
-        "plus_future_failure": safe_probs((1 - 0.15 * failure_risk) * ensemble + (0.15 * failure_risk) * base),
+        "plus_future_failure": safe_probs(
+            (1.0 - 0.15 * float(np.clip(failure_risk / 12.0, 0.0, 1.0))) * ensemble
+            + (0.15 * float(np.clip(failure_risk / 12.0, 0.0, 1.0))) * base
+        ),
         "plus_retrieval": safe_probs(0.80 * ensemble + 0.20 * retrieval),
         "full": ensemble,
     }
