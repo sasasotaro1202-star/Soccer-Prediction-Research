@@ -114,6 +114,14 @@ def test_live_data_and_news_channels_are_catalogued():
     assert get_source("gdelt_doc").production_status == "RESEARCH_CANDIDATE_FREE"
 
 
+def test_regional_and_high_coverage_sources_are_catalogued():
+    assert get_source("playmakerstats").source_class == "fixture_data"
+    assert get_source("bdfutbol").source_class == "fixture_data"
+    assert get_source("jleague_official").source_class == "live_data"
+    assert get_source("kooora").source_class == "live_data"
+    assert get_source("jleague_official").automation_policy == "VERIFY_OFFICIAL_ACCESS_TERMS"
+
+
 def test_national_team_strength_sources_are_catalogued_separately():
     assert get_source("world_football_elo").source_class == "rating"
     assert get_source("fifa_world_ranking").source_class == "rating"
