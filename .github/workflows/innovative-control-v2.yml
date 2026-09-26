@@ -42,6 +42,16 @@ jobs:
           done
           exit 1
 
+      - name: Install LightGBM research dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 90 "lightgbm>=4,<5"; then exit 0; fi
+            sleep $((attempt * 5))
+          done
+          exit 1
+
       - name: Run deterministic tests
         env:
           PYTHONPATH: .
