@@ -70,6 +70,25 @@ def test_reep_is_catalogued_as_a_free_cross_provider_identity_layer():
     assert "Opta" in " ".join(source.strengths)
 
 
+def test_open_event_tracking_and_womens_sources_are_catalogued():
+    assert get_source("wyscout_pappalardo").source_class == "performance_data"
+    assert get_source("impect_open").source_class == "performance_data"
+    assert get_source("skillcorner_open").source_class == "tracking_data"
+    assert get_source("metrica_sample").source_class == "tracking_data"
+    assert get_source("soccer_mon").source_class == "tracking_data"
+    assert get_source("ewf_database").source_class == "archive"
+    assert get_source("brazilian_football_data").source_class == "archive"
+    assert get_source("american_soccer_analysis").source_class == "performance_data"
+
+
+def test_identity_and_video_benchmark_sources_are_not_match_time_features_by_default():
+    assert get_source("fpl_id_map").source_class == "fantasy_data"
+    assert get_source("wikidata_football").source_class == "entity_data"
+    assert get_source("soccer_net").source_class == "tooling"
+    assert get_source("fpl_id_map").pit_default.startswith("IDENTITY_MAP_ONLY")
+    assert get_source("wikidata_football").pit_default.startswith("REFERENCE_GRAPH")
+
+
 def test_national_team_strength_sources_are_catalogued_separately():
     assert get_source("world_football_elo").source_class == "rating"
     assert get_source("fifa_world_ranking").source_class == "rating"
