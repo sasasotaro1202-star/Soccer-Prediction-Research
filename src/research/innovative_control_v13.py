@@ -780,7 +780,17 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
             block_metrics.setdefault(n, []).append(metrics(y_test, p))
         block_targets.append(y_test)
         selected_predictions.append(final_p.copy())
-        selected_rows.append(policy.assign(block=b, current_regime=current_regime))
+        selected_rows.append(
+            policy.assign(
+                block=b,
+                current_regime=current_regime,
+                match_id=test["match_id"].to_numpy(),
+                kickoff_utc=test["kickoff_utc"].astype(str).to_numpy(),
+                target=y_test,
+                baseline_prediction=base_p.argmax(axis=1),
+                ensemble_prediction=ensemble_p.argmax(axis=1),
+            )
+        )
         retrieval_rows.append(pd.DataFrame({
             "block": b,
             "retrieval_support": retrieval_support,
