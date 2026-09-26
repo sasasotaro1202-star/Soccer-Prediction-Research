@@ -73,9 +73,8 @@ class FootballDataWaybackAdapter(_BaseAdapter):
         identity = f"{capture.get('digest','')}|{capture.get('timestamp','')}|{capture.get('original','')}"
         if identity in self._snapshot_diag:
             return self._snapshot_diag[identity]
+
         cache = self._snapshot_cache_path(capture)
-        raw = None
-        last_error = None
         capture_original = str(capture.get("original", "")).strip()
         snapshot_urls = []
         if capture_original:
@@ -85,12 +84,17 @@ class FootballDataWaybackAdapter(_BaseAdapter):
         if not snapshot_urls:
             raise ValueError("Wayback replay requires an original URL")
 
+        last_error = None
+        last_failure_status = "SNAPSHOT_DOWNLOAD_FAILURE"
+
         for attempt in range(1, self.snapshot_retries + 1):
+            raw = None
+            loaded_from_cache = False
             try:
                 if cache.exists():
                     raw = cache.read_bytes()
+                    loaded_from_cache = True
                 else:
-                    last_error = None
                     for snapshot_url in snapshot_urls:
                         try:
                             response = requests.get(
@@ -99,47 +103,86 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                                 headers={"User-Agent": "SoccerPredictionResearch/1.0 PIT-Audit"},
                             )
                             response.raise_for_status()
-                            raw = response.content
+                            candidate = response.content
+                            if candidate[:512].lstrip().lower().startswith((b"<!doctype html", b"<html")):
+                                raise ValueError("html_instead_of_snapshot")
+                            raw = candidate
+                            # Persist only content that is at least non-HTML; parsing
+                            # below is still authoritative before a snapshot is accepted.
                             cache.write_bytes(raw)
                             last_error = None
                             break
-                        except (requests.RequestException, OSError) as exc:
+                        except (requests.RequestException, OSError, ValueError) as exc:
                             last_error = exc
-                    if raw is None and last_error is not None:
+                    if raw is None:
+                        if last_error is None:
+                            raise RuntimeError("snapshot_download_returned_no_content")
                         raise last_error
-                break
-            except (requests.RequestException, OSError) as exc:
+
+                if raw[:512].lstrip().lower().startswith((b"<!doctype html", b"<html")):
+                    last_failure_status = "SNAPSHOT_PARSE_FAILURE"
+                    raise ValueError("html_instead_of_snapshot")
+
+                frame = pd.read_csv(BytesIO(raw))
+                required = {"Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "FTR"}
+                if not required.issubset(frame.columns):
+                    last_failure_status = "SNAPSHOT_SCHEMA_FAILURE"
+                    raise ValueError(
+                        "MissingColumns:" + ",".join(sorted(required - set(frame.columns)))
+                    )
+
+                keys = set()
+                for r in frame.itertuples(index=False):
+                    date = self._date_key(getattr(r, "Date", None))
+                    if date is None:
+                        continue
+                    try:
+                        keys.add((
+                            date,
+                            normalize_team_identity(getattr(r, "HomeTeam")),
+                            normalize_team_identity(getattr(r, "AwayTeam")),
+                            float(getattr(r, "FTHG")),
+                            float(getattr(r, "FTAG")),
+                            str(getattr(r, "FTR")).strip(),
+                        ))
+                    except (TypeError, ValueError):
+                        continue
+
+                diag = SnapshotDiagnostic("SNAPSHOT_PARSED", keys=keys)
+                self._snapshot_diag[identity] = diag
+                return diag
+
+            except (requests.RequestException, OSError, ValueError, pd.errors.ParserError, UnicodeDecodeError) as exc:
                 last_error = exc
-                if isinstance(exc, OSError) and cache.exists() and raw is None:
-                    try: cache.unlink()
-                    except OSError: pass
+                # A malformed cached response can otherwise make every future retry
+                # deterministically fail. Remove only the specific capture cache so
+                # the next bounded attempt can re-fetch immutable evidence.
+                if loaded_from_cache and cache.exists():
+                    try:
+                        cache.unlink()
+                    except OSError:
+                        pass
                 if attempt < self.snapshot_retries:
                     time.sleep(self.retry_backoff * attempt)
-        if raw is None:
-            diag = SnapshotDiagnostic("SNAPSHOT_DOWNLOAD_FAILURE", error_type=type(last_error).__name__ if last_error else "UnknownError", error=f"after_{self.snapshot_retries}_attempts: {last_error}")
-            self._snapshot_diag[identity] = diag
-            return diag
-        try:
-            frame = pd.read_csv(BytesIO(raw))
-        except (ValueError, pd.errors.ParserError, UnicodeDecodeError) as exc:
-            diag = SnapshotDiagnostic("SNAPSHOT_PARSE_FAILURE", error_type=type(exc).__name__, error=str(exc))
-            self._snapshot_diag[identity] = diag
-            return diag
-        required = {"Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "FTR"}
-        if not required.issubset(frame.columns):
-            diag = SnapshotDiagnostic("SNAPSHOT_SCHEMA_FAILURE", error_type="MissingColumns", error=",".join(sorted(required - set(frame.columns))))
-            self._snapshot_diag[identity] = diag
-            return diag
-        keys = set()
-        for r in frame.itertuples(index=False):
-            date = self._date_key(getattr(r, "Date", None))
-            if date is None:
-                continue
-            try:
-                keys.add((date, normalize_team_identity(getattr(r, "HomeTeam")), normalize_team_identity(getattr(r, "AwayTeam")), float(getattr(r, "FTHG")), float(getattr(r, "FTAG")), str(getattr(r, "FTR")).strip()))
-            except (TypeError, ValueError):
-                continue
-        diag = SnapshotDiagnostic("SNAPSHOT_PARSED", keys=keys)
+
+        if last_failure_status == "SNAPSHOT_SCHEMA_FAILURE":
+            diag = SnapshotDiagnostic(
+                "SNAPSHOT_SCHEMA_FAILURE",
+                error_type=type(last_error).__name__ if last_error else "MissingColumns",
+                error=str(last_error) if last_error else "snapshot schema invalid",
+            )
+        elif last_failure_status == "SNAPSHOT_PARSE_FAILURE":
+            diag = SnapshotDiagnostic(
+                "SNAPSHOT_PARSE_FAILURE",
+                error_type=type(last_error).__name__ if last_error else "ValueError",
+                error=str(last_error) if last_error else "snapshot parse failed",
+            )
+        else:
+            diag = SnapshotDiagnostic(
+                "SNAPSHOT_DOWNLOAD_FAILURE",
+                error_type=type(last_error).__name__ if last_error else "UnknownError",
+                error=f"after_{self.snapshot_retries}_attempts: {last_error}",
+            )
         self._snapshot_diag[identity] = diag
         return diag
 
