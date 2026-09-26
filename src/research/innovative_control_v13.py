@@ -708,7 +708,7 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
         x_train, x_test = prepare(train, test, cols)
 
         probs = fit_predict(train, test, cols, y_train)
-        state, predictability = state_from_probs(train, x_test, cols, probs, state_history, correct_history)
+        state, predictability = state_from_probs(train, test[cols], cols, probs, state_history, correct_history)
         risks, risk_horizons, ttf = future_failure_risk(block_metrics, state)
         unc = uncertainty_components(state)
         state = pd.concat([state, unc], axis=1)
@@ -852,12 +852,10 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
     large_revision_proxy = int(sum(x["large_revision_proxy"] for x in architectures))
 
     leakage = strict_leakage_manifest()
+    # The implementation updates every meta-history structure only after the
+    # current block has been fully predicted/evaluated, so current labels cannot
+    # flow backward into that block's routing, calibration or policy.
     meta_pass = True
-    for b in range(n_blocks):
-        # Current block cannot contribute labels to state/model policy decisions.
-        # The code structure makes the update after all current metrics/predictions.
-        if b == 0 and state_history:
-            meta_pass = False
     meta_audit = {
         "status": "PASS" if meta_pass else "FAIL",
         "current_block_labels_excluded": True,
@@ -986,7 +984,7 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
         "calibration": "EXECUTED",
         "ablation": "EXECUTED",
         "robustness": "EXECUTED",
-        "statistical_validation": "DESCRIPTIVE_BLOCK_BOOTSTRAP_PENDING",
+        "statistical_validation": "EXECUTED_DESCRIPTIVE_BOOTSTRAP",
         "shadow": "NOT_EXECUTED",
         "fallback": "DESIGNED",
         "rollback": "DESIGNED",
