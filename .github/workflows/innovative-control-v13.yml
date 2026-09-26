@@ -121,6 +121,13 @@ jobs:
           test -s artifacts/innovative_control_v13/health_monitor.json
           test -s artifacts/innovative_control_v13/fallback_plan.json
           test -s artifacts/innovative_control_v13/ultimate_completion.json
+          test -s artifacts/innovative_control_v13/nested_oos_status.json
+          test -s artifacts/innovative_control_v13/router_stability.csv
+          test -s artifacts/innovative_control_v13/router_stability.json
+          test -s artifacts/innovative_control_v13/forecast_contract.csv
+          test -s artifacts/innovative_control_v13/reproducibility.json
+          test -s artifacts/innovative_control_v13/kill_switch.json
+          test -s artifacts/innovative_control_v13/state_matrix.json
 
       - name: Validate evidence, PIT isolation and artifact integrity
         shell: bash
