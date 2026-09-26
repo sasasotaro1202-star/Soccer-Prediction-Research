@@ -188,12 +188,113 @@ def complete_v13(out_dir: str) -> dict[str, Any]:
     fallback = _build_fallback_plan(result, manifest)
     information = _build_information_status()
 
+    nested_oos = {
+        "status": "RESEARCH_DESIGN_PRESENT",
+        "development_blocks": int(result.get("development_blocks", 0)),
+        "locked_blocks": int(result.get("locked_blocks", 0)),
+        "selection_data_excludes_locked": result.get("locked_oos_untouched_for_tuning") is True,
+        "independent_nested_retraining_required_for_promotion": True,
+        "promotion_ready": False,
+    }
+
+    router = blocks[[c for c in ["block", "router_weight_entropy", "router_weight_max", "mean_predictability", "mean_disagreement"] if c in blocks.columns]].copy()
+    if router.empty:
+        router_status = {"status": "NOT_EVALUATED"}
+    else:
+        router["weight_entropy_delta"] = router["router_weight_entropy"].diff()
+        router["weight_max_delta"] = router["router_weight_max"].diff()
+        router["weight_entropy_abs_velocity"] = router["weight_entropy_delta"].abs()
+        router["weight_max_abs_velocity"] = router["weight_max_delta"].abs()
+        router.to_csv(root / "router_stability.csv", index=False)
+        router_status = {
+            "status": "EXECUTED",
+            "rows": int(len(router)),
+            "max_abs_entropy_velocity": float(router["weight_entropy_abs_velocity"].fillna(0).max()),
+            "max_abs_weight_velocity": float(router["weight_max_abs_velocity"].fillna(0).max()),
+        }
+
+    forecast_contract = pd.DataFrame({
+        "block": blocks["block"] if "block" in blocks.columns else np.arange(len(blocks)),
+        "prediction_time_source": "kickoff_utc_or_prediction_cutoff",
+        "valid_until_policy": "research_horizon_only",
+        "model_version": str(result.get("git_sha", "unknown")),
+        "strategy_source": "prediction_policy_and_output",
+        "pit_status": _safe_status((result.get("pit_audit") or {}).get("status")),
+    })
+    forecast_contract.to_csv(root / "forecast_contract.csv", index=False)
+
+    reproducibility = {
+        "status": "PARTIAL",
+        "git_sha": result.get("git_sha"),
+        "seed": manifest.get("seed", 42),
+        "dataset": manifest.get("dataset"),
+        "feature_count": manifest.get("feature_count", result.get("feature_count")),
+        "parameters": manifest.get("parameters", {}),
+        "run_id": os.getenv("GITHUB_RUN_ID", "unknown"),
+        "python_version": os.getenv("PYTHON_VERSION", "unknown"),
+        "dependency_lock_present": Path("requirements.txt").is_file(),
+        "note": "Environment-level dependency versions require Actions runtime capture.",
+    }
+    kill_switch = {
+        "status": "DESIGNED",
+        "enabled": False,
+        "activation_conditions": [
+            "PIT_FAILURE",
+            "LEAKAGE_FAILURE",
+            "ARTIFACT_INTEGRITY_FAILURE",
+            "ROUTER_HEALTH_FAILURE",
+            "CALIBRATION_FAILURE",
+            "OOD_SURGE",
+        ],
+        "production_mutation_allowed": False,
+    }
+    state_matrix = {
+        "core_three_layers": {
+            "model_disagreement": "EXECUTED",
+            "predictability": "EXECUTED",
+            "future_failure": "EXECUTED",
+            "time_to_failure": "EXECUTED",
+        },
+        "control_layers": {
+            "dynamic_routing": "EXECUTED",
+            "prediction_policy": "EXECUTED_RESEARCH_ONLY",
+            "dynamic_output": "EXECUTED_RESEARCH_ONLY",
+            "retrieval": "EXECUTED",
+            "uncertainty": "EXECUTED",
+            "calibration": "EXECUTED",
+            "selective_prediction": "EXECUTED",
+            "active_information": information["status"],
+        "nested_oos": nested_oos["status"],
+        "router_stability": router_status["status"],
+        "reproducibility": reproducibility["status"],
+        "kill_switch": kill_switch["status"],
+            "tta": "NOT_ENABLED",
+            "shadow": "NOT_EXECUTED",
+            "fallback": fallback["status"],
+            "rollback": fallback["rollback"]["status"],
+        },
+        "gates": {
+            "pit": _safe_status((result.get("pit_audit") or {}).get("status")),
+            "leakage": _safe_status((result.get("leakage_audit") or {}).get("audit_status")),
+            "meta_leakage": _safe_status((result.get("meta_leakage_audit") or {}).get("status")),
+            "oos": "PASS" if result.get("oos_claimed") is True else "FAIL",
+            "nested_oos": nested_oos["status"],
+            "artifact_integrity": health["status"],
+            "promotion": _safe_status((result.get("promotion") or {}).get("status")),
+        },
+    }
+
     history.to_csv(root / "prediction_history.csv", index=False)
     revision.to_csv(root / "revision_analysis.csv", index=False)
     strategy_failure.to_csv(root / "strategy_failure.csv", index=False)
     (root / "health_monitor.json").write_text(json.dumps(health, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     (root / "fallback_plan.json").write_text(json.dumps(fallback, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     (root / "active_information_status.json").write_text(json.dumps(information, indent=2, ensure_ascii=False), encoding="utf-8")
+    (root / "nested_oos_status.json").write_text(json.dumps(nested_oos, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    (root / "router_stability.json").write_text(json.dumps(router_status, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    (root / "reproducibility.json").write_text(json.dumps(reproducibility, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    (root / "kill_switch.json").write_text(json.dumps(kill_switch, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    (root / "state_matrix.json").write_text(json.dumps(state_matrix, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
 
     audit = result.get("leakage_audit") or {}
     leakage_pass = _safe_status(audit.get("audit_status")) == "PASS"
