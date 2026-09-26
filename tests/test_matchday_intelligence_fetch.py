@@ -308,21 +308,29 @@ def test_football_data_complements_partial_sofascore_coverage(monkeypatch):
         source="football-data.co.uk",
         available_at="2026-09-25T00:02:00Z",
     )
-    monkeypatch.setattr(
-        m,
-        "_collect_sofascore_day",
-        lambda *args, **kwargs: ([sofa], [], "2026-09-25T00:01:00Z"),
-    )
-    monkeypatch.setattr(
-        m,
-        "_collect_football_data_fallback",
-        lambda *args, **kwargs: ([football_data], [], "2026-09-25T00:02:00Z"),
-    )
+    captured = {}
 
-    frame, status = m.collect_matchday_snapshots(days=1, horizon_hours=24, max_events=20)
+    def fake_sofa(*args, **kwargs):
+        captured["sofa_horizon"] = kwargs["horizon_hours"]
+        captured["sofa_detail_horizon"] = kwargs["detail_horizon_hours"]
+        return [sofa], [], "2026-09-25T00:01:00Z"
+
+    def fake_fd(*args, **kwargs):
+        captured["fd_horizon"] = kwargs["horizon_hours"]
+        return [football_data], [], "2026-09-25T00:02:00Z"
+
+    monkeypatch.setattr(m, "_collect_sofascore_day", fake_sofa)
+    monkeypatch.setattr(m, "_collect_football_data_fallback", fake_fd)
+
+    frame, status = m.collect_matchday_snapshots(days=2, horizon_hours=12, max_events=20)
     assert set(frame["match_id"]) == {"sofa:partial", "fdx:complement"}
     assert any(x["provider"] == "sofascore" for x in status["fallback_usage"])
     assert any(x["provider"] == "football-data.co.uk" for x in status["fallback_usage"])
+    assert captured["sofa_horizon"] == 48.0
+    assert captured["sofa_detail_horizon"] == 12.0
+    assert captured["fd_horizon"] == 48.0
+    assert status["discovery_horizon_hours"] == 48.0
+    assert status["detail_horizon_hours"] == 12.0
 
 def test_matchday_lineup_signal_uses_confirmed_availability_burden_not_fixed_zero_point_five():
     import src.data.matchday_intelligence_fetch as m
