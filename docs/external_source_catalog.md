@@ -19,6 +19,19 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 | Open-Meteo | weather | Historical weather + archived forecast runs | Global | Archived forecast run timestamp is preferred |
 | OpenFootball World | fixture_data | Fixture/result coverage and competition discovery | North America, Asia, Africa, Australia, Europe and more | Match date is not a feature-availability timestamp |
 | OpenFootball Players | entity_data | Player/entity normalization and discovery | Country-by-country reference data | Reference only; not a match-time feature |
+| Football-Data.co.uk | fixture_data | Free historical results, match statistics, opening/closing bookmaker odds; current fixture files have documented collection windows | Multiple European + worldwide league datasets; country coverage varies | Use documented fixture collection windows when applicable |
+| OpenLigaDB | fixture_data | Free fixtures/results and league-season lookup | Bundesliga + many additional leagues; no key; 60 requests/min/IP | Record update/retrieval time for live use |
+| API-Football Free Tier | fixture_data | Structured fixtures/events/lineups/statistics/odds/predictions/injuries/transfers | Broad competition endpoint coverage; $0 tier is 100 requests/day and has recent-season limits | Record provider/request timestamps; free tier only |
+| TheSportsDB v1 | fixture_data | Fixtures/events/lineups/players/season data + entity fallback | Broad multi-sport database; football coverage varies | Verify provider timestamps and archival availability |
+| RSSSF | fixture_data | Historical/rare-competition results and scope discovery | Worldwide country/competition archive, including low-profile leagues | Archive-only; not a match-time feature source |
+
+## Candidate policy notes
+
+- Football-Data.co.uk is a high-priority historical benchmark because its fixtures page documents when odds are collected, which is unusually useful for PIT reconstruction.
+- OpenLigaDB is a lightweight no-auth fallback for German and additional league coverage.
+- API-Football is only a bounded free-tier candidate: 100 requests/day, no credit card on the free version, and no automatic paid escalation.
+- TheSportsDB is a low-volume fallback because free API limits and coverage vary.
+- RSSSF is valuable primarily for discovery and long-tail historical coverage rather than live prediction features.
 
 ## Operating rules
 
