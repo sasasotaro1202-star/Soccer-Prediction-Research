@@ -59,6 +59,16 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 | J.League Official Match Centre | live_data | Official Japan fixtures, starting-XI status and match data | J.League and supported Japanese cups/competitions | Record JST event/publication/retrieval times |
 | Kooora | live_data | Regional live scores, fixtures, standings and football news | Strong Middle East/North Africa + international coverage | Verify timestamps and terms |
 
+## Broad live-provider and collector layer
+
+| Source | Class | Contribution | Key constraint |
+| --- | --- | --- | --- |
+| Sofascore public web/app data | live_data | Live state, xG, shotmaps, lineups, ratings, H2H, tournaments | No official public API; treat endpoints as unofficial and verify terms/stability |
+| FotMob public web/app data | live_data | xG, shots, momentum, lineups, ratings, news, transfers, fixtures | Public app data; verify terms and endpoint stability |
+| soccerdata | tooling | Unified Python access to multiple football providers | Provider-specific PIT/terms still apply |
+| worldfootballR | tooling | R collection layer for FBref/Understat/transfer/match datasets | Provider-specific PIT/terms still apply |
+| Kaggle European Soccer DB | archive | 25k+ historical matches, 10k+ players, events, lineups, multi-provider odds | 2008-2016 archive; reconstruct timing before PIT use |
+
 ## Open modelling and discovery tooling
 
 | Tool | Class | Contribution | Breadth / constraint |
@@ -121,6 +131,8 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 - Router research: test whether external-source disagreement predicts internal-model error, without assuming the external source is superior.
 - Information-shock research: GDELT + BBC feeds can be transformed into time-stamped news shock/state variables and tested for incremental predictive value.
 - Representation research: Kloppy + socceraction can turn newly discovered event sources into common SPADL/xT/VAEP representations, reducing source-specific implementation work.
+- Broad acquisition research: soccerdata/worldfootballR should be evaluated as collectors, not as a single information source; every downstream provider remains independently PIT-audited.
+- Live cross-checking: Sofascore/FotMob can be used as redundant state channels, with disagreements feeding data-quality and source-reliability monitoring.
 - Live-state research: football-data.org + ESPN can be used as redundant schedule/status channels, with cross-source disagreement monitored as a data-quality signal.
 - Regional coverage research: J.League Official + Kooora + BDFutbol + PlaymakerStats should be used to discover competitions that are missing from the current scope before feature/model work begins.
 
