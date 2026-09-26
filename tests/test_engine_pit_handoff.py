@@ -11,6 +11,7 @@ def test_load_preflight_pit_features_reuses_gate_features_and_attaches_outcomes(
             "kickoff_utc": ["2024-01-01T12:00:00Z", "2024-01-02T12:00:00Z"],
             "prediction_cutoff_at_utc": ["2024-01-01T11:00:00Z", "2024-01-02T11:00:00Z"],
             "pit_verified": [True, False],
+            "feature_source_max_available_at_utc": ["2023-12-31T00:00:00Z", pd.NaT],
             "elo_diff": [10.0, -5.0],
         }
     ).to_csv(tmp_path / "pit_replay_features.csv", index=False)
@@ -39,6 +40,7 @@ def test_load_preflight_pit_features_allows_unknown_publication_time_for_unverif
             "kickoff_utc": ["2024-01-01T12:00:00Z", "2024-01-02T12:00:00Z"],
             "prediction_cutoff_at_utc": ["2024-01-01T11:00:00Z", "2024-01-02T11:00:00Z"],
             "pit_verified": [True, False],
+            "feature_source_max_available_at_utc": ["2023-12-31T00:00:00Z", pd.NaT],
         }
     ).to_csv(tmp_path / "pit_replay_features.csv", index=False)
 
@@ -64,6 +66,7 @@ def test_load_preflight_pit_features_rejects_missing_publication_time_for_verifi
             "kickoff_utc": ["2024-01-01T12:00:00Z"],
             "prediction_cutoff_at_utc": ["2024-01-01T11:00:00Z"],
             "pit_verified": [True],
+            "feature_source_max_available_at_utc": ["2023-12-31T00:00:00Z"],
         }
     ).to_csv(tmp_path / "pit_replay_features.csv", index=False)
 
@@ -76,8 +79,9 @@ def test_load_preflight_pit_features_rejects_missing_publication_time_for_verifi
         }
     )
 
-    with pytest.raises(RuntimeError, match="invalid source_available_at_utc"):
-        _load_preflight_pit_features(tmp_path, history)
+    result = _load_preflight_pit_features(tmp_path, history)
+    assert result["pit_verified"].tolist() == [True]
+    assert pd.isna(result["source_available_at_utc"].iloc[0])
 
 def test_load_preflight_pit_features_rejects_missing_outcome_identity(tmp_path):
     pd.DataFrame(
@@ -109,6 +113,7 @@ def test_load_preflight_pit_features_restores_source_publication_time(tmp_path):
             "kickoff_utc": ["2024-01-01T12:00:00Z"],
             "prediction_cutoff_at_utc": ["2024-01-01T11:00:00Z"],
             "pit_verified": [True],
+            "feature_source_max_available_at_utc": ["2023-12-31T00:00:00Z"],
             "elo_diff": [10.0],
         }
     ).to_csv(tmp_path / "pit_replay_features.csv", index=False)
@@ -124,3 +129,27 @@ def test_load_preflight_pit_features_restores_source_publication_time(tmp_path):
 
     result = _load_preflight_pit_features(tmp_path, history)
     assert result["source_available_at_utc"].iloc[0] == pd.Timestamp("2023-12-31T00:00:00Z")
+
+
+def test_load_preflight_pit_features_rejects_feature_availability_after_prediction_cutoff(tmp_path):
+    pd.DataFrame(
+        {
+            "match_id": ["m1"],
+            "kickoff_utc": ["2024-01-01T12:00:00Z"],
+            "prediction_cutoff_at_utc": ["2024-01-01T11:00:00Z"],
+            "pit_verified": [True],
+            "feature_source_max_available_at_utc": ["2024-01-01T12:00:01Z"],
+        }
+    ).to_csv(tmp_path / "pit_replay_features.csv", index=False)
+
+    history = pd.DataFrame(
+        {
+            "match_id": ["m1"],
+            "home_goals": [1],
+            "away_goals": [0],
+            "source_available_at_utc": [pd.NaT],
+        }
+    )
+
+    with pytest.raises(RuntimeError, match="feature_source_max_available_at_utc"):
+        _load_preflight_pit_features(tmp_path, history)
