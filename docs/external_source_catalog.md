@@ -110,6 +110,15 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 | GDELT GKG | news | Themes, entities, organizations, locations and context | Global multilingual news graph | Ingestion time is not publication time |
 | BBC Sport Football RSS | news | Team/league football news feeds | Premier League, EFL, European, women's and team feeds are available | Feed/article timestamps required |
 
+## Venue, travel and environment support
+
+| Source | Class | Contribution | Breadth / constraint | PIT handling |
+| --- | --- | --- | --- | --- |
+| OpenFootball Clubs & Stadiums | venue_data | Global club/stadium identity and aliases | Worldwide public-domain club/stadium data | Date-filter venue changes |
+| WorldSoccerStadiums | venue_data | Stadium coordinates and capacity | 4,887 stadiums in the public dataset | Static reference; verify historical venue changes |
+
+These sources can be transformed into derived features such as home/away venue continuity, travel distance, altitude difference, capacity-normalized attendance (when attendance is separately available), and geographic novelty. Derived features must use only venue information known by prediction time.
+
 ## Candidate policy notes
 
 - Football-Data.co.uk is useful for PIT methodology and manual reference, but its current terms explicitly restrict automated bots/scrapers/AI use; it must not enter GitHub Actions automation without permission.
