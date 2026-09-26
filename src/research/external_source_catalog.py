@@ -311,6 +311,22 @@ SOURCE_CATALOG: tuple[ExternalSourceProfile, ...] = (
         production_status="RESEARCH_CANDIDATE",
     ),
     ExternalSourceProfile(
+        key="reep",
+        name="Reep Football Identity Register",
+        source_class="entity_data",
+        role="Cross-provider identity, competition and match entity resolution",
+        breadth="Current public release covers ~1.98M entities and ~7.53M provider bridges across 57 providers",
+        strengths=(
+            "stable IDs for players/teams/coaches/competitions/seasons/matches",
+            "provider crosswalks",
+            "aliases and redirects",
+            "Opta / API-Football / FBref / Understat / Soccerway / Sofascore mappings",
+        ),
+        pit_default="REFERENCE_IDENTITY_LAYER;_NOT_A_MATCH-TIME_FEATURE",
+        production_status="RESEARCH_CANDIDATE",
+        automation_policy="FREE_DOWNLOAD_CC0",
+    ),
+    ExternalSourceProfile(
         key="openfootball_players",
         name="OpenFootball Players",
         source_class="entity_data",
