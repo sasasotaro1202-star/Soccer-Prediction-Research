@@ -4,7 +4,12 @@ import json
 
 import pandas as pd
 
-from src.research.v13_ultimate_controls import complete_v13
+from src.research.v13_ultimate_controls import (
+    complete_v13,
+    fallback_prediction,
+    kill_switch_active,
+    validate_prediction_contract,
+)
 
 
 def _write_required(root):
@@ -96,3 +101,33 @@ def test_complete_v13_fails_closed_when_artifact_missing(tmp_path):
     result = complete_v13(str(tmp_path))
     assert result["status"] == "BLOCKED"
     assert "block_metrics.csv" in result["missing"]
+
+
+def test_prediction_contract_and_fallback_are_fail_closed():
+    good = np.array([[0.60, 0.25, 0.15]])
+    bad = np.array([[0.60, 0.50, -0.10]])
+    assert validate_prediction_contract(good, pit_status="PASS")["status"] == "PASS"
+    assert validate_prediction_contract(bad, pit_status="PASS")["status"] == "FAIL"
+
+    baseline = np.array([[0.40, 0.35, 0.25]])
+    candidate = np.array([[0.70, 0.20, 0.10]])
+    out, mode = fallback_prediction(baseline, candidate, safety_ok=False)
+    assert mode == "VERIFIED_BASELINE"
+    assert np.allclose(out, baseline)
+
+    assert kill_switch_active(
+        pit_pass=True,
+        leakage_pass=False,
+        artifact_integrity_pass=True,
+        router_health_pass=True,
+        calibration_pass=True,
+        ood_surge=False,
+    ) is True
+    assert kill_switch_active(
+        pit_pass=True,
+        leakage_pass=True,
+        artifact_integrity_pass=True,
+        router_health_pass=True,
+        calibration_pass=True,
+        ood_surge=False,
+    ) is False
