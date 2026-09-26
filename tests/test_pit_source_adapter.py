@@ -162,3 +162,45 @@ def test_snapshot_retries_exact_capture_original_url_fallback(tmp_path, monkeypa
     assert len(calls) == 2
     assert calls[0] != calls[1]
     assert any("canonical.csv" in url for url in calls)
+
+
+def test_replay_capture_fetch_is_bounded_and_stops_after_all_rows_resolve(tmp_path, monkeypatch):
+    adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
+    captures = [
+        {"timestamp": "20250901213000", "digest": "digest-1", "original": "https://example.invalid/test.csv"},
+        {"timestamp": "20250901220000", "digest": "digest-2", "original": "https://example.invalid/test.csv"},
+        {"timestamp": "20250901223000", "digest": "digest-3", "original": "https://example.invalid/test.csv"},
+    ]
+    calls = []
+
+    monkeypatch.setenv("PIT_CAPTURE_BATCH_SIZE", "1")
+    monkeypatch.setattr(adapter, "captures", lambda url: captures)
+
+    def fake_snapshot(capture, original_url):
+        calls.append(capture["digest"])
+        keys = (
+            {("2025-09-01", "teama", "teamb", 2.0, 1.0, "H")}
+            if capture["digest"] == "digest-2"
+            else set()
+        )
+        return type("Diag", (), {"status": "SNAPSHOT_PARSED", "keys": keys})()
+
+    monkeypatch.setattr(adapter, "_load_snapshot_keys", fake_snapshot)
+    row = pd.Series({
+        "competition": "EPL",
+        "season_start": 2025,
+        "source_event_date": "2025-09-01",
+        "kickoff_utc": "2025-09-01T18:00:00Z",
+        "kickoff_time_available": True,
+        "home_team": "Team A",
+        "away_team": "Team B",
+        "home_goals": 2,
+        "away_goals": 1,
+        "result": "H",
+    })
+
+    evidence = adapter._prefetch_url("https://example.invalid/test.csv", [row], workers=1)[0]
+
+    assert evidence.evidence_status == "VERIFIED"
+    assert evidence.source_available_at_utc == "2025-09-01T22:00:00+00:00"
+    assert calls == ["digest-1", "digest-2"]

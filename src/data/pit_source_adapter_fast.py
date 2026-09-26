@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import time
 import unicodedata
@@ -150,6 +151,7 @@ class FootballDataWaybackAdapter(_BaseAdapter):
             diag = self._capture_diag.get(url, CaptureDiagnostic("CDX_REQUEST_FAILURE"))
             reason = "no_archive_captures" if diag.status == "CDX_NO_CAPTURE" else f"{diag.status.lower()}: {diag.error or ''}".strip()
             return [SourceEvidence(None, "UNVERIFIABLE", reason=reason) for _ in rows]
+
         row_keys = [_normalized_row_key(r) for r in rows]
         bounds = [_result_lower_bound(r) for r in rows]
         results = [None] * len(rows)
@@ -159,9 +161,11 @@ class FootballDataWaybackAdapter(_BaseAdapter):
             return [SourceEvidence(None, "UNVERIFIABLE", reason="missing_record_identity") for _ in rows]
         if not valid_bounds:
             return [SourceEvidence(None, "UNVERIFIABLE", reason="missing_event_time") for _ in rows]
+
         search_bounds = [self._search_floor(r, b) for r, (b, _) in zip(rows, bounds)]
         valid_search_bounds = [b for b in search_bounds if b is not None]
         min_search_bound = min(valid_search_bounds) if valid_search_bounds else min(valid_bounds)
+
         unique = {}
         for capture in captures:
             ts = _utc(capture.get("timestamp"))
@@ -175,24 +179,57 @@ class FootballDataWaybackAdapter(_BaseAdapter):
         candidates = sorted(unique.values(), key=lambda c: c.get("timestamp", ""))
         if not candidates:
             reasons = ";".join(sorted(set(reason for _, reason in bounds)))
-            return [SourceEvidence(None, "UNVERIFIABLE", reason=f"captures_exist_but_no_capture_after_result_lower_bound:{reasons}") for _ in rows]
+            return [
+                SourceEvidence(
+                    None,
+                    "UNVERIFIABLE",
+                    reason=f"captures_exist_but_no_capture_after_result_lower_bound:{reasons}",
+                )
+                for _ in rows
+            ]
+
+        # Fetch captures in bounded chronological batches. The previous implementation
+        # submitted every candidate snapshot at once, even when an early capture had
+        # already resolved all pending rows. Batch ordering preserves the earliest-
+        # observation PIT semantics while bounding unnecessary network/parse work.
+        try:
+            batch_size = int(os.getenv("PIT_CAPTURE_BATCH_SIZE", "32"))
+        except ValueError:
+            batch_size = 32
+        batch_size = max(1, min(64, batch_size))
+
+        snapshot_errors = set()
 
         def fetch(capture):
             return capture, self._load_snapshot_keys(capture, url)
 
-        keysets = []
-        with ThreadPoolExecutor(max_workers=workers or self.max_workers) as pool:
-            futures = [pool.submit(fetch, capture) for capture in candidates]
-            for future in as_completed(futures):
-                keysets.append(future.result())
-        keysets.sort(key=lambda x: x[0].get("timestamp", ""))
+        for offset in range(0, len(candidates), batch_size):
+            if not unresolved:
+                break
 
-        def scan():
+            batch = candidates[offset : offset + batch_size]
+            with ThreadPoolExecutor(max_workers=workers or self.max_workers) as pool:
+                futures = [pool.submit(fetch, capture) for capture in batch]
+                keysets = []
+                for future in futures:
+                    try:
+                        keysets.append(future.result())
+                    except Exception as exc:
+                        snapshot_errors.add(
+                            f"SNAPSHOT_FETCH_TASK_FAILURE:{type(exc).__name__}"
+                        )
+
+            keysets.sort(key=lambda x: x[0].get("timestamp", ""))
+
+            # Scan only the completed batch in chronological order. Later batches
+            # are not downloaded once every unresolved row has been verified.
             for capture, diagnostic in keysets:
                 if not unresolved:
                     break
                 ts = _utc(capture.get("timestamp"))
-                if ts is None or diagnostic.keys is None:
+                if diagnostic.keys is None:
+                    if getattr(diagnostic, "status", None):
+                        snapshot_errors.add(str(diagnostic.status))
                     continue
                 for key in diagnostic.keys.intersection(unresolved.keys()):
                     i = unresolved[key]
@@ -201,15 +238,19 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                         continue
                     accepted_bound = conservative_bound
                     accepted_reason = bound_reason.lower()
-                    if ts >= accepted_bound:
-                        results[i] = SourceEvidence(ts.isoformat(), "VERIFIED", self._snapshot_url(capture, url), capture.get("digest"), f"archived_completed_result_first_observed_after_{accepted_reason}")
+                    if ts is not None and ts >= accepted_bound:
+                        results[i] = SourceEvidence(
+                            ts.isoformat(),
+                            "VERIFIED",
+                            self._snapshot_url(capture, url),
+                            capture.get("digest"),
+                            f"archived_completed_result_first_observed_after_{accepted_reason}",
+                        )
                         del unresolved[key]
 
         # PIT is fail-closed: a capture before the conservative publication lower
         # bound cannot be accepted merely because it already contains the final score.
         # Precise kickoff timing may narrow search, but never relaxes the acceptance bound.
-        scan()
-        snapshot_errors = sorted({d.status for _, d in keysets if d.keys is None and d.status})
         for i, value in enumerate(results):
             if value is not None:
                 continue
@@ -220,7 +261,7 @@ class FootballDataWaybackAdapter(_BaseAdapter):
             elif lower_bound is None:
                 reason = "missing_event_time"
             elif snapshot_errors:
-                reason = "no_archive_snapshot_contains_completed_result:" + ",".join(snapshot_errors)
+                reason = "no_archive_snapshot_contains_completed_result:" + ",".join(sorted(snapshot_errors))
             else:
                 reason = "no_archive_snapshot_contains_completed_result"
             results[i] = SourceEvidence(None, "UNVERIFIABLE", reason=reason)
