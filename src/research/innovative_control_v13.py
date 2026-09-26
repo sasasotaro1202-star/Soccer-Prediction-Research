@@ -691,16 +691,57 @@ def strict_leakage_manifest() -> dict[str, Any]:
     }
 
 
+def _verified_pit_mask(df: pd.DataFrame) -> pd.Series:
+    """Normalize the explicit PIT verification flag without treating unknown as verified."""
+    if "pit_verified" not in df.columns:
+        raise ValueError("missing pit_verified")
+    values = []
+    for v in df["pit_verified"].tolist():
+        key = str(v).strip().casefold()
+        if isinstance(v, (bool, np.bool_)):
+            values.append(bool(v))
+        elif key in {"true", "1", "yes"}:
+            values.append(True)
+        else:
+            values.append(False)
+    return pd.Series(values, index=df.index, dtype=bool)
+
+
 def run(features_path: str, out_dir: str) -> dict[str, Any]:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    df = pd.read_csv(features_path)
-    pit = pit_audit(df)
-    (out / "pit_audit.json").write_text(json.dumps(pit, indent=2, ensure_ascii=False), encoding="utf-8")
-    if pit["status"] != "PASS":
+    raw_df = pd.read_csv(features_path)
+    try:
+        verified_mask = _verified_pit_mask(raw_df)
+    except ValueError as exc:
+        pit = {"status": "FAIL", "reasons": [str(exc)], "checked_rows": int(len(raw_df))}
+        (out / "pit_audit.json").write_text(json.dumps(pit, indent=2, ensure_ascii=False), encoding="utf-8")
         return {"status": "BLOCKED", "oos_claimed": False, "reason": "PIT audit failed", "pit_audit": pit}
 
-    df = df.copy()
+    excluded_unverified = int((~verified_mask).sum())
+    df = raw_df.loc[verified_mask].copy()
+    pit = pit_audit(df)
+    pit["input_rows"] = int(len(raw_df))
+    pit["verified_rows"] = int(len(df))
+    pit["excluded_unverified_rows"] = excluded_unverified
+    (out / "pit_audit.json").write_text(json.dumps(pit, indent=2, ensure_ascii=False), encoding="utf-8")
+    if pit["status"] != "PASS":
+        return {
+            "status": "BLOCKED",
+            "oos_claimed": False,
+            "reason": "PIT audit failed on verified replay subset",
+            "pit_audit": pit,
+        }
+    if len(df) < 1200 + 7 * 300:
+        return {
+            "status": "BLOCKED",
+            "oos_claimed": False,
+            "reason": "insufficient PIT-verified chronological rows",
+            "rows": int(len(df)),
+            "input_rows": int(len(raw_df)),
+            "excluded_unverified_rows": excluded_unverified,
+        }
+
     df["target"] = pd.to_numeric(df["target"], errors="coerce")
     if "kickoff_utc" not in df.columns:
         return {"status": "BLOCKED", "oos_claimed": False, "reason": "missing kickoff_utc"}
