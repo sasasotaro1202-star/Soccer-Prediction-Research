@@ -59,7 +59,7 @@ def test_load_preflight_pit_features_allows_unknown_publication_time_for_unverif
     assert pd.isna(result["source_available_at_utc"].iloc[1])
 
 
-def test_load_preflight_pit_features_rejects_missing_publication_time_for_verified_row(tmp_path):
+def test_load_preflight_pit_features_allows_missing_target_publication_time_for_verified_row(tmp_path):
     pd.DataFrame(
         {
             "match_id": ["m1"],
