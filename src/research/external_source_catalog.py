@@ -31,6 +31,7 @@ class ExternalSourceProfile:
     strengths: tuple[str, ...]
     pit_default: str
     production_status: str
+    automation_policy: str = "UNCONFIRMED"
 
 
 SOURCE_CATALOG: tuple[ExternalSourceProfile, ...] = (
