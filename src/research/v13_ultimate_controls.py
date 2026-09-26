@@ -201,7 +201,7 @@ def kill_switch_active(
 def _build_fallback_plan(result: dict[str, Any], manifest: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "TESTED",
-        "production_changed": result.get("production_changed") is False,
+        "production_changed": bool(result.get("production_changed", False)),
         "fallback": {
             "primary": "standalone_logistic_baseline",
             "secondary": "verified_stable_production",
@@ -370,7 +370,7 @@ def complete_v13(out_dir: str) -> dict[str, Any]:
     leakage_pass = _safe_status(audit.get("audit_status")) == "PASS"
     completion = {
         "status": "COMPLETED_RESEARCH_ONLY" if health["status"] == "PASS" else "FAILED_HEALTH",
-        "production_changed": result.get("production_changed") is False,
+        "production_changed": bool(result.get("production_changed", False)),
         "core_three_layers": {
             "model_disagreement": bool("mean_disagreement" in blocks.columns and blocks["mean_disagreement"].notna().all()),
             "predictability": bool("predictability" in policy.columns),
