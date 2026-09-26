@@ -48,6 +48,15 @@ def test_openfootball_supports_scope_and_entity_expansion_without_claiming_match
     assert "FEATURE_AVAILABILITY" in get_source("openfootball_world").pit_default
 
 
+def test_broad_external_prediction_and_stats_sources_are_research_scoped():
+    assert get_source("betbrain").production_status == "RESEARCH_ONLY"
+    assert get_source("soccervista").production_status == "RESEARCH_ONLY"
+    assert get_source("footystats").production_status == "RESEARCH_CANDIDATE"
+    assert get_source("soccerway").production_status == "RESEARCH_CANDIDATE"
+    assert get_source("global_sports_archive").production_status == "RESEARCH_CANDIDATE"
+    assert get_source("worldfootball_net").production_status == "RESEARCH_CANDIDATE"
+
+
 def test_free_fixture_fallbacks_are_explicitly_research_scoped():
     assert get_source("football_data").production_status == "RESEARCH_CANDIDATE"
     assert get_source("openligadb").production_status == "RESEARCH_CANDIDATE"
