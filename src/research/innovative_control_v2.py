@@ -22,6 +22,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+from src.data.football_data import load_available_history
 from src.evaluation.metrics import classification_metrics
 from src.models.baselines import candidates
 
@@ -339,8 +340,27 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
         return {"status": "BLOCKED", "reason": "LightGBM dependency unavailable; required comparison model missing", "oos_claimed": False}
     if df.empty:
         return {"status": "BLOCKED", "reason": "zero PIT-verified rows", "oos_claimed": False}
-    if not {"target", "kickoff_utc"}.issubset(df.columns):
-        return {"status": "BLOCKED", "reason": "missing target/kickoff", "oos_claimed": False}
+    if "kickoff_utc" not in df.columns:
+        return {"status": "BLOCKED", "reason": "missing kickoff", "oos_claimed": False}
+    if "target" not in df.columns:
+        try:
+            history, _ = load_available_history()
+            required_outcomes = {"match_id", "home_goals", "away_goals"}
+            if not required_outcomes.issubset(history.columns):
+                return {"status": "BLOCKED", "reason": "historical outcome handoff unavailable", "oos_claimed": False}
+            if history["match_id"].duplicated().any():
+                return {"status": "BLOCKED", "reason": "historical outcome handoff has duplicate match_id", "oos_claimed": False}
+            outcomes = history[["match_id", "home_goals", "away_goals"]].copy()
+            df = df.merge(outcomes, on="match_id", how="left", validate="one_to_one")
+            hg = pd.to_numeric(df["home_goals"], errors="coerce")
+            ag = pd.to_numeric(df["away_goals"], errors="coerce")
+            df["target"] = np.select(
+                [hg > ag, hg == ag],
+                [0, 1],
+                default=np.where(hg < ag, 2, np.nan),
+            )
+        except Exception as exc:
+            return {"status": "BLOCKED", "reason": f"historical_outcome_join_failed:{type(exc).__name__}", "oos_claimed": False}
     df["kickoff_utc"] = pd.to_datetime(df["kickoff_utc"], utc=True, errors="coerce")
     df["target"] = pd.to_numeric(df["target"], errors="coerce")
     df = df[df["kickoff_utc"].notna() & df["target"].notna()].sort_values(["kickoff_utc", "match_id"], kind="mergesort").drop_duplicates("match_id")
