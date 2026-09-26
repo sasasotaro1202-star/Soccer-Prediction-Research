@@ -19,6 +19,7 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 | Open-Meteo | weather | Historical weather + archived forecast runs | Global | Archived forecast run timestamp is preferred |
 | OpenFootball World | fixture_data | Fixture/result coverage and competition discovery | North America, Asia, Africa, Australia, Europe and more | Match date is not a feature-availability timestamp |
 | OpenFootball Players | entity_data | Player/entity normalization and discovery | Country-by-country reference data | Reference only; not a match-time feature |
+| Reep Football Identity Register | entity_data | Stable cross-provider IDs and entity resolution for players, teams, coaches, competitions, seasons and matches | ~1.98M entities / ~7.53M provider bridges / 57 providers in the 2026-09-15 release | Free CC0 download; reference identity layer, not a match-time feature |
 | Football-Data.co.uk | fixture_data | Free historical results, match statistics, opening/closing bookmaker odds; current fixture files have documented collection windows | Multiple European + worldwide league datasets; country coverage varies | PIT useful, but current site prohibits automated bots/scrapers/AI use without permission; manual reference only |
 | OpenLigaDB | fixture_data | Free fixtures/results and league-season lookup | Bundesliga + many additional leagues; no key; 60 requests/min/IP | Record update/retrieval time for live use |
 | API-Football Free Tier | fixture_data | Structured fixtures/events/lineups/statistics/odds/predictions/injuries/transfers | Broad competition endpoint coverage; $0 tier is 100 requests/day and has recent-season limits | Record provider/request timestamps; free tier only |
@@ -60,6 +61,7 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 - Availability shocks: Transfermarkt + official competition/club announcements where timestamps are recoverable.
 - Environment: Open-Meteo historical forecast runs at multiple lead times.
 - Scope expansion: OpenFootball World + OpenFootball Players for competition/entity discovery.
+- Identity spine: Reep should be tested as the canonical cross-provider join layer before building many one-off name/ID mappings.
 - Router research: test whether external-source disagreement predicts internal-model error, without assuming the external source is superior.
 
 Every lane remains research/shadow until it passes chronological OOS, calibration, robustness, PIT/replay and promotion gates.
