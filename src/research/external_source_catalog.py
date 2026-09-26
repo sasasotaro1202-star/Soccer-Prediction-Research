@@ -10,6 +10,8 @@ SourceClass = Literal[
     "performance_data",
     "player_status",
     "weather",
+    "fixture_data",
+    "entity_data",
 ]
 
 
@@ -89,7 +91,7 @@ SOURCE_CATALOG: tuple[ExternalSourceProfile, ...] = (
         name="FiveThirtyEight SPI",
         source_class="forecast",
         role="Historical external forecast benchmark",
-        breadth="Match forecasts back to 2016 in published SPI files",
+        breadth="Published match forecasts back to 2016",
         strengths=("historical forecast archive", "pre-match SPI ratings", "replay benchmark"),
         pit_default="DATE_LEVEL_ONLY_UNLESS_TIMESTAMPED",
         production_status="RESEARCH_ONLY",
@@ -129,7 +131,7 @@ SOURCE_CATALOG: tuple[ExternalSourceProfile, ...] = (
         name="Transfermarkt",
         source_class="player_status",
         role="Injury / suspension / transfer context",
-        breadth="Very broad club/player coverage",
+        breadth="Very broad player/club coverage",
         strengths=("injury status", "suspensions", "transfers", "squad context"),
         pit_default="VERIFY_TIMESTAMP_AND_STATUS_EFFECTIVE_TIME",
         production_status="RESEARCH_CANDIDATE",
@@ -147,6 +149,26 @@ SOURCE_CATALOG: tuple[ExternalSourceProfile, ...] = (
             "lead-time-specific weather reconstruction",
         ),
         pit_default="FORECAST_RUN_TIMESTAMP_AVAILABLE_FOR_HISTORICAL_FORECAST_APIS",
+        production_status="RESEARCH_CANDIDATE",
+    ),
+    ExternalSourceProfile(
+        key="openfootball_world",
+        name="OpenFootball World",
+        source_class="fixture_data",
+        role="Broad fixture/result and competition-scope expansion",
+        breadth="North America, Asia, Africa, Australia, Europe and more",
+        strengths=("public-domain fixtures", "historical results", "scope discovery"),
+        pit_default="MATCH_DATE_ONLY;_FEATURE_AVAILABILITY_REQUIRES_SEPARATE_TIMESTAMP",
+        production_status="RESEARCH_CANDIDATE",
+    ),
+    ExternalSourceProfile(
+        key="openfootball_players",
+        name="OpenFootball Players",
+        source_class="entity_data",
+        role="Player/entity normalization and discovery",
+        breadth="Country-by-country player reference data",
+        strengths=("player names", "positions", "date of birth", "entity matching support"),
+        pit_default="REFERENCE_DATA;_NOT_A_MATCH-TIME_FEATURE",
         production_status="RESEARCH_CANDIDATE",
     ),
 )
