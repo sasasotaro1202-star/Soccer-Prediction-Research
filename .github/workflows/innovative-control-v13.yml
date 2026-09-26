@@ -12,6 +12,9 @@ on:
 permissions:
   contents: read
 
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+
 concurrency:
   group: innovative-control-v13-${{ github.ref }}
   cancel-in-progress: false
