@@ -372,9 +372,9 @@ def complete_v13(out_dir: str) -> dict[str, Any]:
         "status": "COMPLETED_RESEARCH_ONLY" if health["status"] == "PASS" else "FAILED_HEALTH",
         "production_changed": result.get("production_changed") is False,
         "core_three_layers": {
-            "model_disagreement": "mean_disagreement" in blocks.columns and blocks["mean_disagreement"].notna().all(),
-            "predictability": "predictability" in policy.columns,
-            "future_failure": (root / "future_failure_by_block.json").is_file(),
+            "model_disagreement": bool("mean_disagreement" in blocks.columns and blocks["mean_disagreement"].notna().all()),
+            "predictability": bool("predictability" in policy.columns),
+            "future_failure": bool((root / "future_failure_by_block.json").is_file()),
         },
         "dynamic_routing": True,
         "dynamic_prediction_output": True,
