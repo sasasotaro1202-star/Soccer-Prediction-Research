@@ -66,6 +66,8 @@ jobs:
               "score_1", "score_1_probability",
               "score_2", "score_2_probability",
               "score_3", "score_3_probability",
+              "over_2_5_probability", "under_2_5_probability",
+              "btts_yes_probability", "btts_no_probability",
               "mom_1_player", "mom_1_probability",
               "mom_2_player", "mom_2_probability",
               "mom_3_player", "mom_3_probability",
@@ -82,6 +84,12 @@ jobs:
               ]
               if abs(sum(one_x_two) - 1.0) > 1e-6:
                   raise SystemExit("1X2 probability sum invariant failed")
+              ou = [float(row["over_2_5_probability"]), float(row["under_2_5_probability"])]
+              if any(v < 0 or v > 1 for v in ou) or abs(sum(ou) - 1.0) > 1e-6:
+                  raise SystemExit("O/U 2.5 probability sum invariant failed")
+              btts = [float(row["btts_yes_probability"]), float(row["btts_no_probability"])]
+              if any(v < 0 or v > 1 for v in btts) or abs(sum(btts) - 1.0) > 1e-6:
+                  raise SystemExit("BTTS probability sum invariant failed")
               if str(row["mom_status"]).startswith("PREDICTED"):
                   mom = [float(row[f"mom_{n}_probability"]) for n in range(1, 5)]
                   if abs(sum(mom) - 1.0) > 1e-6:
