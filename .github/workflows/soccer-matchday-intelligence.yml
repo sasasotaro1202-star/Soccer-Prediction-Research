@@ -99,17 +99,17 @@ jobs:
         run: |
           set -euo pipefail
           python -m src.prediction.prepare_fixtures             --fixtures artifacts/future_matchday_fixtures.csv             --output artifacts/future_fixtures.csv
-      - name: Run current predictions when a safe model exists
+      - name: Run current predictions when an adopted production model exists
         if: success()
         env:
           PYTHONPATH: .
         run: |
           set -euo pipefail
-          if [ -s models/current/production_model.pkl ] || [ -s models/current/validated_candidate_model.pkl ]; then
-            python -m src.prediction.runner               --fixtures artifacts/future_fixtures.csv               --output artifacts/predictions.csv               --status artifacts/prediction_status.json               --model-policy best_available
+          if [ -s models/current/production_model.pkl ] && [ -s models/current/production_model.json ] && [ -s models/current/model_registry.json ] && [ -s models/current/production_provenance.json ]; then
+            python -m src.prediction.runner               --fixtures artifacts/future_fixtures.csv               --output artifacts/predictions.csv               --status artifacts/prediction_status.json               --model-policy production
           else
-            printf '%s\n' '{"status":"DEFERRED_NO_SAFE_MODEL","reason":"No adopted production or validated candidate model is present."}' > artifacts/prediction_status.json
-            echo "No safe model present; prediction execution deferred."
+            printf '%s\n' '{"status":"DEFERRED_NO_ADOPTED_PRODUCTION_MODEL","reason":"No complete adopted production model bundle is present; validated candidates remain research-only."}' > artifacts/prediction_status.json
+            echo "No adopted production model present; prediction execution deferred."
           fi
       - name: Upload matchday intelligence artifact
         if: always()
