@@ -19,7 +19,7 @@ env:
 
 concurrency:
   group: innovative-control-v13-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   research:
