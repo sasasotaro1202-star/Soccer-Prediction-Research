@@ -8,12 +8,11 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import requests
 
 from src.data.competition_sources import TARGET_COMPETITIONS
-from src.data.football_data import load_available_history
+from src.prediction.prepare_fixtures import prepare_from_files
+from src.prediction.runner import run as run_production_prediction
 from src.data.matchday_intelligence_fetch import ESPN_LEAGUES
-from src.evaluation.score import score_distribution
 
 
 FORECAST_COLUMNS = (
@@ -54,154 +53,125 @@ POSITION_PRIOR = {
 }
 
 
+
 def _now_utc() -> pd.Timestamp:
     return pd.Timestamp(datetime.now(timezone.utc))
 
 
-def _fit_goal_rates(history: pd.DataFrame, prediction_time: pd.Timestamp) -> dict[str, Any]:
-    d = history.copy()
-    for col in ("kickoff_utc", "home_goals", "away_goals"):
-        if col not in d.columns:
-            raise RuntimeError(f"Historical data missing {col}")
-    d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
-    d["home_goals"] = pd.to_numeric(d["home_goals"], errors="coerce")
-    d["away_goals"] = pd.to_numeric(d["away_goals"], errors="coerce")
-    d = d.dropna(subset=["kickoff_utc", "home_goals", "away_goals", "home_team", "away_team"])
-    d = d[d["kickoff_utc"] < prediction_time].sort_values("kickoff_utc", kind="mergesort")
-    if d.empty:
-        raise RuntimeError("No historical results before prediction_time")
+def _empty_forecast(output_path: str) -> pd.DataFrame:
+    result = pd.DataFrame(columns=FORECAST_COLUMNS)
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    result.to_csv(path, index=False)
+    return result
 
-    shrink = 20.0
-    home_mean = float(d["home_goals"].mean())
-    away_mean = float(d["away_goals"].mean())
-    overall_mean = float((d["home_goals"].sum() + d["away_goals"].sum()) / (2.0 * len(d)))
 
-    home = d.assign(_team=d["home_team"].astype(str)).groupby("_team").agg(
-        n=("home_goals", "size"),
-        scored=("home_goals", "sum"),
-        conceded=("away_goals", "sum"),
+def _adopted_production_ready() -> tuple[bool, str]:
+    root = Path("models/current")
+    required = (
+        root / "production_model.pkl",
+        root / "production_model.json",
+        root / "model_registry.json",
+        root / "production_provenance.json",
     )
-    away = d.assign(_team=d["away_team"].astype(str)).groupby("_team").agg(
-        n=("away_goals", "size"),
-        scored=("away_goals", "sum"),
-        conceded=("home_goals", "sum"),
-    )
-    teams: dict[str, dict[str, float]] = {}
-    for team in sorted(set(home.index.astype(str)) | set(away.index.astype(str))):
-        h = home.loc[team] if team in home.index else None
-        a = away.loc[team] if team in away.index else None
-        hn = float(h["n"]) if h is not None else 0.0
-        an = float(a["n"]) if a is not None else 0.0
-        hs = float(h["scored"]) if h is not None else 0.0
-        hc = float(h["conceded"]) if h is not None else 0.0
-        ass = float(a["scored"]) if a is not None else 0.0
-        ac = float(a["conceded"]) if a is not None else 0.0
-        teams[team] = {
-            "home_attack": (hs + shrink * home_mean) / (hn + shrink),
-            "home_defence": (hc + shrink * away_mean) / (hn + shrink),
-            "away_attack": (ass + shrink * away_mean) / (an + shrink),
-            "away_defence": (ac + shrink * home_mean) / (an + shrink),
-        }
-
-    comp_rates: dict[str, tuple[float, float]] = {}
-    if "competition" in d.columns:
-        for comp, g in d.groupby(d["competition"].astype(str), sort=True):
-            n = len(g)
-            comp_rates[str(comp)] = (
-                float((g["home_goals"].sum() + shrink * home_mean) / (n + shrink)),
-                float((g["away_goals"].sum() + shrink * away_mean) / (n + shrink)),
-            )
-    return {
-        "home_mean": home_mean,
-        "away_mean": away_mean,
-        "overall_mean": overall_mean,
-        "teams": teams,
-        "comp_rates": comp_rates,
-    }
-
-
-def _lambdas(model: dict[str, Any], home_team: str, away_team: str, competition: str) -> tuple[float, float]:
-    base_h, base_a = model["comp_rates"].get(
-        str(competition), (model["home_mean"], model["away_mean"])
-    )
-    h = model["teams"].get(str(home_team))
-    a = model["teams"].get(str(away_team))
-    if h is None:
-        h = {"home_attack": base_h, "home_defence": base_a}
-    if a is None:
-        a = {"away_attack": base_a, "away_defence": base_h}
-    lh = base_h * float(h["home_attack"]) / max(base_h, 1e-6) * float(a["away_defence"]) / max(base_h, 1e-6)
-    la = base_a * float(a["away_attack"]) / max(base_a, 1e-6) * float(h["home_defence"]) / max(base_a, 1e-6)
-    return float(np.clip(lh, 0.05, 5.0)), float(np.clip(la, 0.05, 5.0))
-
-
-def _one_x_two(dist: list[tuple[int, int, float]]) -> tuple[float, float, float]:
-    values = np.asarray([
-        sum(p for h, a, p in dist if h > a),
-        sum(p for h, a, p in dist if h == a),
-        sum(p for h, a, p in dist if h < a),
-    ], dtype=float)
-    values /= values.sum()
-    return tuple(float(x) for x in values)
-
-
-def _market(row: pd.Series) -> tuple[float, float, float] | None:
-    cols = ("matchday_market_p_home", "matchday_market_p_draw", "matchday_market_p_away")
+    missing = [str(p) for p in required if not p.is_file() or p.stat().st_size <= 0]
+    if missing:
+        return False, "missing_required_adopted_production_artifacts"
     try:
-        values = np.asarray([float(row.get(c)) for c in cols], dtype=float)
-    except (TypeError, ValueError):
-        return None
-    if not np.isfinite(values).all() or values.min() < 0 or values.sum() <= 0:
-        return None
-    values /= values.sum()
-    return tuple(float(x) for x in values)
+        registry = json.loads((root / "model_registry.json").read_text(encoding="utf-8"))
+    except Exception as exc:
+        return False, f"unreadable_production_registry:{type(exc).__name__}"
+    if registry.get("adoption_status") != "ADOPT":
+        return False, "production_registry_is_not_ADOPT"
+    return True, "ADOPTED_PRODUCTION_READY"
 
 
-def _position_score(position: str) -> float:
-    p = str(position or "").upper()
-    for key, value in POSITION_PRIOR.items():
-        if p == key or key in p:
-            return value
-    return 0.65
+def _convert_production_output(
+    production: pd.DataFrame,
+    fixtures: pd.DataFrame,
+) -> pd.DataFrame:
+    if production.empty:
+        return pd.DataFrame(columns=FORECAST_COLUMNS)
+
+    required = {
+        "match_id",
+        "kickoff_utc",
+        "home_team",
+        "away_team",
+        "prediction",
+        "p_home",
+        "p_draw",
+        "p_away",
+        "score_1",
+        "score_1_probability",
+        "score_2",
+        "score_2_probability",
+        "score_3",
+        "score_3_probability",
+    }
+    missing = sorted(required - set(production.columns))
+    if missing:
+        raise RuntimeError(f"Production prediction output missing fields: {missing}")
+
+    fixture_cols = ["match_id", "competition"]
+    fixture_map = fixtures[fixture_cols].drop_duplicates("match_id")
+    d = production.merge(fixture_map, on="match_id", how="left", validate="one_to_one")
+    if d["competition"].isna().any():
+        raise RuntimeError("Production prediction output could not be mapped to fixture competition")
+
+    labels = []
+    for row in d.itertuples(index=False):
+        pred = str(row.prediction)
+        if pred == "H":
+            labels.append(str(row.home_team))
+        elif pred == "A":
+            labels.append(str(row.away_team))
+        elif pred == "D":
+            labels.append("引き分け")
+        else:
+            raise RuntimeError(f"Unknown production prediction label: {pred}")
+
+    result = pd.DataFrame({
+        "match_id": d["match_id"].astype(str),
+        "kickoff_utc": pd.to_datetime(d["kickoff_utc"], utc=True).astype(str),
+        "competition": d["competition"].astype(str),
+        "home_team": d["home_team"].astype(str),
+        "away_team": d["away_team"].astype(str),
+        "home_win_probability": pd.to_numeric(d["p_home"], errors="raise"),
+        "draw_probability": pd.to_numeric(d["p_draw"], errors="raise"),
+        "away_win_probability": pd.to_numeric(d["p_away"], errors="raise"),
+        "result_prediction": labels,
+        "result_prediction_probability": pd.to_numeric(
+            d[["p_home", "p_draw", "p_away"]].max(axis=1), errors="raise"
+        ),
+        "score_1": d["score_1"].astype(str),
+        "score_1_probability": pd.to_numeric(d["score_1_probability"], errors="raise"),
+        "score_2": d["score_2"].astype(str),
+        "score_2_probability": pd.to_numeric(d["score_2_probability"], errors="raise"),
+        "score_3": d["score_3"].astype(str),
+        "score_3_probability": pd.to_numeric(d["score_3_probability"], errors="raise"),
+        "mom_status": "BLOCKED_UPSTREAM_PLAYER_MODEL",
+        "mom_method": "production_runner_player_model_not_available_in_daily_forecast_contract",
+        "mom_1_player": "",
+        "mom_1_probability": np.nan,
+        "mom_2_player": "",
+        "mom_2_probability": np.nan,
+        "mom_3_player": "",
+        "mom_3_probability": np.nan,
+        "mom_4_player": "",
+        "mom_4_probability": np.nan,
+    })
+    if result["match_id"].duplicated().any():
+        raise RuntimeError("Converted production forecast contains duplicate match_id values")
+    return result[FORECAST_COLUMNS]
 
 
-def _mom_candidates(row: pd.Series, session: requests.Session) -> tuple[list[tuple[str, float]], str]:
-    league = ESPN_LEAGUES.get(str(row.get("competition")))
-    if not league:
-        return [], "BLOCKED_NO_ROSTER_ENDPOINT"
-    players: dict[str, float] = {}
-    for side in ("home_team_id", "away_team_id"):
-        team_id = str(row.get(side) or "").strip()
-        if not team_id:
-            continue
-        url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/teams/{team_id}/roster"
-        try:
-            response = session.get(
-                url, timeout=15, headers={"User-Agent": "SoccerPredictionResearch/1.0"}
-            )
-            response.raise_for_status()
-            payload = response.json()
-        except Exception:
-            continue
-        athletes = payload.get("athletes") or payload.get("items") or []
-        for athlete in athletes:
-            if not isinstance(athlete, dict):
-                continue
-            name = str(athlete.get("displayName") or athlete.get("fullName") or "").strip()
-            if not name:
-                continue
-            position = athlete.get("position") or {}
-            abbr = str(position.get("abbreviation") or position.get("name") or "")
-            players[name] = max(players.get(name, 0.0), _position_score(abbr))
-    if len(players) < 4:
-        return [], "BLOCKED_FEWER_THAN_4_PLAYERS"
-    ranked = sorted(players.items(), key=lambda item: (-item[1], item[0]))[:4]
-    raw = np.asarray([score for _, score in ranked], dtype=float)
-    raw /= raw.sum()
-    return [(name, float(prob)) for (name, _), prob in zip(ranked, raw)], "PREDICTED_HEURISTIC"
-
-
-def run(fixtures_path: str, output_path: str, status_path: str, prediction_time: str | None = None) -> dict[str, Any]:
+def run(
+    fixtures_path: str,
+    output_path: str,
+    status_path: str,
+    prediction_time: str | None = None,
+) -> dict[str, Any]:
     now = pd.Timestamp(prediction_time) if prediction_time else _now_utc()
     if now.tzinfo is None:
         now = now.tz_localize("UTC")
@@ -213,93 +183,100 @@ def run(fixtures_path: str, output_path: str, status_path: str, prediction_time:
     missing = sorted(required - set(fixtures.columns))
     if missing:
         raise RuntimeError(f"fixture snapshot missing columns: {missing}")
+
     fixtures["kickoff_utc"] = pd.to_datetime(fixtures["kickoff_utc"], utc=True, errors="coerce")
     fixtures["competition"] = fixtures["competition"].astype(str).str.strip().str.upper()
-    fixtures = fixtures[
+    target = fixtures[
         fixtures["competition"].isin(TARGET_COMPETITIONS)
+        & fixtures["kickoff_utc"].notna()
         & (fixtures["kickoff_utc"] > now)
     ].copy()
-    fixtures = fixtures.sort_values(["kickoff_utc", "match_id"], kind="mergesort").reset_index(drop=True)
+    target = target.sort_values(["kickoff_utc", "match_id"], kind="mergesort").reset_index(drop=True)
 
-    # A valid fail-closed cycle may legitimately contain no target fixtures
-    # (for example, when the live acquisition window only contains unsupported
-    # competitions). Preserve the output schema and avoid unnecessary history
-    # loading so verification can distinguish "0 targets" from a broken run.
-    if fixtures.empty:
-        result = pd.DataFrame(columns=FORECAST_COLUMNS)
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        result.to_csv(output_path, index=False)
+    if target.empty:
+        _empty_forecast(output_path)
         status = {
             "status": "NO_TARGET_FIXTURES",
             "prediction_time_utc": now.isoformat(),
             "rows": 0,
-            "model": "chronological_goal_rate_baseline_70pct_plus_market_30pct_when_available",
             "production_model_used": False,
-            "production_adoption_bypassed": False,
-            "mom_policy": "research_only_roster_position_prior",
-            "mom_predicted_rows": 0,
+            "reason": "No target fixture exists after prediction_time.",
         }
         Path(status_path).write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
         return status
 
-    history, _ = load_available_history()
-    model = _fit_goal_rates(history, now)
-    session = requests.Session()
-    rows: list[dict[str, Any]] = []
-
-    for _, row in fixtures.iterrows():
-        lambdas = _lambdas(model, str(row["home_team"]), str(row["away_team"]), str(row["competition"]))
-        distribution = score_distribution(*lambdas, max_goals=10)
-        model_probs = _one_x_two(distribution)
-        market = _market(row)
-        probs = np.asarray(model_probs, dtype=float)
-        if market is not None:
-            probs = 0.70 * probs + 0.30 * np.asarray(market, dtype=float)
-        probs /= probs.sum()
-        score_top = distribution[:3]
-        labels = [str(row["home_team"]), "引き分け", str(row["away_team"])]
-        winner_index = int(np.argmax(probs))
-        moms, mom_status = _mom_candidates(row, session)
-
-        out: dict[str, Any] = {
-            "match_id": str(row["match_id"]),
-            "kickoff_utc": row["kickoff_utc"].isoformat(),
-            "competition": str(row["competition"]),
-            "home_team": str(row["home_team"]),
-            "away_team": str(row["away_team"]),
-            "home_win_probability": float(probs[0]),
-            "draw_probability": float(probs[1]),
-            "away_win_probability": float(probs[2]),
-            "result_prediction": labels[winner_index],
-            "result_prediction_probability": float(probs[winner_index]),
-            "score_1": f"{score_top[0][0]}-{score_top[0][1]}",
-            "score_1_probability": float(score_top[0][2]),
-            "score_2": f"{score_top[1][0]}-{score_top[1][1]}",
-            "score_2_probability": float(score_top[1][2]),
-            "score_3": f"{score_top[2][0]}-{score_top[2][1]}",
-            "score_3_probability": float(score_top[2][2]),
-            "mom_status": mom_status,
-            "mom_method": "roster_position_prior_research_only",
+    ready, reason = _adopted_production_ready()
+    if not ready:
+        _empty_forecast(output_path)
+        status = {
+            "status": "DEFERRED_NO_ADOPTED_MODEL",
+            "prediction_time_utc": now.isoformat(),
+            "rows": int(len(target)),
+            "prediction_rows": 0,
+            "production_model_used": False,
+            "research_heuristic_disabled": True,
+            "reason": reason,
         }
-        for rank in range(1, 5):
-            out[f"mom_{rank}_player"] = moms[rank - 1][0] if len(moms) >= rank else ""
-            out[f"mom_{rank}_probability"] = float(moms[rank - 1][1]) if len(moms) >= rank else np.nan
-        rows.append(out)
+        Path(status_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(status_path).write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
+        return status
 
-    result = pd.DataFrame(rows, columns=FORECAST_COLUMNS)
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    base_dir = Path(output_path).parent
+    prepared_path = base_dir / ".daily_research_prepared.csv"
+    production_output = base_dir / ".daily_research_production_predictions.csv"
+    production_status = base_dir / ".daily_research_production_status.json"
+    target_snapshot = base_dir / ".daily_research_target.csv"
+    target.to_csv(target_snapshot, index=False)
+
+    prepare_from_files(str(target_snapshot), str(prepared_path))
+    runner_status = run_production_prediction(
+        fixtures_path=str(prepared_path),
+        bundle_path="artifacts/production_model.pkl",
+        output_path=str(production_output),
+        status_path=str(production_status),
+        prediction_time=now.isoformat(),
+        registry_path="artifacts/model_registry.json",
+        model_policy="production",
+    )
+
+    if not production_output.is_file() or production_output.stat().st_size <= 0:
+        _empty_forecast(output_path)
+        status = {
+            "status": "DEFERRED_NO_PIT_ELIGIBLE_FIXTURES",
+            "prediction_time_utc": now.isoformat(),
+            "rows": int(len(target)),
+            "prediction_rows": 0,
+            "production_model_used": True,
+            "runner_status": runner_status,
+        }
+        Path(status_path).write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
+        for path in (prepared_path, production_output, production_status, target_snapshot):
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+        return status
+
+    production = pd.read_csv(production_output)
+    result = _convert_production_output(production, target)
     result.to_csv(output_path, index=False)
     status = {
-        "status": "PREDICTED_RESEARCH_ONLY" if not result.empty else "NO_TARGET_FIXTURES",
+        "status": "PREDICTED_PRODUCTION_ADOPTED" if not result.empty else "DEFERRED_NO_PIT_ELIGIBLE_FIXTURES",
         "prediction_time_utc": now.isoformat(),
-        "rows": int(len(result)),
-        "model": "chronological_goal_rate_baseline_70pct_plus_market_30pct_when_available",
-        "production_model_used": False,
-        "production_adoption_bypassed": False,
-        "mom_policy": "research_only_roster_position_prior",
-        "mom_predicted_rows": int(result["mom_status"].astype(str).str.startswith("PREDICTED").sum()) if not result.empty else 0,
+        "rows": int(len(target)),
+        "prediction_rows": int(len(result)),
+        "production_model_used": True,
+        "research_heuristic_disabled": True,
+        "runner_status": runner_status,
     }
+    Path(status_path).parent.mkdir(parents=True, exist_ok=True)
     Path(status_path).write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    for path in (prepared_path, production_output, production_status, target_snapshot):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
     return status
 
 
