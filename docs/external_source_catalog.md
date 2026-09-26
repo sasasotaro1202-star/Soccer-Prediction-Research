@@ -59,6 +59,9 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 | J.League Official Match Centre | live_data | Official Japan fixtures, starting-XI status and match data | J.League and supported Japanese cups/competitions | Record JST event/publication/retrieval times |
 | Kooora | live_data | Regional live scores, fixtures, standings and football news | Strong Middle East/North Africa + international coverage | Verify timestamps and terms |
 
+| OpenFoot API | live_data | Fixtures, results, live events, confirmed lineups and xG | Public beta; no key required for initial public testing | Preserve response/request timestamps and verify terms/rate limits |
+| BSD (Bzzoiro Sports Data) | live_data | Fixtures, live, odds, lineups, injuries, transfers and predictions | Current docs claim 30+ leagues, 3,000+ teams, 8,900+ players and free access | Preserve provider/request timestamps; treat provider forecasts as external benchmark |
+
 ## Broad live-provider and collector layer
 
 | Source | Class | Contribution | Key constraint |
