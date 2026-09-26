@@ -157,6 +157,12 @@ def test_free_api_fixture_and_lineup_candidates_are_catalogued():
     assert get_source("bsd_free_football_api").production_status == "RESEARCH_CANDIDATE_FREE"
 
 
+def test_venue_enrichment_sources_are_catalogued():
+    assert get_source("openfootball_clubs_stadiums").source_class == "venue_data"
+    assert get_source("world_soccer_stadiums").source_class == "venue_data"
+    assert get_source("world_soccer_stadiums").production_status == "RESEARCH_CANDIDATE"
+
+
 def test_national_team_strength_sources_are_catalogued_separately():
     assert get_source("world_football_elo").source_class == "rating"
     assert get_source("fifa_world_ranking").source_class == "rating"
