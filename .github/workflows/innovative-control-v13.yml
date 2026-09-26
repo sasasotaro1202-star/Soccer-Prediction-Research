@@ -9,6 +9,8 @@ on:
       - "tests/test_innovative_control_v13.py"
       - "tests/test_v13_ultimate_controls.py"
       - ".github/workflows/innovative-control-v13.yml"
+      - "src/data/fixture_field_audit.py"
+      - "src/data/completion_gate.py"
   workflow_dispatch:
 
 permissions:
@@ -74,6 +76,31 @@ jobs:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
         run: python -m pytest -q tests/test_innovative_control_v13.py tests/test_innovative_control_v2.py tests/test_v13_ultimate_controls.py
+
+      - name: Refresh scoped acquisition and audit artifacts
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: |
+          set -euo pipefail
+          python -m src.data.fixture_field_audit
+          test -s artifacts/acquisition_coverage.csv
+          test -s artifacts/field_audit.csv
+          test -s artifacts/fixture_audit.csv
+          test -s artifacts/source_reconciliation.csv
+          python - <<'PY'
+          import pandas as pd
+          p = pd.read_csv("artifacts/acquisition_coverage.csv", low_memory=False)
+          required = {"competition", "season", "status", "rows", "source"}
+          missing = sorted(required - set(p.columns))
+          if missing:
+              raise SystemExit(f"acquisition_coverage missing columns: {missing}")
+          print({
+              "acquisition_rows": int(len(p)),
+              "explicit_status_rows": int(p["status"].notna().sum()),
+              "distinct_competitions": int(p["competition"].nunique()),
+          })
+          PY
 
       - name: Build strict PIT replay handoff
         env:
