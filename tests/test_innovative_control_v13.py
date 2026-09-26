@@ -11,6 +11,7 @@ from src.research.innovative_control_v13 import (
     safe_probs,
     strategy_selector,
     uncertainty_components,
+    _verified_pit_mask,
 )
 
 
@@ -31,6 +32,12 @@ def test_model_disagreement_exposes_core_statistics():
     out = model_disagreement_features(probs)
     assert {"entropy", "agreement", "pairwise_js", "majority_margin"}.issubset(out.columns)
     assert (out["pairwise_js"] > 0).all()
+
+
+def test_verified_pit_mask_excludes_unknown_and_false_rows():
+    df = pd.DataFrame({"pit_verified": [True, "true", False, "false", "UNKNOWN", 1, 0]})
+    mask = _verified_pit_mask(df)
+    assert mask.tolist() == [True, True, False, False, False, True, False]
 
 
 def test_pit_audit_fails_closed_for_future_available_at():
