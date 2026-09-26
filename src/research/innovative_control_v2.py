@@ -489,24 +489,28 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
             "delta_ece": ece - float(np.mean([m["ece"] for m in base[locked_start:]])),
         })
 
-    # Selective prediction is descriptive only: thresholds are fixed ex ante.
+    # Selective thresholds are learned only from the immediately previous OOS block.
+    # Locked OOS rows are evaluation-only and never define coverage cutoffs.
     selective = []
     for a in ARCHES:
-        p = np.concatenate(arch_predictions[a][locked_start:], axis=0)
-        y = np.concatenate(block_targets[locked_start:], axis=0)
-        conf = p.max(axis=1)
-        pred = p.argmax(axis=1)
-        for coverage in (1.00, 0.95, 0.90, 0.80, 0.70):
-            cutoff = float(np.quantile(conf, max(0.0, 1.0 - coverage)))
-            keep = conf >= cutoff
-            high_acc = float((pred[keep] == y[keep]).mean()) if keep.any() else None
-            selective.append({
-                "architecture": a,
-                "coverage_target": coverage,
-                "observed_coverage": float(keep.mean()),
-                "high_confidence_accuracy": high_acc,
-            })
-
+        for b in range(max(1, locked_start), n_blocks):
+            p = arch_predictions[a][b]
+            y = block_targets[b]
+            previous_conf = arch_predictions[a][b - 1].max(axis=1)
+            conf = p.max(axis=1)
+            pred = p.argmax(axis=1)
+            for coverage in (1.00, 0.95, 0.90, 0.80, 0.70):
+                cutoff = float(np.quantile(previous_conf, max(0.0, 1.0 - coverage)))
+                keep = conf >= cutoff
+                high_acc = float((pred[keep] == y[keep]).mean()) if keep.any() else None
+                selective.append({
+                    "architecture": a,
+                    "evaluation_block": b,
+                    "coverage_target": coverage,
+                    "threshold_source_block": b - 1,
+                    "observed_coverage": float(keep.mean()),
+                    "high_confidence_accuracy": high_acc,
+                })
     # Block-bootstrap deltas use the full OOS block sequence; because tuning never
     # touches locked blocks this remains descriptive, not a promotion decision.
     stat = {}
