@@ -1,0 +1,101 @@
+name: Innovative Prediction Control v2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/research/innovative_control_v2.py"
+      - "tests/test_innovative_control_v2.py"
+      - ".github/workflows/innovative-control-v2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: innovative-control-v2-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: \${{ github.sha }}
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt; then exit 0; fi
+            sleep $((attempt * 5))
+          done
+          exit 1
+
+      - name: Run deterministic tests
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: python -m pytest -q
+
+      - name: Run strict PIT completion gate
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+          PIT_ENABLE_ARCHIVE_AUDIT: "1"
+          PIT_ENABLE_SECONDARY_ARCHIVE: "1"
+          PIT_OPENFOOTBALL_COUNTRY_MAX_COMMIT_PAGES: "12"
+          PIT_REPLAY_ROWS_PER_GROUP: "1"
+        run: python -m src.data.completion_gate
+
+      - name: Run innovative control v2 OOS experiment
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+          INNOVATIVE_MIN_TRAIN: "1500"
+          INNOVATIVE_BLOCK_ROWS: "500"
+          INNOVATIVE_MAX_BLOCKS: "12"
+        run: |
+          set -euo pipefail
+          python -m src.research.innovative_control_v2 \
+            --features artifacts/pit_replay_features.csv \
+            --out artifacts/innovative_control_v2
+
+      - name: Verify v2 evidence and production isolation
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("artifacts/innovative_control_v2")
+          payload = json.loads((root / "experiment_results.json").read_text(encoding="utf-8"))
+          assert payload["status"] == "COMPLETED_RESEARCH_ONLY"
+          assert payload["oos_claimed"] is True
+          assert payload["production_changed"] is False
+          assert payload["locked_oos_untouched_for_tuning"] is True
+          assert payload["locked_blocks"] == 2
+          assert set(a["architecture"] for a in payload["architectures"]) == set("ABCDEFGHIJ")
+          assert len(payload["selective_prediction"]) == 50
+          assert len(payload["stress_tests"]) == 20
+          for row in payload["architectures"]:
+              assert all(k in row for k in ("accuracy","logloss","brier","rps","ece","delta_accuracy","delta_logloss","delta_brier","delta_ece"))
+          print(json.dumps(payload, ensure_ascii=False))
+          PY
+
+      - name: Upload v2 evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789
+        with:
+          name: innovative-control-v2-\${{ github.run_id }}
+          path: artifacts/innovative_control_v2
+          retention-days: 7
+          if-no-files-found: error
