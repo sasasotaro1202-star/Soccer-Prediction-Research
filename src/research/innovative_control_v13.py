@@ -301,8 +301,12 @@ def state_from_probs(
             ("model", LogisticRegression(max_iter=1600, C=0.35, random_state=42)),
         ])
         try:
+            common_cols = [c for c in history_states[0].columns if c in state.columns]
+            if len(common_cols) < 5:
+                raise ValueError("insufficient common meta-state columns")
+            X = X[common_cols]
             meta.fit(X, y)
-            meta_p = meta.predict_proba(state[history_states[0].columns])
+            meta_p = meta.predict_proba(state[common_cols])
             classes = list(meta[-1].classes_)
             predictability = meta_p[:, classes.index(1)] if 1 in classes else np.full(len(state), 0.5)
         except Exception:
