@@ -310,6 +310,18 @@ def verify(path: str) -> dict[str, Any]:
             p = float(row.get(f"score_{rank}_probability", np.nan))
             if "-" not in score or not np.isfinite(p) or not 0.0 <= p <= 1.0:
                 errors.append(f"{idx}: invalid score top{rank}")
+        ou = np.asarray([
+            float(row.get("over_2_5_probability", np.nan)),
+            float(row.get("under_2_5_probability", np.nan)),
+        ])
+        if not np.isfinite(ou).all() or np.any((ou < 0) | (ou > 1)) or not np.isclose(ou.sum(), 1.0, atol=1e-6):
+            errors.append(f"{idx}: invalid O/U 2.5 probabilities")
+        btts = np.asarray([
+            float(row.get("btts_yes_probability", np.nan)),
+            float(row.get("btts_no_probability", np.nan)),
+        ])
+        if not np.isfinite(btts).all() or np.any((btts < 0) | (btts > 1)) or not np.isclose(btts.sum(), 1.0, atol=1e-6):
+            errors.append(f"{idx}: invalid BTTS probabilities")
         if str(row.get("mom_status", "")).startswith("PREDICTED"):
             mom_names = [str(row.get(f"mom_{r}_player", "")).strip() for r in (1,2,3,4)]
             mom_probs = np.asarray([float(row[f"mom_{r}_probability"]) for r in (1,2,3,4)])
