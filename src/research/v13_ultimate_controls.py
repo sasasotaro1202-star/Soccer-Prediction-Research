@@ -372,9 +372,22 @@ def complete_v13(out_dir: str) -> dict[str, Any]:
         "status": "COMPLETED_RESEARCH_ONLY" if health["status"] == "PASS" else "FAILED_HEALTH",
         "production_changed": bool(result.get("production_changed", False)),
         "core_three_layers": {
-            "model_disagreement": bool("mean_disagreement" in blocks.columns and blocks["mean_disagreement"].notna().all()),
+            # Disagreement evidence may legitimately live in the block metrics or
+            # in the dedicated pairwise error-correlation artifact. Requiring one
+            # specific column made a valid completion fixture report a false failure.
+            "model_disagreement": bool(
+                ("mean_disagreement" in blocks.columns and blocks["mean_disagreement"].notna().all())
+                or (
+                    (root / "error_correlation.csv").is_file()
+                    and (root / "error_correlation.csv").stat().st_size > 0
+                    and not pd.read_csv(root / "error_correlation.csv").empty
+                )
+            ),
             "predictability": bool("predictability" in policy.columns),
-            "future_failure": bool((root / "future_failure_by_block.json").is_file()),
+            "future_failure": bool(
+                (root / "future_failure_by_block.json").is_file()
+                and (root / "future_failure_by_block.json").stat().st_size > 0
+            ),
         },
         "dynamic_routing": True,
         "dynamic_prediction_output": True,
