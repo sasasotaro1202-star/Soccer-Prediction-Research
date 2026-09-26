@@ -18,3 +18,13 @@ def test_matchday_refresh_contract_is_read_only_and_quarter_hourly():
     assert _has_immutable_action_pin(content, "actions/upload-artifact")
     assert "path: |" in content
     assert "artifacts/future_matchday_fixtures.csv" in content
+
+
+def test_matchday_prediction_execution_requires_complete_adopted_production_bundle():
+    content = Path(".github/workflows/soccer-matchday-intelligence.yml").read_text(encoding="utf-8")
+    assert 'Run current predictions when an adopted production model exists' in content
+    assert '[ -s models/current/production_model.pkl ] && [ -s models/current/production_model.json ]' in content
+    assert '&& [ -s models/current/model_registry.json ] && [ -s models/current/production_provenance.json ]' in content
+    assert "--model-policy production" in content
+    assert "DEFERRED_NO_ADOPTED_PRODUCTION_MODEL" in content
+    assert "validated candidates remain research-only" in content
