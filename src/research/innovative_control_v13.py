@@ -203,7 +203,11 @@ def pit_audit(df: pd.DataFrame) -> dict[str, Any]:
         reasons.append("duplicate_match_id")
     if "prediction_cutoff_at_utc" in df.columns:
         cutoff = pd.to_datetime(df["prediction_cutoff_at_utc"], utc=True, errors="coerce")
-        for c in ("available_at", "available_at_utc", "source_available_at_utc", "feature_source_max_available_at_utc"):
+        # source_available_at_utc on the current fixture can be a matured
+        # post-match result publication timestamp. It must not be interpreted as
+        # a pre-kickoff feature timestamp. Audit the prediction-path timestamps
+        # instead, especially the maximum availability of prior feature inputs.
+        for c in ("available_at", "available_at_utc", "feature_source_max_available_at_utc"):
             if c in df.columns:
                 t = pd.to_datetime(df[c], utc=True, errors="coerce")
                 bad = t.notna() & cutoff.notna() & (t > cutoff)
