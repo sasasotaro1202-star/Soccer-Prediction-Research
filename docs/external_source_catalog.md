@@ -26,6 +26,22 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 | TheSportsDB v1 | fixture_data | Fixtures/events/lineups/players/season data + entity fallback | Broad multi-sport database; football coverage varies | Verify provider timestamps and archival availability |
 | RSSSF | fixture_data | Historical/rare-competition results and scope discovery | Worldwide country/competition archive, including low-profile leagues | Archive-only; not a match-time feature source |
 | World Football Elo Ratings | rating | Independent national-team Elo strength | Worldwide national teams; long history | Date/match-indexed rating; map carefully to prediction time |
+| Wyscout Pappalardo Open Dataset | performance_data | Public event-data benchmark | ~1,941 matches from 2017/18 Big Five, 2018 World Cup and Euro 2016 | Historical event data; reconstruct feature availability |
+| Impect Open Data | performance_data | Packing, packing-xG and possession-value pxT | Bundesliga 2023/24 sample | Historical sample; verify release timing |
+| SkillCorner Open Data | tracking_data | Broadcast tracking, dynamic events and physical aggregates | 10 Australian A-League 2024/25 matches + season aggregates | Research sample, not broad live coverage |
+| Metrica Sports Sample | tracking_data | Synchronised tracking and event data | 3 anonymised matches | Historical benchmark only |
+| SoccerMon | tracking_data | GPS position, athlete wellness and load reports | Norwegian women's Toppserien, two seasons | Historical sample; not match-time publication |
+| Fjelstul World Cup Database | archive | Men's/women's World Cup matches, goals, bookings and squads | Deep tournament archive | Archive source; match-time features need separate verification |
+| English Women's Football Database | archive | Women's WSL/Championship matches, appearances and standings | WSL from 2011; Championship from 2014 | Archive source |
+| BrazilianFootball/Data | archive | Brazilian Serie A-D and Copa do Brasil results from official CBF dockets | ~2013-2025 | Archive source; verify publication times |
+| American Soccer Analysis | performance_data | xG, goals added/g+, xPass and advanced public metrics | MLS, NWSL and USL | Verify provider update semantics |
+| FPL-ID-Map | fantasy_data | Crosswalk between FPL and multiple provider IDs | FPL historical ecosystem | Identity only; not a match-time feature |
+| Wikidata Football Entity Graph | entity_data | Stable global entity metadata and identifiers | Worldwide public graph | Temporal facts require date filtering |
+| SoccerNet | tooling | Video/game-state research benchmark | 550+ broadcast games, ~13 tasks | Raw broadcast video has access restrictions |
+| schochastics Football Data | archive | Large historical domestic/international result archive | 1.237M+ matches, 207 domestic leagues + 20 international tournaments, 1888-2023 | Archive source |
+| International Results CC0 | archive | Very long national-team result/goalscorer history | 49,000+ matches, 1872-2024 | Archive source |
+| Fjelstul English Football Database | archive | Deep English Premier League/EFL history | 208,028 matches, 1888-2024 | Archive source |
+| Football.CSV World | fixture_data | Public-domain country/world fixture/result repositories | Brazil, Mexico and broader Football.CSV ecosystem | Match date only; feature availability separate |
 | FIFA/Coca-Cola World Ranking | rating | Official national-team strength context | Men's and women's national teams | Update times are coarse; do not infer exact match-time availability |
 | BetBrain | forecast | Free public AI/mathematical prediction benchmark using H2H, form, xG and team news | Broad coverage; historical archive availability varies | Historical timestamp must be documented |
 | Soccervista | forecast | Free prediction percentages and 1X2-style tips | Many countries and lower-profile leagues | Historical timestamp must be documented |
@@ -61,6 +77,8 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 - Availability shocks: Transfermarkt + official competition/club announcements where timestamps are recoverable.
 - Environment: Open-Meteo historical forecast runs at multiple lead times.
 - Scope expansion: OpenFootball World + OpenFootball Players for competition/entity discovery.
+- Open-data model research: Wyscout/Impect/SkillCorner/Metrica/SoccerMon provide small but high-information event/tracking samples for testing representations, tracking-derived features and predictability ceilings.
+- Historical breadth: schochastics, International Results, Fjelstul and Football.CSV add long-run and lower-tier coverage without treating archival results as prediction-time features.
 - Identity spine: Reep should be tested as the canonical cross-provider join layer before building many one-off name/ID mappings.
 - Router research: test whether external-source disagreement predicts internal-model error, without assuming the external source is superior.
 
