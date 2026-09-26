@@ -260,9 +260,16 @@ def complete_v13(out_dir: str) -> dict[str, Any]:
     }
 
     router_cols = ["block", "router_weight_entropy", "router_weight_max", "mean_predictability", "mean_disagreement"]
-    router = blocks.reindex(columns=[c for c in router_cols if c in blocks.columns]).copy()
-    if router.empty:
-        router_status = {"status": "NOT_EVALUATED"}
+    available_router = [c for c in router_cols if c in blocks.columns]
+    router = blocks.reindex(columns=available_router).copy()
+    required_router = {"router_weight_entropy", "router_weight_max"}
+    if not required_router.issubset(router.columns):
+        router.to_csv(root / "router_stability.csv", index=False)
+        router_status = {
+            "status": "NOT_EVALUATED",
+            "reason": "router_weight_columns_missing",
+            "available_columns": available_router,
+        }
     else:
         router["weight_entropy_delta"] = router["router_weight_entropy"].diff()
         router["weight_max_delta"] = router["router_weight_max"].diff()
