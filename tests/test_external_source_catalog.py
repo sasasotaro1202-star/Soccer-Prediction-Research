@@ -96,6 +96,15 @@ def test_large_archives_and_public_domain_world_data_are_catalogued():
     assert get_source("footballcsv_world").source_class == "fixture_data"
 
 
+def test_event_modelling_and_discovery_tooling_are_catalogued():
+    assert get_source("kloppy").source_class == "tooling"
+    assert get_source("socceraction").source_class == "tooling"
+    assert get_source("pysport_index").source_class == "tooling"
+    assert get_source("kloppy").production_status == "RESEARCH_CANDIDATE"
+    assert get_source("socceraction").production_status == "RESEARCH_CANDIDATE"
+    assert get_source("pysport_index").production_status == "DISCOVERY_SOURCE"
+
+
 def test_live_data_and_news_channels_are_catalogued():
     assert get_source("football_data_org").source_class == "live_data"
     assert get_source("espn_soccer_scoreboard").source_class == "live_data"
