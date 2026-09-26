@@ -5,7 +5,9 @@ on:
     branches: [main]
     paths:
       - "src/research/innovative_control_v13.py"
+      - "src/research/v13_ultimate_controls.py"
       - "tests/test_innovative_control_v13.py"
+      - "tests/test_v13_ultimate_controls.py"
       - ".github/workflows/innovative-control-v13.yml"
   workflow_dispatch:
 
