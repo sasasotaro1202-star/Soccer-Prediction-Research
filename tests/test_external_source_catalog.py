@@ -63,6 +63,13 @@ def test_football_data_is_not_automated_under_current_source_terms():
     assert source.automation_policy == "DO_NOT_AUTOMATE_WITHOUT_PERMISSION"
 
 
+def test_reep_is_catalogued_as_a_free_cross_provider_identity_layer():
+    source = get_source("reep")
+    assert source.source_class == "entity_data"
+    assert source.automation_policy == "FREE_DOWNLOAD_CC0"
+    assert "Opta" in " ".join(source.strengths)
+
+
 def test_national_team_strength_sources_are_catalogued_separately():
     assert get_source("world_football_elo").source_class == "rating"
     assert get_source("fifa_world_ranking").source_class == "rating"
