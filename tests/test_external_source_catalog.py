@@ -48,6 +48,16 @@ def test_openfootball_supports_scope_and_entity_expansion_without_claiming_match
     assert "FEATURE_AVAILABILITY" in get_source("openfootball_world").pit_default
 
 
+def test_timestamped_and_long_running_forecast_sources_are_catalogued():
+    assert get_source("soccerportalx").source_class == "forecast"
+    assert get_source("foresportia").source_class == "forecast"
+    assert get_source("tofiko").source_class == "forecast"
+    assert get_source("prosoccer").source_class == "forecast"
+    assert get_source("the_football_simulator").source_class == "forecast"
+    assert get_source("soccerportalx").production_status == "RESEARCH_ONLY"
+    assert get_source("foresportia").production_status == "RESEARCH_ONLY"
+
+
 def test_broad_external_prediction_and_stats_sources_are_research_scoped():
     assert get_source("betbrain").production_status == "RESEARCH_ONLY"
     assert get_source("soccervista").production_status == "RESEARCH_ONLY"
