@@ -96,6 +96,15 @@ def test_large_archives_and_public_domain_world_data_are_catalogued():
     assert get_source("footballcsv_world").source_class == "fixture_data"
 
 
+def test_live_data_and_news_channels_are_catalogued():
+    assert get_source("football_data_org").source_class == "live_data"
+    assert get_source("espn_soccer_scoreboard").source_class == "live_data"
+    assert get_source("gdelt_doc").source_class == "news"
+    assert get_source("gdelt_gkg").source_class == "news"
+    assert get_source("bbc_football_rss").source_class == "news"
+    assert get_source("gdelt_doc").production_status == "RESEARCH_CANDIDATE_FREE"
+
+
 def test_national_team_strength_sources_are_catalogued_separately():
     assert get_source("world_football_elo").source_class == "rating"
     assert get_source("fifa_world_ranking").source_class == "rating"
