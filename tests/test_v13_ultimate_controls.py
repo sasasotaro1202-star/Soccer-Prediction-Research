@@ -78,6 +78,12 @@ def test_complete_v13_builds_auditable_outputs(tmp_path):
     assert (tmp_path / "strategy_failure.csv").exists()
     assert (tmp_path / "health_monitor.json").exists()
     assert (tmp_path / "fallback_plan.json").exists()
+    assert (tmp_path / "nested_oos_status.json").exists()
+    assert (tmp_path / "router_stability.json").exists()
+    assert (tmp_path / "forecast_contract.csv").exists()
+    assert (tmp_path / "reproducibility.json").exists()
+    assert (tmp_path / "kill_switch.json").exists()
+    assert (tmp_path / "state_matrix.json").exists()
 
     revision = pd.read_csv(tmp_path / "revision_analysis.csv")
     assert bool(revision.loc[0, "revision_event"]) is True
