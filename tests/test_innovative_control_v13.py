@@ -54,6 +54,19 @@ def test_pit_audit_fails_closed_for_future_available_at():
     assert any("future_available_timestamp" in x for x in result["reasons"])
 
 
+def test_pit_audit_ignores_matured_current_result_timestamp():
+    df = pd.DataFrame(
+        {
+            "match_id": ["m1"],
+            "pit_verified": [True],
+            "prediction_cutoff_at_utc": ["2026-01-01T12:00:00Z"],
+            "source_available_at_utc": ["2026-01-01T15:00:00Z"],
+            "feature_source_max_available_at_utc": ["2026-01-01T11:00:00Z"],
+        }
+    )
+    assert pit_audit(df)["status"] == "PASS"
+
+
 def test_pit_audit_passes_clean_input():
     df = pd.DataFrame(
         {
