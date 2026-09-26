@@ -19,6 +19,7 @@ SourceClass = Literal[
     "news",
     "live_data",
     "odds_market",
+    "venue_data",
 ]
 
 
@@ -527,6 +528,28 @@ SOURCE_CATALOG: tuple[ExternalSourceProfile, ...] = (
         pit_default="APPOINTMENT_TIME_REQUIRED_FOR_PREMATCH_USE",
         production_status="RESEARCH_CANDIDATE",
         automation_policy="VERIFY_TERMS",
+    ),
+    ExternalSourceProfile(
+        key="openfootball_clubs_stadiums",
+        name="OpenFootball Clubs & Stadiums",
+        source_class="venue_data",
+        role="Global club/stadium identity and venue metadata",
+        breadth="Worldwide public-domain clubs and stadiums organized by region/country",
+        strengths=("club aliases", "stadium names", "city", "country", "historical club identity"),
+        pit_default="REFERENCE_METADATA;_DATE_FILTER_HISTORICAL_VENUE_CHANGES",
+        production_status="RESEARCH_CANDIDATE",
+        automation_policy="PUBLIC_DOMAIN_OPEN_DATA",
+    ),
+    ExternalSourceProfile(
+        key="world_soccer_stadiums",
+        name="WorldSoccerStadiums",
+        source_class="venue_data",
+        role="Global stadium geolocation and capacity enrichment",
+        breadth="4,887 football stadiums worldwide in the public dataset",
+        strengths=("latitude", "longitude", "capacity", "country", "town"),
+        pit_default="STATIC_REFERENCE;_VENUE_HISTORY_MUST_BE_DATE_FILTERED",
+        production_status="RESEARCH_CANDIDATE",
+        automation_policy="PUBLIC_DOMAIN_DATA",
     ),
     ExternalSourceProfile(
         key="world_football_elo",
