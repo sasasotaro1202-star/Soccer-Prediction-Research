@@ -175,3 +175,35 @@ def test_status_command_publishes_zero_state(tmp_path, monkeypatch):
     status = json.loads((tmp_path / "status.json").read_text(encoding="utf-8"))
     assert status["status"] == "NO_SETTLED_PREDICTIONS"
     assert status["summary"]["all"]["n"] == 0
+
+
+def test_preserve_timestamp_when_experience_state_is_unchanged():
+    from scripts.experience_ledger import _preserve_timestamp_when_unchanged
+
+    previous = {
+        "status": "NO_SETTLED_PREDICTIONS",
+        "settled_predictions": 0,
+        "ledger_rows": 0,
+        "generated_at_utc": "2026-09-26T00:00:00+00:00",
+        "summary": {"all": {"n": 0, "probability_rows": 0}},
+        "metric_deltas_vs_previous": {},
+    }
+    current = dict(previous)
+    current["generated_at_utc"] = "2026-09-26T04:00:00+00:00"
+    assert _preserve_timestamp_when_unchanged(previous, current)["generated_at_utc"] == previous["generated_at_utc"]
+
+
+def test_update_timestamp_when_experience_state_changes():
+    from scripts.experience_ledger import _preserve_timestamp_when_unchanged
+
+    previous = {
+        "status": "NO_SETTLED_PREDICTIONS",
+        "settled_predictions": 0,
+        "ledger_rows": 0,
+        "generated_at_utc": "2026-09-26T00:00:00+00:00",
+        "summary": {"all": {"n": 0, "probability_rows": 0}},
+    }
+    current = dict(previous)
+    current["ledger_rows"] = 1
+    current["generated_at_utc"] = "2026-09-26T04:00:00+00:00"
+    assert _preserve_timestamp_when_unchanged(previous, current)["generated_at_utc"] == current["generated_at_utc"]
