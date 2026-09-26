@@ -183,7 +183,7 @@ def test_national_team_strength_sources_are_catalogued_separately():
 
 
 def test_free_fixture_fallbacks_are_explicitly_research_scoped():
-    assert get_source("football_data").production_status == "RESEARCH_CANDIDATE"
+    assert get_source("football_data").production_status == "RESEARCH_MANUAL_ONLY"
     assert get_source("openligadb").production_status == "RESEARCH_CANDIDATE"
     assert get_source("api_football_free").production_status == "RESEARCH_CANDIDATE_FREE_TIER_ONLY"
     assert get_source("thesportsdb_v1").production_status == "RESEARCH_CANDIDATE"
