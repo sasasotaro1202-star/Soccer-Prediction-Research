@@ -124,6 +124,13 @@ def test_live_data_and_news_channels_are_catalogued():
     assert get_source("gdelt_doc").production_status == "RESEARCH_CANDIDATE_FREE"
 
 
+def test_official_asian_and_japanese_womens_sources_are_catalogued():
+    assert get_source("kleague_official").source_class == "live_data"
+    assert get_source("weleague_official").source_class == "live_data"
+    assert get_source("kleague_official").automation_policy == "VERIFY_OFFICIAL_ACCESS_TERMS"
+    assert get_source("weleague_official").automation_policy == "VERIFY_OFFICIAL_ACCESS_TERMS"
+
+
 def test_regional_and_high_coverage_sources_are_catalogued():
     assert get_source("playmakerstats").source_class == "fixture_data"
     assert get_source("bdfutbol").source_class == "fixture_data"
