@@ -26,6 +26,9 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 | TheSportsDB v1 | fixture_data | Fixtures/events/lineups/players/season data + entity fallback | Broad multi-sport database; football coverage varies | Verify provider timestamps and archival availability |
 | RSSSF | fixture_data | Historical/rare-competition results and scope discovery | Worldwide country/competition archive, including low-profile leagues | Archive-only; not a match-time feature source |
 | World Football Elo Ratings | rating | Independent national-team Elo strength | Worldwide national teams; long history | Date/match-indexed rating; map carefully to prediction time |
+| Global Football (Soccer) Data Lake | archive | Quality-gated global fixtures, lineups, xG, odds and league catalogue | 271 leagues, 673,966 fixtures, 11,104 teams, 182,125 players in current release | Use known_at when present; inspect league history_status and CC-BY-4.0 license |
+| Dynasty Scouting League 2024 | performance_data | Open event data, lineups and match metadata | 2024 JSONL sample | Reconstruct feature availability |
+| wosostats | performance_data | Women's USWNT/NWSL event benchmark | 2016 onward; community-collected and largely dormant | Audit source quality and event timestamps |
 | Wyscout Pappalardo Open Dataset | performance_data | Public event-data benchmark | ~1,941 matches from 2017/18 Big Five, 2018 World Cup and Euro 2016 | Historical event data; reconstruct feature availability |
 | Impect Open Data | performance_data | Packing, packing-xG and possession-value pxT | Bundesliga 2023/24 sample | Historical sample; verify release timing |
 | SkillCorner Open Data | tracking_data | Broadcast tracking, dynamic events and physical aggregates | 10 Australian A-League 2024/25 matches + season aggregates | Research sample, not broad live coverage |

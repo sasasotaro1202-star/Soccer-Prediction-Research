@@ -170,6 +170,13 @@ def test_venue_enrichment_sources_are_catalogued():
     assert get_source("world_soccer_stadiums").production_status == "RESEARCH_CANDIDATE"
 
 
+def test_global_data_lake_and_open_womens_event_sources_are_catalogued():
+    assert get_source("global_football_data_lake").source_class == "archive"
+    assert get_source("global_football_data_lake").production_status == "RESEARCH_CANDIDATE"
+    assert get_source("dynasty_scouting_league_2024").source_class == "performance_data"
+    assert get_source("wosostats").source_class == "performance_data"
+
+
 def test_national_team_strength_sources_are_catalogued_separately():
     assert get_source("world_football_elo").source_class == "rating"
     assert get_source("fifa_world_ranking").source_class == "rating"
