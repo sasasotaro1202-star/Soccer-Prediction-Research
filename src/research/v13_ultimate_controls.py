@@ -136,9 +136,71 @@ def _build_health(
     }
 
 
+def validate_prediction_contract(
+    prediction: np.ndarray,
+    *,
+    pit_status: str,
+    production_allowed: bool = False,
+) -> dict[str, Any]:
+    """Fail-closed validation of a research prediction payload."""
+    p = np.asarray(prediction, dtype=float)
+    reasons: list[str] = []
+    if p.ndim != 2 or p.shape[1] != 3:
+        reasons.append("probability_shape")
+    elif not np.isfinite(p).all():
+        reasons.append("probability_nonfinite")
+    elif (p < 0).any():
+        reasons.append("probability_negative")
+    elif not np.allclose(p.sum(axis=1), 1.0, atol=1e-6):
+        reasons.append("probability_not_normalized")
+    if _safe_status(pit_status) != "PASS":
+        reasons.append("pit_not_pass")
+    return {
+        "status": "PASS" if not reasons else "FAIL",
+        "reasons": reasons,
+        "production_allowed": bool(production_allowed and not reasons),
+    }
+
+
+def fallback_prediction(
+    baseline: np.ndarray,
+    candidate: np.ndarray,
+    *,
+    safety_ok: bool,
+) -> tuple[np.ndarray, str]:
+    """Choose candidate only when safety is proven; otherwise verified baseline."""
+    base = np.asarray(baseline, dtype=float)
+    cand = np.asarray(candidate, dtype=float)
+    if not safety_ok:
+        return base, "VERIFIED_BASELINE"
+    contract = validate_prediction_contract(cand, pit_status="PASS", production_allowed=False)
+    if contract["status"] != "PASS":
+        return base, "VERIFIED_BASELINE"
+    return cand, "CANDIDATE_RESEARCH_ONLY"
+
+
+def kill_switch_active(
+    *,
+    pit_pass: bool,
+    leakage_pass: bool,
+    artifact_integrity_pass: bool,
+    router_health_pass: bool,
+    calibration_pass: bool,
+    ood_surge: bool,
+) -> bool:
+    return not all([
+        pit_pass,
+        leakage_pass,
+        artifact_integrity_pass,
+        router_health_pass,
+        calibration_pass,
+        not ood_surge,
+    ])
+
+
 def _build_fallback_plan(result: dict[str, Any], manifest: dict[str, Any]) -> dict[str, Any]:
     return {
-        "status": "PASS",
+        "status": "TESTED",
         "production_changed": result.get("production_changed") is False,
         "fallback": {
             "primary": "standalone_logistic_baseline",
