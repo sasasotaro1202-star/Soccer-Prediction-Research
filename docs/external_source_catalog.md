@@ -50,6 +50,14 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 | Global Sports Archive | performance_data | Results, fixtures, tables, match statistics, odds movement, transfers | 500+ worldwide soccer leagues/cups/tournaments | Verify provider/retrieval times |
 | worldfootball.net | fixture_data | Fixtures, results, standings, historical records and player statistics | Broad competition and historical coverage | Verify publication time |
 
+## Open modelling and discovery tooling
+
+| Tool | Class | Contribution | Breadth / constraint |
+| --- | --- | --- | --- |
+| Kloppy | tooling | Normalises event/tracking data across provider formats | 16+ provider formats; BSD-3 |
+| socceraction | tooling | SPADL + xT/VAEP action-value features | Event-data transformation; source PIT still required |
+| PySport Open-Source Index | tooling | Discovery of additional open football/sports tools | Dozens of projects; discovery source only |
+
 ## News and live-state channels
 
 | Source | Class | Contribution | Breadth / constraint | PIT handling |
@@ -92,6 +100,7 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 - Identity spine: Reep should be tested as the canonical cross-provider join layer before building many one-off name/ID mappings.
 - Router research: test whether external-source disagreement predicts internal-model error, without assuming the external source is superior.
 - Information-shock research: GDELT + BBC feeds can be transformed into time-stamped news shock/state variables and tested for incremental predictive value.
+- Representation research: Kloppy + socceraction can turn newly discovered event sources into common SPADL/xT/VAEP representations, reducing source-specific implementation work.
 - Live-state research: football-data.org + ESPN can be used as redundant schedule/status channels, with cross-source disagreement monitored as a data-quality signal.
 
 Every lane remains research/shadow until it passes chronological OOS, calibration, robustness, PIT/replay and promotion gates.
