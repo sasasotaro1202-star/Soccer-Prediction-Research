@@ -50,3 +50,32 @@ def test_research_forecast_verification_accepts_empty_target_set(tmp_path):
     }
 
 
+
+
+def test_daily_research_forecast_defers_without_adopted_model(tmp_path, monkeypatch):
+    from src.prediction.research_forecast import FORECAST_COLUMNS, run
+
+    fixtures = tmp_path / "fixtures.csv"
+    output = tmp_path / "forecast.csv"
+    status = tmp_path / "status.json"
+    pd.DataFrame([{
+        "match_id": "m1",
+        "kickoff_utc": "2030-01-01T12:00:00Z",
+        "competition": "EPL",
+        "home_team": "Home FC",
+        "away_team": "Away FC",
+    }]).to_csv(fixtures, index=False)
+
+    monkeypatch.chdir(tmp_path)
+    result = run(
+        str(fixtures),
+        str(output),
+        str(status),
+        "2029-12-31T12:00:00Z",
+    )
+
+    assert result["status"] == "DEFERRED_NO_ADOPTED_MODEL"
+    assert result["prediction_rows"] == 0
+    frame = pd.read_csv(output)
+    assert list(frame.columns) == list(FORECAST_COLUMNS)
+    assert frame.empty
