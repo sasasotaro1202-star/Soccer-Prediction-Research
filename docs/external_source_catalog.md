@@ -87,6 +87,16 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 | ProSoccer.GR | forecast | Neural/computational forecast, score and O/U outputs | 150+ leagues/cups | Weekly/daily update schedule; reconstruct exact row availability |
 | The Football Simulator | forecast | Transparent Monte Carlo match/season probabilities | 12 current competitions; 36k+ historical results and 95 CSV files | Verify row timestamp before replay |
 
+## Market-odds and referee channels
+
+| Source | Class | Contribution | Current free availability | PIT handling |
+| --- | --- | --- | --- | --- |
+| Odds-API.io | odds_market | Pre-match/live bookmaker odds and market snapshots | Free tier: 100 req/hour, 500/day, 2 recreational books | Preserve request/provider timestamps; distinguish snapshots from closing prices |
+| PulseScore | odds_market | Multi-book canonical odds and freshness | Free BASIC: 500 requests/month | Preserve provider/request time |
+| StatsBet Referees | performance_data | Cards, goals, penalties and referee histories | 130+ leagues | Appointment availability must precede prediction time |
+| RefsRadar | performance_data | Referee cards/fouls/penalties and home-bias features | 27 leagues / 16 countries | Appointment time required for pre-match feature |
+| ScorelineAI Referees | performance_data | Expected cards and discipline probabilities | 1,600+ active referees | Appointment time required; research only |
+
 ## News and live-state channels
 
 | Source | Class | Contribution | Breadth / constraint | PIT handling |
@@ -134,6 +144,8 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 - Broad acquisition research: soccerdata/worldfootballR should be evaluated as collectors, not as a single information source; every downstream provider remains independently PIT-audited.
 - Live cross-checking: Sofascore/FotMob can be used as redundant state channels, with disagreements feeding data-quality and source-reliability monitoring.
 - Live-state research: football-data.org + ESPN can be used as redundant schedule/status channels, with cross-source disagreement monitored as a data-quality signal.
+- Market research: Odds-API.io/PulseScore can provide free bounded odds snapshots for market-prior and price-movement experiments; no automatic paid escalation.
+- Referee research: appointment-aware referee features can augment card/penalty/O-U models and potentially provide an external state variable for match volatility.
 - Regional coverage research: J.League Official + Kooora + BDFutbol + PlaymakerStats should be used to discover competitions that are missing from the current scope before feature/model work begins.
 
 Every lane remains research/shadow until it passes chronological OOS, calibration, robustness, PIT/replay and promotion gates.
