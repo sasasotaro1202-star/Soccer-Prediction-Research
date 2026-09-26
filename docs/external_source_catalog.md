@@ -19,11 +19,13 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 | Open-Meteo | weather | Historical weather + archived forecast runs | Global | Archived forecast run timestamp is preferred |
 | OpenFootball World | fixture_data | Fixture/result coverage and competition discovery | North America, Asia, Africa, Australia, Europe and more | Match date is not a feature-availability timestamp |
 | OpenFootball Players | entity_data | Player/entity normalization and discovery | Country-by-country reference data | Reference only; not a match-time feature |
-| Football-Data.co.uk | fixture_data | Free historical results, match statistics, opening/closing bookmaker odds; current fixture files have documented collection windows | Multiple European + worldwide league datasets; country coverage varies | Use documented fixture collection windows when applicable |
+| Football-Data.co.uk | fixture_data | Free historical results, match statistics, opening/closing bookmaker odds; current fixture files have documented collection windows | Multiple European + worldwide league datasets; country coverage varies | PIT useful, but current site prohibits automated bots/scrapers/AI use without permission; manual reference only |
 | OpenLigaDB | fixture_data | Free fixtures/results and league-season lookup | Bundesliga + many additional leagues; no key; 60 requests/min/IP | Record update/retrieval time for live use |
 | API-Football Free Tier | fixture_data | Structured fixtures/events/lineups/statistics/odds/predictions/injuries/transfers | Broad competition endpoint coverage; $0 tier is 100 requests/day and has recent-season limits | Record provider/request timestamps; free tier only |
 | TheSportsDB v1 | fixture_data | Fixtures/events/lineups/players/season data + entity fallback | Broad multi-sport database; football coverage varies | Verify provider timestamps and archival availability |
 | RSSSF | fixture_data | Historical/rare-competition results and scope discovery | Worldwide country/competition archive, including low-profile leagues | Archive-only; not a match-time feature source |
+| World Football Elo Ratings | rating | Independent national-team Elo strength | Worldwide national teams; long history | Date/match-indexed rating; map carefully to prediction time |
+| FIFA/Coca-Cola World Ranking | rating | Official national-team strength context | Men's and women's national teams | Update times are coarse; do not infer exact match-time availability |
 | BetBrain | forecast | Free public AI/mathematical prediction benchmark using H2H, form, xG and team news | Broad coverage; historical archive availability varies | Historical timestamp must be documented |
 | Soccervista | forecast | Free prediction percentages and 1X2-style tips | Many countries and lower-profile leagues | Historical timestamp must be documented |
 | FootyStats | performance_data | xG, BTTS, goals, corners, cards, correct scores, form | 1,500+ leagues according to current site | Verify publication/feature availability |
@@ -33,7 +35,7 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 
 ## Candidate policy notes
 
-- Football-Data.co.uk is a high-priority historical benchmark because its fixtures page documents when odds are collected, which is unusually useful for PIT reconstruction.
+- Football-Data.co.uk is useful for PIT methodology and manual reference, but its current terms explicitly restrict automated bots/scrapers/AI use; it must not enter GitHub Actions automation without permission.
 - OpenLigaDB is a lightweight no-auth fallback for German and additional league coverage.
 - API-Football is only a bounded free-tier candidate: 100 requests/day, no credit card on the free version, and no automatic paid escalation.
 - TheSportsDB is a low-volume fallback because free API limits and coverage vary.
