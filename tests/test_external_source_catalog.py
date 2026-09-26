@@ -141,6 +141,15 @@ def test_broad_live_providers_and_multi_source_tooling_are_catalogued():
     assert get_source("sofascore_public").production_status == "RESEARCH_CANDIDATE"
 
 
+def test_odds_and_referee_channels_are_catalogued():
+    assert get_source("odds_api_io").source_class == "odds_market"
+    assert get_source("pulsescore_odds").source_class == "odds_market"
+    assert get_source("statsbet_referees").source_class == "performance_data"
+    assert get_source("refsradar").source_class == "performance_data"
+    assert get_source("scorelineai_referees").source_class == "performance_data"
+    assert get_source("odds_api_io").production_status == "RESEARCH_CANDIDATE_FREE_TIER"
+
+
 def test_national_team_strength_sources_are_catalogued_separately():
     assert get_source("world_football_elo").source_class == "rating"
     assert get_source("fifa_world_ranking").source_class == "rating"
