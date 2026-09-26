@@ -150,6 +150,13 @@ def test_odds_and_referee_channels_are_catalogued():
     assert get_source("odds_api_io").production_status == "RESEARCH_CANDIDATE_FREE_TIER"
 
 
+def test_free_api_fixture_and_lineup_candidates_are_catalogued():
+    assert get_source("openfootapi").source_class == "live_data"
+    assert get_source("bsd_free_football_api").source_class == "live_data"
+    assert get_source("openfootapi").production_status == "RESEARCH_CANDIDATE"
+    assert get_source("bsd_free_football_api").production_status == "RESEARCH_CANDIDATE_FREE"
+
+
 def test_national_team_strength_sources_are_catalogued_separately():
     assert get_source("world_football_elo").source_class == "rating"
     assert get_source("fifa_world_ranking").source_class == "rating"
