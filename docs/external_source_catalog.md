@@ -50,6 +50,15 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 | Global Sports Archive | performance_data | Results, fixtures, tables, match statistics, odds movement, transfers | 500+ worldwide soccer leagues/cups/tournaments | Verify provider/retrieval times |
 | worldfootball.net | fixture_data | Fixtures, results, standings, historical records and player statistics | Broad competition and historical coverage | Verify publication time |
 
+## Regional and high-coverage discovery
+
+| Source | Class | Contribution | Breadth / constraint | PIT handling |
+| --- | --- | --- | --- | --- |
+| PlaymakerStats | fixture_data | Competition/team/player discovery, fixtures, reports and context | Current site reports 6.22M fixtures, 2.84M players and 5,126 competitions | Verify page publication time and automation terms |
+| BDFutbol | fixture_data | Deep Spanish history and lower-tier/women's coverage | Current site reports 377k matches and 175k players | Verify publication time and automation terms |
+| J.League Official Match Centre | live_data | Official Japan fixtures, starting-XI status and match data | J.League and supported Japanese cups/competitions | Record JST event/publication/retrieval times |
+| Kooora | live_data | Regional live scores, fixtures, standings and football news | Strong Middle East/North Africa + international coverage | Verify timestamps and terms |
+
 ## Open modelling and discovery tooling
 
 | Tool | Class | Contribution | Breadth / constraint |
@@ -102,5 +111,6 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 - Information-shock research: GDELT + BBC feeds can be transformed into time-stamped news shock/state variables and tested for incremental predictive value.
 - Representation research: Kloppy + socceraction can turn newly discovered event sources into common SPADL/xT/VAEP representations, reducing source-specific implementation work.
 - Live-state research: football-data.org + ESPN can be used as redundant schedule/status channels, with cross-source disagreement monitored as a data-quality signal.
+- Regional coverage research: J.League Official + Kooora + BDFutbol + PlaymakerStats should be used to discover competitions that are missing from the current scope before feature/model work begins.
 
 Every lane remains research/shadow until it passes chronological OOS, calibration, robustness, PIT/replay and promotion gates.
