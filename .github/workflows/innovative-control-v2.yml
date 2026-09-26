@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: innovative-control-v2-\${{ github.ref }}
+  group: innovative-control-v2-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -24,7 +24,7 @@ jobs:
       - name: Checkout exact commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: \${{ github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Setup Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
@@ -105,7 +105,7 @@ jobs:
       - name: Upload v2 evidence
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789
         with:
-          name: innovative-control-v2-\${{ github.run_id }}
+          name: innovative-control-v2-${{ github.run_id }}
           path: artifacts/innovative_control_v2
           retention-days: 7
           if-no-files-found: error
