@@ -193,3 +193,17 @@ def test_rsssf_is_archive_only():
     source = get_source("rsssf")
     assert source.source_class == "fixture_data"
     assert source.pit_default.startswith("ARCHIVAL_RESULTS_ONLY")
+
+
+def test_source_catalog_keys_and_pit_metadata_are_unique_and_explicit():
+    keys = [source.key for source in SOURCE_CATALOG]
+    assert keys
+    assert len(keys) == len(set(keys))
+    assert all(source.key.strip() for source in SOURCE_CATALOG)
+    assert all(source.pit_default.strip() for source in SOURCE_CATALOG)
+    assert all(source.automation_policy.strip() for source in SOURCE_CATALOG)
+
+
+def test_source_catalog_never_marks_entries_as_production_by_catalog_membership():
+    forbidden = {"ADOPT", "PRODUCTION", "STABLE"}
+    assert all(source.production_status not in forbidden for source in SOURCE_CATALOG)
