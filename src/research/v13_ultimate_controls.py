@@ -259,7 +259,8 @@ def complete_v13(out_dir: str) -> dict[str, Any]:
         "promotion_ready": False,
     }
 
-    router = blocks[[c for c in ["block", "router_weight_entropy", "router_weight_max", "mean_predictability", "mean_disagreement"] if c in blocks.columns]].copy()
+    router_cols = ["block", "router_weight_entropy", "router_weight_max", "mean_predictability", "mean_disagreement"]
+    router = blocks.reindex(columns=[c for c in router_cols if c in blocks.columns]).copy()
     if router.empty:
         router_status = {"status": "NOT_EVALUATED"}
     else:

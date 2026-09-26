@@ -109,7 +109,7 @@ def model_disagreement_features(model_probs: dict[str, np.ndarray]) -> pd.DataFr
     majority = np.apply_along_axis(lambda r: np.bincount(r, minlength=3).argmax(), 1, top)
     agreement = (top == majority[:, None]).mean(axis=1)
     pair_js, _ = pairwise_js(model_probs)
-    row_std = stack.std(axis=1).mean(axis=(1, 2))
+    row_std = stack.std(axis=1).mean(axis=1)
     row_range = stack.max(axis=(1, 2)) - stack.min(axis=(1, 2))
     sorted_p = np.sort(mixture, axis=1)
     margin = sorted_p[:, -1] - sorted_p[:, -2]
