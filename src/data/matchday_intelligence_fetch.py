@@ -711,6 +711,7 @@ def _collect_sofascore_day(
     now_ts: pd.Timestamp,
     horizon_hours: float,
     max_events: int,
+    detail_horizon_hours: float | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]], str | None]:
     date_key = day.strftime("%Y-%m-%d")
     try:
@@ -724,6 +725,9 @@ def _collect_sofascore_day(
     errors: list[dict[str, str]] = []
     parsed: list[dict[str, Any]] = []
     upper = now_ts + pd.Timedelta(hours=float(horizon_hours))
+    detail_upper = now_ts + pd.Timedelta(
+        hours=float(horizon_hours if detail_horizon_hours is None else detail_horizon_hours)
+    )
     for event in payload.get("events", []) or []:
         core = parse_sofascore_event(event)
         if not core:
@@ -750,7 +754,11 @@ def _collect_sofascore_day(
         row["sofascore_event_id"] = core["sofascore_event_id"]
         parsed.append(row)
     parsed.sort(key=lambda x: (str(x["kickoff_utc"]), str(x["match_id"])))
-    for row in parsed[:min(int(max_events), SOFASCORE_LINEUP_ENRICH_LIMIT)]:
+    detail_rows = [
+        row for row in parsed
+        if (_ts(row["kickoff_utc"]) is not None and _ts(row["kickoff_utc"]) <= detail_upper)
+    ]
+    for row in detail_rows[:min(int(max_events), SOFASCORE_LINEUP_ENRICH_LIMIT)]:
         kickoff = _ts(row["kickoff_utc"])
         if kickoff is None:
             continue
@@ -825,6 +833,10 @@ def collect_matchday_snapshots(
     """Collect current evidence; no historical PIT claim is made."""
     now = _now()
     now_ts = pd.Timestamp(now)
+    discovery_horizon_hours = max(
+        float(horizon_hours),
+        max(24.0, float(max(1, int(days))) * 24.0),
+    )
     fetcher = ExternalFetcher(cache_dir=cache_dir, timeout=20.0, retries=3, backoff=1.0)
     rows: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
@@ -1048,8 +1060,9 @@ def collect_matchday_snapshots(
                 fetcher,
                 day=day_start,
                 now_ts=now_ts,
-                horizon_hours=float(horizon_hours),
+                horizon_hours=discovery_horizon_hours,
                 max_events=max_events - len(rows),
+                detail_horizon_hours=float(horizon_hours),
             )
             for row in day_rows:
                 fixture_key = _fixture_key(row)
@@ -1069,7 +1082,7 @@ def collect_matchday_snapshots(
             fd_rows, fd_errors, _ = _collect_football_data_fallback(
                 fetcher,
                 now_ts=now_ts,
-                horizon_hours=float(horizon_hours),
+                horizon_hours=discovery_horizon_hours,
                 max_events=max_events - len(rows),
             )
             day_date = day_start.date()
@@ -1118,6 +1131,8 @@ def collect_matchday_snapshots(
         "historical_pit_claim": False,
         "current_snapshot_pit_basis": "retrieval_time_recorded_separately;_source_availability_unknown;PIT_not_verified",
         "free_keyless_default": True,
+        "discovery_horizon_hours": float(discovery_horizon_hours),
+        "detail_horizon_hours": float(horizon_hours),
     }
     return frame, status
 
