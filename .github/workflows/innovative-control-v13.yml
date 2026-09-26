@@ -106,6 +106,20 @@ jobs:
           set -euo pipefail
           python -m src.research.innovative_control_v13             --features artifacts/pit_replay_features.csv             --out artifacts/innovative_control_v13
 
+      - name: Complete v13 evidence and safety layer
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: |
+          set -euo pipefail
+          python -m src.research.v13_ultimate_controls --out artifacts/innovative_control_v13
+          test -s artifacts/innovative_control_v13/prediction_history.csv
+          test -s artifacts/innovative_control_v13/revision_analysis.csv
+          test -s artifacts/innovative_control_v13/strategy_failure.csv
+          test -s artifacts/innovative_control_v13/health_monitor.json
+          test -s artifacts/innovative_control_v13/fallback_plan.json
+          test -s artifacts/innovative_control_v13/ultimate_completion.json
+
       - name: Validate evidence, PIT isolation and artifact integrity
         shell: bash
         run: |
@@ -122,6 +136,12 @@ jobs:
           test -s artifacts/innovative_control_v13/prediction_policy_and_output.csv
           test -s artifacts/innovative_control_v13/future_failure_by_block.json
           test -s artifacts/innovative_control_v13/robustness_stress.csv
+          test -s artifacts/innovative_control_v13/prediction_history.csv
+          test -s artifacts/innovative_control_v13/revision_analysis.csv
+          test -s artifacts/innovative_control_v13/strategy_failure.csv
+          test -s artifacts/innovative_control_v13/health_monitor.json
+          test -s artifacts/innovative_control_v13/fallback_plan.json
+          test -s artifacts/innovative_control_v13/ultimate_completion.json
           python - <<'PY'
           import json
           from pathlib import Path
