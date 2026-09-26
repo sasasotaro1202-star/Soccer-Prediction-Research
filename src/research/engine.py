@@ -160,7 +160,13 @@ def _load_preflight_pit_features(out: Path, history: pd.DataFrame) -> pd.DataFra
         return None
 
     features = pd.read_csv(path)
-    required_features = {"match_id", "pit_verified", "prediction_cutoff_at_utc", "kickoff_utc"}
+    required_features = {
+        "match_id",
+        "pit_verified",
+        "prediction_cutoff_at_utc",
+        "kickoff_utc",
+        "feature_source_max_available_at_utc",
+    }
     missing = sorted(required_features - set(features.columns))
     if missing:
         raise RuntimeError(
@@ -175,33 +181,45 @@ def _load_preflight_pit_features(out: Path, history: pd.DataFrame) -> pd.DataFra
     if outcomes["match_id"].isna().any() or outcomes["match_id"].duplicated().any():
         raise RuntimeError("Historical outcome table has missing/duplicate match_id values")
 
-    if "source_available_at_utc" not in history.columns:
-        raise RuntimeError(
-            "Historical PIT evidence handoff is missing source_available_at_utc"
-        )
-    # Unverified historical rows are intentionally allowed to have unknown
-    # publication timestamps. They are excluded by downstream PIT filters.
-    # Fail closed only for rows that the preflight feature handoff actually
-    # claims as PIT-verified: a verified row without a valid source timestamp
-    # cannot safely enter OOS training/evaluation.
-    verified_ids = set(
-        features.loc[features["pit_verified"].eq(True), "match_id"].astype(str).tolist()
+    # The target match's own publication time is not part of the prediction
+    # feature PIT condition: its outcome is the label being scored. The actual
+    # PIT condition is that every historical feature consumed for this target was
+    # available by the prediction cutoff. The preflight feature handoff exposes
+    # that invariant as feature_source_max_available_at_utc.
+    verified = features["pit_verified"].eq(True)
+    cutoff = pd.to_datetime(features["prediction_cutoff_at_utc"], utc=True, errors="coerce")
+    feature_available = pd.to_datetime(
+        features["feature_source_max_available_at_utc"], utc=True, errors="coerce"
     )
-    pit_timing = history[["match_id", "source_available_at_utc"]].copy()
-    pit_timing["match_id"] = pit_timing["match_id"].astype(str)
-    pit_timing["source_available_at_utc"] = pd.to_datetime(
-        pit_timing["source_available_at_utc"], utc=True, errors="coerce"
+    invalid_feature_pit = verified & (
+        cutoff.isna()
+        | feature_available.isna()
+        | (feature_available > cutoff)
     )
-    invalid_verified = pit_timing["match_id"].isin(verified_ids) & pit_timing["source_available_at_utc"].isna()
-    if invalid_verified.any():
+    if invalid_feature_pit.any():
         raise RuntimeError(
-            "Historical PIT evidence handoff contains invalid source_available_at_utc "
-            f"for {int(invalid_verified.sum())} PIT-verified rows"
+            "PIT preflight feature handoff contains invalid feature_source_max_available_at_utc "
+            f"for {int(invalid_feature_pit.sum())} PIT-verified rows"
         )
 
+    # Keep source publication evidence when it is present in the historical table,
+    # but do not require it for the target label row: source availability of the
+    # outcome itself is not the predictor-side PIT condition.
+    if "source_available_at_utc" in history.columns:
+        pit_timing = history[["match_id", "source_available_at_utc"]].copy()
+        pit_timing["match_id"] = pit_timing["match_id"].astype(str)
+        pit_timing["source_available_at_utc"] = pd.to_datetime(
+            pit_timing["source_available_at_utc"], utc=True, errors="coerce"
+        )
+    else:
+        pit_timing = pd.DataFrame({
+            "match_id": history["match_id"].astype(str),
+            "source_available_at_utc": pd.NaT,
+        })
+
     # build_match_features focuses on model features and may omit publication
-    # evidence metadata. Restore the authoritative PIT timestamp from the same
-    # preflight-enriched history before downstream OOS consumers see the frame.
+    # evidence metadata. Restore optional source publication evidence from the
+    # historical table without weakening predictor-side PIT validation.
     features = features.drop(columns=["source_available_at_utc"], errors="ignore")
     merged = features.merge(
         outcomes,
