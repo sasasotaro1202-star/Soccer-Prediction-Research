@@ -113,6 +113,24 @@ def parse_football_txt(text: str, competition: str, season_start: int, source_ur
     return pd.DataFrame(rows).drop_duplicates(subset=["competition", "season_start", "kickoff_utc", "home_team", "away_team"]) if rows else pd.DataFrame()
 
 
+def _expected_season_bounds(start_year: int) -> tuple[pd.Timestamp, pd.Timestamp]:
+    # Allow early qualifiers and late finals, but reject impossible dates that
+    # can arise from stale/corrupted cached OpenFootball files.
+    lower = pd.Timestamp(datetime(start_year, 6, 1, tzinfo=timezone.utc))
+    upper = pd.Timestamp(datetime(start_year + 1, 8, 31, 23, 59, 59, tzinfo=timezone.utc))
+    return lower, upper
+
+
+def _season_dates_valid(frame: pd.DataFrame, start_year: int) -> bool:
+    if frame.empty:
+        return True
+    kickoff = pd.to_datetime(frame["kickoff_utc"], utc=True, errors="coerce")
+    if kickoff.isna().any():
+        return False
+    lower, upper = _expected_season_bounds(start_year)
+    return bool((kickoff >= lower).all() and (kickoff <= upper).all())
+
+
 def load_openfootball_season(competition: str, start_year: int, cache_dir: str = "data/raw/openfootball") -> pd.DataFrame:
     if competition not in BASE_URLS or start_year < SEASON_START[competition]:
         return pd.DataFrame()
@@ -120,12 +138,39 @@ def load_openfootball_season(competition: str, start_year: int, cache_dir: str =
     url = BASE_URLS[competition].format(season=season)
     cache = Path(cache_dir) / f"{competition}_{season}.txt"
     cache.parent.mkdir(parents=True, exist_ok=True)
-    if cache.exists():
+
+    if cache.exists() and cache.stat().st_size > 0:
         raw = cache.read_bytes()
-    else:
-        r = requests.get(url, timeout=45, headers={"User-Agent": "SoccerPredictionResearch/1.0"})
-        r.raise_for_status(); raw = r.content; cache.write_bytes(raw)
-    return parse_football_txt(raw.decode("utf-8", errors="replace"), competition, start_year, url, raw)
+        cached = parse_football_txt(
+            raw.decode("utf-8", errors="replace"),
+            competition,
+            start_year,
+            url,
+            raw,
+        )
+        if _season_dates_valid(cached, start_year):
+            return cached
+
+    # Stale/corrupt cached content is never used silently. Re-fetch the exact
+    # public source and fail closed when the refreshed content is still invalid.
+    response = requests.get(url, timeout=45, headers={"User-Agent": "SoccerPredictionResearch/1.0"})
+    response.raise_for_status()
+    raw = response.content
+    parsed = parse_football_txt(
+        raw.decode("utf-8", errors="replace"),
+        competition,
+        start_year,
+        url,
+        raw,
+    )
+    if not _season_dates_valid(parsed, start_year):
+        lower, upper = _expected_season_bounds(start_year)
+        raise ValueError(
+            f"OpenFootball {competition} {season} contains kickoff dates outside "
+            f"expected season bounds {lower.isoformat()}..{upper.isoformat()}"
+        )
+    cache.write_bytes(raw)
+    return parsed
 
 
 def load_openfootball_history(start_year: int = 2010, end_year: int = 2025, max_workers: int = 8) -> tuple[pd.DataFrame, pd.DataFrame]:
