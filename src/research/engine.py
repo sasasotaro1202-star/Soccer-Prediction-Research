@@ -179,13 +179,24 @@ def _load_preflight_pit_features(out: Path, history: pd.DataFrame) -> pd.DataFra
         raise RuntimeError(
             "Historical PIT evidence handoff is missing source_available_at_utc"
         )
+    # Unverified historical rows are intentionally allowed to have unknown
+    # publication timestamps. They are excluded by downstream PIT filters.
+    # Fail closed only for rows that the preflight feature handoff actually
+    # claims as PIT-verified: a verified row without a valid source timestamp
+    # cannot safely enter OOS training/evaluation.
+    verified_ids = set(
+        features.loc[features["pit_verified"].eq(True), "match_id"].astype(str).tolist()
+    )
     pit_timing = history[["match_id", "source_available_at_utc"]].copy()
+    pit_timing["match_id"] = pit_timing["match_id"].astype(str)
     pit_timing["source_available_at_utc"] = pd.to_datetime(
         pit_timing["source_available_at_utc"], utc=True, errors="coerce"
     )
-    if pit_timing["source_available_at_utc"].isna().any():
+    invalid_verified = pit_timing["match_id"].isin(verified_ids) & pit_timing["source_available_at_utc"].isna()
+    if invalid_verified.any():
         raise RuntimeError(
-            "Historical PIT evidence handoff contains invalid source_available_at_utc"
+            "Historical PIT evidence handoff contains invalid source_available_at_utc "
+            f"for {int(invalid_verified.sum())} PIT-verified rows"
         )
 
     # build_match_features focuses on model features and may omit publication
