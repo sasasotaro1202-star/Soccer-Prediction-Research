@@ -24,6 +24,12 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 | API-Football Free Tier | fixture_data | Structured fixtures/events/lineups/statistics/odds/predictions/injuries/transfers | Broad competition endpoint coverage; $0 tier is 100 requests/day and has recent-season limits | Record provider/request timestamps; free tier only |
 | TheSportsDB v1 | fixture_data | Fixtures/events/lineups/players/season data + entity fallback | Broad multi-sport database; football coverage varies | Verify provider timestamps and archival availability |
 | RSSSF | fixture_data | Historical/rare-competition results and scope discovery | Worldwide country/competition archive, including low-profile leagues | Archive-only; not a match-time feature source |
+| BetBrain | forecast | Free public AI/mathematical prediction benchmark using H2H, form, xG and team news | Broad coverage; historical archive availability varies | Historical timestamp must be documented |
+| Soccervista | forecast | Free prediction percentages and 1X2-style tips | Many countries and lower-profile leagues | Historical timestamp must be documented |
+| FootyStats | performance_data | xG, BTTS, goals, corners, cards, correct scores, form | 1,500+ leagues according to current site | Verify publication/feature availability |
+| Soccerway | performance_data | Fixtures, results, lineups, xG, possession, player ratings, H2H | Hundreds of leagues/competitions worldwide | Verify publication time |
+| Global Sports Archive | performance_data | Results, fixtures, tables, match statistics, odds movement, transfers | 500+ worldwide soccer leagues/cups/tournaments | Verify provider/retrieval times |
+| worldfootball.net | fixture_data | Fixtures, results, standings, historical records and player statistics | Broad competition and historical coverage | Verify publication time |
 
 ## Candidate policy notes
 
@@ -32,6 +38,8 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 - API-Football is only a bounded free-tier candidate: 100 requests/day, no credit card on the free version, and no automatic paid escalation.
 - TheSportsDB is a low-volume fallback because free API limits and coverage vary.
 - RSSSF is valuable primarily for discovery and long-tail historical coverage rather than live prediction features.
+- BetBrain and Soccervista are external forecast benchmarks only; their published percentages should be tested, not trusted.
+- FootyStats, Soccerway and Global Sports Archive are broad enrichment/scope sources; use them to expand cases and feature channels before considering fusion.
 
 ## Operating rules
 
