@@ -67,6 +67,16 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 | socceraction | tooling | SPADL + xT/VAEP action-value features | Event-data transformation; source PIT still required |
 | PySport Open-Source Index | tooling | Discovery of additional open football/sports tools | Dozens of projects; discovery source only |
 
+## Timestamped and long-running external forecast benchmarks
+
+| Source | Class | Contribution | Current public scope/history | PIT handling |
+| --- | --- | --- | --- | --- |
+| SoccerPortalX | forecast | Multi-stage pre-kickoff probabilities, live refreshes, model-versioned archive | 153 competitions; 421k+ graded/timestamped forecasts; corpus 1.6M+ matches / 1,243 competitions / 34 years | Strong candidate: verify per-row archive timestamp and terms |
+| Foresportia | forecast | 1X2 + BTTS/O-U/DNB + score candidates + stability | 40+ current competitions; public history says 18k+ verified matches in 53 competitions | Use per-row published/update timestamp; keep strict PIT |
+| Tofiko | forecast | Poisson/Dixon-Coles/Elo 1X2 probabilities + market comparison | 30+ leagues; 800+ tracked forecasts | Verify exact forecast-publication time |
+| ProSoccer.GR | forecast | Neural/computational forecast, score and O/U outputs | 150+ leagues/cups | Weekly/daily update schedule; reconstruct exact row availability |
+| The Football Simulator | forecast | Transparent Monte Carlo match/season probabilities | 12 current competitions; 36k+ historical results and 95 CSV files | Verify row timestamp before replay |
+
 ## News and live-state channels
 
 | Source | Class | Contribution | Breadth / constraint | PIT handling |
@@ -98,7 +108,8 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 
 ## Immediate research lanes
 
-- Forecast fusion: internal + Opta + Forebet + PredictZ + Oddspedia.
+- Forecast fusion: internal + Opta + Forebet + PredictZ + Oddspedia + SoccerPortalX + Foresportia + Tofiko + ProSoccer + The Football Simulator.
+- Forecast archive replay: prioritize SoccerPortalX/Foresportia where historical timestamps and raw probability rows can be independently recovered.
 - Historical benchmark: FiveThirtyEight SPI + ClubElo.
 - Process features: Understat + FBref + StatsBomb.
 - Availability shocks: Transfermarkt + official competition/club announcements where timestamps are recoverable.
