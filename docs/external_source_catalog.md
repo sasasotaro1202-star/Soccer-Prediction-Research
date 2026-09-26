@@ -2,38 +2,41 @@
 
 This catalog is deliberately wider than external match forecasts. Sources are separated by the information type they can contribute to the prediction stack.
 
-## Priority research candidates
+## Current source candidates
 
-| Source | Class | What it can contribute | Breadth / constraint | PIT handling |
+| Source | Class | Contribution | Breadth / constraint | PIT handling |
 | --- | --- | --- | --- | --- |
-| Forebet | forecast | 1X2 probabilities, correct score, goals, BTTS, handicap, cards, corners | Very broad global coverage; site/FAQ currently describe 850+ to 1,200+ leagues | Historical rows require documented availability; otherwise UNKNOWN |
+| Forebet | forecast | 1X2 probabilities, correct score, goals, BTTS, handicap, cards, corners | Very broad global coverage; current site/FAQ describe 850+ to 1,200+ leagues | Historical availability timestamp required |
 | PredictZ | forecast | 1X2 odds display, correct-score tips, recent form | Broad global coverage | Historical publication timestamp generally UNKNOWN |
 | Opta Analyst | forecast | External 1X2 probabilities / season forecasts | Major competitions; public history incomplete | Timestamp must be documented per row |
-| Oddspedia SmartBet | forecast | 1X2 model probabilities; injuries/player stats/H2H context; odds comparison | Broad but competition coverage varies | Historical timestamp must be documented |
-| ClubElo | rating | Date-specific team strength, historical Elo, home-field adjustment | Long historical European club coverage | Rating snapshot itself is date-indexed; map snapshot date to prediction time |
-| FiveThirtyEight SPI | forecast | Historical pre-match SPI + forecast benchmark | Published match files go back to 2016; historical/archival use | Date-level history is useful for benchmark; strict PIT requires timestamped availability |
-| StatsBomb Open Data | performance_data | Events, lineups, selected 360 data | Selected competitions/seasons | Use event times and verify feature availability |
-| Understat | performance_data | Shot-level xG / shot locations | Big 5 + RFPL in the supported public ecosystem | Treat as delayed and verify availability |
-| FBref | performance_data | Team/player advanced statistics | Broad but metric/competition coverage varies | Verify publication/availability time |
-| Transfermarkt | player_status | Injuries, suspensions, transfers, squad context | Very broad player/club coverage | Effective status time + publication time must be checked |
-| Open-Meteo | weather | Historical weather and archived forecast runs at lead times | Global | Prefer archived forecast runs for PIT-safe reconstruction |
+| Oddspedia SmartBet | forecast | 1X2 model probabilities; injury/player/H2H context; odds comparison | Broad but competition coverage varies | Historical timestamp must be documented |
+| ClubElo | rating | Date-specific team strength and home-field adjustment | Long historical European club coverage | Use date-aligned rating snapshot |
+| FiveThirtyEight SPI | forecast | Historical pre-match SPI + forecast benchmark | Published match files go back to 2016 | Date-level archive; strict PIT needs timestamped availability |
+| StatsBomb Open Data | performance_data | Events, lineups, selected 360 data | Selected competitions/seasons | Verify feature availability at prediction time |
+| Understat | performance_data | Shot-level xG / shot locations | Big 5 + RFPL in supported public ecosystem | Treat as delayed; verify availability |
+| FBref | performance_data | Team/player advanced statistics | Wide coverage; metric availability varies | Verify publication/availability time |
+| Transfermarkt | player_status | Injuries, suspensions, transfers, squad context | Very broad player/club coverage | Verify effective status + publication time |
+| Open-Meteo | weather | Historical weather + archived forecast runs | Global | Archived forecast run timestamp is preferred |
+| OpenFootball World | fixture_data | Fixture/result coverage and competition discovery | North America, Asia, Africa, Australia, Europe and more | Match date is not a feature-availability timestamp |
+| OpenFootball Players | entity_data | Player/entity normalization and discovery | Country-by-country reference data | Reference only; not a match-time feature |
 
 ## Operating rules
 
 1. External forecasts are priors/benchmarks, not truth.
-2. No historical source with unknown availability timestamp is silently converted to PIT-safe data.
-3. A source can be useful without being a forecast source: rating, xG, player status and weather should enter as separate information channels.
-4. Source redundancy is intentional. Independent sources are evaluated for disagreement, incremental information, error correlation and regime-specific value.
-5. Research status remains separate from production status. No source is promoted from this catalog by catalog membership alone.
-6. The catalog should be expanded whenever a new broad-coverage, free and reproducible source is discovered.
+2. Unknown historical availability stays FAIL-CLOSED.
+3. Forecast, rating, performance, player-status and weather channels are evaluated separately before any fusion.
+4. Source disagreement, incremental information, error correlation, calibration and regime-specific value are measured before changing production predictions.
+5. Catalog membership never implies production approval.
+6. The catalog is a discovery frontier and should keep expanding when new free, broad and reproducible sources appear.
 
-## Immediate experiments
+## Immediate research lanes
 
-- Forecast fusion: Opta + Forebet + PredictZ + Oddspedia + internal model.
+- Forecast fusion: internal + Opta + Forebet + PredictZ + Oddspedia.
 - Historical benchmark: FiveThirtyEight SPI + ClubElo.
 - Process features: Understat + FBref + StatsBomb.
-- Availability shock: Transfermarkt + official club/league announcements where timestamps are recoverable.
-- Environment: Open-Meteo historical forecast runs by lead time.
-- Cross-source routing: estimate whether source disagreement predicts internal-model error before changing the forecast itself.
+- Availability shocks: Transfermarkt + official competition/club announcements where timestamps are recoverable.
+- Environment: Open-Meteo historical forecast runs at multiple lead times.
+- Scope expansion: OpenFootball World + OpenFootball Players for competition/entity discovery.
+- Router research: test whether external-source disagreement predicts internal-model error, without assuming the external source is superior.
 
-All experiments must use chronological OOS, calibration, robustness and PIT/replay checks.
+Every lane remains research/shadow until it passes chronological OOS, calibration, robustness, PIT/replay and promotion gates.
