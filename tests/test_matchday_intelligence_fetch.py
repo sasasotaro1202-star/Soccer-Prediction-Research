@@ -198,6 +198,12 @@ def test_matchday_base_row_preserves_unknown_optional_signals():
         "matchday_rest_diff_hours",
     ):
         assert pd.isna(row[key])
+    assert pd.isna(row["source_available_at_utc"])
+    assert row["pit_verified"] is False
+    assert row["source_retrieved_at_utc"] == "2026-09-24T12:00:00Z"
+    assert pd.isna(row["matchday_available_at_utc"])
+    assert row["matchday_pit_verified"] is False
+    assert row["matchday_retrieved_at_utc"] == "2026-09-24T12:00:00Z"
 
 
 def test_asian_games_are_not_misrouted_to_argentina():
@@ -357,3 +363,23 @@ def test_matchday_lineup_signal_uses_confirmed_availability_burden_not_fixed_zer
     assert updated["matchday_lineup_missing_count_away"] == 0
     assert updated["matchday_lineup_impact_home"] > updated["matchday_lineup_impact_away"]
     assert updated["matchday_lineup_impact_away"] == 0.50
+
+
+def test_retrieval_time_is_never_promoted_to_source_availability():
+    from src.data.matchday_intelligence_fetch import _matchday_base_row
+
+    row = _matchday_base_row(
+        match_id="retrieval-only",
+        kickoff=pd.Timestamp("2026-09-25T12:00:00Z"),
+        home_team="A",
+        away_team="B",
+        competition="EPL",
+        source="espn_scoreboard",
+        available_at="2026-09-25T08:00:00Z",
+    )
+    assert pd.isna(row["source_available_at_utc"])
+    assert row["pit_verified"] is False
+    assert pd.isna(row["matchday_available_at_utc"])
+    assert row["matchday_pit_verified"] is False
+    assert row["source_retrieved_at_utc"] == "2026-09-25T08:00:00Z"
+    assert row["matchday_retrieved_at_utc"] == "2026-09-25T08:00:00Z"
