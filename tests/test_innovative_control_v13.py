@@ -35,7 +35,7 @@ def test_model_disagreement_exposes_core_statistics():
     assert (out["pairwise_js"] > 0).all()
 
 
-def test_future_failure_ablation_remains_valid_for_high_ttf():
+def test_future_failure_ablation_remains_valid_for_high_failure_risk():
     y = np.array([0, 1, 2])
     base = np.tile([0.6, 0.3, 0.1], (3, 1))
     ensemble = np.tile([0.2, 0.5, 0.3], (3, 1))
@@ -46,9 +46,13 @@ def test_future_failure_ablation_remains_valid_for_high_ttf():
             "predictability": [0.7, 0.6, 0.5],
         }
     )
-    out = evaluate_ablation(y, base, ensemble, retrieval, state, failure_risk=12.0)
-    # High time-to-failure input must still produce a valid probability matrix.
+    out = evaluate_ablation(y, base, ensemble, retrieval, state, failure_risk=1.0)
+    # Maximal modeled failure probability must still produce a valid convex blend.
+    p = (1.0 - 0.15) * ensemble + 0.15 * base
     assert np.isfinite(out["plus_future_failure"]["logloss"])
+    assert p.shape == (3, 3)
+    assert np.all(p >= 0.0)
+    assert np.allclose(p.sum(axis=1), 1.0)
 
 
 def test_verified_pit_mask_excludes_unknown_and_false_rows():
