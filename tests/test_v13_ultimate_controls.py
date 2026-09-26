@@ -79,6 +79,8 @@ def test_complete_v13_builds_auditable_outputs(tmp_path):
     assert result["status"] == "COMPLETED_RESEARCH_ONLY"
     assert result["leakage"] == "FAIL"
     assert result["promotion"] == "HOLD"
+    # Regression: completion payload must be native-JSON serializable.
+    json.dumps(result, ensure_ascii=False)
     assert (tmp_path / "prediction_history.csv").exists()
     assert (tmp_path / "revision_analysis.csv").exists()
     assert (tmp_path / "strategy_failure.csv").exists()
