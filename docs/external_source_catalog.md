@@ -127,6 +127,7 @@ These sources can be transformed into derived features such as home/away venue c
 ## Candidate policy notes
 
 - Football-Data.co.uk is useful for PIT methodology and manual reference, but its current terms explicitly restrict automated bots/scrapers/AI use; it must not enter GitHub Actions automation without permission.
+- In tests and source policy, Football-Data.co.uk remains `RESEARCH_MANUAL_ONLY`; it must not be treated as a generic automated fixture fallback.
 - OpenLigaDB is a lightweight no-auth fallback for German and additional league coverage.
 - API-Football is only a bounded free-tier candidate: 100 requests/day, no credit card on the free version, and no automatic paid escalation.
 - TheSportsDB is a low-volume fallback because free API limits and coverage vary.
