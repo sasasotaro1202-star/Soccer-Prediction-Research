@@ -103,7 +103,7 @@ jobs:
           PY
 
       - name: Upload v2 evidence
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789ff
         with:
           name: innovative-control-v2-${{ github.run_id }}
           path: artifacts/innovative_control_v2
