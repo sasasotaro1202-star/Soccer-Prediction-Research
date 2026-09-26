@@ -57,6 +57,17 @@ def test_broad_external_prediction_and_stats_sources_are_research_scoped():
     assert get_source("worldfootball_net").production_status == "RESEARCH_CANDIDATE"
 
 
+def test_football_data_is_not_automated_under_current_source_terms():
+    source = get_source("football_data")
+    assert source.production_status == "RESEARCH_MANUAL_ONLY"
+    assert source.automation_policy == "DO_NOT_AUTOMATE_WITHOUT_PERMISSION"
+
+
+def test_national_team_strength_sources_are_catalogued_separately():
+    assert get_source("world_football_elo").source_class == "rating"
+    assert get_source("fifa_world_ranking").source_class == "rating"
+
+
 def test_free_fixture_fallbacks_are_explicitly_research_scoped():
     assert get_source("football_data").production_status == "RESEARCH_CANDIDATE"
     assert get_source("openligadb").production_status == "RESEARCH_CANDIDATE"
