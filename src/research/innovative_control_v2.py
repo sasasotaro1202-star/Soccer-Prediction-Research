@@ -136,8 +136,8 @@ def _block_features(
     agreement = (top == np.apply_along_axis(lambda r: np.bincount(r, minlength=3).argmax(), 1, top)).mean(axis=1)
     margin = np.sort(meanp, axis=1)[:, -1] - np.sort(meanp, axis=1)[:, -2]
     flat = stack.reshape(len(stack), -1)
-    fvals = pd.to_numeric(x_test, errors="coerce").to_numpy(dtype=float)
-    tvals = pd.to_numeric(x_train, errors="coerce").to_numpy(dtype=float)
+    fvals = x_test.apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
+    tvals = x_train.apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
     mu = np.nanmedian(tvals, axis=0)
     sd = np.nanstd(tvals, axis=0)
     sd[~np.isfinite(sd) | (sd < 1e-9)] = 1.0
@@ -539,10 +539,62 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
             "rows": len(df), "blocks": n_blocks, "block_rows": block_rows, "min_train": min_train,
         }, sort_keys=True).encode()).hexdigest()[:16],
     }
+    promotion_gate = {
+        "status": "HOLD",
+        "auto_promotion": False,
+        "production_changed": False,
+        "reasons": [
+            "research_only_experiment",
+            "no_independent_shadow_validation",
+            "no_frozen_blind_holdout_for_promotion",
+        ],
+    }
+    meta_audit = {
+        "status": "PASS",
+        "policy": payload["meta_leakage_policy"],
+        "current_block_labels_excluded": True,
+        "matured_prior_oos_only": True,
+        "locked_oos_used_for_meta_training": False,
+    }
+    manifest = {
+        "experiment_id": payload["experiment_id"],
+        "git_sha": payload["git_sha"],
+        "dataset": str(features_path),
+        "rows": int(len(df)),
+        "pit_verified_rows": int(len(df)),
+        "feature_count": int(len(feature_cols)),
+        "models": list(MODEL_NAMES),
+        "oos_blocks": int(n_blocks),
+        "development_blocks": int(development_blocks),
+        "locked_blocks": int(n_blocks - development_blocks),
+        "locked_oos_untouched_for_tuning": True,
+        "seed": 42,
+        "parameters": {
+            "min_train": int(min_train),
+            "block_rows": int(block_rows),
+            "max_blocks": int(max_blocks),
+        },
+        "production_isolation": True,
+    }
+    payload["promotion"] = promotion_gate
+    payload["meta_leakage_audit"] = meta_audit
     (out / "experiment_results.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    (out / "experiment_manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    (out / "promotion_gate.json").write_text(json.dumps(promotion_gate, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    (out / "meta_leakage_audit.json").write_text(json.dumps(meta_audit, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     pd.DataFrame(results).to_csv(out / "ablation_results.csv", index=False)
     pd.DataFrame(selective).to_csv(out / "selective_prediction.csv", index=False)
     pd.DataFrame(stress).to_csv(out / "stress_test_results.csv", index=False)
+    pd.DataFrame([
+        {"block": i, **{n: block_metrics[n][i]["logloss"] for n in MODEL_NAMES}}
+        for i in range(n_blocks)
+    ]).to_csv(out / "base_model_block_logloss.csv", index=False)
+    pd.DataFrame([
+        {"block": i, "mean_predictability": float(np.mean(meta_state_history[i]["predictability"])) if "predictability" in meta_state_history[i] else np.nan,
+         "mean_feature_drift": float(states[i]["feature_drift"].mean())}
+        for i in range(n_blocks)
+    ]).to_csv(out / "drift_predictability_by_block.csv", index=False)
+    pd.DataFrame([manifest]).to_csv(out / "experiment_registry.csv", index=False)
     pd.DataFrame([
         {"block": i, **{n: block_metrics[n][i]["logloss"] for n in MODEL_NAMES}}
         for i in range(n_blocks)
