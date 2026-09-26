@@ -607,6 +607,40 @@ def evaluate_ablation(
     return out
 
 
+def bootstrap_mean_ci(values: list[float], draws: int = 1000) -> tuple[float | None, float | None]:
+    arr = np.asarray(values, dtype=float)
+    if len(arr) < 5 or not np.isfinite(arr).all():
+        return None, None
+    rng = np.random.default_rng(42)
+    means = np.empty(draws, dtype=float)
+    for i in range(draws):
+        means[i] = float(np.mean(arr[rng.integers(0, len(arr), len(arr))]))
+    return float(np.quantile(means, 0.025)), float(np.quantile(means, 0.975))
+
+
+def error_correlation_rows(
+    y: np.ndarray, model_probs: dict[str, np.ndarray], block: int
+) -> list[dict[str, Any]]:
+    names = list(model_probs)
+    errors = {
+        n: (safe_probs(model_probs[n]).argmax(axis=1) != np.asarray(y, dtype=int)).astype(float)
+        for n in names
+    }
+    rows: list[dict[str, Any]] = []
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            xa, xb = errors[a], errors[b]
+            corr = float(np.corrcoef(xa, xb)[0, 1]) if np.std(xa) > 0 and np.std(xb) > 0 else 0.0
+            rows.append({
+                "block": int(block),
+                "model_a": a,
+                "model_b": b,
+                "error_correlation": corr,
+                "error_overlap": float(np.mean((xa == 1) & (xb == 1))),
+            })
+    return rows
+
+
 def stress_test(y: np.ndarray, p: np.ndarray) -> list[dict[str, Any]]:
     q = safe_probs(p)
     rng = np.random.default_rng(42)
@@ -695,6 +729,7 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
     revision_counts = {"revisions": 0, "large_revision": 0}
     ablation_rows: list[dict[str, Any]] = []
     stress_rows: list[dict[str, Any]] = []
+    error_corr_rows: list[dict[str, Any]] = []
     failure_by_block: list[dict[str, Any]] = []
     retrieval_rows: list[pd.DataFrame] = []
 
@@ -771,6 +806,7 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
         for k, m in abl.items():
             ablation_rows.append({"block": b, "variant": k, **m})
         stress_rows.extend([{"block": b, **x} for x in stress_test(y_test, final_p)])
+        error_corr_rows.extend(error_correlation_rows(y_test, probs, b))
 
         sorted_conf = np.sort(final_p, axis=1)
         architectures.append({
@@ -864,6 +900,21 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
         "calibration_prior_block_only": True,
         "policy_prior_history_only": True,
     }
+    delta_block_values = {
+        "accuracy": arch_df["delta_accuracy"].astype(float).tolist(),
+        "logloss": arch_df["delta_logloss"].astype(float).tolist(),
+        "brier": arch_df["delta_brier"].astype(float).tolist(),
+        "ece": arch_df["delta_ece"].astype(float).tolist(),
+    }
+    statistical_validation = {
+        metric: {
+            "block_bootstrap_ci95": bootstrap_mean_ci(values),
+            "mean_delta": float(np.mean(values)),
+            "n_blocks": int(len(values)),
+        }
+        for metric, values in delta_block_values.items()
+    }
+
     promotion = {
         "status": "HOLD",
         "auto_promotion": False,
@@ -913,6 +964,7 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
         "future_regime_probabilities": regime_state(pd.concat([state_history[-1]], ignore_index=True), regime_history[:-1])[1] if state_history else {},
         "future_failure": failure_by_block[-1] if failure_by_block else {},
         "promotion": promotion,
+        "statistical_validation": statistical_validation,
         "ablation_status": "EXECUTED",
         "robustness_status": "EXECUTED",
         "calibration_status": "EXECUTED",
@@ -953,6 +1005,8 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
     selected.to_csv(out / "prediction_policy_and_output.csv", index=False)
     pd.DataFrame(failure_by_block).to_json(out / "future_failure_by_block.json", orient="records", indent=2)
     pd.DataFrame(stress_rows).to_csv(out / "robustness_stress.csv", index=False)
+    pd.DataFrame(error_corr_rows).to_csv(out / "error_correlation.csv", index=False)
+    (out / "statistical_validation.json").write_text(json.dumps(statistical_validation, indent=2, ensure_ascii=False), encoding="utf-8")
     pd.DataFrame([manifest]).to_csv(out / "experiment_registry.csv", index=False)
 
     # Explicit status ledger for all major v13 layers.
