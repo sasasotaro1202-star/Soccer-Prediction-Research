@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from src.research.innovative_control_v2 import (
+    MODEL_NAMES,
     _architectures,
     _bootstrap_ci,
     _route,
@@ -29,15 +30,15 @@ def test_route_probability_safety_and_shape():
     n = 8
     probs = {
         name: _safe_probs(np.random.default_rng(42 + i).random((n, 3)))
-        for i, name in enumerate(("logistic", "elo_logistic", "recency_logistic", "extra_trees", "hist_gb"))
+        for i, name in enumerate(MODEL_NAMES)
     }
     state = pd.DataFrame({
         "predictability": np.linspace(0.1, 0.9, n),
         "feature_drift": np.linspace(0.0, 1.0, n),
-        **{f"{name}_disagreement": np.full(n, 0.05) for name in probs},
+        **{f"{name}_disagreement": np.full(n, 0.05) for name in MODEL_NAMES},
     })
     risks = {name: np.full(n, 0.2) for name in probs}
-    weights = {name: 0.2 for name in probs}
+    weights = {name: 1.0 / len(MODEL_NAMES) for name in MODEL_NAMES}
     p, confidence = _route(
         probs, state, risks, weights,
         use_disagreement=True,
