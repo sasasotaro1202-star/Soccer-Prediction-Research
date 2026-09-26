@@ -59,10 +59,22 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
     """Stable PIT adapter with conservative, mock-safe snapshot identity checks."""
 
     def __init__(self, *args, cdx_retries: int = 5, cdx_retry_backoff: float = 1.5, snapshot_retries: int = 6, snapshot_retry_backoff: float = 1.5, **kwargs):
-        super().__init__(*args, snapshot_retries=snapshot_retries, retry_backoff=snapshot_retry_backoff, **kwargs)
+        # Preserve the historical retry_backoff alias while routing the explicit
+        # value to the wrapper's snapshot retry policy exactly once.
+        legacy_retry_backoff = kwargs.pop("retry_backoff", None)
+        if legacy_retry_backoff is not None:
+            snapshot_retry_backoff = legacy_retry_backoff
+        super().__init__(
+            *args,
+            snapshot_retries=snapshot_retries,
+            retry_backoff=snapshot_retry_backoff,
+            **kwargs,
+        )
         self.max_workers = min(self.max_workers, 2)
-        self.cdx_retries = max(1, int(cdx_retries)); self.cdx_retry_backoff = max(0.0, float(cdx_retry_backoff))
-        self.snapshot_retries = max(1, int(snapshot_retries)); self.snapshot_retry_backoff = max(0.0, float(snapshot_retry_backoff))
+        self.cdx_retries = max(1, int(cdx_retries))
+        self.cdx_retry_backoff = max(0.0, float(cdx_retry_backoff))
+        self.snapshot_retries = max(1, int(snapshot_retries))
+        self.snapshot_retry_backoff = max(0.0, float(snapshot_retry_backoff))
 
     def captures(self, url: str):
         for attempt in range(1, self.cdx_retries + 1):
@@ -124,9 +136,24 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
         cache = self._snapshot_cache_path(capture); raw = None; last_error = None
         urls = self._snapshot_variants(capture, original_url)
         headers = {"User-Agent":"SoccerPredictionResearch/1.0 (+PIT-audit)","Accept":"text/csv,text/plain,*/*","Cache-Control":"no-cache"}
+        cache_was_loaded = False
         if cache.exists():
-            try: raw = cache.read_bytes()
-            except OSError as exc: last_error = exc
+            try:
+                cached = cache.read_bytes()
+                head = cached[:512].lstrip().lower()
+                if head.startswith(b"<!doctype html") or head.startswith(b"<html") or (b"wayback machine" in head and b"error" in head):
+                    raise ValueError("malformed_wayback_cache")
+                if cached.strip():
+                    raw = cached
+                    cache_was_loaded = True
+                else:
+                    raise ValueError("empty_wayback_cache")
+            except (OSError, ValueError) as exc:
+                last_error = exc
+                try:
+                    cache.unlink()
+                except OSError:
+                    pass
         if raw is None:
             for url in urls:
                 for attempt in range(1, self.snapshot_retries + 1):
@@ -152,12 +179,89 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
             err = str(last_error) if last_error else "no_response"
             diag = SnapshotDiagnostic("SNAPSHOT_DOWNLOAD_FAILURE", error_type=type(last_error).__name__ if last_error else "UnknownError", error=f"after_{self.snapshot_retries}_attempts_per_variant: {err}")
             self._snapshot_diag[identity] = diag; return diag
-        try: frame = pd.read_csv(BytesIO(raw))
+        try:
+            frame = pd.read_csv(BytesIO(raw))
         except (ValueError, pd.errors.ParserError, UnicodeDecodeError) as exc:
-            diag = SnapshotDiagnostic("SNAPSHOT_PARSE_FAILURE", error_type=type(exc).__name__, error=str(exc)); self._snapshot_diag[identity] = diag; return diag
+            # A stale/malformed cache must not poison future PIT attempts. Retry the
+            # immutable capture once through the network path before failing closed.
+            if cache_was_loaded and cache.exists():
+                try:
+                    cache.unlink()
+                except OSError:
+                    pass
+                raw = None
+                retry_error = exc
+                for url in urls:
+                    try:
+                        response = requests.get(
+                            url,
+                            timeout=max(self.timeout, 45),
+                            headers=headers,
+                            allow_redirects=True,
+                        )
+                        status_code = getattr(response, "status_code", None)
+                        if status_code in (429, 500, 502, 503, 504):
+                            raise requests.HTTPError(
+                                f"transient_http_{status_code}", response=response
+                            )
+                        response.raise_for_status()
+                        final_url = self._response_final_url(response, url)
+                        if status_code is not None and not self._has_exact_capture_identity(
+                            final_url, capture.get("timestamp")
+                        ):
+                            raise requests.HTTPError(
+                                "unexpected_redirect_from_exact_capture", response=response
+                            )
+                        candidate = response.content
+                        head = candidate[:512].lstrip().lower()
+                        if head.startswith((b"<!doctype html", b"<html")) or (
+                            b"wayback machine" in head and b"error" in head
+                        ):
+                            raise requests.HTTPError("wayback_html_error_page", response=response)
+                        if not candidate.strip():
+                            raise requests.HTTPError("empty_wayback_snapshot", response=response)
+                        raw = candidate
+                        retry_error = None
+                        break
+                    except (requests.RequestException, OSError, AttributeError) as retry_exc:
+                        retry_error = retry_exc
+                if raw is not None:
+                    try:
+                        frame = pd.read_csv(BytesIO(raw))
+                    except (ValueError, pd.errors.ParserError, UnicodeDecodeError) as parse_exc:
+                        retry_error = parse_exc
+                        raw = None
+                if retry_error is not None and raw is None:
+                    diag = SnapshotDiagnostic(
+                        "SNAPSHOT_PARSE_FAILURE",
+                        error_type=type(retry_error).__name__,
+                        error=str(retry_error),
+                    )
+                    self._snapshot_diag[identity] = diag
+                    return diag
+            else:
+                diag = SnapshotDiagnostic(
+                    "SNAPSHOT_PARSE_FAILURE",
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                )
+                self._snapshot_diag[identity] = diag
+                return diag
+
         required = {"Date","HomeTeam","AwayTeam","FTHG","FTAG","FTR"}
         if not required.issubset(frame.columns):
-            diag = SnapshotDiagnostic("SNAPSHOT_SCHEMA_FAILURE", error_type="MissingColumns", error=",".join(sorted(required-set(frame.columns)))); self._snapshot_diag[identity] = diag; return diag
+            if cache_was_loaded and cache.exists():
+                try:
+                    cache.unlink()
+                except OSError:
+                    pass
+            diag = SnapshotDiagnostic(
+                "SNAPSHOT_SCHEMA_FAILURE",
+                error_type="MissingColumns",
+                error=",".join(sorted(required - set(frame.columns))),
+            )
+            self._snapshot_diag[identity] = diag
+            return diag
         keys = set()
         for r in frame.itertuples(index=False):
             date = self._date_key(getattr(r,"Date",None))

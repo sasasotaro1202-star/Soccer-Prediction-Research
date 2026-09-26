@@ -204,3 +204,38 @@ def test_replay_capture_fetch_is_bounded_and_stops_after_all_rows_resolve(tmp_pa
     assert evidence.evidence_status == "VERIFIED"
     assert evidence.source_available_at_utc == "2025-09-01T22:00:00+00:00"
     assert calls == ["digest-1", "digest-2"]
+
+
+def test_malformed_snapshot_cache_is_invalidated_and_refetched(tmp_path, monkeypatch):
+    csv = b"Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\n01/09/25,Team A,Team B,2,1,H\n"
+    calls = []
+
+    class Response:
+        content = csv
+        def raise_for_status(self):
+            return None
+
+    adapter = FootballDataWaybackAdapter(
+        cache_dir=str(tmp_path),
+        snapshot_retries=2,
+        retry_backoff=0,
+    )
+    capture = {
+        "timestamp": "20250902200000",
+        "digest": "digest-corrupt",
+        "original": "https://example.invalid/test.csv",
+    }
+    cache = adapter._snapshot_cache_path(capture)
+    cache.write_bytes(b"<html>temporary gateway error</html>")
+
+    def fake_get(url, *args, **kwargs):
+        calls.append(url)
+        return Response()
+
+    monkeypatch.setattr("src.data.pit_source_adapter_fast.requests.get", fake_get)
+
+    diag = adapter._load_snapshot_keys(capture, "https://example.invalid/test.csv")
+
+    assert diag.status == "SNAPSHOT_PARSED"
+    assert len(calls) == 1
+    assert cache.read_bytes() == csv
