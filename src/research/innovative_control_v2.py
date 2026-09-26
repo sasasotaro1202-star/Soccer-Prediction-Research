@@ -282,9 +282,8 @@ def _route(
 
 def _architectures() -> dict[str, dict[str, bool]]:
     return {
-        "A": dict(use_disagreement=False, use_predictability=False, use_failure=False, use_drift=False),
         "B": dict(use_disagreement=True, use_predictability=False, use_failure=False, use_drift=False),
-        "C": dict(use_disagreement=True, use_predictability=True, use_failure=False, use_drift=False),
+        "C": dict(use_disagreement=False, use_predictability=True, use_failure=False, use_drift=False),
         "D": dict(use_disagreement=False, use_predictability=False, use_failure=True, use_drift=False),
         "E": dict(use_disagreement=False, use_predictability=False, use_failure=False, use_drift=True),
         "F": dict(use_disagreement=True, use_predictability=True, use_failure=False, use_drift=False),
@@ -336,10 +335,9 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
     block_metrics = {n: [] for n in MODEL_NAMES}
     block_arch_metrics = {a: [] for a in ARCHES}
     prev_arch_predictions: dict[str, np.ndarray] = {}
+    arch_predictions: dict[str, list[np.ndarray]] = {a: [] for a in ARCHES}
     quality_history: list[dict[str, float]] = []
     calibration_history: dict[str, list[float]] = {a: [] for a in ARCHES}
-    failure_training_frames: list[pd.DataFrame] = []
-    failure_training_y: list[np.ndarray] = []
     meta_state_history: list[pd.DataFrame] = []
     meta_y_history: list[np.ndarray] = []
 
@@ -374,10 +372,21 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
         # Baseline and static quality-weighted mixture.
         base_w = _quality_weights(block_metrics)
         quality_history.append(base_w)
-        arch = _architectures()
-        for a, flags in arch.items():
-            p, conf = _route(probs, state, risks, base_w, **flags)
-            # Calibration is learned from the immediately previous block only.
+        # A is the incumbent-style baseline: standalone Logistic Regression.
+        p_a = probs["logistic"]
+        if prev_arch_predictions.get("A") is not None:
+            t = _temperature(prev_arch_predictions["A"], block_targets[-1])
+            calibration_history["A"].append(t)
+            p_a = _apply_temp(p_a, t)
+        else:
+            calibration_history["A"].append(1.0)
+        block_arch_metrics["A"].append(_metrics(y_test, p_a))
+        arch_predictions["A"].append(p_a.copy())
+        prev_arch_predictions["A"] = p_a
+
+        for a, flags in _architectures().items():
+            p, _ = _route(probs, state, risks, base_w, **flags)
+            # Calibration is learned only from the immediately previous block.
             if prev_arch_predictions.get(a) is not None:
                 t = _temperature(prev_arch_predictions[a], block_targets[-1])
                 calibration_history[a].append(t)
@@ -385,10 +394,8 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
             else:
                 calibration_history[a].append(1.0)
             block_arch_metrics[a].append(_metrics(y_test, p))
-            if a not in prev_arch_predictions:
-                prev_arch_predictions[a] = p
-            else:
-                prev_arch_predictions[a] = p
+            arch_predictions[a].append(p.copy())
+            prev_arch_predictions[a] = p
 
         for name in MODEL_NAMES:
             block_metrics[name].append(_metrics(y_test, probs[name]))
@@ -430,27 +437,20 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
     # Selective prediction is descriptive only: thresholds are fixed ex ante.
     selective = []
     for a in ARCHES:
+        p = np.concatenate(arch_predictions[a][locked_start:], axis=0)
+        y = np.concatenate(block_targets[locked_start:], axis=0)
+        conf = p.max(axis=1)
+        pred = p.argmax(axis=1)
         for coverage in (1.00, 0.95, 0.90, 0.80, 0.70):
-            confs = []
-            ys = []
-            for b in range(locked_start, n_blocks):
-                p = prev_arch_predictions[a]
-                confs.append(np.max(p))
-                # This is only illustrative for the final block; per-block
-                # storage is not required for the promotion gate.
-                ys.append(block_targets[b])
-            if confs and len(np.concatenate(confs if isinstance(confs[0], (list, np.ndarray)) else [confs])) > 0:
-                c = np.concatenate(confs if isinstance(confs[0], (list, np.ndarray)) else [np.asarray(confs)])
-                y = np.concatenate(ys)
-                cutoff = float(np.quantile(c, 1.0 - coverage))
-                # Conservative fixed coverage diagnostic, no threshold tuning.
-                keep = c >= cutoff
-                selective.append({
-                    "architecture": a,
-                    "coverage_target": coverage,
-                    "observed_coverage": float(keep.mean()),
-                    "high_confidence_accuracy": None,
-                })
+            cutoff = float(np.quantile(conf, max(0.0, 1.0 - coverage)))
+            keep = conf >= cutoff
+            high_acc = float((pred[keep] == y[keep]).mean()) if keep.any() else None
+            selective.append({
+                "architecture": a,
+                "coverage_target": coverage,
+                "observed_coverage": float(keep.mean()),
+                "high_confidence_accuracy": high_acc,
+            })
 
     # Block-bootstrap deltas use the full OOS block sequence; because tuning never
     # touches locked blocks this remains descriptive, not a promotion decision.
@@ -506,7 +506,10 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
     pd.DataFrame(results).to_csv(out / "ablation_results.csv", index=False)
     pd.DataFrame(selective).to_csv(out / "selective_prediction.csv", index=False)
     pd.DataFrame(stress).to_csv(out / "stress_test_results.csv", index=False)
-    pd.DataFrame([{"architecture": a, **m} for a in ARCHES for m in []]).to_csv(out / "placeholder.csv", index=False)
+    pd.DataFrame([
+        {"block": i, **{n: block_metrics[n][i]["logloss"] for n in MODEL_NAMES}}
+        for i in range(n_blocks)
+    ]).to_csv(out / "base_model_block_logloss.csv", index=False)
     return payload
 
 
