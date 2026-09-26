@@ -385,11 +385,16 @@ def _matchday_base_row(
         "venue_country": venue_country,
         "venue_lat": venue_lat,
         "venue_lon": venue_lon,
-        "source_available_at_utc": available_at,
-        "pit_verified": True,
+        # Retrieval is evidence that the row was observed, not proof of when
+        # the upstream source first made it available. Keep source availability
+        # unknown unless an explicit publication/availability timestamp exists.
+        "source_available_at_utc": pd.NaT,
+        "source_retrieved_at_utc": available_at,
+        "pit_verified": False,
         "starter_status": "EXPECTED",
-        "matchday_available_at_utc": available_at,
-        "matchday_pit_verified": True,
+        "matchday_available_at_utc": pd.NaT,
+        "matchday_retrieved_at_utc": available_at,
+        "matchday_pit_verified": False,
         "matchday_source": source,
         "matchday_signal_confidence": 0.30,
         # Unknown optional signals stay missing until a real source populates them.
@@ -773,8 +778,14 @@ def _collect_sofascore_day(
                 "match_id": str(row["match_id"]),
                 "error": f"{type(exc).__name__}: {exc}",
             })
-        row["matchday_available_at_utc"] = max(times)
-        row["matchday_pit_verified"] = all(pd.Timestamp(x).tzinfo is not None for x in times)
+        observed_at = max(times)
+        row["source_retrieved_at_utc"] = observed_at
+        row["matchday_retrieved_at_utc"] = observed_at
+        # No upstream publication/availability timestamp was supplied, so this
+        # observation remains non-PIT-verified even though it was retrieved before
+        # the local prediction timestamp.
+        row["matchday_available_at_utc"] = pd.NaT
+        row["matchday_pit_verified"] = False
     return parsed[:int(max_events)], errors, scheduled_at
 
 
@@ -857,11 +868,15 @@ def collect_matchday_snapshots(
 
                 row: dict[str, Any] = {
                     **core,
-                    "source_available_at_utc": scoreboard_at,
-                    "pit_verified": True,
+                    # Scoreboard retrieval proves only observation time; it does
+                    # not establish upstream publication/availability time.
+                    "source_available_at_utc": pd.NaT,
+                    "source_retrieved_at_utc": scoreboard_at,
+                    "pit_verified": False,
                     "starter_status": "EXPECTED",
-                    "matchday_available_at_utc": scoreboard_at,
-                    "matchday_pit_verified": True,
+                    "matchday_available_at_utc": pd.NaT,
+                    "matchday_retrieved_at_utc": scoreboard_at,
+                    "matchday_pit_verified": False,
                     "matchday_source": "espn_scoreboard",
                     "matchday_signal_confidence": 0.40,
                     "matchday_injury_impact_home": np.nan,
@@ -997,11 +1012,13 @@ def collect_matchday_snapshots(
                             "error": f"{type(exc).__name__}: {exc}",
                         })
 
-                    row["matchday_available_at_utc"] = max(retrieval_times)
-                    row["matchday_pit_verified"] = all(
-                        pd.Timestamp(x).tzinfo is not None and pd.Timestamp(x) <= now_ts
-                        for x in retrieval_times
-                    )
+                    observed_at = max(retrieval_times)
+                    row["source_retrieved_at_utc"] = observed_at
+                    row["matchday_retrieved_at_utc"] = observed_at
+                    # Keep PIT closed: retrieved_at is never promoted to source
+                    # availability time without explicit upstream evidence.
+                    row["matchday_available_at_utc"] = pd.NaT
+                    row["matchday_pit_verified"] = False
                     quality = [
                         float(bool(row["matchday_market_provider"])),
                         float(injury_ok == 2),
@@ -1099,7 +1116,7 @@ def collect_matchday_snapshots(
         "errors": errors,
         "fallback_usage": fallback_usage,
         "historical_pit_claim": False,
-        "current_snapshot_pit_basis": "source_retrieval_time_and_snapshot_finish",
+        "current_snapshot_pit_basis": "retrieval_time_recorded_separately;_source_availability_unknown;PIT_not_verified",
         "free_keyless_default": True,
     }
     return frame, status
