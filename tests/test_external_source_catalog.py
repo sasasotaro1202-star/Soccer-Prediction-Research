@@ -132,6 +132,15 @@ def test_regional_and_high_coverage_sources_are_catalogued():
     assert get_source("jleague_official").automation_policy == "VERIFY_OFFICIAL_ACCESS_TERMS"
 
 
+def test_broad_live_providers_and_multi_source_tooling_are_catalogued():
+    assert get_source("sofascore_public").source_class == "live_data"
+    assert get_source("fotmob_public").source_class == "live_data"
+    assert get_source("soccerdata_python").source_class == "tooling"
+    assert get_source("worldfootballr").source_class == "tooling"
+    assert get_source("kaggle_european_soccer_db").source_class == "archive"
+    assert get_source("sofascore_public").production_status == "RESEARCH_CANDIDATE"
+
+
 def test_national_team_strength_sources_are_catalogued_separately():
     assert get_source("world_football_elo").source_class == "rating"
     assert get_source("fifa_world_ranking").source_class == "rating"
