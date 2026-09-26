@@ -1,0 +1,209 @@
+name: Innovative Prediction Control v13
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/research/innovative_control_v13.py"
+      - "tests/test_innovative_control_v13.py"
+      - ".github/workflows/innovative-control-v13.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: innovative-control-v13-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies with bounded retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt; then
+              exit 0
+            fi
+            echo "dependency install attempt ${attempt} failed"
+            sleep $((attempt * 5))
+          done
+          exit 1
+
+      - name: Install LightGBM research dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 90 "lightgbm>=4,<5"; then
+              exit 0
+            fi
+            echo "LightGBM install attempt ${attempt} failed"
+            sleep $((attempt * 5))
+          done
+          exit 1
+
+      - name: Compile source and tests
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: python -m compileall -q src tests
+
+      - name: Run v13 unit/integration contracts
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: python -m pytest -q tests/test_innovative_control_v13.py tests/test_innovative_control_v2.py
+
+      - name: Build strict PIT replay handoff
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+          PIT_ENABLE_ARCHIVE_AUDIT: "1"
+          PIT_ENABLE_SECONDARY_ARCHIVE: "1"
+          PIT_OPENFOOTBALL_COUNTRY_MAX_COMMIT_PAGES: "12"
+          PIT_REPLAY_ROWS_PER_GROUP: "1"
+        run: |
+          set -euo pipefail
+          python -m src.data.completion_gate
+          test -s artifacts/pit_replay_features.csv
+          python - <<'PY'
+          import pandas as pd
+          p = pd.read_csv("artifacts/pit_replay_features.csv")
+          if p.empty:
+              raise SystemExit("PIT replay handoff is empty")
+          if "pit_verified" not in p.columns:
+              raise SystemExit("pit_verified is missing")
+          print({"rows": len(p), "pit_verified_true": int(p["pit_verified"].astype(str).str.lower().isin(["true","1","yes"]).sum())})
+          PY
+
+      - name: Run v13 chronological OOS controller
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+          V13_MIN_TRAIN: "1500"
+          V13_BLOCK_ROWS: "500"
+          V13_MAX_BLOCKS: "10"
+        run: |
+          set -euo pipefail
+          python -m src.research.innovative_control_v13             --features artifacts/pit_replay_features.csv             --out artifacts/innovative_control_v13
+
+      - name: Validate evidence, PIT isolation and artifact integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/innovative_control_v13/experiment_results.json
+          test -s artifacts/innovative_control_v13/experiment_manifest.json
+          test -s artifacts/innovative_control_v13/promotion_gate.json
+          test -s artifacts/innovative_control_v13/meta_leakage_audit.json
+          test -s artifacts/innovative_control_v13/leakage_audit.json
+          test -s artifacts/innovative_control_v13/block_metrics.csv
+          test -s artifacts/innovative_control_v13/ablation_results.csv
+          test -s artifacts/innovative_control_v13/error_correlation.csv
+          test -s artifacts/innovative_control_v13/uncertainty_by_row.csv
+          test -s artifacts/innovative_control_v13/prediction_policy_and_output.csv
+          test -s artifacts/innovative_control_v13/future_failure_by_block.json
+          test -s artifacts/innovative_control_v13/robustness_stress.csv
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("artifacts/innovative_control_v13")
+          r=json.loads((root/"experiment_results.json").read_text())
+          assert r["status"]=="COMPLETED_RESEARCH_ONLY"
+          assert r["oos_claimed"] is True
+          assert r["production_changed"] is False
+          assert r["locked_oos_untouched_for_tuning"] is True
+          assert r["locked_blocks"] == 2
+          assert r["meta_leakage_audit"]["status"] == "PASS"
+          assert r["promotion"]["status"] == "HOLD"
+          print(json.dumps({
+            "status":r["status"],
+            "overall_metrics":r["overall_metrics"],
+            "locked_metrics":r["locked_metrics"],
+            "promotion":r["promotion"],
+            "pit":r["pit_audit"]["status"],
+            "meta_leakage":r["meta_leakage_audit"]["status"],
+            "leakage":r["leakage_audit"]["audit_status"],
+          }, ensure_ascii=False))
+          PY
+
+      - name: Generate v13 report
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/innovative_control_v13
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("artifacts/innovative_control_v13")
+          result=root/"experiment_results.json"
+          if not result.exists():
+              Path(root/"report.md").write_text(
+                  "# ULTIMATE FINAL v13\n\nStatus: FAILED_OR_BLOCKED\n",
+                  encoding="utf-8",
+              )
+          else:
+              r=json.loads(result.read_text())
+              o=r["overall_metrics"]; l=r["locked_metrics"]
+              lines=[
+                  "# ULTIMATE FINAL v13 Research Result",
+                  "",
+                  f"- Repository: ${{ github.repository }}",
+                  f"- Commit: ${{ github.sha }}",
+                  f"- Run ID: ${{ github.run_id }}",
+                  f"- Status: {r.get('status')}",
+                  f"- OOS blocks: {r.get('oos_blocks')}",
+                  "",
+                  "## Metrics",
+                  "",
+                  "| Metric | Baseline | New | Delta | Locked Delta |",
+                  "|---|---:|---:|---:|---:|",
+              ]
+              pairs=[("Accuracy","baseline_accuracy","accuracy","delta_accuracy"),
+                     ("LogLoss","baseline_logloss","logloss","delta_logloss"),
+                     ("Brier","baseline_brier","brier","delta_brier"),
+                     ("ECE","baseline_ece","ece","delta_ece")]
+              for label,b,n,d in pairs:
+                  lines.append(f"| {label} | {o[b]:.6f} | {o[n]:.6f} | {o[d]:+.6f} | {l[d]:+.6f} |")
+              lines += [
+                  "",
+                  "## Safety",
+                  "",
+                  f"- PIT: {r['pit_audit']['status']}",
+                  f"- Meta-Leakage: {r['meta_leakage_audit']['status']}",
+                  f"- Leakage audit: {r['leakage_audit']['audit_status']}",
+                  f"- Production changed: {r['production_changed']}",
+                  f"- Promotion: {r['promotion']['status']}",
+                  "",
+                  "## Layer Status",
+                  "",
+              ]
+              for k,v in json.loads((root/"status_ledger.json").read_text()).items():
+                  lines.append(f"- {k}: {v}")
+              (root/"report.md").write_text("\n".join(lines)+"\n",encoding="utf-8")
+          PY
+
+      - name: Upload v13 evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: innovative-control-v13-${{ github.run_id }}
+          path: artifacts/innovative_control_v13
+          retention-days: 7
+          if-no-files-found: error
