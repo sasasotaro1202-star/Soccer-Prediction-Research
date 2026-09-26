@@ -606,9 +606,11 @@ def evaluate_ablation(
         "baseline": base,
         "plus_disagreement": safe_probs((1 - 0.20 * disagree[:, None]) * base + 0.20 * disagree[:, None] * ensemble),
         "plus_predictability": safe_probs((0.70 + 0.30 * pred[:, None]) * ensemble + (0.30 - 0.30 * pred[:, None]) * base),
+        # failure_risk is a probability in [0, 1]. Clip defensively so
+        # malformed callers cannot create negative mixture weights.
         "plus_future_failure": safe_probs(
-            (1.0 - 0.15 * float(np.clip(failure_risk / 12.0, 0.0, 1.0))) * ensemble
-            + (0.15 * float(np.clip(failure_risk / 12.0, 0.0, 1.0))) * base
+            (1.0 - 0.15 * float(np.clip(failure_risk, 0.0, 1.0))) * ensemble
+            + (0.15 * float(np.clip(failure_risk, 0.0, 1.0))) * base
         ),
         "plus_retrieval": safe_probs(0.80 * ensemble + 0.20 * retrieval),
         "full": ensemble,
@@ -864,7 +866,10 @@ def run(features_path: str, out_dir: str) -> dict[str, Any]:
             "failure_risk_horizons": risk_horizons,
         })
 
-        abl = evaluate_ablation(y_test, base_p, ensemble_p, retrieval_p, state, float(np.mean(list(ttf.values()))))
+        # Use predicted future model-failure probability for this ablation;
+        # time-to-failure is kept as a separate signal and must not be treated as risk.
+        mean_failure_risk = float(np.mean([float(np.mean(v)) for v in risks.values()]))
+        abl = evaluate_ablation(y_test, base_p, ensemble_p, retrieval_p, state, mean_failure_risk)
         for k, m in abl.items():
             ablation_rows.append({"block": b, "variant": k, **m})
         stress_rows.extend([{"block": b, **x} for x in stress_test(y_test, final_p)])
