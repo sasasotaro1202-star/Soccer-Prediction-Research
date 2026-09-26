@@ -46,3 +46,16 @@ def test_openfootball_supports_scope_and_entity_expansion_without_claiming_match
     assert get_source("openfootball_world").source_class == "fixture_data"
     assert get_source("openfootball_players").source_class == "entity_data"
     assert "FEATURE_AVAILABILITY" in get_source("openfootball_world").pit_default
+
+
+def test_free_fixture_fallbacks_are_explicitly_research_scoped():
+    assert get_source("football_data").production_status == "RESEARCH_CANDIDATE"
+    assert get_source("openligadb").production_status == "RESEARCH_CANDIDATE"
+    assert get_source("api_football_free").production_status == "RESEARCH_CANDIDATE_FREE_TIER_ONLY"
+    assert get_source("thesportsdb_v1").production_status == "RESEARCH_CANDIDATE"
+
+
+def test_rsssf_is_archive_only():
+    source = get_source("rsssf")
+    assert source.source_class == "fixture_data"
+    assert source.pit_default.startswith("ARCHIVAL_RESULTS_ONLY")
