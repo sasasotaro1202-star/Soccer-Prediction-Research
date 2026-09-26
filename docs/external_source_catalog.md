@@ -50,6 +50,16 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 | Global Sports Archive | performance_data | Results, fixtures, tables, match statistics, odds movement, transfers | 500+ worldwide soccer leagues/cups/tournaments | Verify provider/retrieval times |
 | worldfootball.net | fixture_data | Fixtures, results, standings, historical records and player statistics | Broad competition and historical coverage | Verify publication time |
 
+## News and live-state channels
+
+| Source | Class | Contribution | Breadth / constraint | PIT handling |
+| --- | --- | --- | --- | --- |
+| football-data.org | live_data | Structured competitions, matches, standings, teams and players | Current v4 docs list 157 competitions; free access is rate-limited | Record provider/request time |
+| ESPN Soccer Scoreboard endpoint | live_data | Low-latency live status and finished results | Competition coverage follows ESPN; endpoint is unofficial | Record response/retrieval time and endpoint version |
+| GDELT DOC 2.0 | news | Global multilingual football-news monitoring, search, tone and timelines | Global news corpus; keyless public API | Source publication/indexing time must be separated |
+| GDELT GKG | news | Themes, entities, organizations, locations and context | Global multilingual news graph | Ingestion time is not publication time |
+| BBC Sport Football RSS | news | Team/league football news feeds | Premier League, EFL, European, women's and team feeds are available | Feed/article timestamps required |
+
 ## Candidate policy notes
 
 - Football-Data.co.uk is useful for PIT methodology and manual reference, but its current terms explicitly restrict automated bots/scrapers/AI use; it must not enter GitHub Actions automation without permission.
@@ -81,5 +91,7 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 - Historical breadth: schochastics, International Results, Fjelstul and Football.CSV add long-run and lower-tier coverage without treating archival results as prediction-time features.
 - Identity spine: Reep should be tested as the canonical cross-provider join layer before building many one-off name/ID mappings.
 - Router research: test whether external-source disagreement predicts internal-model error, without assuming the external source is superior.
+- Information-shock research: GDELT + BBC feeds can be transformed into time-stamped news shock/state variables and tested for incremental predictive value.
+- Live-state research: football-data.org + ESPN can be used as redundant schedule/status channels, with cross-source disagreement monitored as a data-quality signal.
 
 Every lane remains research/shadow until it passes chronological OOS, calibration, robustness, PIT/replay and promotion gates.
