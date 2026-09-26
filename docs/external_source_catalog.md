@@ -50,6 +50,8 @@ This catalog is deliberately wider than external match forecasts. Sources are se
 | Global Sports Archive | performance_data | Results, fixtures, tables, match statistics, odds movement, transfers | 500+ worldwide soccer leagues/cups/tournaments | Verify provider/retrieval times |
 | worldfootball.net | fixture_data | Fixtures, results, standings, historical records and player statistics | Broad competition and historical coverage | Verify publication time |
 
+| K League Official | live_data | Official Korean K League 1/2 fixtures/results and current competition match-centre schedule | Current schedule also exposes Korean Cup and AFC club competition selectors | Official page timestamps/retrieval time required |
+| WE League Official Data Site | live_data | Official Japanese women's fixture/results/venue/attendance dataset | Current 2026/27 data covers league and cup competition rows | Official data-site availability time required |
 ## Regional and high-coverage discovery
 
 | Source | Class | Contribution | Breadth / constraint | PIT handling |
