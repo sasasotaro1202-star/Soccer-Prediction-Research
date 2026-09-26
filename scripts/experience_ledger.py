@@ -285,6 +285,18 @@ def _proper_score_metrics(frame: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+def _preserve_timestamp_when_unchanged(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    """Avoid timestamp-only commits when durable experience state is unchanged."""
+    if not isinstance(previous, dict):
+        return current
+    old = {k: v for k, v in previous.items() if k != "generated_at_utc"}
+    new = {k: v for k, v in current.items() if k != "generated_at_utc"}
+    if old == new and isinstance(previous.get("generated_at_utc"), str):
+        current = dict(current)
+        current["generated_at_utc"] = previous["generated_at_utc"]
+    return current
+
+
 def _status_metric_deltas(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
     """Compare monitoring summaries and retain only finite numeric changes."""
     out: dict[str, Any] = {}
@@ -326,6 +338,15 @@ def compute_metrics(ledger=None):
             "metric_deltas_vs_previous": {},
         }
         STATUS.parent.mkdir(parents=True, exist_ok=True)
+        previous_status = {}
+        if STATUS.is_file() and STATUS.stat().st_size:
+            try:
+                loaded = json.loads(STATUS.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    previous_status = loaded
+            except (OSError, json.JSONDecodeError):
+                previous_status = {}
+        current_status = _preserve_timestamp_when_unchanged(previous_status, current_status)
         STATUS.write_text(json.dumps(current_status, indent=2), encoding="utf-8")
         return 1
     d=ledger.copy(); d["kickoff_utc"]=pd.to_datetime(d["kickoff_utc"],utc=True,errors="coerce")
@@ -351,6 +372,7 @@ def compute_metrics(ledger=None):
             "summary": {"all": {"n": 0, "probability_rows": 0}},
         }
         current_status["metric_deltas_vs_previous"] = _status_metric_deltas(previous_status, current_status)
+        current_status = _preserve_timestamp_when_unchanged(previous_status, current_status)
         STATUS.parent.mkdir(parents=True, exist_ok=True)
         STATUS.write_text(json.dumps(current_status, indent=2), encoding="utf-8")
         return 1
@@ -408,6 +430,7 @@ def compute_metrics(ledger=None):
                       "generated_at_utc":_now().isoformat(),"metrics_file":str(METRICS),
                       "summary":summary}
     current_status["metric_deltas_vs_previous"] = _status_metric_deltas(previous_status, current_status)
+    current_status = _preserve_timestamp_when_unchanged(previous_status, current_status)
     STATUS.parent.mkdir(parents=True,exist_ok=True)
     STATUS.write_text(json.dumps(current_status,indent=2),encoding="utf-8")
     return len(rows)
