@@ -166,3 +166,4 @@ These sources can be transformed into derived features such as home/away venue c
 - Regional coverage research: J.League Official + Kooora + BDFutbol + PlaymakerStats should be used to discover competitions that are missing from the current scope before feature/model work begins.
 
 Every lane remains research/shadow until it passes chronological OOS, calibration, robustness, PIT/replay and promotion gates.
+- Global breadth benchmark: the current open Global Football Data Lake release exposes 271 leagues, 673,966 fixtures, 11,104 teams and 182,125 players, with `known_at` leakage metadata; use it for research coverage/QA, not as an automatic production truth source.
