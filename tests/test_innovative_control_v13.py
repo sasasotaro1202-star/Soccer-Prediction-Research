@@ -12,6 +12,7 @@ from src.research.innovative_control_v13 import (
     strategy_selector,
     uncertainty_components,
     _verified_pit_mask,
+    evaluate_ablation,
 )
 
 
@@ -32,6 +33,22 @@ def test_model_disagreement_exposes_core_statistics():
     out = model_disagreement_features(probs)
     assert {"entropy", "agreement", "pairwise_js", "majority_margin"}.issubset(out.columns)
     assert (out["pairwise_js"] > 0).all()
+
+
+def test_future_failure_ablation_remains_valid_for_high_ttf():
+    y = np.array([0, 1, 2])
+    base = np.tile([0.6, 0.3, 0.1], (3, 1))
+    ensemble = np.tile([0.2, 0.5, 0.3], (3, 1))
+    retrieval = np.tile([0.3, 0.4, 0.3], (3, 1))
+    state = pd.DataFrame(
+        {
+            "pairwise_js": [0.1, 0.2, 0.3],
+            "predictability": [0.7, 0.6, 0.5],
+        }
+    )
+    out = evaluate_ablation(y, base, ensemble, retrieval, state, failure_risk=12.0)
+    # High time-to-failure input must still produce a valid probability matrix.
+    assert np.isfinite(out["plus_future_failure"]["logloss"])
 
 
 def test_verified_pit_mask_excludes_unknown_and_false_rows():
