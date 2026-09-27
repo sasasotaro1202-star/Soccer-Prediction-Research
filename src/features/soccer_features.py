@@ -13,6 +13,27 @@ COMPETITION_ELO_SHRINK_K = 8.0
 NEUTRAL_VENUE_REQUIRED_COMPETITIONS = {"AG_M", "AG_W"}
 STAT_KEYS = ("shots", "shots_on_target", "corners", "fouls", "yellow_cards", "red_cards")
 
+# Optional historical player-contribution aggregates. These are consumed only
+# when an upstream PIT-safe player-history adapter supplies matching columns.
+PLAYER_STAT_KEYS = (
+    "rating_mean",
+    "starter_rating_mean",
+    "minutes_total",
+    "goals_assists_total",
+    "shots_total",
+    "shots_on_total",
+    "passes_key_total",
+    "duels_won_total",
+    "tackles_total",
+    "cards_yellow_total",
+    "cards_red_total",
+    "penalty_scored_total",
+    "penalty_missed_total",
+    "lineup_size",
+    "starter_count",
+    "player_stat_coverage",
+)
+
 
 def _result_available(ts: pd.Timestamp, cutoff: pd.Timestamp) -> bool:
     return bool(is_available_by_cutoff(ts, cutoff))
