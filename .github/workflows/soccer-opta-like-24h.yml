@@ -35,6 +35,25 @@ jobs:
       - run: python -m pytest -q
       - run: python -m src.research.opta_like_source_probe --output artifacts/opta_like_source_probe.json
       - run: python -m src.research.scope_frontier --days 14 --output artifacts/scope_frontier.json
+
+      - name: Write immutable run manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/checkpoints
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload={
+              'schema_version':1,
+              'research_only':True,
+              'production_changed':False,
+              'github_sha':'${{ github.sha }}',
+              'run_id':int('${{ github.run_id }}'),
+              'source':'soccer-opta-like-24h',
+          }
+          Path('artifacts/checkpoints/run_manifest.json').write_text(json.dumps(payload,indent=2),encoding='utf-8')
+          PY
       - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
@@ -172,6 +191,72 @@ jobs:
           path: artifacts/
           retention-days: 14
           if-no-files-found: warn
+
+  finalize:
+    name: Final - 24H evidence reconciliation
+    needs: [phase1, phase2, phase3, phase4]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+      - name: Download available phase evidence
+        continue-on-error: true
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632e53
+        with:
+          pattern: soccer-opta-24h-phase*
+          merge-multiple: true
+          path: artifacts/phases
+      - name: Reconcile immutable handoff
+        env:
+          P1: ${{ needs.phase1.result }}
+          P2: ${{ needs.phase2.result }}
+          P3: ${{ needs.phase3.result }}
+          P4: ${{ needs.phase4.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/final
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          phases={
+              "phase1_discovery":os.environ["P1"],
+              "phase2_pit_data":os.environ["P2"],
+              "phase3_oos":os.environ["P3"],
+              "phase4_verify":os.environ["P4"],
+          }
+          status="COMPLETED" if all(v=="success" for v in phases.values()) else "PARTIAL_OR_BLOCKED"
+          payload={
+              "schema_version":1,
+              "status":status,
+              "commit":"${{ github.sha }}",
+              "run_id":int("${{ github.run_id }}"),
+              "phase_results":phases,
+              "production_changed":False,
+              "research_only":True,
+              "oos_claimed": phases["phase3_oos"]=="success",
+          }
+          Path("artifacts/final/24h_run_status.json").write_text(json.dumps(payload,indent=2),encoding="utf-8")
+          print(json.dumps(payload,indent=2))
+          PY
+      - name: Verify no research phase claims production mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if find artifacts/phases -name '*.json' -print0 | xargs -0 grep -l '"production_changed": true' 2>/dev/null; then
+            echo "Detected production mutation claim in research evidence" >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        if: always()
+        with:
+          name: soccer-opta-like-24h-reconciled-${{ github.run_id }}
+          path: artifacts/final/
+          retention-days: 14
+          if-no-files-found: error
 
 # Maximum runtime: 4 x 360 minutes = 24 hours.
 # The workflow is research-only. It does not promote models or change production.
