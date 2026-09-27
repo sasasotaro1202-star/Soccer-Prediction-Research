@@ -236,6 +236,11 @@ def _load_preflight_pit_features(out: Path, history: pd.DataFrame) -> pd.DataFra
     # evidence metadata. Restore optional source publication evidence from the
     # historical table without weakening predictor-side PIT validation.
     features = features.drop(columns=["source_available_at_utc"], errors="ignore")
+    # When outcomes come from the PIT handoff itself, those label columns are
+    # already present in features. Remove them before the label-only join so pandas
+    # does not create home_goals_x/home_goals_y and away_goals_x/away_goals_y.
+    if outcome_source == "pit_feature_handoff_outcome_labels":
+        features = features.drop(columns=["home_goals", "away_goals"], errors="ignore")
     merged = features.merge(
         outcomes,
         on="match_id",
