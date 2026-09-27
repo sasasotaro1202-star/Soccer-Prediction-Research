@@ -50,6 +50,19 @@ def test_global_datalake_adapter_maps_entities_and_preserves_pit(monkeypatch, tm
         {"id": 100, "name": "Alpha FC"},
         {"id": 101, "name": "Beta FC"},
     ])
+    match_stats = pd.DataFrame([
+        {
+            "fixture_id": 10,
+            "home_shots_inside_box": 8,
+            "away_shots_inside_box": 4,
+            "home_shots_outside_box": 5,
+            "away_shots_outside_box": 6,
+            "home_blocked_shots": 2,
+            "away_blocked_shots": 3,
+            "home_xg": 1.8,
+            "away_xg": 0.7,
+        }
+    ])
 
     monkeypatch.setattr(adapter, "_download", lambda url, path: "a" * 64)
 
@@ -61,6 +74,8 @@ def test_global_datalake_adapter_maps_entities_and_preserves_pit(monkeypatch, tm
             return leagues.copy()
         if name.endswith("teams.parquet"):
             return teams.copy()
+        if name.endswith("match_stats.parquet"):
+            return match_stats.copy()
         raise AssertionError(name)
 
     monkeypatch.setattr(adapter.pd, "read_parquet", fake_read_parquet)
@@ -85,3 +100,5 @@ def test_global_datalake_adapter_maps_entities_and_preserves_pit(monkeypatch, tm
     assert row["away_xg"] == 0.7
     assert row["home_pass_accuracy"] == 82
     assert row["away_offsides"] == 1
+    assert row["home_shots_inside_box"] == 8
+    assert row["away_blocked_shots"] == 3
