@@ -323,3 +323,37 @@ def load_global_datalake_history(
         "production_status": "RESEARCH_ONLY",
     }
     return result, status
+
+
+def save_research_artifacts(
+    *,
+    start_year: int,
+    end_year: int,
+    output_dir: str = "artifacts/global_datalake",
+    cache_dir: str = "cache/global_datalake",
+) -> dict:
+    """Execute the adapter and persist bounded, inspectable research artifacts."""
+    import json
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    frame, status = load_global_datalake_history(
+        start_year=start_year,
+        end_year=end_year,
+        cache_dir=cache_dir,
+    )
+    coverage = (
+        frame.groupby("competition", dropna=False)
+        .agg(
+            rows=("match_id", "size"),
+            pit_verified_rate=("pit_verified", "mean"),
+            xg_rows=("home_xg", lambda s: int(pd.to_numeric(s, errors="coerce").notna().sum())),
+        )
+        .reset_index()
+        .sort_values("competition", kind="mergesort")
+    )
+    coverage_path = out / "coverage.csv"
+    coverage.to_csv(coverage_path, index=False)
+    status_path = out / "status.json"
+    status = {**status, "coverage_artifact": str(coverage_path)}
+    status_path.write_text(json.dumps(status, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    return status
