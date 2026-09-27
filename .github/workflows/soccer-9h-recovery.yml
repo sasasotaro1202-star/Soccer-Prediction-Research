@@ -4,8 +4,6 @@ name: Soccer 9H Recovery Controller
 # always compares against the latest main SHA before dispatching and never interrupts an active 9H snapshot.
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
   workflow_run:
     workflows: ["Soccer 9H Autonomous Research"]
