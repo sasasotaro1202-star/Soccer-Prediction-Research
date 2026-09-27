@@ -14,6 +14,7 @@ from urllib.request import Request, urlopen
 
 from src.data.competition_sources import TARGET_COMPETITIONS
 from src.data.matchday_intelligence_fetch import _sofascore_competition
+from src.research.competition_taxonomy import classify_competition_kind, classify_stage
 
 SOFASCORE_URL = "https://www.sofascore.com/api/v1/sport/football/scheduled-events/{date}"
 
@@ -34,17 +35,20 @@ def _fetch_json(day: date, timeout: float = 20.0) -> dict[str, Any]:
     return payload
 
 
-def _tournament_identity(event: dict[str, Any]) -> tuple[str, str, str]:
+def _tournament_identity(event: dict[str, Any]) -> tuple[str, str, str, str, str]:
     tournament = event.get("tournament") or {}
     unique = tournament.get("uniqueTournament") or event.get("uniqueTournament") or {}
     name = str(unique.get("name") or tournament.get("name") or "").strip()
     slug = str(unique.get("slug") or tournament.get("slug") or "").strip().lower()
     tid = str(unique.get("id") or tournament.get("id") or "").strip()
-    return name, slug, tid
+    round_info = event.get("roundInfo") or {}
+    round_name = str(round_info.get("name") or round_info.get("round") or event.get("round") or "").strip()
+    phase = str(round_info.get("phase") or event.get("phase") or "").strip()
+    return name, slug, tid, round_name, phase
 
 
 def _candidate(identity: tuple[str, str, str], *, first_seen: str, events: int) -> dict[str, Any]:
-    name, slug, tid = identity
+    name, slug, tid, round_name, phase = identity
     key = tid or slug or name.lower()
     lower = name.lower()
     if any(token in lower for token in ("women", "female", "ladies")):
@@ -61,6 +65,8 @@ def _candidate(identity: tuple[str, str, str], *, first_seen: str, events: int) 
         "id": f"sofascore:{key}",
         "target": name,
         "type": case_type,
+        "competition_kind": classify_competition_kind(name, slug),
+        "stage_type": classify_stage(name, slug, round_name, phase),
         "rationale": "Observed by public SofaScore scheduled-events discovery but not mapped to a known competition code.",
         "eligibility": "RESEARCH_ONLY_UNVERIFIED",
         "volume": events,
@@ -80,6 +86,8 @@ def _candidate(identity: tuple[str, str, str], *, first_seen: str, events: int) 
         "reversibility": "HIGH",
         "stage": "DISCOVERED",
         "evidence": {
+            "round_name": round_name,
+            "phase": phase,
             "source": "SofaScore public scheduled-events",
             "first_seen_utc_date": first_seen,
             "tournament_id": tid,
@@ -114,7 +122,7 @@ def discover(days: int, output: str, *, start: date | None = None) -> dict[str, 
                 observed_known[mapped] = observed_known.get(mapped, 0) + 1
                 continue
             identity = _tournament_identity(event)
-            if not any(identity):
+            if not any(identity[:3]):
                 continue
             name, slug, tid = identity
             key = tid or slug or name.lower()
