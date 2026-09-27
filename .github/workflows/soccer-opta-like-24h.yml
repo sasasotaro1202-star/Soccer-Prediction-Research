@@ -52,6 +52,23 @@ jobs:
           }
           Path('artifacts/checkpoints/run_manifest.json').write_text(json.dumps(payload,indent=2),encoding='utf-8')
           PY
+      - name: Record phase 1 checkpoint
+        if: always()
+        env:
+          PHASE_STATUS: ${{ job.status }}
+          GIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          mkdir -p artifacts/checkpoints
+          python -m src.research.checkpoint_state record \
+            --store artifacts/checkpoints/research_checkpoints.jsonl \
+            --experiment-key "24h/phase1/source-discovery" \
+            --status "${PHASE_STATUS}" \
+            --git-sha "${GIT_SHA}" \
+            --run-id "${RUN_ID}" \
+            --config-json '{"phase":1,"purpose":"source_discovery_and_probe"}' \
+            --artifacts-json '["artifacts/opta_like_source_probe.json","artifacts/scope_frontier.json"]'
+
       - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
@@ -100,6 +117,23 @@ jobs:
           for c in EPL UCL UEL UECL J1; do
             python -m src.research.pit_replay_audit --competition "$c" --rows-per-season 2 || echo "$c: BLOCKED_OR_FAILED" > "artifacts/pit_samples/$c.status"
           done
+      - name: Record phase 2 checkpoint
+        if: always()
+        env:
+          PHASE_STATUS: ${{ job.status }}
+          GIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          mkdir -p artifacts/checkpoints
+          python -m src.research.checkpoint_state record \
+            --store artifacts/checkpoints/research_checkpoints.jsonl \
+            --experiment-key "24h/phase2/pit-data" \
+            --status "${PHASE_STATUS}" \
+            --git-sha "${GIT_SHA}" \
+            --run-id "${RUN_ID}" \
+            --config-json '{"phase":2,"purpose":"data_and_pit_validation","archive_audit":"1"}' \
+            --artifacts-json '["artifacts/completion_gate.json","artifacts/pit_replay_features.csv"]'
+
       - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
@@ -136,6 +170,25 @@ jobs:
           python -m src.research.innovative_control_v13 --features artifacts/pit_replay_features.csv --out artifacts/innovative_control_v13
       - name: Re-run deterministic suite
         run: python -m pytest -q
+      - name: Validate cross-project research contracts
+        run: python -m pytest -q tests/test_case_risk_oos.py tests/test_checkpoint_state.py tests/test_dual_memory_oos.py tests/test_source_snapshot.py
+      - name: Record phase 3 checkpoint
+        if: always()
+        env:
+          PHASE_STATUS: ${{ job.status }}
+          GIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          mkdir -p artifacts/checkpoints
+          python -m src.research.checkpoint_state record \
+            --store artifacts/checkpoints/research_checkpoints.jsonl \
+            --experiment-key "24h/phase3/oos-control" \
+            --status "${PHASE_STATUS}" \
+            --git-sha "${GIT_SHA}" \
+            --run-id "${RUN_ID}" \
+            --config-json '{"phase":3,"purpose":"oos_control_case_risk"}' \
+            --artifacts-json '["artifacts/pit_replay_features.csv","artifacts/innovative_control_v13/experiment_results.json"]'
+
       - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
@@ -182,6 +235,23 @@ jobs:
         run: |
           mkdir -p artifacts/24h
           printf '%s\n' '{"production_changed":false,"commit":"${{ github.sha }}","run_id":"${{ github.run_id }}"}' > artifacts/24h/final_checkpoint.json
+      - name: Record phase 4 checkpoint
+        if: always()
+        env:
+          PHASE_STATUS: ${{ job.status }}
+          GIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          mkdir -p artifacts/checkpoints
+          python -m src.research.checkpoint_state record \
+            --store artifacts/checkpoints/research_checkpoints.jsonl \
+            --experiment-key "24h/phase4/verification" \
+            --status "${PHASE_STATUS}" \
+            --git-sha "${GIT_SHA}" \
+            --run-id "${RUN_ID}" \
+            --config-json '{"phase":4,"purpose":"evidence_and_production_immutability"}' \
+            --artifacts-json '["artifacts/phase3/innovative_control_v13/experiment_results.json","artifacts/24h/final_checkpoint.json"]'
+
       - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
