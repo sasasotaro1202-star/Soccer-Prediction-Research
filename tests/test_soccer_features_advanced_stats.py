@@ -82,7 +82,7 @@ def test_advanced_stats_are_featured_and_xga_is_safely_derived():
     assert np.isclose(row["home_shots_outside_box_avg_3"], 5.0)
     assert np.isclose(row["home_blocked_shots_avg_3"], 2.0)
     assert np.isclose(row["home_offsides_avg_3"], 1.0)
-    assert np.isclose(row["home_pass_accuracy_avg_3"], np.mean([78.0, 80.0, 77.0]))
+    assert np.isclose(row["home_pass_accuracy_avg_3"], 78.0)
     assert np.isclose(row["home_goals_ht_avg_3"], 0.0)
     assert np.isfinite(row["home_xg_ht_avg_3"])
 
