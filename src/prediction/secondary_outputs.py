@@ -450,6 +450,125 @@ def predict_score_markets(
     out["btts_no"] = float(probs[(home_goals == 0) | (away_goals == 0)].sum())
     return out
 
+def fit_xg_score_rate_model(
+    history: pd.DataFrame,
+    *,
+    shrinkage: float = 20.0,
+) -> dict[str, Any]:
+    """PIT-safe Score challenger driven by historical xG/xGA rates."""
+    required = {
+        "home_team", "away_team", "home_xg", "away_xg", "pit_verified",
+    }
+    missing = sorted(required - set(history.columns))
+    if missing:
+        raise ValueError(f"xG score training data missing columns: {missing}")
+    d = history.loc[history["pit_verified"] == True].copy()
+    d["home_xg"] = pd.to_numeric(d["home_xg"], errors="coerce")
+    d["away_xg"] = pd.to_numeric(d["away_xg"], errors="coerce")
+    d = d.dropna(subset=["home_xg", "away_xg", "home_team", "away_team"])
+    d = d[(d["home_xg"] >= 0.0) & (d["away_xg"] >= 0.0)].copy()
+    if d.empty:
+        raise ValueError("No PIT-verified xG rows available")
+    k = max(float(shrinkage), 0.0)
+    home_mean = float(d["home_xg"].mean())
+    away_mean = float(d["away_xg"].mean())
+    overall_mean = float((d["home_xg"].sum() + d["away_xg"].sum()) / max(1, 2 * len(d)))
+
+    competition_rates: dict[str, dict[str, float]] = {}
+    if "competition" in d.columns:
+        for name, g in d.assign(_competition=d["competition"].astype(str)).groupby("_competition", sort=True):
+            n = len(g)
+            competition_rates[str(name)] = {
+                "home_mean": float((g["home_xg"].sum() + k * home_mean) / (n + k)),
+                "away_mean": float((g["away_xg"].sum() + k * away_mean) / (n + k)),
+                "matches": float(n),
+            }
+
+    d["_home_team"] = d["home_team"].astype(str)
+    d["_away_team"] = d["away_team"].astype(str)
+    d["_home_for"] = d["home_xg"]
+    d["_home_against"] = d["away_xg"]
+    d["_away_for"] = d["away_xg"]
+    d["_away_against"] = d["home_xg"]
+    home_agg = d.groupby("_home_team", sort=False).agg(
+        home_matches=("home_xg", "size"),
+        home_for=("_home_for", "sum"),
+        home_against=("_home_against", "sum"),
+    )
+    away_agg = d.groupby("_away_team", sort=False).agg(
+        away_matches=("away_xg", "size"),
+        away_for=("_away_for", "sum"),
+        away_against=("_away_against", "sum"),
+    )
+
+    rows: dict[str, dict[str, float]] = {}
+    teams = sorted(set(home_agg.index.astype(str)) | set(away_agg.index.astype(str)))
+    for team in teams:
+        h = home_agg.loc[team] if team in home_agg.index else None
+        a = away_agg.loc[team] if team in away_agg.index else None
+        hn = int(h["home_matches"]) if h is not None else 0
+        an = int(a["away_matches"]) if a is not None else 0
+        hf = float(h["home_for"]) if h is not None else 0.0
+        ha = float(h["home_against"]) if h is not None else 0.0
+        af = float(a["away_for"]) if a is not None else 0.0
+        aa = float(a["away_against"]) if a is not None else 0.0
+        rows[team] = {
+            "home_xg_for_rate": (hf + k * home_mean) / (hn + k),
+            "home_xg_against_rate": (ha + k * away_mean) / (hn + k),
+            "away_xg_for_rate": (af + k * away_mean) / (an + k),
+            "away_xg_against_rate": (aa + k * home_mean) / (an + k),
+            "xg_for_rate": (hf + af + k * overall_mean) / (hn + an + k),
+            "xg_against_rate": (ha + aa + k * overall_mean) / (hn + an + k),
+            "home_matches": float(hn),
+            "away_matches": float(an),
+        }
+    return {
+        "schema_version": 1,
+        "method": "xg_pit_smoothed_venue_split_team_rates",
+        "shrinkage": k,
+        "home_mean": home_mean,
+        "away_mean": away_mean,
+        "overall_mean": overall_mean,
+        "competition_rates": competition_rates,
+        "teams": rows,
+        "training_rows": int(len(d)),
+    }
+
+
+def predict_xg_score_distribution(
+    score_model: dict[str, Any],
+    home_team: str,
+    away_team: str,
+    competition: str | None = None,
+    *,
+    max_goals: int = 12,
+) -> list[tuple[int, int, float]]:
+    teams = score_model.get("teams", {})
+    home = teams.get(str(home_team))
+    away = teams.get(str(away_team))
+    if home is None or away is None:
+        raise RuntimeError("xG score model has no trained rate for one or both fixture teams")
+    base_home = max(float(score_model.get("home_mean", 1.0)), 1e-6)
+    base_away = max(float(score_model.get("away_mean", 1.0)), 1e-6)
+    comp = (score_model.get("competition_rates") or {}).get(str(competition))
+    if isinstance(comp, dict):
+        base_home = max(float(comp.get("home_mean", base_home)), 1e-6)
+        base_away = max(float(comp.get("away_mean", base_away)), 1e-6)
+    home_lambda = base_home * (
+        float(home.get("home_xg_for_rate", home["xg_for_rate"])) / base_home
+    ) * (
+        float(away.get("away_xg_against_rate", away["xg_against_rate"])) / base_home
+    )
+    away_lambda = base_away * (
+        float(away.get("away_xg_for_rate", away["xg_for_rate"])) / base_away
+    ) * (
+        float(home.get("home_xg_against_rate", home["xg_against_rate"])) / base_away
+    )
+    home_lambda = float(np.clip(home_lambda, 0.05, 6.0))
+    away_lambda = float(np.clip(away_lambda, 0.05, 6.0))
+    return score_distribution(home_lambda, away_lambda, max_goals=max_goals)
+
+
 def _parse_mom_input(value: Any) -> tuple[list[str], list[float]]:
     if isinstance(value, str):
         value = json.loads(value)

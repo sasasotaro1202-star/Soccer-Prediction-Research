@@ -4,7 +4,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-METHODS = ("primary", "neutral_aware", "recency", "time_decay", "dixon_coles", "negative_binomial")
+METHODS = ("primary", "neutral_aware", "recency", "time_decay", "dixon_coles", "negative_binomial", "xg")
 METRICS = ("score_logloss", "over_2_5_logloss", "over_2_5_brier", "btts_logloss", "btts_brier")
 
 def _weighted_mean(values: pd.Series, weights: pd.Series) -> float:
@@ -66,6 +66,7 @@ def select_score_model(
             "time_decay": "time_decay_status",
             "dixon_coles": "dc_status",
             "negative_binomial": "negative_binomial_status",
+            "xg": "xg_status",
         }[method]
         if status_col not in work.columns or not work[status_col].astype(str).eq("PASS").all():
             records[method] = {"status": "UNAVAILABLE", "metrics": {}}
@@ -238,6 +239,7 @@ def verify_selected_score_model(
         "time_decay": "time_decay_status",
         "dixon_coles": "dc_status",
         "negative_binomial": "negative_binomial_status",
+        "xg": "xg_status",
     }.get(selected)
     if status_col in locked_oos.columns and not locked_oos[status_col].astype(str).eq("PASS").all():
         return {
