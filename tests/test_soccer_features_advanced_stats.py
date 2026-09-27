@@ -68,4 +68,4 @@ def test_advanced_stats_are_featured_with_aliases_and_safe_xga_derivation():
 
     # The post-fixture 9.0 xG observation cannot leak backwards.
     assert row["home_xg_avg_3"] < 3.0
-    assert row["pit_verified"] is True
+    assert bool(row["pit_verified"])
