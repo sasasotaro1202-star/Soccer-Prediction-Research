@@ -15,7 +15,9 @@ from src.prediction.secondary_outputs import (
     fit_time_decay_score_rate_model,
     fit_neutral_aware_score_rate_model,
     fit_score_rate_model,
+    fit_xg_score_rate_model,
     predict_score_distribution,
+    predict_xg_score_distribution,
 )
 
 
@@ -199,6 +201,31 @@ def run_score_walk_forward(
             )
         model = fit_score_rate_model(train)
         metrics = _score_block_metrics(oos, model)
+
+        # Challenger: xG-based team scoring rates. xG is historical post-match
+        # information and is used only when it is PIT-verified in the training slice.
+        try:
+            xg_model = fit_xg_score_rate_model(train)
+            xg_metrics = _score_block_metrics(
+                oos,
+                xg_model,
+                distribution_fn=predict_xg_score_distribution,
+            )
+            metrics.update({f"xg_{k}": v for k, v in xg_metrics.items() if k != "n"})
+            metrics["xg_training_rows"] = int(xg_model.get("training_rows", 0))
+            metrics["xg_status"] = "PASS"
+            metrics["xg_error"] = ""
+        except Exception as exc:
+            for key in (
+                "score_logloss", "exact_score_hit_rate", "top3_score_hit_rate",
+                "top4_score_hit_rate", "home_goals_mae", "away_goals_mae",
+                "total_goals_mae", "over_2_5_logloss", "over_2_5_brier",
+                "btts_logloss", "btts_brier",
+            ):
+                metrics[f"xg_{key}"] = float("nan")
+            metrics["xg_training_rows"] = 0
+            metrics["xg_status"] = "ERROR"
+            metrics["xg_error"] = f"{type(exc).__name__}: {exc}"
 
         # Challenger: neutral-venue-aware rates. Standard fixtures match primary exactly;
         # neutral fixtures avoid importing a home-field asymmetry that was not observed.
