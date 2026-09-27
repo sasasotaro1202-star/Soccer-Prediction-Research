@@ -28,6 +28,7 @@ ADVANCED_STAT_KEYS = (
     "blocked_shots",
     "goals_ht",
     "xg_ht",
+    "penalties",
 )
 
 ADVANCED_STAT_ALIASES = {
