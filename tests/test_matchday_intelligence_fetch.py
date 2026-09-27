@@ -391,3 +391,17 @@ def test_retrieval_time_is_never_promoted_to_source_availability():
     assert row["matchday_pit_verified"] is False
     assert row["source_retrieved_at_utc"] == "2026-09-25T08:00:00Z"
     assert row["matchday_retrieved_at_utc"] == "2026-09-25T08:00:00Z"
+
+
+def test_sofascore_slug_discovers_current_asian_games_women():
+    from src.data.matchday_intelligence_fetch import _sofascore_competition
+
+    event = {
+        "tournament": {
+            "uniqueTournament": {
+                "name": "Asian Games",
+                "slug": "asian-games-women",
+            }
+        }
+    }
+    assert _sofascore_competition(event) == "AG_W"

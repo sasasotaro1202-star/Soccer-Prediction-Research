@@ -1,0 +1,80 @@
+name: Soccer Scope Frontier Discovery
+
+on:
+  schedule:
+    - cron: "20 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Future calendar days to scan for unknown competitions"
+        required: false
+        default: "14"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soccer-scope-frontier
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+
+      - name: Discover and update research frontier
+        env:
+          PYTHONPATH: .
+          DAYS: ${{ inputs.days || '14' }}
+        run: |
+          set -euo pipefail
+          python -m src.research.scope_frontier --days "${DAYS}" --output docs/scope_frontier.json
+
+      - name: Validate frontier contract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("docs/scope_frontier.json").read_text(encoding="utf-8"))
+          if payload.get("schema_version") != 1:
+              raise SystemExit("unsupported frontier schema")
+          if payload.get("production_auto_promotion") is not False:
+              raise SystemExit("unknown frontier candidates must never auto-promote")
+          candidates = payload.get("discovered_candidates")
+          if not isinstance(candidates, list):
+              raise SystemExit("discovered_candidates must be a list")
+          allowed = {
+              "DISCOVERED", "METADATA_CHECKED", "DATA_FEASIBLE", "PIT_VALIDATED",
+              "SHADOW", "OOS/ROBUSTNESS_VALIDATED", "LIMITED_PRODUCTION",
+              "STABLE_PRODUCTION", "SCALE-UP",
+          }
+          for item in candidates:
+              if item.get("stage") not in allowed:
+                  raise SystemExit("invalid scope frontier stage")
+              if item.get("stage") == "DISCOVERED" and item.get("eligibility") != "RESEARCH_ONLY_UNVERIFIED":
+                  raise SystemExit("discovered candidate escaped research-only status")
+          print({"status": payload.get("status"), "candidates": len(candidates), "errors": len(payload.get("errors", []))})
+          PY
+
+      - name: Persist changed frontier ledger
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/scope_frontier.json
+          if git diff --cached --quiet; then
+            echo "No frontier change."
+            exit 0
+          fi
+          git commit -m "research: update scope discovery frontier"
+          git push origin HEAD:main
