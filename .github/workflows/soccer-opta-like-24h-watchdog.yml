@@ -1,0 +1,69 @@
+name: Soccer Opta-like 24H Watchdog
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/10 * * * *"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: soccer-opta-like-24h-watchdog
+  cancel-in-progress: true
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Reconcile daily 24H marathon
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_API: ${{ github.api_url }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "${GH_API}/repos/${REPO}/actions/workflows/soccer-opta-like-24h.yml/runs?per_page=20" > /tmp/runs.json
+          python - <<'PY' > /tmp/decision
+          import json
+          from datetime import datetime, timezone
+          p=json.load(open('/tmp/runs.json'))
+          now=datetime.now(timezone.utc)
+          runs=p.get('workflow_runs',[])
+          active={'queued','in_progress','waiting','requested','pending'}
+          current=[r for r in runs if r.get('status') in active]
+          completed=[r for r in runs if r.get('status')=='completed']
+          if current:
+              print('ACTIVE')
+          elif not completed:
+              print('DISPATCH')
+          else:
+              latest=max(completed,key=lambda r:r.get('updated_at') or r.get('created_at') or '')
+              raw=latest.get('updated_at') or latest.get('created_at')
+              age=(now-datetime.fromisoformat(raw.replace('Z','+00:00'))).total_seconds()/3600
+              print('DISPATCH' if age >= 24 else 'WAIT')
+          PY
+          decision=$(cat /tmp/decision)
+          if [ "$decision" != "DISPATCH" ]; then
+            echo "WATCHDOG: $decision"
+            exit 0
+          fi
+          for attempt in 1 2 3 4; do
+            code=$(curl -sS -o /tmp/dispatch.json -w "%{http_code}" -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -d '{"ref":"main"}' \
+              "${GH_API}/repos/${REPO}/actions/workflows/soccer-opta-like-24h.yml/dispatches")
+            case "$code" in
+              204) echo "WATCHDOG: 24H marathon dispatched"; exit 0 ;;
+              409|429|500|502|503|504) sleep $((attempt*4)) ;;
+              *) echo "WATCHDOG: dispatch failed HTTP $code" >&2; cat /tmp/dispatch.json >&2; exit 1 ;;
+            esac
+          done
+          exit 1
