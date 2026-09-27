@@ -172,8 +172,8 @@ jobs:
           python -m src.research.innovative_control_v13 --features artifacts/pit_replay_features.csv --out artifacts/innovative_control_v13
       - name: Re-run deterministic suite
         run: python -m pytest -q
-      - name: Validate case-risk and checkpoint contracts
-        run: python -m pytest -q tests/test_case_risk_oos.py tests/test_checkpoint_state.py
+      - name: Validate cross-project research contracts
+        run: python -m pytest -q tests/test_case_risk_oos.py tests/test_checkpoint_state.py tests/test_dual_memory_oos.py
       - name: Record phase 3 checkpoint
         if: always()
         env:
