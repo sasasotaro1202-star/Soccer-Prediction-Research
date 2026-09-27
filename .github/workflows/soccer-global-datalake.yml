@@ -1,0 +1,90 @@
+name: Soccer Global Data Lake Research
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/data/global_datalake_adapter.py"
+      - "tests/test_global_datalake_adapter.py"
+      - ".github/workflows/soccer-global-datalake.yml"
+  schedule:
+    - cron: "35 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      start_year:
+        description: "Research start year"
+        required: false
+        default: "2012"
+      end_year:
+        description: "Research end year"
+        required: false
+        default: "2025"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soccer-global-datalake
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install core dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 pyarrow
+
+      - name: Run adapter tests
+        env:
+          PYTHONHASHSEED: "0"
+        run: python -m pytest -q tests/test_global_datalake_adapter.py
+
+      - name: Execute research adapter
+        env:
+          PYTHONPATH: .
+          START_YEAR: ${{ inputs.start_year || '2012' }}
+          END_YEAR: ${{ inputs.end_year || '2025' }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from src.data.global_datalake_adapter import save_research_artifacts
+
+          start_year = int(os.environ["START_YEAR"])
+          end_year = int(os.environ["END_YEAR"])
+          if start_year > end_year:
+              raise SystemExit("start_year must be <= end_year")
+          status = save_research_artifacts(
+              start_year=start_year,
+              end_year=end_year,
+              output_dir="artifacts/global_datalake",
+              cache_dir="cache/global_datalake",
+          )
+          print({
+              "status": status.get("status"),
+              "rows": status.get("rows"),
+              "pit_basis": status.get("pit_basis"),
+              "production_status": status.get("production_status"),
+          })
+          if status.get("status") != "OK":
+              raise SystemExit("global data lake research adapter did not complete cleanly")
+          PY
+
+      - name: Upload research evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: global-datalake-research
+          path: artifacts/global_datalake/
