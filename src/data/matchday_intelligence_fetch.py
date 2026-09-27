@@ -431,31 +431,32 @@ def _sofascore_competition(event: dict[str, Any]) -> str | None:
         event.get("uniqueTournament") or {},
         tournament,
     ]
+    # Prefer a specific slug when the provider uses a shared umbrella name.
+    # Example: "Asian Games" is ambiguous, while "asian-games-women" is not.
+    slug_map = {
+        "premier-league": "EPL",
+        "eredivisie": "ERE",
+        "laliga": "LL",
+        "serie-a": "SA",
+        "bundesliga": "BL1",
+        "ligue-1": "FL1",
+        "j1-league": "J1",
+        "j2-league": "J2",
+        "j3-league": "J3",
+        "uefa-champions-league": "UCL",
+        "uefa-europa-league": "UEL",
+        "uefa-europa-conference-league": "UECL",
+        "asian-games-women": "AG_W",
+        "asian-games-women-football": "AG_W",
+    }
     for candidate in candidates:
+        slug = str(candidate.get("slug") or "").strip().lower()
+        mapped = slug_map.get(slug)
+        if mapped:
+            return mapped
         name = str(candidate.get("name") or "").strip()
         if name in SOFASCORE_COMPETITIONS:
             return SOFASCORE_COMPETITIONS[name]
-        slug = str(candidate.get("slug") or "").strip().lower()
-        if slug:
-            slug_map = {
-                "premier-league": "EPL",
-                "eredivisie": "ERE",
-                "laliga": "LL",
-                "serie-a": "SA",
-                "bundesliga": "BL1",
-                "ligue-1": "FL1",
-                "j1-league": "J1",
-                "j2-league": "J2",
-                "j3-league": "J3",
-                "uefa-champions-league": "UCL",
-                "uefa-europa-league": "UEL",
-                "uefa-europa-conference-league": "UECL",
-                "asian-games-women": "AG_W",
-                "asian-games-women-football": "AG_W",
-            }
-            mapped = slug_map.get(slug)
-            if mapped:
-                return mapped
     return None
 
 
