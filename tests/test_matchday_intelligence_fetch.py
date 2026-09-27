@@ -220,6 +220,53 @@ def test_weather_without_timestamps_remains_unknown():
     assert pd.isna(temp)
 
 
+def test_sofascore_maps_extended_global_leagues():
+    cases = {
+        "2. Bundesliga": "BL2",
+        "Segunda División": "LL2",
+        "Serie B": "SB",
+        "Ligue 2": "FL2",
+        "Primeira Liga": "PPL",
+        "Belgian Pro League": "BEL",
+        "Scottish Premiership": "SPL",
+        "Süper Lig": "TUR",
+        "Austrian Bundesliga": "AUT",
+        "Swiss Super League": "SUI",
+        "K League 1": "KOR",
+        "Liga MX": "LIGA_MX",
+        "Brasileirão Série A": "BRA",
+        "Liga Profesional": "ARG",
+        "Saudi Pro League": "SPL_SA",
+    }
+    for name, expected in cases.items():
+        assert _sofascore_competition({"tournament": {"name": name}}) == expected
+
+
+def test_extended_espn_league_registry_is_explicit_and_keyless():
+    expected = {
+        "CHA": "eng.2",
+        "ENG1": "eng.3",
+        "ENG2": "eng.4",
+        "BL2": "ger.2",
+        "LL2": "esp.2",
+        "SB": "ita.2",
+        "FL2": "fra.2",
+        "PPL": "por.1",
+        "BEL": "bel.1",
+        "SPL": "sco.1",
+        "TUR": "tur.1",
+        "AUT": "aut.1",
+        "SUI": "sui.1",
+        "KOR": "kor.1",
+        "BRA": "bra.1",
+        "LIGA_MX": "mex.1",
+        "SPL_SA": "ksa.1",
+    }
+    for competition, league in expected.items():
+        assert ESPN_LEAGUES[competition] == league
+
+
+
 def test_sofascore_uses_public_api_host():
     from src.data import matchday_intelligence_fetch as m
     source = m.SOFASCORE_COMPETITIONS
