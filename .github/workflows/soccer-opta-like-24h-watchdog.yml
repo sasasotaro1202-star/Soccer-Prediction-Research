@@ -18,52 +18,95 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Reconcile daily 24H marathon
+      - name: Reconcile 24H marathon
         env:
           GH_TOKEN: ${{ github.token }}
           GH_API: ${{ github.api_url }}
           REPO: ${{ github.repository }}
+          SELF_RUN_ID: ${{ github.run_id }}
         shell: bash
         run: |
           set -euo pipefail
-          curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            "${GH_API}/repos/${REPO}/actions/workflows/soccer-opta-like-24h.yml/runs?per_page=20" > /tmp/runs.json
-          python - <<'PY' > /tmp/decision
-          import json
-          from datetime import datetime, timezone
-          p=json.load(open('/tmp/runs.json'))
-          now=datetime.now(timezone.utc)
-          runs=p.get('workflow_runs',[])
-          active={'queued','in_progress','waiting','requested','pending'}
-          current=[r for r in runs if r.get('status') in active]
-          completed=[r for r in runs if r.get('status')=='completed']
-          if current:
-              print('ACTIVE')
-          elif not completed:
-              print('DISPATCH')
-          else:
-              latest=max(completed,key=lambda r:r.get('updated_at') or r.get('created_at') or '')
-              raw=latest.get('updated_at') or latest.get('created_at')
-              age=(now-datetime.fromisoformat(raw.replace('Z','+00:00'))).total_seconds()/3600
-              print('DISPATCH' if age >= 24 else 'WAIT')
-          PY
-          decision=$(cat /tmp/decision)
-          if [ "$decision" != "DISPATCH" ]; then
-            echo "WATCHDOG: $decision"
-            exit 0
-          fi
-          for attempt in 1 2 3 4; do
-            code=$(curl -sS -o /tmp/dispatch.json -w "%{http_code}" -X POST \
+
+          api_runs() {
+            curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
               -H "Authorization: Bearer ${GH_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
-              -d '{"ref":"main"}' \
-              "${GH_API}/repos/${REPO}/actions/workflows/soccer-opta-like-24h.yml/dispatches")
-            case "$code" in
-              204) echo "WATCHDOG: 24H marathon dispatched"; exit 0 ;;
-              409|429|500|502|503|504) sleep $((attempt*4)) ;;
-              *) echo "WATCHDOG: dispatch failed HTTP $code" >&2; cat /tmp/dispatch.json >&2; exit 1 ;;
-            esac
-          done
-          exit 1
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${GH_API}/repos/${REPO}/actions/workflows/soccer-opta-like-24h.yml/runs?per_page=50"
+          }
+
+          api_runs > /tmp/runs.json
+          MAIN_SHA="$(gh api "repos/${REPO}/git/ref/heads/main" --jq '.object.sha')"
+
+          python - /tmp/runs.json "$MAIN_SHA" "$SELF_RUN_ID" <<'PY' > /tmp/decision.json
+          import json, sys
+          from datetime import datetime, timezone
+          runs = json.load(open(sys.argv[1])).get('workflow_runs', [])
+          main_sha = sys.argv[2]
+          self_id = int(sys.argv[3])
+          now = datetime.now(timezone.utc)
+          active = {'queued','in_progress','waiting','requested','pending'}
+          def ts(r, field='updated_at'):
+              raw=r.get(field) or r.get('created_at')
+              return datetime.fromisoformat(raw.replace('Z','+00:00')) if raw else now
+          candidates=[r for r in runs if r.get('id') != self_id]
+          current_active=[r for r in candidates if r.get('status') in active and r.get('head_sha')==main_sha]
+          stale_active=[]; stale_queued=[]
+          for r in current_active:
+              age=(now-ts(r,'updated_at')).total_seconds()/60.0
+              if r.get('status')=='in_progress' and age>=350: stale_active.append(r)
+              elif r.get('status') in {'queued','pending'} and age>=30: stale_queued.append(r)
+          completed=[r for r in candidates if r.get('status')=='completed' and r.get('head_sha')==main_sha]
+          completed.sort(key=lambda r: ts(r,'updated_at'), reverse=True)
+          if stale_active:
+              print(json.dumps({'action':'CANCEL_AND_DISPATCH','run_id':stale_active[0]['id'],'reason':'active_over_350m'}))
+          elif stale_queued:
+              print(json.dumps({'action':'CANCEL_AND_DISPATCH','run_id':stale_queued[0]['id'],'reason':'queued_over_30m'}))
+          elif current_active:
+              print(json.dumps({'action':'WAIT','reason':'current_main_active'}))
+          elif not completed:
+              print(json.dumps({'action':'DISPATCH','reason':'no_current_main_run'}))
+          else:
+              latest=completed[0]
+              age=(now-ts(latest,'updated_at')).total_seconds()/60.0
+              recent_failures=[r for r in completed if (now-ts(r,'updated_at')).total_seconds()<=6*3600 and r.get('conclusion') in {'failure','cancelled','timed_out'}]
+              conclusion=latest.get('conclusion')
+              if conclusion in {'failure','cancelled','timed_out'} and age>=10 and len(recent_failures)<3:
+                  print(json.dumps({'action':'DISPATCH','reason':'recent_failed_run_recovery','age_min':round(age,1)}))
+              elif len(recent_failures)>=3 and age<360:
+                  print(json.dumps({'action':'HOLD','reason':'three_recent_failures_cooldown','failures':len(recent_failures)}))
+              elif age>=24*60:
+                  print(json.dumps({'action':'DISPATCH','reason':'24h_cycle_elapsed','age_min':round(age,1)}))
+              else:
+                  print(json.dumps({'action':'WAIT','reason':'cycle_within_window','age_min':round(age,1)}))
+          PY
+
+          cat /tmp/decision.json
+          action="$(python -c 'import json; print(json.load(open("/tmp/decision.json"))["action"])')"
+          run_id="$(python -c 'import json; print(json.load(open("/tmp/decision.json")).get("run_id",""))')"
+          reason="$(python -c 'import json; print(json.load(open("/tmp/decision.json"))["reason"])')"
+
+          cancel_run() {
+            gh run cancel "$1" --repo "$REPO"
+            echo "WATCHDOG: cancelled stale 24H run $1"
+          }
+
+          dispatch_main() {
+            for attempt in 1 2 3 4; do
+              if gh workflow run soccer-opta-like-24h.yml --repo "$REPO" --ref main; then
+                echo "WATCHDOG: dispatched fresh 24H run (attempt ${attempt}/4)"
+                return 0
+              fi
+              sleep $((attempt * 4))
+            done
+            echo "WATCHDOG: bounded dispatch retries exhausted" >&2
+            return 1
+          }
+
+          case "$action" in
+            WAIT|HOLD) echo "WATCHDOG: ${action} (${reason})" ;;
+            CANCEL_AND_DISPATCH) cancel_run "$run_id"; dispatch_main ;;
+            DISPATCH) dispatch_main ;;
+            *) echo "WATCHDOG: unknown action ${action}" >&2; exit 1 ;;
+          esac
