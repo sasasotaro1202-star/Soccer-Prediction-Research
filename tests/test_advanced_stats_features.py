@@ -71,6 +71,25 @@ def test_advanced_stats_are_replayed_into_pit_safe_rolling_features():
             "away_xg_ht": 0.2,
         })
 
+    # This match happened before the prediction cutoff but its advanced statistics
+    # were published after the cutoff. It must not enter the rolling feature state.
+    history_rows.append({
+        "match_id": "late_known",
+        "competition": "EPL",
+        "kickoff_utc": "2026-09-18T12:00:00Z",
+        "home_team": "Alpha",
+        "away_team": "Beta",
+        "home_goals": 0,
+        "away_goals": 0,
+        "source_available_at_utc": "2026-09-21T12:00:00Z",
+        "home_xg": 9.0,
+        "away_xg": 0.01,
+        "home_possession": 99.0,
+        "away_possession": 1.0,
+        "home_pass_accuracy": 99.0,
+        "away_pass_accuracy": 1.0,
+    })
+
     history = pd.DataFrame(history_rows)
     future = pd.DataFrame([{
         "match_id": "future",
@@ -94,3 +113,7 @@ def test_advanced_stats_are_replayed_into_pit_safe_rolling_features():
     assert row["pass_accuracy_diff_3"] == 5.0
     assert row["shots_inside_box_diff_3"] == 4.0
     assert row["blocked_shots_diff_3"] == -1.0
+    # The 9/18 event was not available by the 9/20 cutoff, so its extreme xG/possession
+    # values cannot contaminate the prediction-time 3-match window.
+    assert row["home_xg_avg_3"] == 1.0
+    assert row["possession_diff_3"] == 20.0
