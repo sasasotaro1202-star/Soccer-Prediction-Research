@@ -70,9 +70,10 @@ def test_advanced_stats_are_featured_and_xga_is_safely_derived():
     assert np.isclose(row["home_xg_avg_3"], np.mean([2.0, 1.2, 2.4]))
     assert np.isclose(row["away_xg_avg_3"], np.mean([1.4, 0.7, 1.6]))
 
-    # xGA is safely derived from the opponent's explicitly supplied xG.
-    assert np.isclose(row["home_xga_avg_3"], row["away_xg_avg_3"])
-    assert np.isclose(row["away_xga_avg_3"], row["home_xg_avg_3"])
+    # xGA is safely derived from the opponent's explicitly supplied xG in
+    # the same team's own historical fixtures.
+    assert np.isclose(row["home_xga_avg_3"], np.mean([0.4, 1.0, 0.9]))
+    assert np.isclose(row["away_xga_avg_3"], np.mean([0.5, 0.8, 1.1]))
 
     assert np.isclose(row["home_possession_avg_3"], np.mean([58.0, 61.0, 55.0]))
     assert np.isclose(row["away_possession_avg_3"], np.mean([42.0, 47.0, 49.0]))
