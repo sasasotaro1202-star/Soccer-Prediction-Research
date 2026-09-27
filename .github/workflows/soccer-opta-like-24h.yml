@@ -72,7 +72,8 @@ jobs:
         run: |
           set -euo pipefail
           python -m src.data.fixture_field_audit
-          PIT_ENABLE_ARCHIVE_AUDIT=1 python -m src.data.completion_gate || test -s artifacts/completion_gate.json
+          PIT_ENABLE_ARCHIVE_AUDIT=1 python -m src.data.completion_gate
+          test -s artifacts/completion_gate.json
       - name: Representative PIT replay
         run: |
           set -euo pipefail
@@ -140,14 +141,20 @@ jobs:
           cache: pip
       - run: python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
       - run: python -m pytest -q
+      - name: Download Phase 3 research evidence
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632e53
+        with:
+          name: soccer-opta-24h-phase3-${{ github.run_id }}
+          path: artifacts/phase3
+
       - name: Production immutability check
         run: |
           set -euo pipefail
-          test -f artifacts/innovative_control_v13/experiment_results.json || exit 0
+          test -f artifacts/phase3/innovative_control_v13/experiment_results.json
           python - <<'PY'
           import json
           from pathlib import Path
-          p=Path('artifacts/innovative_control_v13/experiment_results.json')
+          p=Path('artifacts/phase3/innovative_control_v13/experiment_results.json')
           x=json.loads(p.read_text())
           if x.get('production_changed') is True: raise SystemExit('production_changed=true')
           print({'status':x.get('status'),'oos_claimed':x.get('oos_claimed'),'production_changed':x.get('production_changed')})
