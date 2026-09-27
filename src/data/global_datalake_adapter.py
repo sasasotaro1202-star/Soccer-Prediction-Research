@@ -50,21 +50,6 @@ FIXTURE_COLUMNS = (
     "away_team_id",
     "goals_home",
     "goals_away",
-    "home_xg",
-    "away_xg",
-    "home_possession",
-    "away_possession",
-    "home_fouls",
-    "away_fouls",
-    "home_offsides",
-    "away_offsides",
-    "home_pass_accuracy",
-    "away_pass_accuracy",
-    "home_goals_ht",
-    "away_goals_ht",
-    "home_xg_ht",
-    "away_xg_ht",
-    "stats_fetched_at",
     "known_at",
 )
 
@@ -185,6 +170,8 @@ def load_global_datalake_history(
         "home_fouls", "away_fouls",
         "home_offsides", "away_offsides",
         "home_pass_accuracy", "away_pass_accuracy",
+        "home_goals_ht", "away_goals_ht",
+        "home_xg_ht", "away_xg_ht",
     ]
     stats = match_stats[[c for c in stats_columns if c in match_stats.columns]].copy()
     if stats["fixture_id"].duplicated().any():
