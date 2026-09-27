@@ -1,8 +1,6 @@
 name: Soccer 9H Queue Watchdog
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
   schedule:
     # Independent 5-minute queue watchdog. This is separate from the recovery
