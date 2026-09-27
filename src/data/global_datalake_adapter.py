@@ -50,7 +50,6 @@ FIXTURE_COLUMNS = (
     "away_team_id",
     "goals_home",
     "goals_away",
-    "known_at",
 )
 
 
@@ -121,18 +120,17 @@ def load_global_datalake_history(
 
     _require_columns(
         fixtures,
-        {"id", "date_utc", "league_id", "home_team_id", "away_team_id", "goals_home", "goals_away", "known_at"},
+        {"id", "date_utc", "league_id", "home_team_id", "away_team_id", "goals_home", "goals_away"},
         "global_datalake fixtures",
     )
     _require_columns(leagues, {"id", "name"}, "global_datalake leagues")
+    _require_columns(match_stats, {"fixture_id", "known_at"}, "global_datalake match_stats")
     _require_columns(teams, {"id", "name"}, "global_datalake teams")
 
     selected = fixtures[[c for c in FIXTURE_COLUMNS if c in fixtures.columns]].copy()
     selected["date_utc"] = pd.to_datetime(selected["date_utc"], utc=True, errors="coerce")
-    selected["known_at"] = pd.to_datetime(selected["known_at"], utc=True, errors="coerce")
     selected = selected[
         selected["date_utc"].notna()
-        & selected["known_at"].notna()
         & selected["goals_home"].notna()
         & selected["goals_away"].notna()
     ].copy()
@@ -173,10 +171,12 @@ def load_global_datalake_history(
         "home_goals_ht", "away_goals_ht",
         "home_xg_ht", "away_xg_ht",
     ]
-    stats = match_stats[[c for c in stats_columns if c in match_stats.columns]].copy()
+    stats = match_stats[[c for c in stats_columns if c in match_stats.columns] + (["known_at"] if "known_at" in match_stats.columns else [])].copy()
+    stats["known_at"] = pd.to_datetime(stats["known_at"], utc=True, errors="coerce")
     if stats["fixture_id"].duplicated().any():
         raise RuntimeError("global_datalake match_stats contains duplicate fixture_id values")
     selected = selected.merge(stats, left_on="id", right_on="fixture_id", how="left", validate="one_to_one")
+    selected = selected[selected["known_at"].notna()].copy()
     if "fixture_id" in selected.columns:
         selected = selected.drop(columns=["fixture_id"])
 
