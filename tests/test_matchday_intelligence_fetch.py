@@ -220,6 +220,20 @@ def test_weather_without_timestamps_remains_unknown():
     assert pd.isna(temp)
 
 
+def test_parse_sofascore_event_attaches_type_and_stage_metadata():
+    payload = {
+        "id": 998,
+        "startTimestamp": 1790000000,
+        "tournament": {"name": "FA Cup"},
+        "roundInfo": {"name": "Semi-final"},
+        "homeTeam": {"id": 1, "name": "Home"},
+        "awayTeam": {"id": 2, "name": "Away"},
+    }
+    row = parse_sofascore_event(payload)
+    assert row["competition"] == "FAC"
+    assert row["competition_kind"] == "domestic_cup"
+    assert row["stage_type"] == "semi_final"
+
 def test_sofascore_uses_public_api_host():
     from src.data import matchday_intelligence_fetch as m
     source = m.SOFASCORE_COMPETITIONS

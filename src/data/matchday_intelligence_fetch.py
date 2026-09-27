@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from src.data.external_fetch import ExternalFetcher, iso_utc
+from src.research.competition_taxonomy import classify_competition_kind, classify_stage
 
 
 ESPN_LEAGUES: dict[str, str] = {
@@ -495,6 +496,9 @@ def parse_sofascore_event(event: dict[str, Any]) -> dict[str, Any] | None:
     coords = event.get("venueCoordinates") or venue.get("coordinates") or {}
     canonical = f"sofascore|{event_id}|{competition}|{home_name}|{away_name}"
     match_id = "sofa:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:20]
+    round_info = event.get("roundInfo") or {}
+    round_name = str(round_info.get("name") or round_info.get("round") or event.get("round") or "").strip()
+    phase = str(round_info.get("phase") or event.get("phase") or "").strip()
     return {
         "match_id": match_id,
         "sofascore_event_id": str(event_id),
@@ -504,6 +508,10 @@ def parse_sofascore_event(event: dict[str, Any]) -> dict[str, Any] | None:
         "home_team": home_name,
         "away_team": away_name,
         "competition": competition,
+        "competition_kind": classify_competition_kind(competition, gender=str(event.get("gender") or "")),
+        "stage_type": classify_stage(round_name=round_name, phase=phase),
+        "round_name": round_name,
+        "phase": phase,
         "venue_name": str(venue.get("name") or "").strip(),
         "venue_city": str(venue.get("city") or "").strip(),
         "venue_country": str(country.get("name") or "").strip(),
