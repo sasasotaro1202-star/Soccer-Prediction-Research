@@ -102,6 +102,8 @@ def discover(days: int, output: str, *, start: date | None = None) -> dict[str, 
     start = start or date.today()
     known = set(TARGET_COMPETITIONS)
     observed_known: dict[str, int] = {}
+    observed_known_by_kind: dict[str, int] = {}
+    observed_known_by_stage: dict[str, int] = {}
     discovered: dict[str, dict[str, Any]] = {}
     errors: list[dict[str, str]] = []
     scanned_dates: list[str] = []
@@ -117,11 +119,16 @@ def discover(days: int, output: str, *, start: date | None = None) -> dict[str, 
         for event in payload.get("events", []) or []:
             if not isinstance(event, dict):
                 continue
+            identity = _tournament_identity(event)
+            name, slug, tid, round_name, phase = identity
+            kind = classify_competition_kind(name, slug)
+            stage = classify_stage(round_name=round_name, phase=phase)
             mapped = _sofascore_competition(event)
             if mapped in known:
                 observed_known[mapped] = observed_known.get(mapped, 0) + 1
+                observed_known_by_kind[kind] = observed_known_by_kind.get(kind, 0) + 1
+                observed_known_by_stage[stage] = observed_known_by_stage.get(stage, 0) + 1
                 continue
-            identity = _tournament_identity(event)
             if not any(identity[:3]):
                 continue
             name, slug, tid = identity
@@ -159,11 +166,14 @@ def discover(days: int, output: str, *, start: date | None = None) -> dict[str, 
         "scanned_to_utc_date": scanned_dates[-1] if scanned_dates else None,
         "scanned_calendar_days": len(scanned_dates),
         "known_target_event_counts": dict(sorted(observed_known.items())),
+        "known_target_event_counts_by_kind": dict(sorted(observed_known_by_kind.items())),
+        "known_target_event_counts_by_stage": dict(sorted(observed_known_by_stage.items())),
         "discovered_candidates": sorted(
             merged.values(), key=lambda x: (str(x.get("target", "")), str(x.get("id", "")))
         ),
         "new_candidates_this_run": len(discovered),
         "errors": errors,
+        "coverage_dimensions": ["competition", "competition_kind", "stage_type"],
         "production_auto_promotion": False,
         "fail_closed_on_unknown_pit": True,
     }
