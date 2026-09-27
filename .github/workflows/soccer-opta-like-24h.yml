@@ -1,8 +1,6 @@
 name: Soccer Opta-like 24H Research Marathon
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
   schedule:
     - cron: "05 0 * * *"
