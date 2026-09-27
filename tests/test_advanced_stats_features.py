@@ -86,7 +86,7 @@ def test_advanced_stats_are_replayed_into_pit_safe_rolling_features():
     out = build_match_features(history, future, windows=(3,))
     row = out.iloc[0]
 
-    assert row["pit_verified"] is True
+    assert bool(row["pit_verified"]) is True
     assert row["home_xg_avg_3"] == 1.0
     assert row["away_xg_avg_3"] == 0.5
     assert row["xg_diff_3"] == 0.5
