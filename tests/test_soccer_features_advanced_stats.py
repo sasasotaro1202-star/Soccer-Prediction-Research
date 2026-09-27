@@ -76,7 +76,7 @@ def test_advanced_stats_are_featured_and_xga_is_safely_derived():
     assert np.isclose(row["away_xga_avg_3"], np.mean([0.5, 0.8, 1.1]))
 
     assert np.isclose(row["home_possession_avg_3"], np.mean([58.0, 61.0, 55.0]))
-    assert np.isclose(row["away_possession_avg_3"], np.mean([42.0, 47.0, 49.0]))
+    assert np.isclose(row["away_possession_avg_3"], np.mean([58.0, 53.0, 51.0]))
     assert np.isclose(row["home_big_chances_avg_3"], np.mean([3.0, 4.0, 5.0]))
     assert np.isclose(row["home_shots_inside_box_avg_3"], np.mean([8.0, 7.0, 6.0]))
     assert np.isclose(row["home_shots_outside_box_avg_3"], 5.0)
