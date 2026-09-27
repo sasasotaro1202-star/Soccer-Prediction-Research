@@ -1,6 +1,4 @@
 import json
-
-import pytest
 import requests
 
 from src.research import safe_runner
