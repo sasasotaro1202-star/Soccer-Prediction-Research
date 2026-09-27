@@ -33,6 +33,7 @@ jobs:
       - run: python -m pytest -q
       - run: python -m src.research.opta_like_source_probe --output artifacts/opta_like_source_probe.json
       - run: python -m src.research.scope_frontier --days 14 --output artifacts/scope_frontier.json
+      - run: python -m src.research.coverage_funnel_audit --frontier artifacts/scope_frontier.json --output artifacts/coverage_funnel.json
 
       - name: Write immutable run manifest
         shell: bash
@@ -114,9 +115,27 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/pit_samples
+          diagnostic_failures=0
           for c in EPL UCL UEL UECL J1; do
-            python -m src.research.pit_replay_audit --competition "$c" --rows-per-season 2 || echo "$c: BLOCKED_OR_FAILED" > "artifacts/pit_samples/$c.status"
+            set +e
+            python -m src.research.pit_replay_audit --competition "$c" --rows-per-season 2
+            rc=$?
+            set -e
+            if [ "$rc" -eq 0 ]; then
+              printf '%s\n' '{"status":"VERIFIED"}' > "artifacts/pit_samples/$c.status"
+            elif [ "$rc" -eq 2 ]; then
+              printf '%s\n' '{"status":"BLOCKED","reason":"pit_audit_insufficient_or_unverifiable_evidence"}' > "artifacts/pit_samples/$c.status"
+              echo "$c: PIT audit BLOCKED; evidence preserved and not promoted."
+            else
+              printf '%s\n' "{\"status\":\"FAILED\",\"exit_code\":$rc}" > "artifacts/pit_samples/$c.status"
+              echo "$c: PIT audit execution FAILED with exit code $rc" >&2
+              diagnostic_failures=1
+            fi
           done
+          if [ "$diagnostic_failures" -ne 0 ]; then
+            echo "One or more PIT diagnostic commands failed at execution level." >&2
+            exit 1
+          fi
       - name: Record phase 2 checkpoint
         if: always()
         env:
@@ -310,6 +329,21 @@ jobs:
           Path("artifacts/final/24h_run_status.json").write_text(json.dumps(payload,indent=2),encoding="utf-8")
           print(json.dumps(payload,indent=2))
           PY
+      - name: Fail final reconciliation when a research phase failed
+        env:
+          P1: ${{ needs.phase1.result }}
+          P2: ${{ needs.phase2.result }}
+          P3: ${{ needs.phase3.result }}
+          P4: ${{ needs.phase4.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "phase_results: P1=$P1 P2=$P2 P3=$P3 P4=$P4"
+          if [ "$P1" != "success" ] || [ "$P2" != "success" ] || [ "$P3" != "success" ] || [ "$P4" != "success" ]; then
+            echo "24H research did not complete all required phases." >&2
+            exit 1
+          fi
+          echo "24H research phases: all succeeded."
       - name: Verify no research phase claims production mutation
         shell: bash
         run: |
