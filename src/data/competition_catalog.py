@@ -85,6 +85,30 @@ COMPETITION_CATALOG: tuple[CompetitionSpec, ...] = (
     CompetitionSpec("ARG", "Argentine Primera División", "Argentina", "1", "league"),
     CompetitionSpec("ARG_CUP", "Copa Argentina", "Argentina", "cup", "cup"),
     CompetitionSpec("SPL_SA", "Saudi Pro League", "Saudi Arabia", "1", "league"),
+    # Major women's domestic leagues and global competitions
+    CompetitionSpec("ENGW", "Women's Super League", "England", "1", "league"),
+    CompetitionSpec("SPAW", "Liga F", "Spain", "1", "league"),
+    CompetitionSpec("GERW", "Frauen-Bundesliga", "Germany", "1", "league"),
+    CompetitionSpec("ITAW", "Serie A Women", "Italy", "1", "league"),
+    CompetitionSpec("FRAW", "Première Ligue", "France", "1", "league"),
+    CompetitionSpec("NWSL", "National Women's Soccer League", "United States", "1", "league"),
+    CompetitionSpec("AUSW", "A-League Women", "Australia", "1", "league"),
+    CompetitionSpec("KORW", "WK-League", "South Korea", "1", "league"),
+    CompetitionSpec("WELEAGUE", "WE League", "Japan", "1", "league"),
+
+    # Major continental/global club competitions outside UEFA
+    CompetitionSpec("AFC_CL_ELITE", "AFC Champions League Elite", "Asia", "continental", "asia"),
+    CompetitionSpec("AFC_CL_TWO", "AFC Champions League Two", "Asia", "continental", "asia"),
+    CompetitionSpec("AFC_WCL", "AFC Women's Champions League", "Asia", "continental", "asia"),
+    CompetitionSpec("LIB", "Copa Libertadores", "South America", "continental", "south_america"),
+    CompetitionSpec("SUD", "Copa Sudamericana", "South America", "continental", "south_america"),
+    CompetitionSpec("CAF_CL", "CAF Champions League", "Africa", "continental", "africa"),
+    CompetitionSpec("CAF_CONF", "CAF Confederation Cup", "Africa", "continental", "africa"),
+    CompetitionSpec("CCL", "CONCACAF Champions Cup", "North/Central America", "continental", "concacaf"),
+    CompetitionSpec("CSL", "Chinese Super League", "China", "1", "league"),
+    CompetitionSpec("COL", "Categoría Primera A", "Colombia", "1", "league"),
+    CompetitionSpec("CHI", "Primera División de Chile", "Chile", "1", "league"),
+
     # UEFA club competitions
     CompetitionSpec("UCL", "UEFA Champions League", "Europe", "continental", "europe"),
     CompetitionSpec("UEL", "UEFA Europa League", "Europe", "continental", "europe"),
