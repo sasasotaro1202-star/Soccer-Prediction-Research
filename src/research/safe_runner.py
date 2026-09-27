@@ -5,6 +5,8 @@ import os
 import time
 from pathlib import Path
 
+import requests
+
 
 def _write_status(out: Path, payload: dict) -> None:
     out.mkdir(parents=True, exist_ok=True)
@@ -32,6 +34,22 @@ def _load_gate(out: Path) -> dict | None:
 
 def _load_audit_gate(out: Path) -> dict | None:
     return _load_json(out / "audit_gate.json")
+
+
+def _is_retryable_exception(exc: Exception) -> bool:
+    """Return True only for failures that may plausibly clear on a bounded retry.
+
+    Deterministic code/schema failures such as KeyError, TypeError and ValueError
+    must fail fast. Retrying those failures wastes runner time and can delay the
+    newest main snapshot behind an obsolete immutable cycle.
+    """
+    transient_types = (
+        requests.exceptions.RequestException,
+        TimeoutError,
+        ConnectionError,
+        BrokenPipeError,
+    )
+    return isinstance(exc, transient_types)
 
 
 def run_with_retries() -> int:
@@ -93,6 +111,7 @@ def run_with_retries() -> int:
         return 1
 
     errors: list[str] = []
+    retry_history: list[dict] = []
 
     # Mark the research attempt as started before any expensive engine work.
     # This prevents stale/missing run_status artifacts from being mistaken for a
@@ -104,6 +123,7 @@ def run_with_retries() -> int:
             "completion_gate_passed": True,
             "audit_gate_passed": True,
         },
+        "retry_policy": "transient_only",
         "runner": {"status": "STARTED"},
         "oos_claimed": False,
     })
@@ -113,18 +133,47 @@ def run_with_retries() -> int:
     for attempt in range(1, attempts + 1):
         try:
             report = run(str(out))
-            report["runner"] = {"attempt": attempt, "max_attempts": attempts, "status": "COMPLETED"}
+            report["retry_policy"] = "transient_only"
+            report["runner"] = {
+                "attempt": attempt,
+                "max_attempts": attempts,
+                "status": "COMPLETED",
+                "retry_history": retry_history,
+            }
             _write_status(out, report)
             return 0
         except Exception as exc:
-            errors.append(f"attempt={attempt} {type(exc).__name__}: {exc}")
-            if attempt < attempts:
+            retryable = _is_retryable_exception(exc)
+            error_text = f"attempt={attempt} {type(exc).__name__}: {exc}"
+            errors.append(error_text)
+            retry_history.append(
+                {
+                    "attempt": attempt,
+                    "exception_type": type(exc).__name__,
+                    "error": str(exc),
+                    "retryable": retryable,
+                }
+            )
+            if attempt < attempts and retryable:
                 time.sleep(backoff * attempt)
+                continue
+            break
 
+    status = "DEGRADED" if errors else "FAILED"
     _write_status(out, {
-        "status": "DEGRADED",
-        "reason": "Research engine failed after bounded retries; no OOS result was claimed.",
-        "runner": {"attempts": attempts, "status": "FAILED_AFTER_RETRIES"},
+        "status": status,
+        "reason": (
+            "Research engine failed after a bounded retry policy; no OOS result was claimed."
+            if errors
+            else "Research engine did not produce a result; no OOS result was claimed."
+        ),
+        "retry_policy": "transient_only",
+        "runner": {
+            "attempts": len(retry_history),
+            "max_attempts": attempts,
+            "status": "FAILED_AFTER_RETRIES" if len(retry_history) > 1 else "FAILED_FAST",
+            "retry_history": retry_history,
+        },
         "errors": errors,
         "oos_claimed": False,
     })
