@@ -263,7 +263,7 @@ def usable_source_candidates(*, target_axis: str, include_unproven_pit: bool = T
 
 
 def data_sources_only() -> tuple[OptaLikeSource, ...]:
-    return tuple(source for source in _SOURCES if source.kind not in {"analytics_engine", "normalization_engine", "tracking_feature_engine"})
+    return tuple(source for source in _SOURCES if not source.kind.endswith("_engine"))
 
 
 def source_summary() -> dict[str, int]:
