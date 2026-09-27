@@ -103,3 +103,49 @@ def test_global_player_history_aggregates_prior_player_performance_with_match_st
     assert row["home_player_passes_key_total"] == 5
     assert row["home_player_tackles_total"] == 6
     assert row["away_player_goals_assists_total"] == 0
+
+
+def test_player_feature_columns_are_consumed_by_pit_feature_replay():
+    from src.features.soccer_features import build_match_features
+
+    history = pd.DataFrame([
+        {
+            "match_id": "prior-1",
+            "competition": "EPL",
+            "kickoff_utc": "2025-05-01T15:00:00Z",
+            "home_team": "Alpha FC",
+            "away_team": "Beta FC",
+            "home_goals": 2,
+            "away_goals": 1,
+            "source_available_at_utc": "2025-05-01T16:45:00Z",
+            "home_player_rating_mean": 7.5,
+            "away_player_rating_mean": 6.0,
+            "home_player_starter_rating_mean": 7.8,
+            "away_player_starter_rating_mean": 6.2,
+            "home_player_goals_assists_total": 3,
+            "away_player_goals_assists_total": 0,
+            "home_player_shots_total": 6,
+            "away_player_shots_total": 1,
+            "home_player_tackles_total": 6,
+            "away_player_tackles_total": 5,
+            "home_player_lineup_size": 2,
+            "away_player_lineup_size": 1,
+            "home_player_starter_count": 2,
+            "away_player_starter_count": 1,
+        },
+    ])
+    future = pd.DataFrame([{
+        "match_id": "future-1",
+        "competition": "EPL",
+        "kickoff_utc": "2025-05-05T15:00:00Z",
+        "home_team": "Alpha FC",
+        "away_team": "Beta FC",
+        "neutral_venue": False,
+    }])
+    result = build_match_features(history, future, windows=(1,))
+    row = result.iloc[0]
+    assert row["home_player_rating_mean_1"] == 7.5
+    assert row["away_player_rating_mean_1"] == 6.0
+    assert row["player_goals_assists_total_diff_1"] == 3.0
+    assert row["player_shots_total_diff_1"] == 5.0
+    assert row["player_tackles_total_diff_1"] == 1.0
