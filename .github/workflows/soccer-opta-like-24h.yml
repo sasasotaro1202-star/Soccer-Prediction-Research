@@ -33,6 +33,7 @@ jobs:
       - run: python -m pytest -q
       - run: python -m src.research.opta_like_source_probe --output artifacts/opta_like_source_probe.json
       - run: python -m src.research.scope_frontier --days 14 --output artifacts/scope_frontier.json
+      - run: python -m src.research.coverage_funnel_audit --frontier artifacts/scope_frontier.json --output artifacts/coverage_funnel.json
 
       - name: Write immutable run manifest
         shell: bash
