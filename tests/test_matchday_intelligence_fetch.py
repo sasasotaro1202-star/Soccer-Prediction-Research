@@ -220,6 +220,16 @@ def test_weather_without_timestamps_remains_unknown():
     assert pd.isna(temp)
 
 
+def test_sofascore_competition_resolves_catalog_name_without_manual_alias():
+    assert _sofascore_competition({
+        "tournament": {"uniqueTournament": {"name": "Argentine Primera División"}}
+    }) == "ARG"
+    assert _sofascore_competition({
+        "tournament": {"uniqueTournament": {"name": "2. Bundesliga"}}
+    }) == "BL2"
+
+
+
 def test_sofascore_uses_public_api_host():
     from src.data import matchday_intelligence_fetch as m
     source = m.SOFASCORE_COMPETITIONS

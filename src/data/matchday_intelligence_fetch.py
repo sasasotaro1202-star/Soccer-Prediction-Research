@@ -7,11 +7,14 @@ from datetime import datetime, timezone
 from io import BytesIO
 from zoneinfo import ZoneInfo
 from pathlib import Path
+import re
+import unicodedata
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
+from src.data.competition_catalog import COMPETITION_CATALOG
 from src.data.external_fetch import ExternalFetcher, iso_utc
 
 
@@ -120,6 +123,24 @@ FOOTBALL_DATA_TZ: dict[str, str] = {
     "ARG": "America/Argentina/Buenos_Aires",
 }
 
+
+
+def _competition_lookup_key(value: Any) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = text.encode("ascii", "ignore").decode("ascii").casefold()
+    return re.sub(r"[^a-z0-9]+", "", text)
+
+
+def _catalog_competition_lookup() -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    for spec in COMPETITION_CATALOG:
+        key = _competition_lookup_key(spec.name)
+        if key:
+            lookup[key] = spec.code
+    return lookup
+
+
+CATALOG_COMPETITION_LOOKUP = _catalog_competition_lookup()
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -472,6 +493,12 @@ def _sofascore_competition(event: dict[str, Any]) -> str | None:
         name = str(candidate.get("name") or "").strip()
         if name in SOFASCORE_COMPETITIONS:
             return SOFASCORE_COMPETITIONS[name]
+        dynamic = CATALOG_COMPETITION_LOOKUP.get(_competition_lookup_key(name))
+        if dynamic:
+            return dynamic
+        dynamic_slug = CATALOG_COMPETITION_LOOKUP.get(_competition_lookup_key(slug))
+        if dynamic_slug:
+            return dynamic_slug
     return None
 
 
