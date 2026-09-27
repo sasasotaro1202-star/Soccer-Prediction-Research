@@ -27,7 +27,7 @@ class OptaLikeSource:
     notes: str = ""
 
 
-_SOURCES = (
+_CORE_SOURCES = (
     OptaLikeSource(
         "statsbomb_open", "StatsBomb Open Data", "event+360",
         "https://github.com/hudl/open-data",
@@ -232,6 +232,20 @@ _SOURCES = (
         "Convenient pre-collected data, but archival publication timing is not itself proof of prediction-time availability.",
     ),
 )
+
+
+_EXTENDED_SOURCES = (
+    OptaLikeSource("driblab_open", "Driblab Open Data", "tracking", "https://github.com/driblab/open-data", ("player_tracking","ball_tracking","player_metadata","positions","velocity","acceleration"), ("tactics","physical_state","off_ball","transition"), "FREE_PUBLIC_SAMPLE", "PIT_NOT_PROVEN", "REPOSITORY_TERMS_AUDIT", "VERY_HIGH", 94, "Ten 10-FPS broadcast-tracking matches from major European competitions; strong cross-league spatial benchmark."),
+    OptaLikeSource("idsse_dfl_open", "IDSSE / DFL open synchronized data", "tracking+event", "https://github.com/PySport/kloppy", ("tracab_tracking","synchronized_event_data","player_positions","ball_positions","bundesliga_matches"), ("tactics","tracking","event_sequences","pitch_control"), "FREE_PUBLIC_DATASET", "PIT_NOT_PROVEN", "CC_BY_4_0", "VERY_HIGH", 91, "Open synchronized TRACAB tracking plus DFL event data; underlying dataset terms still require audit."),
+    OptaLikeSource("databallpy", "DataBallPy", "tracking_event_engine", "https://github.com/Alek050/databallpy", ("tracking_event_sync","coordinate_processing","provider_loaders","sportec_loader","dfl_open_games"), ("data_integration","tracking","event_sequences"), "FREE_OPEN_SOURCE", "N_A_LIBRARY", "OPEN_SOURCE_LICENSE_AUDIT", "HIGH", 89, "Supports Metrica, Inmotio, TRACAB, DFL/Sportec, Opta/StatsPerform, StatsBomb and Wyscout formats."),
+    OptaLikeSource("open_starlab_preprocessing", "open-starlab football preprocessing", "preprocessing_engine", "https://github.com/open-starlab/PreProcessing", ("event_preprocessing","unified_event_format","nmpstpp","statsbomb","wyscout","sportec","metrica","soccertrackv2"), ("data_integration","event_sequences","forecasting"), "FREE_OPEN_SOURCE", "N_A_LIBRARY", "OPEN_SOURCE_LICENSE_AUDIT", "HIGH", 86, "Compatibility layer for many provider formats; underlying provider rights still apply."),
+    OptaLikeSource("soccermatics", "Soccermatics", "tracking_event_feature_engine", "https://github.com/JoGall/soccermatics", ("tracking_visualization","shot_maps","average_positions","heatmaps","player_trajectories","tracking_helpers"), ("tactics","spatial_features","player_state"), "FREE_OPEN_SOURCE", "N_A_LIBRARY", "OPEN_SOURCE_LICENSE_AUDIT", "MEDIUM_HIGH", 83, "Spatial feature utilities; useful for representation and diagnostics rather than as an independent data feed."),
+    OptaLikeSource("football_data_xg_reference", "StatsBomb xG reference implementation", "xg_feature_engine", "https://github.com/carrba/football-data-xg", ("shot_xg","shot_context","xg_training_pipeline"), ("shot_quality","model_validation"), "FREE_OPEN_SOURCE", "N_A_LIBRARY", "REPOSITORY_LICENSE_AUDIT", "MEDIUM_HIGH", 81, "Reference implementation for independent xG feature experiments using StatsBomb open data."),
+    OptaLikeSource("last_row_tracking", "Last Row tracking sample", "tracking", "https://github.com/Friends-of-Tracking-Data-FoTD/Last-Row", ("player_tracking","ball_tracking","goal_sequences"), ("tactics","transition","tracking"), "FREE_PUBLIC_SAMPLE", "PIT_NOT_PROVEN", "SOURCE_CREDIT_REQUIRED", "MEDIUM", 76, "Small 2D tracking sample of Liverpool goal sequences; useful for validating spatial feature code."),
+    OptaLikeSource("hammarby_signality", "Signality / Hammarby tracking sample", "tracking", "https://uppsala.instructure.com/courses/28112/pages/4-player-movements-on-the-pitch", ("player_movements","tracking"), ("tactics","tracking","physical_state"), "FREE_RESEARCH_SAMPLE", "PIT_NOT_PROVEN", "COURSE_ACCESS_TERMS_AUDIT", "MEDIUM", 75, "Three Hammarby matches referenced by Metrica's sample-data documentation."),
+    OptaLikeSource("pff_fc_2022", "PFF FC 2022 World Cup data", "tracking+event", "https://github.com/PySport/kloppy", ("broadcast_tracking","event_data","play_by_play_grades"), ("tactics","tracking","player_contribution"), "FREE_ACCESS_REQUEST", "PIT_NOT_PROVEN", "ACCESS_REQUEST_TERMS_AUDIT", "HIGH", 78, "Reported as covering all 64 matches of the 2022 men's World Cup; request-based access remains optional."),
+)
+_SOURCES = _CORE_SOURCES + _EXTENDED_SOURCES
 
 
 def all_sources() -> tuple[OptaLikeSource, ...]:
