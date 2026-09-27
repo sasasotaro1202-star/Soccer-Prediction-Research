@@ -85,6 +85,59 @@ COMPETITION_CATALOG: tuple[CompetitionSpec, ...] = (
     CompetitionSpec("ARG", "Argentine Primera División", "Argentina", "1", "league"),
     CompetitionSpec("ARG_CUP", "Copa Argentina", "Argentina", "cup", "cup"),
     CompetitionSpec("SPL_SA", "Saudi Pro League", "Saudi Arabia", "1", "league"),
+    # Domestic league cups and super cups
+    CompetitionSpec("COMMUNITY_SHIELD", "FA Community Shield", "England", "super_cup", "super_cup"),
+    CompetitionSpec("DFL_SUPER", "DFL-Supercup", "Germany", "super_cup", "super_cup"),
+    CompetitionSpec("SUPERCOPA_ES", "Supercopa de España", "Spain", "super_cup", "super_cup"),
+    CompetitionSpec("SUPERCOPPA_IT", "Supercoppa Italiana", "Italy", "super_cup", "super_cup"),
+    CompetitionSpec("TROPHEE_CHAMPIONS", "Trophée des Champions", "France", "super_cup", "super_cup"),
+    CompetitionSpec("JOHAN_CRUYFF", "Johan Cruyff Shield", "Netherlands", "super_cup", "super_cup"),
+    CompetitionSpec("SUPERTACA_POR", "Supertaça Cândido de Oliveira", "Portugal", "super_cup", "super_cup"),
+    CompetitionSpec("BEL_SUPER", "Belgian Super Cup", "Belgium", "super_cup", "super_cup"),
+    CompetitionSpec("SCOT_LEAGUE_CUP", "Scottish League Cup", "Scotland", "cup", "league_cup"),
+    CompetitionSpec("TUR_SUPER", "Turkish Super Cup", "Turkey", "super_cup", "super_cup"),
+    CompetitionSpec("AUTCUP", "Austrian Cup", "Austria", "cup", "cup"),
+    CompetitionSpec("AUT_SUPER", "Austrian Super Cup", "Austria", "super_cup", "super_cup"),
+    CompetitionSpec("SUI_CUP", "Swiss Cup", "Switzerland", "cup", "cup"),
+    CompetitionSpec("SUI_SUPER", "Swiss Super Cup", "Switzerland", "super_cup", "super_cup"),
+    CompetitionSpec("J_SUPER", "Japanese Super Cup", "Japan", "super_cup", "super_cup"),
+    CompetitionSpec("BRA_SUPER", "Supercopa do Brasil", "Brazil", "super_cup", "super_cup"),
+    CompetitionSpec("ARG_SUPER", "Supercopa Argentina", "Argentina", "super_cup", "super_cup"),
+    CompetitionSpec("MEX_CAMPEONES", "Campeón de Campeones", "Mexico", "super_cup", "super_cup"),
+    CompetitionSpec("MLS_CUP", "MLS Cup", "North America", "playoff", "cup"),
+    CompetitionSpec("LEAGUES_CUP", "Leagues Cup", "North America", "cup", "cup"),
+    CompetitionSpec("CAN_CHAMP", "Canadian Championship", "Canada", "cup", "cup"),
+
+    # Global and continental national-team tournaments, qualifiers and
+    # multi-stage championships.
+    CompetitionSpec("WC_QUALI_M", "FIFA World Cup Qualifiers Men", "Global", "qualifier", "international"),
+    CompetitionSpec("WC_QUALI_W", "FIFA Women's World Cup Qualifiers", "Global", "qualifier", "international"),
+    CompetitionSpec("ASIAN_CUP", "AFC Asian Cup", "Asia", "senior", "international"),
+    CompetitionSpec("COPA_AMERICA", "Copa América", "South America", "senior", "international"),
+    CompetitionSpec("AFCON", "Africa Cup of Nations", "Africa", "senior", "international"),
+    CompetitionSpec("GOLD_CUP", "CONCACAF Gold Cup", "North/Central America", "senior", "international"),
+    CompetitionSpec("OFC_NATIONS", "OFC Nations Cup", "Oceania", "senior", "international"),
+    CompetitionSpec("ARAB_CUP", "FIFA Arab Cup", "Arab world", "senior", "international"),
+    CompetitionSpec("OLY_M", "Olympic Men's Football", "Global", "senior", "multi_sport"),
+    CompetitionSpec("OLY_W", "Olympic Women's Football", "Global", "senior", "multi_sport"),
+    CompetitionSpec("WC_U20_M", "FIFA U-20 World Cup", "Global", "U20", "youth"),
+    CompetitionSpec("WC_U20_W", "FIFA U-20 Women's World Cup", "Global", "U20", "youth"),
+    CompetitionSpec("WC_U17_M", "FIFA U-17 World Cup", "Global", "U17", "youth"),
+    CompetitionSpec("WC_U17_W", "FIFA U-17 Women's World Cup", "Global", "U17", "youth"),
+
+    # Global club showpieces / intercontinental competitions.
+    CompetitionSpec("FIFA_INTERCONTINENTAL", "FIFA Intercontinental Cup", "Global", "intercontinental", "international"),
+    CompetitionSpec("FIFA_WOMENS_CLUB", "FIFA Women's Champions Cup", "Global", "intercontinental", "international"),
+    CompetitionSpec("FIFA_CLUB_WORLD_CUP", "FIFA Club World Cup", "Global", "intercontinental", "international"),
+    CompetitionSpec("CAF_SUPER_CUP", "CAF Super Cup", "Africa", "super_cup", "super_cup"),
+    CompetitionSpec("AFC_SUPER_CUP", "AFC Super Cup", "Asia", "super_cup", "super_cup"),
+
+    # Explicit friendlies: club-vs-club and national-team fixtures are separate
+    # research populations because their strength/selection processes differ.
+    CompetitionSpec("CLUB_FRIENDLY", "Club Friendly Matches", "Global", "friendly", "friendly"),
+    CompetitionSpec("INTL_FRIENDLY_M", "Men's International Friendly Matches", "Global", "friendly", "friendly"),
+    CompetitionSpec("INTL_FRIENDLY_W", "Women's International Friendly Matches", "Global", "friendly", "friendly"),
+
     # UEFA club competitions
     CompetitionSpec("UCL", "UEFA Champions League", "Europe", "continental", "europe"),
     CompetitionSpec("UEL", "UEFA Europa League", "Europe", "continental", "europe"),
