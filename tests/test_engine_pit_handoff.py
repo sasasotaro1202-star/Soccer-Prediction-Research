@@ -153,3 +153,48 @@ def test_load_preflight_pit_features_rejects_feature_availability_after_predicti
 
     with pytest.raises(RuntimeError, match="feature_source_max_available_at_utc"):
         _load_preflight_pit_features(tmp_path, history)
+
+
+def test_load_preflight_pit_features_falls_back_to_pit_handoff_outcome_labels(tmp_path):
+    pd.DataFrame(
+        {
+            "match_id": ["m1", "m2"],
+            "kickoff_utc": ["2024-01-01T12:00:00Z", "2024-01-02T12:00:00Z"],
+            "prediction_cutoff_at_utc": ["2024-01-01T11:00:00Z", "2024-01-02T11:00:00Z"],
+            "pit_verified": [True, False],
+            "feature_source_max_available_at_utc": ["2023-12-31T00:00:00Z", pd.NaT],
+            "home_goals": [2, 0],
+            "away_goals": [1, 1],
+        }
+    ).to_csv(tmp_path / "pit_replay_features.csv", index=False)
+
+    # Simulates a valid adapter history frame whose feature/audit path is
+    # available but whose normalized history frame does not carry outcome labels.
+    history = pd.DataFrame(
+        {
+            "match_id": ["m1", "m2"],
+            "source_available_at_utc": ["2023-12-31T00:00:00Z", "2024-01-01T00:00:00Z"],
+        }
+    )
+
+    result = _load_preflight_pit_features(tmp_path, history)
+    assert result["home_goals"].tolist() == [2, 0]
+    assert result["away_goals"].tolist() == [1, 1]
+    assert result["target"].tolist() == [0, 2]
+
+
+def test_load_preflight_pit_features_fails_clearly_without_any_outcome_labels(tmp_path):
+    pd.DataFrame(
+        {
+            "match_id": ["m1"],
+            "kickoff_utc": ["2024-01-01T12:00:00Z"],
+            "prediction_cutoff_at_utc": ["2024-01-01T11:00:00Z"],
+            "pit_verified": [True],
+            "feature_source_max_available_at_utc": ["2023-12-31T00:00:00Z"],
+        }
+    ).to_csv(tmp_path / "pit_replay_features.csv", index=False)
+
+    history = pd.DataFrame({"match_id": ["m1"]})
+
+    with pytest.raises(RuntimeError, match="No standardized historical outcome labels"):
+        _load_preflight_pit_features(tmp_path, history)

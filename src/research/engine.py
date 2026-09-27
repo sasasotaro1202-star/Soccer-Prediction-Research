@@ -177,7 +177,22 @@ def _load_preflight_pit_features(out: Path, history: pd.DataFrame) -> pd.DataFra
     if features["match_id"].duplicated().any():
         raise RuntimeError("PIT preflight feature handoff contains duplicate match_id values")
 
-    outcomes = history[["match_id", "home_goals", "away_goals"]].copy()
+    # Most history providers expose standardized outcome columns, but a valid
+    # PIT handoff can still originate from an adapter whose history frame omits
+    # those label columns. The PIT-replayed feature artifact already carries the
+    # exact historical outcome labels for scoring, so use it only as a bounded
+    # label-source fallback; labels remain excluded from model features.
+    if {"match_id", "home_goals", "away_goals"}.issubset(history.columns):
+        outcomes = history[["match_id", "home_goals", "away_goals"]].copy()
+        outcome_source = "historical_outcome_table"
+    elif {"match_id", "home_goals", "away_goals"}.issubset(features.columns):
+        outcomes = features[["match_id", "home_goals", "away_goals"]].copy()
+        outcome_source = "pit_feature_handoff_outcome_labels"
+    else:
+        raise RuntimeError(
+            "No standardized historical outcome labels available in either "
+            "history or the PIT feature handoff"
+        )
     if outcomes["match_id"].isna().any() or outcomes["match_id"].duplicated().any():
         raise RuntimeError("Historical outcome table has missing/duplicate match_id values")
 
@@ -221,6 +236,11 @@ def _load_preflight_pit_features(out: Path, history: pd.DataFrame) -> pd.DataFra
     # evidence metadata. Restore optional source publication evidence from the
     # historical table without weakening predictor-side PIT validation.
     features = features.drop(columns=["source_available_at_utc"], errors="ignore")
+    # When outcomes come from the PIT handoff itself, those label columns are
+    # already present in features. Remove them before the label-only join so pandas
+    # does not create home_goals_x/home_goals_y and away_goals_x/away_goals_y.
+    if outcome_source == "pit_feature_handoff_outcome_labels":
+        features = features.drop(columns=["home_goals", "away_goals"], errors="ignore")
     merged = features.merge(
         outcomes,
         on="match_id",
