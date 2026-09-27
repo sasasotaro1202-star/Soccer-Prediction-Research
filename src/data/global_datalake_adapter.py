@@ -180,6 +180,27 @@ def load_global_datalake_history(
     if "fixture_id" in selected.columns:
         selected = selected.drop(columns=["fixture_id"])
 
+    # Normalize provider-specific names to the canonical feature schema used by
+    # src.features.soccer_features. Prefer Global Data Lake match_stats values,
+    # while leaving missing observations missing rather than fabricating zeros.
+    STANDARD_STAT_ALIASES = {
+        "home_shots": "home_shots_total",
+        "away_shots": "away_shots_total",
+        "home_shots_on_target": "home_shots_on_goal",
+        "away_shots_on_target": "away_shots_on_goal",
+        "home_corners": "home_corners",
+        "away_corners": "away_corners",
+        "home_fouls": "home_fouls",
+        "away_fouls": "away_fouls",
+        "home_yellow_cards": "home_yellow_cards",
+        "away_yellow_cards": "away_yellow_cards",
+        "home_red_cards": "home_red_cards",
+        "away_red_cards": "away_red_cards",
+    }
+    for canonical, provider_name in STANDARD_STAT_ALIASES.items():
+        if provider_name in selected.columns:
+            selected[canonical] = selected[provider_name]
+
     team_map = teams[["id", "name"]].copy()
     team_map["id"] = pd.to_numeric(team_map["id"], errors="coerce")
     selected["home_team_id"] = pd.to_numeric(selected["home_team_id"], errors="coerce")
@@ -228,6 +249,7 @@ def load_global_datalake_history(
         "home_shots_inside_box", "away_shots_inside_box",
         "home_shots_outside_box", "away_shots_outside_box",
         "home_blocked_shots", "away_blocked_shots",
+        "home_penalties", "away_penalties",
     ):
         if column not in selected:
             selected[column] = pd.NA
@@ -266,6 +288,8 @@ def load_global_datalake_history(
         "away_shots_outside_box",
         "home_blocked_shots",
         "away_blocked_shots",
+        "home_penalties",
+        "away_penalties",
     ]
     result = selected[keep].copy()
     result = result.sort_values(
