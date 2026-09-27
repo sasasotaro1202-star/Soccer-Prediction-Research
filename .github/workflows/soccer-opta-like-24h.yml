@@ -1,0 +1,178 @@
+name: Soccer Opta-like 24H Research Marathon
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "05 0 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soccer-opta-like-24h
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: .
+  PYTHONHASHSEED: '0'
+
+jobs:
+  phase1:
+    name: Phase 1 - discovery and source probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+      - run: python -m pytest -q
+      - run: python -m src.research.opta_like_source_probe --output artifacts/opta_like_source_probe.json
+      - run: python -m src.research.scope_frontier --days 14 --output artifacts/scope_frontier.json
+      - if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-opta-24h-phase1-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: warn
+
+  phase2:
+    name: Phase 2 - data and PIT
+    needs: phase1
+    if: needs.phase1.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 pyarrow
+      - name: Global Data Lake research
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from src.data.global_datalake_adapter import save_research_artifacts
+          x = save_research_artifacts(start_year=2012, end_year=2025, output_dir='artifacts/global_datalake', cache_dir='cache/global_datalake')
+          print(x)
+          if x.get('status') != 'OK': raise SystemExit('GFDL research failed')
+          PY
+      - name: Structural and strict PIT diagnostics
+        run: |
+          set -euo pipefail
+          python -m src.data.fixture_field_audit
+          PIT_ENABLE_ARCHIVE_AUDIT=1 python -m src.data.completion_gate
+          test -s artifacts/completion_gate.json
+      - name: Representative PIT replay
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/pit_samples
+          for c in EPL UCL UEL UECL J1; do
+            python -m src.research.pit_replay_audit --competition "$c" --rows-per-season 2 || echo "$c: BLOCKED_OR_FAILED" > "artifacts/pit_samples/$c.status"
+          done
+      - if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-opta-24h-phase2-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: warn
+
+  phase3:
+    name: Phase 3 - OOS/control
+    needs: phase2
+    if: needs.phase2.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: |
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 pyarrow
+      - name: Build fresh PIT handoff
+        run: |
+          set -euo pipefail
+          PIT_ENABLE_ARCHIVE_AUDIT=1 python -m src.data.completion_gate
+          test -s artifacts/pit_replay_features.csv
+      - name: Run v13 chronological OOS controller
+        run: |
+          set -euo pipefail
+          python -m src.research.innovative_control_v13 --features artifacts/pit_replay_features.csv --out artifacts/innovative_control_v13
+      - name: Re-run deterministic suite
+        run: python -m pytest -q
+      - if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-opta-24h-phase3-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: warn
+
+  phase4:
+    name: Phase 4 - verification and handoff
+    needs: phase3
+    if: needs.phase3.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+      - run: python -m pytest -q
+      - name: Download Phase 3 research evidence
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632e53
+        with:
+          name: soccer-opta-24h-phase3-${{ github.run_id }}
+          path: artifacts/phase3
+
+      - name: Production immutability check
+        run: |
+          set -euo pipefail
+          test -f artifacts/phase3/innovative_control_v13/experiment_results.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('artifacts/phase3/innovative_control_v13/experiment_results.json')
+          x=json.loads(p.read_text())
+          if x.get('production_changed') is True: raise SystemExit('production_changed=true')
+          print({'status':x.get('status'),'oos_claimed':x.get('oos_claimed'),'production_changed':x.get('production_changed')})
+          PY
+      - name: Write final checkpoint
+        run: |
+          mkdir -p artifacts/24h
+          printf '%s\n' '{"production_changed":false,"commit":"${{ github.sha }}","run_id":"${{ github.run_id }}"}' > artifacts/24h/final_checkpoint.json
+      - if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-opta-like-24h-final-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 14
+          if-no-files-found: warn
+
+# Maximum runtime: 4 x 360 minutes = 24 hours.
+# The workflow is research-only. It does not promote models or change production.
+# GitHub Actions schedule becomes active once this workflow is present on the default branch.
