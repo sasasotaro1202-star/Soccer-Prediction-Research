@@ -355,6 +355,21 @@ def _fixture_key(row: dict[str, Any]) -> str:
     return f"{kickoff.isoformat()}|{home}|{away}"
 
 
+def _current_snapshot_pit_state(observed_at: str | None, kickoff: pd.Timestamp) -> tuple[pd.Timestamp | pd.NaT, bool]:
+    """Use retrieval as a live-only availability lower bound.
+
+    This does not create historical publication timestamps. It only records that a
+    current response was observable by ``observed_at``; historical replay remains
+    dependent on independently timestamped source availability evidence.
+    """
+    if not observed_at:
+        return pd.NaT, False
+    available = pd.to_datetime(observed_at, utc=True, errors="coerce")
+    if pd.isna(available) or available > kickoff:
+        return pd.NaT, False
+    return pd.Timestamp(available), True
+
+
 def _matchday_base_row(
     *,
     match_id: str,
@@ -792,11 +807,11 @@ def _collect_sofascore_day(
         observed_at = max(times)
         row["source_retrieved_at_utc"] = observed_at
         row["matchday_retrieved_at_utc"] = observed_at
-        # No upstream publication/availability timestamp was supplied, so this
-        # observation remains non-PIT-verified even though it was retrieved before
-        # the local prediction timestamp.
-        row["matchday_available_at_utc"] = pd.NaT
-        row["matchday_pit_verified"] = False
+        # Current snapshot only: retrieval is a conservative lower bound on
+        # availability. This is not a historical publication-time claim.
+        available, pit_verified = _current_snapshot_pit_state(observed_at, kickoff)
+        row["matchday_available_at_utc"] = available
+        row["matchday_pit_verified"] = pit_verified
     return parsed[:int(max_events)], errors, scheduled_at
 
 
@@ -1053,10 +1068,11 @@ def collect_matchday_snapshots(
                     observed_at = max(retrieval_times)
                     row["source_retrieved_at_utc"] = observed_at
                     row["matchday_retrieved_at_utc"] = observed_at
-                    # Keep PIT closed: retrieved_at is never promoted to source
-                    # availability time without explicit upstream evidence.
-                    row["matchday_available_at_utc"] = pd.NaT
-                    row["matchday_pit_verified"] = False
+                    # Current snapshot only: retrieval is a conservative lower bound
+                    # on availability. This is not a historical publication-time claim.
+                    available, pit_verified = _current_snapshot_pit_state(observed_at, kickoff)
+                    row["matchday_available_at_utc"] = available
+                    row["matchday_pit_verified"] = pit_verified
                     quality = [
                         float(bool(row["matchday_market_provider"])),
                         float(injury_ok == 2),
