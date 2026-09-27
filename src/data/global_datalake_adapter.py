@@ -20,6 +20,7 @@ FILES = {
     "fixtures": f"{BASE_URL}/fixtures.parquet",
     "teams": f"{BASE_URL}/teams.parquet",
     "leagues": f"{BASE_URL}/leagues.parquet",
+    "match_stats": f"{BASE_URL}/match_stats.parquet",
 }
 
 # Start conservatively with competitions already represented by the current
@@ -126,10 +127,12 @@ def load_global_datalake_history(
     fixture_hash = _download(FILES["fixtures"], cache / "fixtures.parquet")
     team_hash = _download(FILES["teams"], cache / "teams.parquet")
     league_hash = _download(FILES["leagues"], cache / "leagues.parquet")
+    stats_hash = _download(FILES["match_stats"], cache / "match_stats.parquet")
 
     fixtures = pd.read_parquet(cache / "fixtures.parquet", engine="pyarrow")
     teams = pd.read_parquet(cache / "teams.parquet", engine="pyarrow")
     leagues = pd.read_parquet(cache / "leagues.parquet", engine="pyarrow")
+    match_stats = pd.read_parquet(cache / "match_stats.parquet", engine="pyarrow")
 
     _require_columns(
         fixtures,
@@ -162,6 +165,33 @@ def load_global_datalake_history(
         how="inner",
         validate="many_to_one",
     )
+
+    # Match statistics are post-match facts governed by the same fixture-level
+    # known_at boundary. Join only the documented side-level aggregates needed by
+    # the PIT feature layer; closing odds are deliberately not consumed here.
+    stats_columns = [
+        "fixture_id",
+        "home_shots_total", "away_shots_total",
+        "home_shots_on_goal", "away_shots_on_goal",
+        "home_shots_inside_box", "away_shots_inside_box",
+        "home_shots_outside_box", "away_shots_outside_box",
+        "home_blocked_shots", "away_blocked_shots",
+        "home_penalties", "away_penalties",
+        "home_corners", "away_corners",
+        "home_yellow_cards", "away_yellow_cards",
+        "home_red_cards", "away_red_cards",
+        "home_xg", "away_xg",
+        "home_possession", "away_possession",
+        "home_fouls", "away_fouls",
+        "home_offsides", "away_offsides",
+        "home_pass_accuracy", "away_pass_accuracy",
+    ]
+    stats = match_stats[[c for c in stats_columns if c in match_stats.columns]].copy()
+    if stats["fixture_id"].duplicated().any():
+        raise RuntimeError("global_datalake match_stats contains duplicate fixture_id values")
+    selected = selected.merge(stats, left_on="id", right_on="fixture_id", how="left", validate="one_to_one")
+    if "fixture_id" in selected.columns:
+        selected = selected.drop(columns=["fixture_id"])
 
     team_map = teams[["id", "name"]].copy()
     team_map["id"] = pd.to_numeric(team_map["id"], errors="coerce")
@@ -208,6 +238,9 @@ def load_global_datalake_history(
         "home_pass_accuracy", "away_pass_accuracy",
         "home_goals_ht", "away_goals_ht",
         "home_xg_ht", "away_xg_ht",
+        "home_shots_inside_box", "away_shots_inside_box",
+        "home_shots_outside_box", "away_shots_outside_box",
+        "home_blocked_shots", "away_blocked_shots",
     ):
         if column not in selected:
             selected[column] = pd.NA
@@ -240,6 +273,12 @@ def load_global_datalake_history(
         "away_goals_ht",
         "home_xg_ht",
         "away_xg_ht",
+        "home_shots_inside_box",
+        "away_shots_inside_box",
+        "home_shots_outside_box",
+        "away_shots_outside_box",
+        "home_blocked_shots",
+        "away_blocked_shots",
     ]
     result = selected[keep].copy()
     result = result.sort_values(
@@ -268,6 +307,7 @@ def load_global_datalake_history(
             "fixtures.parquet": fixture_hash,
             "teams.parquet": team_hash,
             "leagues.parquet": league_hash,
+            "match_stats.parquet": stats_hash,
         },
         "production_status": "RESEARCH_ONLY",
     }
