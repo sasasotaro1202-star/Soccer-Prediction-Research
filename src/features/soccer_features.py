@@ -16,13 +16,33 @@ STAT_KEYS = ("shots", "shots_on_target", "corners", "fouls", "yellow_cards", "re
 # Optional advanced performance channels. They are only populated when an
 # upstream source explicitly supplies a PIT-safe observation. No value is
 # inferred from missing data.
-ADVANCED_STAT_KEYS = ("xg", "possession", "big_chances", "xga")
+ADVANCED_STAT_KEYS = (
+    "xg",
+    "possession",
+    "big_chances",
+    "xga",
+    "offsides",
+    "pass_accuracy",
+    "shots_inside_box",
+    "shots_outside_box",
+    "blocked_shots",
+    "goals_ht",
+    "xg_ht",
+)
 
 ADVANCED_STAT_ALIASES = {
     "xg": ("xg", "expected_goals", "expectedGoals"),
     "possession": ("possession", "possession_pct", "possession_percentage", "possessionPercentage"),
     "big_chances": ("big_chances", "big_chances_created", "bigChancesCreated"),
     "xga": ("xga", "xg_against", "expected_goals_against", "expectedGoalsAgainst"),
+    "offsides": ("offsides",),
+    "pass_accuracy": ("pass_accuracy", "passAccuracy", "passes_accuracy"),
+    "shots_inside_box": ("shots_inside_box", "shotsInsideBox"),
+    "shots_outside_box": ("shots_outside_box", "shotsOutsideBox"),
+    "blocked_shots": ("blocked_shots", "blockedShots"),
+    "goals_ht": ("goals_ht", "half_time_goals", "goalsHalfTime"),
+    "xg_ht": ("xg_ht", "expected_goals_ht", "expectedGoalsHalfTime"),
+
 }
 
 
