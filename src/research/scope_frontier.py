@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
+from src.data.competition_catalog import COMPETITION_CATALOG
 from src.data.competition_sources import TARGET_COMPETITIONS
 from src.data.matchday_intelligence_fetch import _sofascore_competition
 
@@ -93,7 +94,9 @@ def _candidate(identity: tuple[str, str, str], *, first_seen: str, events: int) 
 def discover(days: int, output: str, *, start: date | None = None) -> dict[str, Any]:
     start = start or date.today()
     known = set(TARGET_COMPETITIONS)
+    catalog = {spec.code: spec for spec in COMPETITION_CATALOG}
     observed_known: dict[str, int] = {}
+    observed_catalogued: dict[str, int] = {}
     discovered: dict[str, dict[str, Any]] = {}
     errors: list[dict[str, str]] = []
     scanned_dates: list[str] = []
@@ -112,6 +115,46 @@ def discover(days: int, output: str, *, start: date | None = None) -> dict[str, 
             mapped = _sofascore_competition(event)
             if mapped in known:
                 observed_known[mapped] = observed_known.get(mapped, 0) + 1
+                continue
+            if mapped in catalog:
+                observed_catalogued[mapped] = observed_catalogued.get(mapped, 0) + 1
+                spec = catalog[mapped]
+                key = f"catalog:{mapped}"
+                if key not in discovered:
+                    discovered[key] = {
+                        "id": f"catalog:{mapped}",
+                        "target": spec.name,
+                        "code": mapped,
+                        "region": spec.region,
+                        "competition_type": spec.competition_type,
+                        "type": spec.competition_type,
+                        "rationale": "Catalogued competition observed in public scheduled-events discovery but not yet in the strict active prediction target.",
+                        "eligibility": "RESEARCH_ONLY_UNVERIFIED",
+                        "volume": 0,
+                        "production_value": "UNKNOWN",
+                        "learning_value": "HIGH",
+                        "coverage_value": "HIGH",
+                        "novelty": "MEDIUM",
+                        "data_availability": "OBSERVED_CURRENT_FIXTURES",
+                        "quality": spec.data_quality_status,
+                        "pit_feasibility": spec.pit_status,
+                        "acquisition_reliability": "UNVERIFIED",
+                        "oos_risk": "HIGH",
+                        "false_discovery_risk": "LOW",
+                        "operational_risk": "LOW",
+                        "cost": "FREE",
+                        "dependency_risk": "LOW",
+                        "reversibility": "HIGH",
+                        "stage": "DISCOVERED",
+                        "evidence": {
+                            "source": "SofaScore public scheduled-events",
+                            "catalogued_code": mapped,
+                            "catalogued_name": spec.name,
+                        },
+                        "next_test": "source/metadata validation -> PIT validation -> historical acquisition -> chronological OOS",
+                        "review_trigger": "PIT proof, historical coverage, OOS evidence, or production-scope policy change",
+                    }
+                discovered[key]["volume"] = int(discovered[key]["volume"]) + 1
                 continue
             identity = _tournament_identity(event)
             if not any(identity):
@@ -151,9 +194,11 @@ def discover(days: int, output: str, *, start: date | None = None) -> dict[str, 
         "scanned_to_utc_date": scanned_dates[-1] if scanned_dates else None,
         "scanned_calendar_days": len(scanned_dates),
         "known_target_event_counts": dict(sorted(observed_known.items())),
+        "catalogued_inactive_event_counts": dict(sorted(observed_catalogued.items())),
         "discovered_candidates": sorted(
             merged.values(), key=lambda x: (str(x.get("target", "")), str(x.get("id", "")))
         ),
+        "catalogued_inactive_candidates": sum(1 for x in merged.values() if str(x.get("id","")).startswith("catalog:")),
         "new_candidates_this_run": len(discovered),
         "errors": errors,
         "production_auto_promotion": False,
