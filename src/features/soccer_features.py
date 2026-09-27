@@ -12,6 +12,10 @@ DYNAMIC_ELO_MEAN_REVERSION_30D = 0.08
 COMPETITION_ELO_SHRINK_K = 8.0
 NEUTRAL_VENUE_REQUIRED_COMPETITIONS = {"AG_M", "AG_W"}
 STAT_KEYS = ("shots", "shots_on_target", "corners", "fouls", "yellow_cards", "red_cards")
+ADVANCED_STAT_KEYS = (
+    "xg", "possession", "offsides", "pass_accuracy", "goals_ht", "xg_ht",
+    "shots_inside_box", "shots_outside_box", "blocked_shots", "penalties",
+)
 
 
 def _result_available(ts: pd.Timestamp, cutoff: pd.Timestamp) -> bool:
@@ -54,6 +58,8 @@ def _summarize(games: deque, window: int) -> dict[str, float]:
                 "failed_to_score_rate": np.nan}
         base.update({f"{k}_avg": np.nan for k in STAT_KEYS})
         base.update({f"{k}_ewma": np.nan for k in STAT_KEYS})
+        base.update({f"{k}_avg": np.nan for k in ADVANCED_STAT_KEYS})
+        base.update({f"{k}_ewma": np.nan for k in ADVANCED_STAT_KEYS})
         return base
     gf = [x["gf"] for x in recent]
     ga = [x["ga"] for x in recent]
@@ -74,6 +80,10 @@ def _summarize(games: deque, window: int) -> dict[str, float]:
         "failed_to_score_rate": float(np.mean([g == 0 for g in gf])),
     }
     for k in STAT_KEYS:
+        vals = [x.get(k, np.nan) for x in recent]
+        out[f"{k}_avg"] = float(np.nanmean(vals)) if any(pd.notna(v) for v in vals) else np.nan
+        out[f"{k}_ewma"] = _ewma(vals)
+    for k in ADVANCED_STAT_KEYS:
         vals = [x.get(k, np.nan) for x in recent]
         out[f"{k}_avg"] = float(np.nanmean(vals)) if any(pd.notna(v) for v in vals) else np.nan
         out[f"{k}_ewma"] = _ewma(vals)
@@ -116,6 +126,14 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
 
     cols = ["kickoff_utc", "home_team", "away_team", "home_goals", "away_goals", "competition", "match_id", "source_available_at_utc", "neutral_venue"]
     cols += [c for c in ("home_shots", "away_shots", "home_shots_on_target", "away_shots_on_target", "home_corners", "away_corners", "home_fouls", "away_fouls", "home_yellow_cards", "away_yellow_cards", "home_red_cards", "away_red_cards") if c in h.columns]
+    cols += [c for c in (
+        "home_xg", "away_xg", "home_possession", "away_possession",
+        "home_offsides", "away_offsides", "home_pass_accuracy", "away_pass_accuracy",
+        "home_goals_ht", "away_goals_ht", "home_xg_ht", "away_xg_ht",
+        "home_shots_inside_box", "away_shots_inside_box",
+        "home_shots_outside_box", "away_shots_outside_box",
+        "home_blocked_shots", "away_blocked_shots", "home_penalties", "away_penalties",
+    ) if c in h.columns]
     h_records = h[cols].to_dict("records")
     m_records = m[[c for c in ["match_id", "competition", "season", "season_start", "kickoff_utc", "home_team", "away_team", "neutral_venue"] if c in m.columns]].to_dict("records")
 
@@ -182,6 +200,8 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
             gf, ga, pts, venue, gd = _team_result(r, team)
             entry = {"time": event, "gf": gf, "ga": ga, "points": pts, "venue": venue, "gd": gd, "competition": str(r["competition"]), "available": available}
             for k in STAT_KEYS:
+                entry[k] = _stat_value(r, team, k)
+            for k in ADVANCED_STAT_KEYS:
                 entry[k] = _stat_value(r, team, k)
             team_games[team].append(entry)
             team_last[team] = event
@@ -278,6 +298,8 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
             row[f"gd_ewma_diff_{w}"] = hs["gd_ewma"] - aws["gd_ewma"]
             row[f"points_ewma_diff_{w}"] = hs["points_ewma"] - aws["points_ewma"]
             for k in STAT_KEYS:
+                row[f"{k}_diff_{w}"] = hs[f"{k}_avg"] - aws[f"{k}_avg"]
+            for k in ADVANCED_STAT_KEYS:
                 row[f"{k}_diff_{w}"] = hs[f"{k}_avg"] - aws[f"{k}_avg"]
         meetings = list(h2h[(home, away)])[-5:]
         row["h2h_games_5"] = float(len(meetings)); row["h2h_home_win_rate_5"] = float(np.mean([x == 0 for x in meetings])) if meetings else np.nan; row["h2h_draw_rate_5"] = float(np.mean([x == 1 for x in meetings])) if meetings else np.nan; row["h2h_away_win_rate_5"] = float(np.mean([x == 2 for x in meetings])) if meetings else np.nan; row["h2h_points_edge_5"] = float(np.mean([3 if x == 0 else 1 if x == 1 else 0 for x in meetings]) - np.mean([3 if x == 2 else 1 if x == 1 else 0 for x in meetings])) if meetings else np.nan
