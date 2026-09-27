@@ -13,6 +13,18 @@ COMPETITION_ELO_SHRINK_K = 8.0
 NEUTRAL_VENUE_REQUIRED_COMPETITIONS = {"AG_M", "AG_W"}
 STAT_KEYS = ("shots", "shots_on_target", "corners", "fouls", "yellow_cards", "red_cards")
 
+# Optional advanced performance channels. They are only populated when an
+# upstream source explicitly supplies a PIT-safe observation. No value is
+# inferred from missing data.
+ADVANCED_STAT_KEYS = ("xg", "possession", "big_chances", "xga")
+
+ADVANCED_STAT_ALIASES = {
+    "xg": ("xg", "expected_goals", "expectedGoals"),
+    "possession": ("possession", "possession_pct", "possession_percentage", "possessionPercentage"),
+    "big_chances": ("big_chances", "big_chances_created", "bigChancesCreated"),
+    "xga": ("xga", "xg_against", "expected_goals_against", "expectedGoalsAgainst"),
+}
+
 
 def _result_available(ts: pd.Timestamp, cutoff: pd.Timestamp) -> bool:
     return bool(is_available_by_cutoff(ts, cutoff))
@@ -29,8 +41,21 @@ def _team_result(row, team: str) -> tuple[float, float, int, str, float]:
 
 def _stat_value(row: dict, team: str, key: str) -> float:
     prefix = "home_" if row["home_team"] == team else "away_"
-    value = row.get(f"{prefix}{key}", np.nan)
-    return float(value) if pd.notna(value) else np.nan
+    aliases = ADVANCED_STAT_ALIASES.get(key, (key,))
+    for alias in aliases:
+        value = row.get(f"{prefix}{alias}", np.nan)
+        if pd.notna(value):
+            return float(value)
+
+    # xGA can be represented either directly by the provider or safely derived
+    # from the opponent's xG when both side-level xG values are present.
+    if key == "xga":
+        opponent_prefix = "away_" if prefix == "home_" else "home_"
+        for alias in ADVANCED_STAT_ALIASES["xg"]:
+            value = row.get(f"{opponent_prefix}{alias}", np.nan)
+            if pd.notna(value):
+                return float(value)
+    return np.nan
 
 
 def _ewma(values: list[float], alpha: float = 0.35) -> float:
@@ -54,6 +79,8 @@ def _summarize(games: deque, window: int) -> dict[str, float]:
                 "failed_to_score_rate": np.nan}
         base.update({f"{k}_avg": np.nan for k in STAT_KEYS})
         base.update({f"{k}_ewma": np.nan for k in STAT_KEYS})
+        base.update({f"{k}_avg": np.nan for k in ADVANCED_STAT_KEYS})
+        base.update({f"{k}_ewma": np.nan for k in ADVANCED_STAT_KEYS})
         return base
     gf = [x["gf"] for x in recent]
     ga = [x["ga"] for x in recent]
@@ -74,6 +101,10 @@ def _summarize(games: deque, window: int) -> dict[str, float]:
         "failed_to_score_rate": float(np.mean([g == 0 for g in gf])),
     }
     for k in STAT_KEYS:
+        vals = [x.get(k, np.nan) for x in recent]
+        out[f"{k}_avg"] = float(np.nanmean(vals)) if any(pd.notna(v) for v in vals) else np.nan
+        out[f"{k}_ewma"] = _ewma(vals)
+    for k in ADVANCED_STAT_KEYS:
         vals = [x.get(k, np.nan) for x in recent]
         out[f"{k}_avg"] = float(np.nanmean(vals)) if any(pd.notna(v) for v in vals) else np.nan
         out[f"{k}_ewma"] = _ewma(vals)
@@ -115,7 +146,12 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
     ).reset_index(drop=True)
 
     cols = ["kickoff_utc", "home_team", "away_team", "home_goals", "away_goals", "competition", "match_id", "source_available_at_utc", "neutral_venue"]
-    cols += [c for c in ("home_shots", "away_shots", "home_shots_on_target", "away_shots_on_target", "home_corners", "away_corners", "home_fouls", "away_fouls", "home_yellow_cards", "away_yellow_cards", "home_red_cards", "away_red_cards") if c in h.columns]
+    known_stat_cols = []
+    for canonical in (*STAT_KEYS, *ADVANCED_STAT_KEYS):
+        aliases = ADVANCED_STAT_ALIASES.get(canonical, (canonical,))
+        for side in ("home_", "away_"):
+            known_stat_cols.extend(f"{side}{alias}" for alias in aliases)
+    cols += [c for c in dict.fromkeys(known_stat_cols) if c in h.columns]
     h_records = h[cols].to_dict("records")
     m_records = m[[c for c in ["match_id", "competition", "season", "season_start", "kickoff_utc", "home_team", "away_team", "neutral_venue"] if c in m.columns]].to_dict("records")
 
@@ -182,6 +218,8 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
             gf, ga, pts, venue, gd = _team_result(r, team)
             entry = {"time": event, "gf": gf, "ga": ga, "points": pts, "venue": venue, "gd": gd, "competition": str(r["competition"]), "available": available}
             for k in STAT_KEYS:
+                entry[k] = _stat_value(r, team, k)
+            for k in ADVANCED_STAT_KEYS:
                 entry[k] = _stat_value(r, team, k)
             team_games[team].append(entry)
             team_last[team] = event
@@ -278,6 +316,8 @@ def build_match_features(history: pd.DataFrame, matches: pd.DataFrame, windows=(
             row[f"gd_ewma_diff_{w}"] = hs["gd_ewma"] - aws["gd_ewma"]
             row[f"points_ewma_diff_{w}"] = hs["points_ewma"] - aws["points_ewma"]
             for k in STAT_KEYS:
+                row[f"{k}_diff_{w}"] = hs[f"{k}_avg"] - aws[f"{k}_avg"]
+            for k in ADVANCED_STAT_KEYS:
                 row[f"{k}_diff_{w}"] = hs[f"{k}_avg"] - aws[f"{k}_avg"]
         meetings = list(h2h[(home, away)])[-5:]
         row["h2h_games_5"] = float(len(meetings)); row["h2h_home_win_rate_5"] = float(np.mean([x == 0 for x in meetings])) if meetings else np.nan; row["h2h_draw_rate_5"] = float(np.mean([x == 1 for x in meetings])) if meetings else np.nan; row["h2h_away_win_rate_5"] = float(np.mean([x == 2 for x in meetings])) if meetings else np.nan; row["h2h_points_edge_5"] = float(np.mean([3 if x == 0 else 1 if x == 1 else 0 for x in meetings]) - np.mean([3 if x == 2 else 1 if x == 1 else 0 for x in meetings])) if meetings else np.nan
