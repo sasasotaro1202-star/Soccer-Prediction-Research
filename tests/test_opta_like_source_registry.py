@@ -17,7 +17,7 @@ def test_registry_has_broad_free_public_source_coverage():
 def test_priority_candidates_include_event_and_tracking_channels():
     tactics = usable_source_candidates(target_axis="tactics")
     keys = {source.key for source in tactics}
-    assert {"statsbomb_open", "skillcorner_open", "kloppy", "laurie_on_tracking"} <= keys
+    assert {"statsbomb_open", "skillcorner_open", "kloppy", "laurie_on_tracking", "driblab_open", "idsse_dfl_open"} <= keys
 
 
 def test_data_only_view_excludes_feature_engines():
@@ -32,3 +32,10 @@ def test_all_sources_are_explicit_about_pit_and_license():
         assert source.pit_status
         assert source.license_status
         assert source.source_url.startswith("https://")
+
+
+def test_archived_and_free_plan_sources_are_explicitly_classified():
+    sources = {source.key: source for source in all_sources()}
+    assert sources["football_data_org"].access == "FREE_PLAN"
+    assert sources["fivethirtyeight_spi"].pit_status == "HISTORICAL_ONLY"
+    assert sources["clubelo_archive"].pit_status == "CURRENT_ACCESS_UNCONFIRMED"
