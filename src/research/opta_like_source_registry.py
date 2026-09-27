@@ -275,7 +275,7 @@ def source_summary() -> dict[str, int]:
         "total": len(_SOURCES),
         "data_sources": len(data_sources_only()),
         "free_or_public": sum(
-            source.access.startswith(("FREE_", "PUBLIC_")) for source in _SOURCES
+            source.access.startswith(("FREE_", "PUBLIC_")) or source.access == "FREE_PLAN" for source in _SOURCES
         ),
         "pit_known_or_current": sum(
             source.pit_status in {"KNOWN_AT_AVAILABLE", "CURRENT_SNAPSHOT_SEMANTICS"} for source in _SOURCES
