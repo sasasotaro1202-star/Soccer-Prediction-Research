@@ -61,6 +61,10 @@ def test_global_datalake_adapter_maps_entities_and_preserves_pit(monkeypatch, tm
             "away_blocked_shots": 3,
             "home_xg": 1.8,
             "away_xg": 0.7,
+            "home_pass_accuracy": 82,
+            "away_pass_accuracy": 76,
+            "home_offsides": 2,
+            "away_offsides": 1,
         }
     ])
 
