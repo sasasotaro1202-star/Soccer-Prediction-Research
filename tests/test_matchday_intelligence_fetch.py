@@ -373,8 +373,8 @@ def test_matchday_lineup_signal_uses_confirmed_availability_burden_not_fixed_zer
     assert updated["matchday_lineup_impact_away"] == 0.50
 
 
-def test_retrieval_time_is_never_promoted_to_source_availability():
-    from src.data.matchday_intelligence_fetch import _matchday_base_row
+def test_current_snapshot_retrieval_is_a_live_pit_lower_bound_only():
+    from src.data.matchday_intelligence_fetch import _current_snapshot_pit_state, _matchday_base_row
 
     row = _matchday_base_row(
         match_id="retrieval-only",
@@ -385,6 +385,12 @@ def test_retrieval_time_is_never_promoted_to_source_availability():
         source="espn_scoreboard",
         available_at="2026-09-25T08:00:00Z",
     )
+    available, pit_verified = _current_snapshot_pit_state(
+        "2026-09-25T08:00:00Z",
+        pd.Timestamp("2026-09-25T12:00:00Z"),
+    )
+    assert available == pd.Timestamp("2026-09-25T08:00:00Z")
+    assert pit_verified is True
     assert pd.isna(row["source_available_at_utc"])
     assert row["pit_verified"] is False
     assert pd.isna(row["matchday_available_at_utc"])
@@ -392,6 +398,16 @@ def test_retrieval_time_is_never_promoted_to_source_availability():
     assert row["source_retrieved_at_utc"] == "2026-09-25T08:00:00Z"
     assert row["matchday_retrieved_at_utc"] == "2026-09-25T08:00:00Z"
 
+
+def test_current_snapshot_after_kickoff_is_blocked():
+    from src.data.matchday_intelligence_fetch import _current_snapshot_pit_state
+
+    available, pit_verified = _current_snapshot_pit_state(
+        "2026-09-25T13:00:00Z",
+        pd.Timestamp("2026-09-25T12:00:00Z"),
+    )
+    assert pd.isna(available)
+    assert pit_verified is False
 
 def test_sofascore_slug_discovers_current_asian_games_women():
     from src.data.matchday_intelligence_fetch import _sofascore_competition
