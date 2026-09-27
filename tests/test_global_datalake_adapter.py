@@ -65,6 +65,7 @@ def test_global_datalake_adapter_maps_entities_and_preserves_pit(monkeypatch, tm
             "away_pass_accuracy": 76,
             "home_offsides": 2,
             "away_offsides": 1,
+            "known_at": "2025-05-10T16:45:00Z",
         }
     ])
 
