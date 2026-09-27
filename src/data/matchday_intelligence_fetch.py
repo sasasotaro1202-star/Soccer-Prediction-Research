@@ -823,6 +823,24 @@ def _collect_football_data_fallback(
         }], None
 
 
+def _required_calendar_days(
+    *,
+    now: pd.Timestamp,
+    discovery_horizon_hours: float,
+    requested_days: int,
+) -> int:
+    """Cover every UTC calendar date touched by the discovery horizon.
+
+    The caller's requested day count remains a lower bound. This prevents a
+    horizon such as 48h from silently omitting the final calendar date when
+    now is not near midnight.
+    """
+    safe_requested = max(1, int(requested_days))
+    upper = now + pd.Timedelta(hours=float(discovery_horizon_hours))
+    calendar_days = max(1, (upper.date() - now.date()).days + 1)
+    return max(safe_requested, calendar_days)
+
+
 def collect_matchday_snapshots(
     *,
     days: int = 2,
@@ -844,7 +862,12 @@ def collect_matchday_snapshots(
     seen_fixture_keys: set[str] = set()
 
     fallback_usage: list[dict[str, Any]] = []
-    for day_offset in range(max(1, int(days))):
+    scan_days = _required_calendar_days(
+        now=now_ts,
+        discovery_horizon_hours=discovery_horizon_hours,
+        requested_days=days,
+    )
+    for day_offset in range(scan_days):
         day_start = now + pd.Timedelta(days=day_offset)
         date = day_start.strftime("%Y%m%d")
         before_day_rows = len(rows)
@@ -1133,6 +1156,8 @@ def collect_matchday_snapshots(
         "free_keyless_default": True,
         "discovery_horizon_hours": float(discovery_horizon_hours),
         "detail_horizon_hours": float(horizon_hours),
+        "requested_calendar_days": int(max(1, int(days))),
+        "scanned_calendar_days": int(scan_days),
     }
     return frame, status
 
