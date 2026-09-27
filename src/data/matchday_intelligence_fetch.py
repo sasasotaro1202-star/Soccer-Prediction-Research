@@ -450,6 +450,8 @@ def _sofascore_competition(event: dict[str, Any]) -> str | None:
                 "uefa-champions-league": "UCL",
                 "uefa-europa-league": "UEL",
                 "uefa-europa-conference-league": "UECL",
+                "asian-games-women": "AG_W",
+                "asian-games-women-football": "AG_W",
             }
             mapped = slug_map.get(slug)
             if mapped:
