@@ -89,7 +89,7 @@ def record_prediction_file(predictions_path: str, prediction_time: str | None = 
         raise RuntimeError("prediction ledger contains invalid/missing prediction or kickoff timestamps")
     if bool((cutoffs >= kickoff).any()):
         raise RuntimeError("prediction ledger contains a prediction at/after kickoff; refusing non-pregame state")
-    incoming["prediction_pit_cutoff_utc"] = cutoffs.astype("string")
+    incoming["prediction_pit_cutoff_utc"] = cutoffs.map(lambda ts: pd.Timestamp(ts).isoformat())
     incoming["prediction_recorded_at_utc"] = _now()
     incoming["prediction_pit_gate"] = "PASS"
     for c in ["p_home","p_draw","p_away","score_1_probability","score_2_probability","score_3_probability",
