@@ -25,4 +25,10 @@ Chronological OOS soccer prediction, backtesting, calibration and automated rese
 
 The current system uses a fail-closed PIT replay layer with archived evidence recovery, bounded retries, exact completed-result identity matching, and persisted PIT evidence caching between robust runs. Valid publication evidence is required before a row can be PIT-verified; unavailable evidence remains unknown rather than being imputed. Production adoption remains blocked unless the chronological OOS, stability, calibration, provenance, and PIT gates all pass.
 
+## Latest prediction contract
+
+On-demand/production predictions must use the freshest available matchday snapshot. The production runner requires a successful current matchday refresh and rejects snapshots older than 15 minutes, so previously generated prediction artifacts are not treated as current predictions.
+
+Performance monitoring is target-specific. Durable experience metrics are stored separately for 1X2, Score Top1/Top3, O/U, BTTS, and MOM Top1/Top4, with probability-quality metrics retained where the required probabilities are available.
+
 See `docs/MIGRATION_STATUS.md` for the legacy `soccer` repository migration classification.
