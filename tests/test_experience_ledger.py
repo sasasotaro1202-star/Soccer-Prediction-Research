@@ -259,3 +259,39 @@ def test_update_timestamp_when_experience_state_changes():
     current["ledger_rows"] = 1
     current["generated_at_utc"] = "2026-09-26T04:00:00+00:00"
     assert _preserve_timestamp_when_unchanged(previous, current)["generated_at_utc"] == current["generated_at_utc"]
+def test_compute_metrics_persists_target_specific_results(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+
+    metrics_path = tmp_path / "metrics.csv"
+    target_metrics_path = tmp_path / "target_metrics.csv"
+    status_path = tmp_path / "status.json"
+    monkeypatch.setattr(mod, "METRICS", metrics_path)
+    monkeypatch.setattr(mod, "TARGET_METRICS", target_metrics_path)
+    monkeypatch.setattr(mod, "STATUS", status_path)
+
+    base = {
+        "kickoff_utc": "2026-09-01T10:00:00Z",
+        "actual_result": "H",
+        "p_home": 0.8,
+        "p_draw": 0.1,
+        "p_away": 0.1,
+        "correct_1x2": 1,
+        "score_top1_hit": 0,
+        "score_top3_hit": 1,
+        "over_2_5_correct": 1,
+        "btts_correct": 0,
+        "mom_top1_hit": 0,
+        "mom_top4_hit": 1,
+        "model_version": "v1",
+        "competition": "EPL",
+    }
+    pd.DataFrame([base]).to_csv(tmp_path / "ledger.csv", index=False)
+
+    assert mod.compute_metrics(pd.DataFrame([base])) > 0
+    report = pd.read_csv(target_metrics_path)
+    assert set(report["target"]) == {"1X2", "Score", "O/U", "BTTS", "MOM"}
+    assert report.loc[(report["target"] == "1X2") & (report["metric"] == "1x2_accuracy_pct"), "accuracy_pct"].iloc[0] == 100.0
+    assert report.loc[(report["target"] == "Score") & (report["metric"] == "score_top3_accuracy_pct"), "accuracy_pct"].iloc[0] == 100.0
+    assert report.loc[(report["target"] == "MOM") & (report["metric"] == "mom_top4_accuracy_pct"), "accuracy_pct"].iloc[0] == 100.0
+
+
