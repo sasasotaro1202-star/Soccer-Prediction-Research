@@ -40,6 +40,7 @@ def test_record_rejects_invalid_1x2_probabilities(tmp_path, monkeypatch):
     pd.DataFrame([{
         "match_id": "espn:bad",
         "kickoff_utc": "2026-09-26T10:00:00Z",
+        "prediction_time_utc": "2026-09-26T08:00:00Z",
         "home_team": "A",
         "away_team": "B",
         "competition": "EPL",
