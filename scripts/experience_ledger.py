@@ -401,6 +401,38 @@ def _binary_probability_metrics(
     }
 
 
+def _target_metric_deltas(previous_frame: pd.DataFrame, current_frame: pd.DataFrame) -> dict[str, Any]:
+    """Return finite target-level metric deltas keyed by scope/segment/target/metric."""
+    if previous_frame.empty or current_frame.empty:
+        return {}
+    key_cols = ["scope", "segment", "target", "metric"]
+    if not all(c in previous_frame.columns for c in key_cols) or not all(c in current_frame.columns for c in key_cols):
+        return {}
+    previous = previous_frame.copy()
+    current = current_frame.copy()
+    for frame in (previous, current):
+        frame["accuracy_pct"] = pd.to_numeric(frame["accuracy_pct"], errors="coerce")
+        for col in ("logloss", "brier", "ece"):
+            if col in frame.columns:
+                frame[col] = pd.to_numeric(frame[col], errors="coerce")
+    merged = previous.merge(current, on=key_cols, how="inner", suffixes=("_previous", "_current"))
+    out: dict[str, Any] = {}
+    for _, row in merged.iterrows():
+        deltas: dict[str, float] = {}
+        for metric in ("accuracy_pct", "logloss", "brier", "ece"):
+            old_value = row.get(metric + "_previous")
+            new_value = row.get(metric + "_current")
+            if pd.isna(old_value) or pd.isna(new_value):
+                continue
+            delta = float(new_value) - float(old_value)
+            if np.isfinite(delta) and abs(delta) > 0:
+                deltas[metric] = round(delta, 6)
+        if deltas:
+            key = f"{row['scope']}|{row['segment']}|{row['target']}|{row['metric']}"
+            out[key] = deltas
+    return out
+
+
 def _target_metrics(frame: pd.DataFrame) -> pd.DataFrame:
     """Build target-specific monitoring rows without inventing unavailable labels."""
     specs = [
@@ -520,6 +552,7 @@ def compute_metrics(ledger=None):
             "summary": {"all": {"n": 0, "probability_rows": 0}},
         }
         current_status["metric_deltas_vs_previous"] = _status_metric_deltas(previous_status, current_status)
+    current_status["target_metric_deltas_vs_previous"] = _target_metric_deltas(previous_target_metrics, target_frame)
         current_status = _preserve_timestamp_when_unchanged(previous_status, current_status)
         STATUS.parent.mkdir(parents=True, exist_ok=True)
         STATUS.write_text(json.dumps(current_status, indent=2), encoding="utf-8")
@@ -551,6 +584,7 @@ def compute_metrics(ledger=None):
 
     metrics_frame = pd.DataFrame(rows)
     _write_csv(METRICS, metrics_frame)
+    previous_target_metrics = _read(TARGET_METRICS)
     target_rows = []
     for scope, start in [("all", d["kickoff_utc"].min()), ("365d", now-pd.Timedelta(days=365)),
                          ("90d", now-pd.Timedelta(days=90)), ("30d", now-pd.Timedelta(days=30)),
