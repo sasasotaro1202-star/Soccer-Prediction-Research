@@ -269,3 +269,18 @@ def test_production_contract_rejects_legacy_adopted_bundle_without_routing(monke
     result = write_contract_result(str(tmp_path))
     assert result.passed is False
     assert "production_bundle_load" in result.failures
+
+def test_contract_does_not_skip_bundle_validation_for_champion_status(tmp_path):
+    _minimal_passing_artifacts(tmp_path)
+    _write(tmp_path / "adoption_decision.json", {
+        "status": "CHAMPION",
+        "oos_claimed": True,
+        "stability": {"status": "PASS"},
+        "external_stability_gate": {"status": "PASS"},
+        "locked_block_rows": [500, 500],
+        "minimum_locked_rows_per_block": 500,
+    })
+    (tmp_path / "production_model.pkl").write_bytes(b"tampered-invalid-bundle")
+    result = write_contract_result(str(tmp_path))
+    assert result.passed is False
+    assert "production_bundle_load" in result.failures
