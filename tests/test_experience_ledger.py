@@ -361,8 +361,10 @@ def test_target_metrics_include_binary_probability_quality(tmp_path, monkeypatch
     assert float(ou["accuracy_pct"]) == 100.0
     assert float(ou["logloss"]) > 0.0
     assert float(ou["brier"]) >= 0.0
+    assert float(ou["ece"]) >= 0.0
     assert float(btts["accuracy_pct"]) == 100.0
     assert float(btts["logloss"]) > 0.0
     assert float(btts["brier"]) >= 0.0
+    assert float(btts["ece"]) >= 0.0
 
 
