@@ -18,6 +18,7 @@ from src.evaluation.metrics import classification_metrics
 LEDGER = Path("data/experience/prediction_ledger.csv")
 PREDICTION_SNAPSHOTS = Path("data/experience/prediction_snapshots.jsonl")
 METRICS = Path("artifacts/experience_metrics.csv")
+TARGET_METRICS = Path("artifacts/experience_metrics_by_target.csv")
 STATUS = Path("artifacts/experience_status.json")
 
 def _now():
@@ -334,6 +335,37 @@ def _preserve_timestamp_when_unchanged(previous: dict[str, Any], current: dict[s
     return current
 
 
+
+def _target_metrics(frame: pd.DataFrame) -> pd.DataFrame:
+    """Build target-specific monitoring rows without inventing unavailable labels."""
+    specs = [
+        ("1X2", "correct_1x2", "1x2_accuracy_pct"),
+        ("Score", "score_top1_hit", "score_top1_accuracy_pct"),
+        ("Score", "score_top3_hit", "score_top3_accuracy_pct"),
+        ("O/U", "over_2_5_correct", "over_2_5_accuracy_pct"),
+        ("BTTS", "btts_correct", "btts_accuracy_pct"),
+        ("MOM", "mom_top1_hit", "mom_top1_accuracy_pct"),
+        ("MOM", "mom_top4_hit", "mom_top4_accuracy_pct"),
+    ]
+    rows: list[dict[str, Any]] = []
+    for target, column, metric_name in specs:
+        if column not in frame.columns:
+            continue
+        vals = pd.to_numeric(frame[column], errors="coerce").dropna()
+        if vals.empty:
+            continue
+        row = {
+            "target": target,
+            "metric": metric_name,
+            "n": int(len(vals)),
+            "accuracy_pct": round(float(vals.mean() * 100), 4),
+        }
+        if target == "1X2":
+            proper = _proper_score_metrics(frame)
+            row.update({k: proper[k] for k in ("logloss", "brier", "rps", "ece", "probability_rows") if k in proper})
+        rows.append(row)
+    return pd.DataFrame(rows)
+
 def _status_metric_deltas(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
     """Compare monitoring summaries and retain only finite numeric changes."""
     out: dict[str, Any] = {}
@@ -437,7 +469,39 @@ def compute_metrics(ledger=None):
         emit(scope,d[d["kickoff_utc"]>=start])
     for model,x in d.groupby("model_version",dropna=False): emit("model",x,str(model))
     for comp,x in d.groupby("competition",dropna=False): emit("competition",x,str(comp))
-    _write_csv(METRICS,pd.DataFrame(rows))
+
+    metrics_frame = pd.DataFrame(rows)
+    _write_csv(METRICS, metrics_frame)
+    target_rows = []
+    for scope, start in [("all", d["kickoff_utc"].min()), ("365d", now-pd.Timedelta(days=365)),
+                         ("90d", now-pd.Timedelta(days=90)), ("30d", now-pd.Timedelta(days=30)),
+                         ("7d", now-pd.Timedelta(days=7))]:
+        scoped = d[d["kickoff_utc"] >= start]
+        if scoped.empty:
+            continue
+        tm = _target_metrics(scoped)
+        if not tm.empty:
+            tm.insert(0, "scope", scope)
+            tm.insert(1, "segment", "")
+            target_rows.append(tm)
+    for model, x in d.groupby("model_version", dropna=False):
+        tm = _target_metrics(x)
+        if not tm.empty:
+            tm.insert(0, "scope", "model")
+            tm.insert(1, "segment", str(model))
+            target_rows.append(tm)
+    for comp, x in d.groupby("competition", dropna=False):
+        tm = _target_metrics(x)
+        if not tm.empty:
+            tm.insert(0, "scope", "competition")
+            tm.insert(1, "segment", str(comp))
+            target_rows.append(tm)
+    target_frame = (
+        pd.concat(target_rows, ignore_index=True)
+        if target_rows
+        else pd.DataFrame(columns=["scope", "segment", "target", "metric", "n", "accuracy_pct"])
+    )
+    _write_csv(TARGET_METRICS, target_frame)
     summary = {}
     for scope in ("all", "30d", "7d"):
         match = next((r for r in rows if r.get("scope") == scope and not r.get("segment")), None)
