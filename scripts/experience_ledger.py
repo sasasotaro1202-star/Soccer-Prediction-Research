@@ -97,6 +97,24 @@ def record_prediction_file(predictions_path: str, prediction_time: str | None = 
               "mom_1_probability","mom_2_probability","mom_3_probability","mom_4_probability"]:
         if c in incoming:
             incoming[c] = pd.to_numeric(incoming[c], errors="coerce")
+    for positive, negative, target in [("over_2_5", "under_2_5", "O/U"), ("btts_yes", "btts_no", "BTTS")]:
+        source_positive = "market_" + positive
+        source_negative = "market_" + negative
+        if positive not in incoming and source_positive in incoming:
+            incoming[positive] = pd.to_numeric(incoming[source_positive], errors="coerce")
+        if negative not in incoming and source_negative in incoming:
+            incoming[negative] = pd.to_numeric(incoming[source_negative], errors="coerce")
+        if positive in incoming or negative in incoming:
+            if positive not in incoming or negative not in incoming:
+                raise RuntimeError("prediction ledger " + target + " probabilities are incomplete")
+            binary = incoming[[positive, negative]].to_numpy(dtype=float)
+            if not np.isfinite(binary).all() or np.any(binary < 0):
+                raise RuntimeError("prediction ledger received non-finite or negative " + target + " probabilities")
+            binary_sums = binary.sum(axis=1)
+            if np.any(binary_sums <= 0) or np.any(np.abs(binary_sums - 1.0) > 1e-3):
+                raise RuntimeError("prediction ledger received " + target + " probabilities whose row sums are not within 1e-3 of 1")
+            incoming[[positive, negative]] = np.round(binary / binary_sums[:, None], 5)
+
     probs = incoming[["p_home","p_draw","p_away"]].to_numpy(dtype=float)
     if not np.isfinite(probs).all() or np.any(probs < 0):
         raise RuntimeError("prediction ledger received non-finite or negative 1X2 probabilities")
