@@ -113,6 +113,9 @@ def record_prediction_file(predictions_path: str, prediction_time: str | None = 
     existing = _read(LEDGER)
     seen = set(existing["prediction_state_id"].astype(str)) if not existing.empty and "prediction_state_id" in existing else set()
     new_rows = incoming[~incoming["prediction_state_id"].astype(str).isin(seen)].copy()
+    batch_duplicates_dropped = int(new_rows["prediction_state_id"].astype(str).duplicated(keep="first").sum()) if not new_rows.empty else 0
+    if batch_duplicates_dropped:
+        new_rows = new_rows.drop_duplicates("prediction_state_id", keep="first").copy()
     for c in ["actual_home_goals","actual_away_goals","actual_result","actual_score","settled_at_utc","settlement_source",
               "correct_1x2","predicted_1x2","confidence","score_top1_hit","score_top3_hit",
               "over_2_5_correct","btts_correct","mom_actual_player_id","mom_top1_hit","mom_top4_hit","mom_settlement_status"]:
@@ -126,6 +129,7 @@ def record_prediction_file(predictions_path: str, prediction_time: str | None = 
             ["kickoff_utc","prediction_recorded_at_utc","match_id"],kind="mergesort")
     _write_csv(LEDGER, combined)
     return {"status":"RECORDED","added":len(new_rows),"ledger_rows":len(combined),
+            "batch_duplicates_dropped":batch_duplicates_dropped,
             "prediction_snapshots_appended":len(snapshot_rows),
             "unique_fixtures":int(combined["match_id"].nunique()) if not combined.empty else 0}
 
