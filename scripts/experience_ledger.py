@@ -552,7 +552,7 @@ def compute_metrics(ledger=None):
             "summary": {"all": {"n": 0, "probability_rows": 0}},
         }
         current_status["metric_deltas_vs_previous"] = _status_metric_deltas(previous_status, current_status)
-    current_status["target_metric_deltas_vs_previous"] = _target_metric_deltas(previous_target_metrics, target_frame)
+        current_status["target_metric_deltas_vs_previous"] = {}
         current_status = _preserve_timestamp_when_unchanged(previous_status, current_status)
         STATUS.parent.mkdir(parents=True, exist_ok=True)
         STATUS.write_text(json.dumps(current_status, indent=2), encoding="utf-8")
@@ -644,6 +644,7 @@ def compute_metrics(ledger=None):
                       "generated_at_utc":_now().isoformat(),"metrics_file":str(METRICS),
                       "summary":summary}
     current_status["metric_deltas_vs_previous"] = _status_metric_deltas(previous_status, current_status)
+    current_status["target_metric_deltas_vs_previous"] = _target_metric_deltas(previous_target_metrics, target_frame)
     current_status = _preserve_timestamp_when_unchanged(previous_status, current_status)
     STATUS.parent.mkdir(parents=True,exist_ok=True)
     STATUS.write_text(json.dumps(current_status,indent=2),encoding="utf-8")
