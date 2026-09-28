@@ -97,7 +97,7 @@ jobs:
             exit 0
           fi
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import json
+          import csv, json
           from pathlib import Path
           status = json.loads(Path("artifacts/experience_status.json").read_text(encoding="utf-8"))
           summary = status.get("summary") or {}
@@ -106,9 +106,25 @@ jobs:
           for scope in ("all", "30d", "7d"):
               row = summary.get(scope)
               if not isinstance(row, dict): continue
-              print(f"- **{scope}**: n={row.get('n', 0)}, 1X2={row.get('1x2_accuracy_pct', 'NA')}%, LogLoss={row.get('logloss', 'NA')}, Brier={row.get('brier', 'NA')}, RPS={row.get('rps', 'NA')}, ECE={row.get('ece', 'NA')}")
-              if scope in deltas: print(f"  - **changed vs previous**: {deltas[scope]}")
-          if not deltas: print("- **No metric change vs previous durable status detected.**")
+              print(f"- **{scope} / 1X2**: n={row.get('n', 0)}, Accuracy={row.get('1x2_accuracy_pct', 'NA')}%, LogLoss={row.get('logloss', 'NA')}, Brier={row.get('brier', 'NA')}, RPS={row.get('rps', 'NA')}, ECE={row.get('ece', 'NA')}")
+              if scope in deltas: print(f"  - **1X2 changed vs previous**: {deltas[scope]}")
+          target_path = Path("artifacts/experience_metrics_by_target.csv")
+          if target_path.is_file() and target_path.stat().st_size:
+              print("")
+              print("## Target-specific performance")
+              with target_path.open(encoding="utf-8", newline="") as fh:
+                  rows = list(csv.DictReader(fh))
+              targets = ("1X2", "Score", "O/U", "BTTS", "MOM")
+              for target in targets:
+                  selected = [r for r in rows if r.get("scope") == "all" and r.get("target") == target]
+                  if not selected:
+                      print(f"- **{target}**: insufficient settled evidence")
+                      continue
+                  metrics = [f"{r.get('metric')}={r.get('accuracy_pct')}% (n={r.get('n')})" for r in selected]
+                  print(f"- **{target}**: " + ", ".join(metrics))
+          else:
+              print("- **Target-specific performance**: artifact unavailable")
+          if not deltas: print("- **No 1X2 metric change vs previous durable status detected.**")
           PY
       - name: Commit durable experience
         shell: bash
