@@ -354,6 +354,53 @@ def _preserve_timestamp_when_unchanged(previous: dict[str, Any], current: dict[s
 
 
 
+def _binary_probability_metrics(
+    frame: pd.DataFrame,
+    positive_probability: str,
+    negative_probability: str,
+    positive_label,
+) -> dict[str, Any]:
+    """Score a binary target only when both PIT-safe probabilities and outcome labels exist."""
+    required = {positive_probability, negative_probability, "actual_home_goals", "actual_away_goals"}
+    if not required.issubset(frame.columns):
+        return {}
+    d = frame[list(required)].copy()
+    d[positive_probability] = pd.to_numeric(d[positive_probability], errors="coerce")
+    d[negative_probability] = pd.to_numeric(d[negative_probability], errors="coerce")
+    d["actual_home_goals"] = pd.to_numeric(d["actual_home_goals"], errors="coerce")
+    d["actual_away_goals"] = pd.to_numeric(d["actual_away_goals"], errors="coerce")
+    d = d.dropna(subset=[positive_probability, negative_probability, "actual_home_goals", "actual_away_goals"])
+    if d.empty:
+        return {}
+    probs = d[[positive_probability, negative_probability]].to_numpy(dtype=float)
+    invalid = (~np.isfinite(probs).all(axis=1)) | (probs < 0).any(axis=1) | (probs.sum(axis=1) <= 0)
+    if invalid.any():
+        raise RuntimeError(
+            f"experience metrics received {int(invalid.sum())} invalid binary probability rows"
+        )
+    probs /= probs.sum(axis=1, keepdims=True)
+    positive = np.asarray(
+        [1 if positive_label(int(h), int(a)) else 0 for h, a in d[["actual_home_goals", "actual_away_goals"]].to_numpy()],
+        dtype=int,
+    )
+    p = np.clip(probs[:, 0], 1e-15, 1 - 1e-15)
+    logloss = float(-np.mean(positive * np.log(p) + (1 - positive) * np.log(1 - p)))
+    brier = float(np.mean((p - positive) ** 2))
+    bins = np.linspace(0.0, 1.0, 11)
+    ece = 0.0
+    for left, right in zip(bins[:-1], bins[1:]):
+        mask = (p >= left) & ((p < right) if right < 1.0 else (p <= right))
+        if not mask.any():
+            continue
+        ece += float(mask.mean()) * abs(float(p[mask].mean()) - float(positive[mask].mean()))
+    return {
+        "logloss": round(logloss, 6),
+        "brier": round(brier, 6),
+        "ece": round(ece, 6),
+        "probability_rows": int(len(positive)),
+    }
+
+
 def _target_metrics(frame: pd.DataFrame) -> pd.DataFrame:
     """Build target-specific monitoring rows without inventing unavailable labels."""
     specs = [
@@ -366,6 +413,16 @@ def _target_metrics(frame: pd.DataFrame) -> pd.DataFrame:
         ("MOM", "mom_top4_hit", "mom_top4_accuracy_pct"),
     ]
     rows: list[dict[str, Any]] = []
+    binary_quality = {
+        "O/U": _binary_probability_metrics(
+            frame, "over_2_5", "under_2_5",
+            lambda home, away: (home + away) > 2.5,
+        ),
+        "BTTS": _binary_probability_metrics(
+            frame, "btts_yes", "btts_no",
+            lambda home, away: home > 0 and away > 0,
+        ),
+    }
     for target, column, metric_name in specs:
         if column not in frame.columns:
             continue
@@ -381,6 +438,8 @@ def _target_metrics(frame: pd.DataFrame) -> pd.DataFrame:
         if target == "1X2":
             proper = _proper_score_metrics(frame)
             row.update({k: proper[k] for k in ("logloss", "brier", "rps", "ece", "probability_rows") if k in proper})
+        elif target in binary_quality:
+            row.update(binary_quality[target])
         rows.append(row)
     return pd.DataFrame(rows)
 
