@@ -77,9 +77,21 @@ def record_prediction_file(predictions_path: str, prediction_time: str | None = 
     if missing:
         raise RuntimeError(f"prediction ledger input missing required columns: {missing}")
     incoming = incoming.copy()
-    incoming["prediction_recorded_at_utc"] = (pd.to_datetime(prediction_time, utc=True, errors="coerce") if prediction_time else _now())
-    if pd.isna(incoming["prediction_recorded_at_utc"]).all():
-        incoming["prediction_recorded_at_utc"] = _now()
+    if "prediction_time_utc" in incoming.columns:
+        cutoffs = pd.to_datetime(incoming["prediction_time_utc"], utc=True, errors="coerce")
+    elif prediction_time:
+        parsed = pd.to_datetime(prediction_time, utc=True, errors="coerce")
+        cutoffs = pd.Series(parsed, index=incoming.index)
+    else:
+        raise RuntimeError("prediction ledger requires an explicit prediction_time_utc/prediction-time; refusing unknown PIT")
+    kickoff = pd.to_datetime(incoming["kickoff_utc"], utc=True, errors="coerce")
+    if cutoffs.isna().any() or kickoff.isna().any():
+        raise RuntimeError("prediction ledger contains invalid/missing prediction or kickoff timestamps")
+    if bool((cutoffs >= kickoff).any()):
+        raise RuntimeError("prediction ledger contains a prediction at/after kickoff; refusing non-pregame state")
+    incoming["prediction_pit_cutoff_utc"] = cutoffs.astype("string")
+    incoming["prediction_recorded_at_utc"] = _now()
+    incoming["prediction_pit_gate"] = "PASS"
     for c in ["p_home","p_draw","p_away","score_1_probability","score_2_probability","score_3_probability",
               "mom_1_probability","mom_2_probability","mom_3_probability","mom_4_probability"]:
         if c in incoming:
