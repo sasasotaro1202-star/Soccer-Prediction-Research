@@ -114,6 +114,8 @@ COMPETITION_CATALOG: tuple[CompetitionSpec, ...] = (
     CompetitionSpec("CONT_M", "Senior Men's Continental Championships", "Global", "senior", "international"),
     CompetitionSpec("CONT_W", "Senior Women's Continental Championships", "Global", "senior", "international"),
     CompetitionSpec("INTL_M", "Senior Men's International Friendlies", "Global", "senior", "friendly"),
+    CompetitionSpec("WORLD_CUP", "FIFA World Cup", "Global", "senior", "international"),
+    CompetitionSpec("ASIAN_CUP", "AFC Asian Cup", "Asia", "senior", "international"),
     CompetitionSpec("INTL_W", "Senior Women's International Friendlies", "Global", "senior", "friendly"),
 
     # Asian football, including the Asian Games men's and women's tournaments.
