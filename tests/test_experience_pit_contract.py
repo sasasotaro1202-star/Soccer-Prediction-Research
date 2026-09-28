@@ -47,6 +47,22 @@ def test_record_rejects_prediction_at_or_after_kickoff(tmp_path: Path, monkeypat
         mod.record_prediction_file(str(predictions))
 
 
+def test_record_deduplicates_identical_states_within_one_batch(tmp_path: Path, monkeypatch):
+    ledger = tmp_path / "ledger.csv"
+    snapshots = tmp_path / "snapshots.jsonl"
+    predictions = tmp_path / "predictions.csv"
+    monkeypatch.setattr(mod, "LEDGER", ledger)
+    monkeypatch.setattr(mod, "PREDICTION_SNAPSHOTS", snapshots)
+    row = _base_row(prediction_time_utc="2026-09-26T08:00:00Z")
+    pd.DataFrame([row, dict(row)]).to_csv(predictions, index=False)
+    result = mod.record_prediction_file(str(predictions))
+    assert result["added"] == 1
+    assert result["batch_duplicates_dropped"] == 1
+    assert len(pd.read_csv(ledger)) == 1
+    snapshot_rows = [json.loads(x) for x in snapshots.read_text().splitlines() if x.strip()]
+    assert len(snapshot_rows) == 1
+
+
 def test_settlement_requires_pit_validated_prediction():
     row = pd.Series(_base_row(
         fixture_key="unused",
