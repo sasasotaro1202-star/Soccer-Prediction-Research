@@ -15,6 +15,7 @@ from urllib3.util.retry import Retry
 
 from src.data.jleague_adapter import load_jleague_history
 from src.data.openfootball_adapter import load_openfootball_history
+from src.data.openfootball_international_adapter import load_openfootball_international_history
 from src.data.competition_catalog import ACTIVE_SCOPE
 
 LEAGUES={"EPL":"E0","BL1":"D1","SA":"I1","LL":"SP1","FL1":"F1","ERE":"N1"}
@@ -70,9 +71,10 @@ def load_available_history(start_year:int=2010,end_year:int=2025,max_workers:int
     with ThreadPoolExecutor(max_workers=max(1,min(int(max_workers),len(tasks)))) as pool: results=[f.result() for f in as_completed([pool.submit(_load_one,t) for t in tasks])]
     results.sort(key=lambda x:(list(LEAGUES).index(x[0]),x[1])); primary_frames=[r[2] for r in results if r[2] is not None]; primary_history=pd.concat(primary_frames,ignore_index=True) if primary_frames else pd.DataFrame(); primary_coverage=pd.DataFrame([r[3] for r in results])
     jleague_history,jleague_coverage=load_jleague_history(start_year=start_year,end_year=end_year); cup_history,cup_coverage=load_openfootball_history(start_year=start_year,end_year=end_year,max_workers=max_workers)
-    frames=[x for x in (primary_history,jleague_history,cup_history) if not x.empty]; history=pd.concat(frames,ignore_index=True) if frames else pd.DataFrame()
+    international_history,international_coverage=load_openfootball_international_history(start_year=max(2000,start_year),end_year=end_year,max_workers=max_workers)
+    frames=[x for x in (primary_history,jleague_history,cup_history,international_history) if not x.empty]; history=pd.concat(frames,ignore_index=True) if frames else pd.DataFrame()
     if not history.empty: history=history.sort_values(["competition","kickoff_utc","home_team","away_team","source_name"],kind="mergesort").reset_index(drop=True)
-    coverage=pd.concat([primary_coverage,jleague_coverage,cup_coverage],ignore_index=True)
+    coverage=pd.concat([primary_coverage,jleague_coverage,cup_coverage,international_coverage],ignore_index=True)
     if not history.empty:
         history=history[history["competition"].astype(str).isin(ACTIVE_SCOPE)].copy()
     if not coverage.empty:
