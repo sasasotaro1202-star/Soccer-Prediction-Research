@@ -267,6 +267,18 @@ SOCCER_SOURCES: Final[tuple[SourceSpec, ...]] = (
         notes="Free public-domain historical results; publication-time evidence still required for strict PIT.",
     ),
     SourceSpec(
+        name="openfootball/internationals",
+        kind="open_dataset",
+        role="international_tournament_historical_results",
+        fields=("fixtures", "results", "scores", "competition_context"),
+        historical=True,
+        pit_capable=False,
+        live_capable=False,
+        auth_required=False,
+        primary_for=("WORLD_CUP", "ASIAN_CUP", "UEFA_EURO_M", "UEFA_EURO_QUALI_M", "UEFA_NATIONS_LEAGUE_M"),
+        notes="Free public-domain international tournament history discovered from the versioned repository tree; publication-time evidence is handled separately by the PIT replay layer.",
+    ),
+    SourceSpec(
         name="Internet Archive / Wayback",
         kind="archive",
         role="historical_snapshot_evidence",
