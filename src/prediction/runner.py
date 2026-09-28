@@ -187,6 +187,38 @@ def _normalize_prediction_time(value: str | None) -> pd.Timestamp:
     return ts.tz_convert("UTC")
 
 
+def _require_fresh_matchday_snapshot(
+    status_path: str,
+    prediction_time: pd.Timestamp,
+    max_age_minutes: float = 15.0,
+) -> dict:
+    """Require a freshly acquired matchday snapshot for latest production predictions."""
+    path = Path(status_path)
+    if not path.is_file() or path.stat().st_size <= 0:
+        raise RuntimeError("Latest prediction requires a current matchday refresh status; refusing stale artifact reuse")
+    try:
+        status = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"Latest matchday refresh status is unreadable: {type(exc).__name__}: {exc}") from exc
+    if not isinstance(status, dict):
+        raise RuntimeError("Latest matchday refresh status must be a JSON object")
+    if str(status.get("status", "")).upper() != "COLLECTED":
+        raise RuntimeError("Latest prediction requires a successful current matchday refresh; status={!r}".format(status.get("status")))
+    finished = pd.to_datetime(status.get("snapshot_finished_at_utc"), utc=True, errors="coerce")
+    if pd.isna(finished):
+        raise RuntimeError("Latest matchday refresh has no valid snapshot_finished_at_utc")
+    age_minutes = (prediction_time - pd.Timestamp(finished)).total_seconds() / 60.0
+    if age_minutes < -1.0:
+        raise RuntimeError("Latest matchday snapshot timestamp is in the future; refusing ambiguous freshness state")
+    if age_minutes > max_age_minutes:
+        raise RuntimeError("Latest matchday snapshot is stale ({:.2f} min > {:.2f} min); refresh required".format(age_minutes, max_age_minutes))
+    return {
+        "status": "FRESH",
+        "snapshot_finished_at_utc": pd.Timestamp(finished).isoformat(),
+        "age_minutes": round(max(0.0, float(age_minutes)), 3),
+        "max_age_minutes": float(max_age_minutes),
+    }
+
 def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) -> pd.DataFrame:
     missing = sorted(REQUIRED_FIXTURE_COLUMNS - set(fixtures.columns))
     if missing:
@@ -365,6 +397,11 @@ def run(
         return _write_status(status_file, "NO_FIXTURE_INPUT", prediction_time_utc=now.isoformat(), oos_claimed=False)
 
     fixtures = pd.read_csv(p)
+    freshness = None
+    if model_policy == "production":
+        freshness = _require_fresh_matchday_snapshot(
+            "artifacts/matchday_intelligence_status.json", now, max_age_minutes=15.0
+        )
     fixtures, matchday_merge_status = _merge_matchday_snapshot(fixtures, now)
     eligible = _eligible_fixtures(fixtures, now)
     if eligible.empty:
@@ -376,6 +413,7 @@ def run(
             eligible_rows=0,
             oos_claimed=False,
             matchday_merge_status=matchday_merge_status,
+            freshness=freshness,
         )
 
     raw_probs = predict_bundle(bundle, eligible)
