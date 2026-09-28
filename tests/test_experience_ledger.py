@@ -293,5 +293,76 @@ def test_compute_metrics_persists_target_specific_results(tmp_path, monkeypatch)
     assert report.loc[(report["target"] == "1X2") & (report["metric"] == "1x2_accuracy_pct"), "accuracy_pct"].iloc[0] == 100.0
     assert report.loc[(report["target"] == "Score") & (report["metric"] == "score_top3_accuracy_pct"), "accuracy_pct"].iloc[0] == 100.0
     assert report.loc[(report["target"] == "MOM") & (report["metric"] == "mom_top4_accuracy_pct"), "accuracy_pct"].iloc[0] == 100.0
+def test_record_normalizes_binary_target_probabilities(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+
+    ledger = tmp_path / "ledger.csv"
+    predictions = tmp_path / "predictions.csv"
+    monkeypatch.setattr(mod, "LEDGER", ledger)
+    monkeypatch.setattr(mod, "PREDICTION_SNAPSHOTS", tmp_path / "snapshots.jsonl")
+
+    row = {
+        "match_id": "espn:3",
+        "kickoff_utc": "2026-09-26T10:00:00Z",
+        "prediction_time_utc": "2026-09-26T08:00:00Z",
+        "home_team": "A",
+        "away_team": "B",
+        "competition": "EPL",
+        "p_home": 0.5,
+        "p_draw": 0.25,
+        "p_away": 0.25,
+        "market_over_2_5": 0.6,
+        "market_under_2_5": 0.4,
+        "market_btts_yes": 0.7,
+        "market_btts_no": 0.3,
+        "model_version": "v1",
+    }
+    pd.DataFrame([row]).to_csv(predictions, index=False)
+    assert mod.record_prediction_file(str(predictions))["added"] == 1
+    saved = pd.read_csv(ledger).iloc[0]
+    assert float(saved["over_2_5"]) == 0.6
+    assert float(saved["under_2_5"]) == 0.4
+    assert float(saved["btts_yes"]) == 0.7
+    assert float(saved["btts_no"]) == 0.3
+
+
+def test_target_metrics_include_binary_probability_quality(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+
+    target_metrics_path = tmp_path / "target_metrics.csv"
+    monkeypatch.setattr(mod, "METRICS", tmp_path / "metrics.csv")
+    monkeypatch.setattr(mod, "TARGET_METRICS", target_metrics_path)
+    monkeypatch.setattr(mod, "STATUS", tmp_path / "status.json")
+
+    ledger = pd.DataFrame([{
+        "kickoff_utc": "2026-09-01T10:00:00Z",
+        "actual_result": "H",
+        "actual_home_goals": 2,
+        "actual_away_goals": 1,
+        "p_home": 0.8,
+        "p_draw": 0.1,
+        "p_away": 0.1,
+        "correct_1x2": 1,
+        "score_top1_hit": 1,
+        "score_top3_hit": 1,
+        "over_2_5": 0.75,
+        "under_2_5": 0.25,
+        "over_2_5_correct": 1,
+        "btts_yes": 0.8,
+        "btts_no": 0.2,
+        "btts_correct": 1,
+        "model_version": "v1",
+        "competition": "EPL",
+    }])
+    assert mod.compute_metrics(ledger) > 0
+    report = pd.read_csv(target_metrics_path)
+    ou = report[(report["scope"] == "all") & (report["target"] == "O/U")].iloc[0]
+    btts = report[(report["scope"] == "all") & (report["target"] == "BTTS")].iloc[0]
+    assert float(ou["accuracy_pct"]) == 100.0
+    assert float(ou["logloss"]) > 0.0
+    assert float(ou["brier"]) >= 0.0
+    assert float(btts["accuracy_pct"]) == 100.0
+    assert float(btts["logloss"]) > 0.0
+    assert float(btts["brier"]) >= 0.0
 
 
