@@ -12,6 +12,8 @@ import numpy as np
 from typing import Any
 
 from src.prediction.model_bundle import load_bundle
+from src.data.competition_sources import TARGET_COMPETITIONS
+from src.research.task_scope import TASK_SPECS
 
 REQUIRED_GATES = ("data", "schema", "leakage", "features", "training", "backtest", "oos", "prediction", "sanity", "artifact")
 REQUIRED_ARTIFACTS = (
@@ -72,7 +74,8 @@ def _valid_task_scope_matrix(root: Path) -> bool:
         value = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return False
-    if not isinstance(value, list) or len(value) != 175:
+    expected_count = len(TARGET_COMPETITIONS) * len(TASK_SPECS)
+    if not isinstance(value, list) or len(value) != expected_count:
         return False
     seen: set[tuple[str, str]] = set()
     required_counts = {"Score": 3, "MOM": 4, "1X2": 1, "O/U": 2, "BTTS": 2}
@@ -89,7 +92,7 @@ def _valid_task_scope_matrix(root: Path) -> bool:
         if row.get("production_eligible") is not False:
             return False
         seen.add(key)
-    return len(seen) == 175
+    return len(seen) == expected_count
 
 
 def _file_nonempty(root: Path, name: str) -> bool:
