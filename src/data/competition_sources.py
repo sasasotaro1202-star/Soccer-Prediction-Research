@@ -8,7 +8,7 @@ from dataclasses import dataclass
 TARGET_COMPETITIONS = (
     "EPL", "AG_M", "AG_W", "ERE", "LL", "SA", "BL1", "J1", "J2", "J3",
     "FL1",
-    "UCL", "UEL", "UECL", "UEFA_SUPER_CUP", "UEFA_YOUTH_LEAGUE", "UWCL", "UWEC",
+    "UCL", "UEL", "UECL", "UEFA_SUPER_CUP", "UEFA_YOUTH_LEAGUE", "UWCL", "UWEC", "WORLD_CUP", "ASIAN_CUP",
     "UEFA_EURO_M", "UEFA_EURO_QUALI_M", "UEFA_NATIONS_LEAGUE_M",
     "UEFA_EURO_W", "UEFA_EURO_QUALI_W", "UEFA_NATIONS_LEAGUE_W",
     "UEFA_U21", "UEFA_U19", "UEFA_U17", "UEFA_WU19", "UEFA_WU17",
@@ -50,6 +50,8 @@ class CompetitionSourcePlan:
 
 
 PLANS = {
+    "WORLD_CUP": ("FIFA", "openfootball/internationals", "ESPN"),
+    "ASIAN_CUP": ("AFC", "openfootball/internationals", "JFA", "ESPN"),
     "EPL": ("Football-Data.co.uk", "football-data.org", "Sportmonks", "openfootball"),
     "CHA": ("Football-Data.co.uk", "football-data.org", "Sportmonks", "openfootball"),
     "BL1": ("Football-Data.co.uk", "football-data.org", "Sportmonks", "openfootball"),
