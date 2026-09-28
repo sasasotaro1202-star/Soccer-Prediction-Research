@@ -17,7 +17,11 @@ def test_registry_has_broad_free_public_source_coverage():
 def test_priority_candidates_include_event_and_tracking_channels():
     tactics = usable_source_candidates(target_axis="tactics")
     keys = {source.key for source in tactics}
-    assert {"statsbomb_open", "skillcorner_open", "kloppy", "laurie_on_tracking", "driblab_open", "idsse_dfl_open"} <= keys
+    assert {"statsbomb_open", "skillcorner_open", "laurie_on_tracking", "driblab_open", "idsse_dfl_open"} <= keys
+
+    integration = usable_source_candidates(target_axis="data_integration")
+    integration_keys = {source.key for source in integration}
+    assert "kloppy" in integration_keys
 
 
 def test_data_only_view_excludes_feature_engines():
