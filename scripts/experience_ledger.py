@@ -397,6 +397,7 @@ def compute_metrics(ledger=None):
         pd.DataFrame([{"scope":"all","n":0,"status":"NO_SETTLED_PREDICTIONS",
                        "1x2_accuracy_pct":None,"logloss":None,"brier":None,"rps":None,"ece":None,
                        "probability_rows":0}]).to_csv(METRICS,index=False)
+        pd.DataFrame(columns=["scope","segment","target","metric","n","accuracy_pct"]).to_csv(TARGET_METRICS,index=False)
         current_status = {
             "status": "NO_SETTLED_PREDICTIONS",
             "settled_predictions": 0,
@@ -424,6 +425,7 @@ def compute_metrics(ledger=None):
         pd.DataFrame([{"scope":"all","n":0,"status":"NO_SETTLED_PREDICTIONS",
                        "1x2_accuracy_pct":None,"logloss":None,"brier":None,"rps":None,"ece":None,
                        "probability_rows":0}]).to_csv(METRICS,index=False)
+        pd.DataFrame(columns=["scope","segment","target","metric","n","accuracy_pct"]).to_csv(TARGET_METRICS,index=False)
         previous_status: dict[str, Any] = {}
         if STATUS.is_file() and STATUS.stat().st_size:
             try:
