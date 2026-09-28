@@ -120,6 +120,7 @@ jobs:
             data/experience/prediction_ledger.csv \
             data/experience/prediction_snapshots.jsonl \
             artifacts/experience_metrics.csv \
+            artifacts/experience_metrics_by_target.csv \
             artifacts/experience_status.json
           do
             if [ -e "$path" ]; then
