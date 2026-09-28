@@ -197,6 +197,8 @@ def _espn_event_key(e):
                 (aw.get("team") or {}).get("displayName") or aw.get("id"))
 
 def _settle_row(row, by_key, by_id):
+    if str(row.get("prediction_pit_gate") or "") != "PASS":
+        return {}
     event=by_id.get(str(row.get("match_id") or "")) or by_key.get(str(row.get("fixture_key") or ""))
     if event is None: return {}
     if str(event.get("id","")).isdigit():
@@ -217,8 +219,14 @@ def _settle_row(row, by_key, by_id):
     p=np.array([float(row["p_home"]),float(row["p_draw"]),float(row["p_away"])])
     pred=["H","D","A"][int(p.argmax())]
     top=[str(row.get(f"score_{i}","")).strip() for i in (1,2,3)]
+    settled_at = _now()
+    cutoff = pd.to_datetime(row.get("prediction_pit_cutoff_utc"), utc=True, errors="coerce")
+    kickoff = pd.to_datetime(row.get("kickoff_utc"), utc=True, errors="coerce")
+    if pd.isna(cutoff) or pd.isna(kickoff) or cutoff >= kickoff or settled_at <= cutoff:
+        return {}
     out={"actual_home_goals":hg,"actual_away_goals":ag,"actual_result":actual,"actual_score":f"{hg}-{ag}",
-         "settled_at_utc":_now().isoformat(),"settlement_source":"espn" if str(row["match_id"]).startswith("espn:") else "sofascore",
+         "settled_at_utc":settled_at.isoformat(),"experience_available_at_utc":settled_at.isoformat(),
+         "teacher_information_gate":"POST_KICKOFF","settlement_source":"espn" if str(row["match_id"]).startswith("espn:") else "sofascore",
          "correct_1x2":int(pred==actual),"predicted_1x2":pred,"confidence":float(p.max()),
          "score_top1_hit":int(top[0]==f"{hg}-{ag}"),"score_top3_hit":int(f"{hg}-{ag}" in top)}
     if pd.notna(row.get("market_over_2_5")): out["over_2_5_correct"]=int((float(row["market_over_2_5"])>=0.5)==((hg+ag)>2.5))
