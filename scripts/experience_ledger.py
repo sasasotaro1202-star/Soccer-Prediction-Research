@@ -16,6 +16,7 @@ from src.data.sofascore_mom_labels import fetch_mom_label
 from src.evaluation.metrics import classification_metrics
 
 LEDGER = Path("data/experience/prediction_ledger.csv")
+PREDICTION_SNAPSHOTS = Path("data/experience/prediction_snapshots.jsonl")
 METRICS = Path("artifacts/experience_metrics.csv")
 STATUS = Path("artifacts/experience_status.json")
 
@@ -54,6 +55,15 @@ def _write_csv(path: Path, frame: pd.DataFrame) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     frame.to_csv(tmp, index=False)
     tmp.replace(path)
+
+
+def _append_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True, default=str) + "\n")
 
 def record_prediction_file(predictions_path: str, prediction_time: str | None = None) -> dict:
     src = Path(predictions_path)
