@@ -1,0 +1,49 @@
+from __future__ import annotations
+
+import pandas as pd
+
+from src.data import openfootball_international_adapter as mod
+
+
+def test_international_path_patterns_cover_major_project_targets():
+    samples = {
+        "UEFA_EURO_M": "uefa_euro/2024_uefa_euro.txt",
+        "UEFA_EURO_QUALI_M": "uefa_euro_qualification/2024_uefa_euro_qualification.txt",
+        "UEFA_NATIONS_LEAGUE_M": "uefa_nations_league/2025_uefa_nations_league.txt",
+        "ASIAN_CUP": "afc_asian_cup/2024_afc_asian_cup.txt",
+        "WORLD_CUP": "fifa_world_cup/2026_fifa_world_cup.txt",
+        "WORLD_CUP_QUALI": "fifa_world_cup_qualification/2026_fifa_world_cup_qualification.txt",
+    }
+    for competition, path in samples.items():
+        assert mod.PATH_PATTERNS[competition].match(path)
+
+
+def test_international_loader_uses_discovered_paths_without_network_for_download(tmp_path, monkeypatch):
+    paths = [
+        "uefa_euro/2024_uefa_euro.txt",
+        "uefa_nations_league/2025_uefa_nations_league.txt",
+        "fifa_world_cup/2026_fifa_world_cup.txt",
+        "ignored/readme.md",
+    ]
+    raw_text = """= UEFA Euro 2024
+Sat Jun 15
+Germany v Scotland 5-1
+"""
+    monkeypatch.setattr(mod, "_tree_paths", lambda: paths)
+
+    def fake_fetch(relative_path, cache_dir):
+        return raw_text, raw_text.encode("utf-8"), mod.RAW_BASE + relative_path
+
+    monkeypatch.setattr(mod, "_fetch_text", fake_fetch)
+    history, coverage = mod.load_openfootball_international_history(
+        start_year=2024,
+        end_year=2024,
+        max_workers=2,
+    )
+
+    assert not history.empty
+    assert set(history["competition"]) == {"UEFA_EURO_M"}
+    assert int(history["home_goals"].iloc[0]) == 5
+    assert int(history["away_goals"].iloc[0]) == 1
+    assert coverage["status"].tolist() == ["AVAILABLE"]
+    assert coverage["competition"].tolist() == ["UEFA_EURO_M"]
