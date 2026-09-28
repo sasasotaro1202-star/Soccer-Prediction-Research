@@ -30,6 +30,51 @@ def test_record_deduplicates_prediction_state(tmp_path, monkeypatch):
     assert snapshot_rows[0]["prediction_pit_cutoff_utc"].startswith("2026-09-26T08:00:00")
 
 
+def test_record_keeps_distinct_prediction_times_as_distinct_states(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+
+    ledger = tmp_path / "ledger.csv"
+    snapshots = tmp_path / "prediction_snapshots.jsonl"
+    predictions = tmp_path / "predictions.csv"
+    monkeypatch.setattr(mod, "LEDGER", ledger)
+    monkeypatch.setattr(mod, "PREDICTION_SNAPSHOTS", snapshots)
+
+    base = {
+        "match_id": "espn:2",
+        "kickoff_utc": "2026-09-26T10:00:00Z",
+        "home_team": "A",
+        "away_team": "B",
+        "competition": "EPL",
+        "p_home": 0.5,
+        "p_draw": 0.25,
+        "p_away": 0.25,
+        "model_version": "v1",
+        "score_1": "1-0",
+        "score_1_probability": 0.2,
+        "score_2": "0-0",
+        "score_2_probability": 0.1,
+        "score_3": "1-1",
+        "score_3_probability": 0.1,
+    }
+    first = {**base, "prediction_time_utc": "2026-09-26T08:00:00Z"}
+    second = {**base, "prediction_time_utc": "2026-09-26T09:00:00Z"}
+
+    pd.DataFrame([first]).to_csv(predictions, index=False)
+    assert mod.record_prediction_file(str(predictions))["added"] == 1
+    pd.DataFrame([second]).to_csv(predictions, index=False)
+    assert mod.record_prediction_file(str(predictions))["added"] == 1
+
+    recorded = pd.read_csv(ledger)
+    assert len(recorded) == 2
+    assert set(recorded["prediction_pit_cutoff_utc"]) == {
+        "2026-09-26T08:00:00+00:00",
+        "2026-09-26T09:00:00+00:00",
+    }
+    snapshot_rows = [json.loads(x) for x in snapshots.read_text().splitlines() if x.strip()]
+    assert len(snapshot_rows) == 2
+    assert len({row["prediction_state_id"] for row in snapshot_rows}) == 2
+
+
 def test_record_rejects_invalid_1x2_probabilities(tmp_path, monkeypatch):
     from scripts import experience_ledger as mod
     import pytest
