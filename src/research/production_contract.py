@@ -191,7 +191,7 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
         external_stability = adoption.get("external_stability_gate")
         if not isinstance(external_stability, dict) or external_stability.get("status") not in {"PASS"}:
             failures.append("external_stability_gate")
-        if adoption_status == "ADOPT":
+        if adoption_status in {"ADOPT", "CHAMPION", "ADOPTED"}:
             locked_block_rows = adoption.get("locked_block_rows")
             if not isinstance(locked_block_rows, list) or not locked_block_rows:
                 failures.append("adoption_locked_block_rows_missing")
