@@ -35,7 +35,7 @@ def _key(kickoff: Any, home: Any, away: Any) -> str:
     return f"{pd.Timestamp(ts).isoformat()}|{_norm(home)}|{_norm(away)}"
 
 def _hash_state(row: pd.Series) -> str:
-    cols = ["match_id","kickoff_utc","home_team","away_team","competition","model_version",
+    cols = ["match_id","kickoff_utc","prediction_pit_cutoff_utc","home_team","away_team","competition","model_version",
             "p_home","p_draw","p_away","score_1","score_1_probability","score_2","score_2_probability",
             "score_3","score_3_probability","mom_1_player_id","mom_1_probability","mom_2_player_id",
             "mom_2_probability","mom_3_player_id","mom_3_probability","mom_4_player_id","mom_4_probability"]
