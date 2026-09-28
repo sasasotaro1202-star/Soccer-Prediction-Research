@@ -37,7 +37,7 @@ def _key(kickoff: Any, home: Any, away: Any) -> str:
 
 def _hash_state(row: pd.Series) -> str:
     cols = ["match_id","kickoff_utc","prediction_pit_cutoff_utc","home_team","away_team","competition","model_version",
-            "p_home","p_draw","p_away","score_1","score_1_probability","score_2","score_2_probability",
+            "p_home","p_draw","p_away","over_2_5","under_2_5","btts_yes","btts_no","score_1","score_1_probability","score_2","score_2_probability",
             "score_3","score_3_probability","mom_1_player_id","mom_1_probability","mom_2_player_id",
             "mom_2_probability","mom_3_player_id","mom_3_probability","mom_4_player_id","mom_4_probability"]
     payload = {}
@@ -93,7 +93,7 @@ def record_prediction_file(predictions_path: str, prediction_time: str | None = 
     incoming["prediction_pit_cutoff_utc"] = cutoffs.map(lambda ts: pd.Timestamp(ts).isoformat())
     incoming["prediction_recorded_at_utc"] = _now()
     incoming["prediction_pit_gate"] = "PASS"
-    for c in ["p_home","p_draw","p_away","score_1_probability","score_2_probability","score_3_probability",
+    for c in ["p_home","p_draw","p_away","over_2_5","under_2_5","btts_yes","btts_no","score_1_probability","score_2_probability","score_3_probability",
               "mom_1_probability","mom_2_probability","mom_3_probability","mom_4_probability"]:
         if c in incoming:
             incoming[c] = pd.to_numeric(incoming[c], errors="coerce")
