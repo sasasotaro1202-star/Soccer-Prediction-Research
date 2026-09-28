@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+"""Expanded free historical international-football acquisition.
+
+The public-domain openfootball/internationals repository contains tournament/year
+files for major international competitions. We discover matching files from the
+repository tree once, then download/cache only the requested seasons.
+"""
+
+import hashlib
+import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
+from pathlib import Path
+
+import pandas as pd
+import requests
+
+from src.data.openfootball_adapter import parse_football_txt
+
+TREE_URL = "https://api.github.com/repos/openfootball/internationals/git/trees/master?recursive=1"
+RAW_BASE = "https://raw.githubusercontent.com/openfootball/internationals/master/"
+
+# Active project competition codes -> openfootball tournament directory/name.
+PATH_PATTERNS: dict[str, re.Pattern[str]] = {
+    "UEFA_EURO_M": re.compile(r"^uefa_euro/(\d{4})_uefa_euro\.txt$"),
+    "UEFA_EURO_QUALI_M": re.compile(r"^uefa_euro_qualification/(\d{4})_uefa_euro_qualification\.txt$"),
+    "UEFA_NATIONS_LEAGUE_M": re.compile(r"^uefa_nations_league/(\d{4})_uefa_nations_league\.txt$"),
+    "ASIAN_CUP": re.compile(r"^afc_asian_cup/(\d{4})_afc_asian_cup\.txt$"),
+    "ASIAN_CUP_QUALI": re.compile(r"^afc_asian_cup_qualification/(\d{4})_afc_asian_cup_qualification\.txt$"),
+    "WORLD_CUP": re.compile(r"^fifa_world_cup/(\d{4})_fifa_world_cup\.txt$"),
+    "WORLD_CUP_QUALI": re.compile(r"^fifa_world_cup_qualification/(\d{4})_fifa_world_cup_qualification\.txt$"),
+}
+
+HEADERS = {"User-Agent": "SoccerPredictionResearch/1.0", "Accept": "application/vnd.github+json"}
+
+
+def _tree_paths() -> list[str]:
+    response = requests.get(TREE_URL, timeout=45, headers=HEADERS)
+    response.raise_for_status()
+    payload = response.json()
+    if payload.get("truncated"):
+        raise RuntimeError("openfootball international source tree is truncated; refusing incomplete discovery")
+    return [
+        str(item["path"])
+        for item in payload.get("tree", [])
+        if item.get("type") == "blob" and str(item.get("path", "")).endswith(".txt")
+    ]
+
+
+def _cache_path(cache_dir: str, relative_path: str) -> Path:
+    path = Path(cache_dir) / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _fetch_text(relative_path: str, cache_dir: str) -> tuple[str, bytes, str]:
+    url = RAW_BASE + relative_path
+    cache = _cache_path(cache_dir, relative_path)
+    raw = cache.read_bytes() if cache.exists() and cache.stat().st_size > 0 else None
+    if raw is None:
+        response = requests.get(url, timeout=45, headers={"User-Agent": HEADERS["User-Agent"]})
+        response.raise_for_status()
+        raw = response.content
+        cache.write_bytes(raw)
+    return raw.decode("utf-8", errors="replace"), raw, url
+
+
+def _season_ok(season_start: int, start_year: int, end_year: int) -> bool:
+    return int(start_year) <= int(season_start) <= int(end_year)
+
+
+def _one(item: tuple[str, str, int, int, str]) -> tuple[pd.DataFrame, dict]:
+    competition, relative_path, season_start, start_year, end_year = item
+    if not _season_ok(season_start, start_year, end_year):
+        return pd.DataFrame(), {}
+    try:
+        text, raw, url = _fetch_text(relative_path, "data/raw/openfootball-internationals")
+        frame = parse_football_txt(
+            text,
+            competition,
+            season_start,
+            url,
+            raw,
+        )
+        coverage = {
+            "competition": competition,
+            "season": str(season_start),
+            "status": "AVAILABLE" if not frame.empty else "UNAVAILABLE",
+            "rows": int(len(frame)),
+            "source": "openfootball/internationals",
+            "source_path": relative_path,
+        }
+        return frame, coverage
+    except Exception as exc:
+        return pd.DataFrame(), {
+            "competition": competition,
+            "season": str(season_start),
+            "status": "UNAVAILABLE",
+            "rows": 0,
+            "source": "openfootball/internationals",
+            "source_path": relative_path,
+            "error": str(exc),
+        }
+
+
+def load_openfootball_international_history(
+    start_year: int = 2000,
+    end_year: int = 2026,
+    max_workers: int = 8,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    paths = _tree_paths()
+    tasks: list[tuple[str, str, int, int, str]] = []
+    for competition, pattern in PATH_PATTERNS.items():
+        for relative_path in paths:
+            match = pattern.match(relative_path)
+            if not match:
+                continue
+            season_start = int(match.group(1))
+            if _season_ok(season_start, start_year, end_year):
+                tasks.append((competition, relative_path, season_start, start_year, end_year))
+
+    tasks.sort(key=lambda x: (x[0], x[2], x[1]))
+    frames: list[pd.DataFrame] = []
+    coverage: list[dict] = []
+    if not tasks:
+        return pd.DataFrame(), pd.DataFrame()
+
+    with ThreadPoolExecutor(max_workers=max(1, min(int(max_workers), len(tasks)))) as pool:
+        futures = [pool.submit(_one, task) for task in tasks]
+        for future in as_completed(futures):
+            frame, row = future.result()
+            if not frame.empty:
+                frames.append(frame)
+            if row:
+                coverage.append(row)
+
+    history = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    if not history.empty:
+        history = history.drop_duplicates(
+            ["competition", "season_start", "kickoff_utc", "home_team", "away_team"],
+            keep="first",
+        ).sort_values(
+            ["competition", "kickoff_utc", "home_team", "away_team"],
+            kind="mergesort",
+        ).reset_index(drop=True)
+
+    coverage_frame = pd.DataFrame(coverage).sort_values(
+        ["competition", "season", "source_path"],
+        kind="mergesort",
+    ).reset_index(drop=True) if coverage else pd.DataFrame()
+    return history, coverage_frame
