@@ -118,12 +118,15 @@ def record_prediction_file(predictions_path: str, prediction_time: str | None = 
               "over_2_5_correct","btts_correct","mom_actual_player_id","mom_top1_hit","mom_top4_hit","mom_settlement_status"]:
         if c not in new_rows:
             new_rows[c] = pd.NA
+    snapshot_rows = [row.to_dict() for _, row in new_rows.iterrows()]
+    _append_jsonl(PREDICTION_SNAPSHOTS, snapshot_rows)
     combined = pd.concat([existing,new_rows],ignore_index=True) if not existing.empty else new_rows
     if not combined.empty:
         combined = combined.drop_duplicates("prediction_state_id",keep="first").sort_values(
             ["kickoff_utc","prediction_recorded_at_utc","match_id"],kind="mergesort")
     _write_csv(LEDGER, combined)
     return {"status":"RECORDED","added":len(new_rows),"ledger_rows":len(combined),
+            "prediction_snapshots_appended":len(snapshot_rows),
             "unique_fixtures":int(combined["match_id"].nunique()) if not combined.empty else 0}
 
 def _score_value(score_obj):
