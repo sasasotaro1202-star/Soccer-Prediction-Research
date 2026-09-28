@@ -118,6 +118,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           for path in \
             data/experience/prediction_ledger.csv \
+            data/experience/prediction_snapshots.jsonl \
             artifacts/experience_metrics.csv \
             artifacts/experience_status.json
           do

@@ -16,6 +16,7 @@ from src.data.sofascore_mom_labels import fetch_mom_label
 from src.evaluation.metrics import classification_metrics
 
 LEDGER = Path("data/experience/prediction_ledger.csv")
+PREDICTION_SNAPSHOTS = Path("data/experience/prediction_snapshots.jsonl")
 METRICS = Path("artifacts/experience_metrics.csv")
 STATUS = Path("artifacts/experience_status.json")
 
@@ -55,6 +56,15 @@ def _write_csv(path: Path, frame: pd.DataFrame) -> None:
     frame.to_csv(tmp, index=False)
     tmp.replace(path)
 
+
+def _append_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True, default=str) + "\n")
+
 def record_prediction_file(predictions_path: str, prediction_time: str | None = None) -> dict:
     src = Path(predictions_path)
     if not src.is_file() or src.stat().st_size == 0:
@@ -67,9 +77,21 @@ def record_prediction_file(predictions_path: str, prediction_time: str | None = 
     if missing:
         raise RuntimeError(f"prediction ledger input missing required columns: {missing}")
     incoming = incoming.copy()
-    incoming["prediction_recorded_at_utc"] = (pd.to_datetime(prediction_time, utc=True, errors="coerce") if prediction_time else _now())
-    if pd.isna(incoming["prediction_recorded_at_utc"]).all():
-        incoming["prediction_recorded_at_utc"] = _now()
+    if "prediction_time_utc" in incoming.columns:
+        cutoffs = pd.to_datetime(incoming["prediction_time_utc"], utc=True, errors="coerce")
+    elif prediction_time:
+        parsed = pd.to_datetime(prediction_time, utc=True, errors="coerce")
+        cutoffs = pd.Series(parsed, index=incoming.index)
+    else:
+        raise RuntimeError("prediction ledger requires an explicit prediction_time_utc/prediction-time; refusing unknown PIT")
+    kickoff = pd.to_datetime(incoming["kickoff_utc"], utc=True, errors="coerce")
+    if cutoffs.isna().any() or kickoff.isna().any():
+        raise RuntimeError("prediction ledger contains invalid/missing prediction or kickoff timestamps")
+    if bool((cutoffs >= kickoff).any()):
+        raise RuntimeError("prediction ledger contains a prediction at/after kickoff; refusing non-pregame state")
+    incoming["prediction_pit_cutoff_utc"] = cutoffs.astype("string")
+    incoming["prediction_recorded_at_utc"] = _now()
+    incoming["prediction_pit_gate"] = "PASS"
     for c in ["p_home","p_draw","p_away","score_1_probability","score_2_probability","score_3_probability",
               "mom_1_probability","mom_2_probability","mom_3_probability","mom_4_probability"]:
         if c in incoming:
@@ -96,12 +118,15 @@ def record_prediction_file(predictions_path: str, prediction_time: str | None = 
               "over_2_5_correct","btts_correct","mom_actual_player_id","mom_top1_hit","mom_top4_hit","mom_settlement_status"]:
         if c not in new_rows:
             new_rows[c] = pd.NA
+    snapshot_rows = [row.to_dict() for _, row in new_rows.iterrows()]
+    _append_jsonl(PREDICTION_SNAPSHOTS, snapshot_rows)
     combined = pd.concat([existing,new_rows],ignore_index=True) if not existing.empty else new_rows
     if not combined.empty:
         combined = combined.drop_duplicates("prediction_state_id",keep="first").sort_values(
             ["kickoff_utc","prediction_recorded_at_utc","match_id"],kind="mergesort")
     _write_csv(LEDGER, combined)
     return {"status":"RECORDED","added":len(new_rows),"ledger_rows":len(combined),
+            "prediction_snapshots_appended":len(snapshot_rows),
             "unique_fixtures":int(combined["match_id"].nunique()) if not combined.empty else 0}
 
 def _score_value(score_obj):
@@ -172,6 +197,8 @@ def _espn_event_key(e):
                 (aw.get("team") or {}).get("displayName") or aw.get("id"))
 
 def _settle_row(row, by_key, by_id):
+    if str(row.get("prediction_pit_gate") or "") != "PASS":
+        return {}
     event=by_id.get(str(row.get("match_id") or "")) or by_key.get(str(row.get("fixture_key") or ""))
     if event is None: return {}
     if str(event.get("id","")).isdigit():
@@ -192,8 +219,14 @@ def _settle_row(row, by_key, by_id):
     p=np.array([float(row["p_home"]),float(row["p_draw"]),float(row["p_away"])])
     pred=["H","D","A"][int(p.argmax())]
     top=[str(row.get(f"score_{i}","")).strip() for i in (1,2,3)]
+    settled_at = _now()
+    cutoff = pd.to_datetime(row.get("prediction_pit_cutoff_utc"), utc=True, errors="coerce")
+    kickoff = pd.to_datetime(row.get("kickoff_utc"), utc=True, errors="coerce")
+    if pd.isna(cutoff) or pd.isna(kickoff) or cutoff >= kickoff or settled_at <= cutoff:
+        return {}
     out={"actual_home_goals":hg,"actual_away_goals":ag,"actual_result":actual,"actual_score":f"{hg}-{ag}",
-         "settled_at_utc":_now().isoformat(),"settlement_source":"espn" if str(row["match_id"]).startswith("espn:") else "sofascore",
+         "settled_at_utc":settled_at.isoformat(),"experience_available_at_utc":settled_at.isoformat(),
+         "teacher_information_gate":"POST_KICKOFF","settlement_source":"espn" if str(row["match_id"]).startswith("espn:") else "sofascore",
          "correct_1x2":int(pred==actual),"predicted_1x2":pred,"confidence":float(p.max()),
          "score_top1_hit":int(top[0]==f"{hg}-{ag}"),"score_top3_hit":int(f"{hg}-{ag}" in top)}
     if pd.notna(row.get("market_over_2_5")): out["over_2_5_correct"]=int((float(row["market_over_2_5"])>=0.5)==((hg+ag)>2.5))

@@ -10,10 +10,12 @@ def test_fixture_key_is_stable():
 
 def test_record_deduplicates_prediction_state(tmp_path, monkeypatch):
     ledger = tmp_path / "ledger.csv"
+    snapshots = tmp_path / "prediction_snapshots.jsonl"
     predictions = tmp_path / "predictions.csv"
     monkeypatch.setattr("scripts.experience_ledger.LEDGER", ledger)
+    monkeypatch.setattr("scripts.experience_ledger.PREDICTION_SNAPSHOTS", snapshots)
     row = {
-        "match_id":"espn:1","kickoff_utc":"2026-09-26T10:00:00Z","home_team":"A","away_team":"B",
+        "match_id":"espn:1","kickoff_utc":"2026-09-26T10:00:00Z","prediction_time_utc":"2026-09-26T08:00:00Z","home_team":"A","away_team":"B",
         "competition":"EPL","p_home":0.5,"p_draw":0.25,"p_away":0.25,"model_version":"v1",
         "score_1":"1-0","score_1_probability":0.2,"score_2":"0-0","score_2_probability":0.1,
         "score_3":"1-1","score_3_probability":0.1,
@@ -22,6 +24,10 @@ def test_record_deduplicates_prediction_state(tmp_path, monkeypatch):
     assert record_prediction_file(str(predictions))["added"] == 1
     assert record_prediction_file(str(predictions))["added"] == 0
     assert len(pd.read_csv(ledger)) == 1
+    snapshot_rows = [json.loads(x) for x in snapshots.read_text().splitlines() if x.strip()]
+    assert len(snapshot_rows) == 1
+    assert snapshot_rows[0]["prediction_pit_gate"] == "PASS"
+    assert snapshot_rows[0]["prediction_pit_cutoff_utc"].startswith("2026-09-26T08:00:00")
 
 
 def test_record_rejects_invalid_1x2_probabilities(tmp_path, monkeypatch):
@@ -34,6 +40,7 @@ def test_record_rejects_invalid_1x2_probabilities(tmp_path, monkeypatch):
     pd.DataFrame([{
         "match_id": "espn:bad",
         "kickoff_utc": "2026-09-26T10:00:00Z",
+        "prediction_time_utc": "2026-09-26T08:00:00Z",
         "home_team": "A",
         "away_team": "B",
         "competition": "EPL",
