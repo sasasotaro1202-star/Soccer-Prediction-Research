@@ -21,8 +21,8 @@ def test_output_cardinality_is_locked():
 
 def test_scope_summary_is_consistent():
     s = scope_summary()
-    assert s["competitions"] == 35
+    assert s["competitions"] == len(TARGET_COMPETITIONS)
     assert s["tasks"] == 5
-    assert s["task_cells"] == 175
+    assert s["task_cells"] == len(TARGET_COMPETITIONS) * len(TASK_SPECS)
     assert s["score_choices_per_match"] == 3
     assert s["mom_choices_per_match"] == 4
