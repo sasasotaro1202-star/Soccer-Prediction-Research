@@ -51,7 +51,7 @@ def pit_audit(field_rows):
     if field_rows.empty:return pd.DataFrame(columns=cols)
     out=field_rows.groupby(["competition","season","source","field_name","pit_status"],dropna=False).size().reset_index(name="count"); totals=out.groupby(["competition","season","source","field_name"],as_index=False)["count"].sum().rename(columns={"count":"total"}); out=out.merge(totals,on=["competition","season","source","field_name"],how="left"); out["rate"]=out["count"]/out["total"]; return out
 
-CALENDAR_YEAR_COMPETITIONS = {"AG_M", "AG_W", "J1", "J2", "J3", "U23_M", "U18_M"}
+CALENDAR_YEAR_COMPETITIONS = {"AG_M", "AG_W", "J1", "J2", "J3", "U23_M", "U18_M", "WORLD_CUP", "ASIAN_CUP"}
 
 def _season_key(comp,year):
     if comp in CALENDAR_YEAR_COMPETITIONS: return str(year)
