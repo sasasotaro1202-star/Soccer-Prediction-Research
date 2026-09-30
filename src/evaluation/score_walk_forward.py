@@ -187,6 +187,7 @@ def run_score_walk_forward(
         )
 
     rows = []
+    competition_metrics_rows = []
     start = _advance_past_same_kickoff(d, int(min_train))
     while start < len(d):
         end = _advance_past_same_kickoff(d, min(start + int(oos_block), len(d)))
@@ -201,6 +202,9 @@ def run_score_walk_forward(
             )
         model = fit_score_rate_model(train)
         metrics = _score_block_metrics(oos, model)
+        candidate_models = {"primary": model}
+        candidate_distributions = {"primary": predict_score_distribution}
+        candidate_status = {"primary": "PASS"}
 
         # Challenger: xG-based team scoring rates. xG is historical post-match
         # information and is used only when it is PIT-verified in the training slice.
@@ -215,6 +219,9 @@ def run_score_walk_forward(
             metrics["xg_training_rows"] = int(xg_model.get("training_rows", 0))
             metrics["xg_status"] = "PASS"
             metrics["xg_error"] = ""
+            candidate_models["xg"] = xg_model
+            candidate_distributions["xg"] = predict_xg_score_distribution
+            candidate_status["xg"] = "PASS"
         except Exception as exc:
             for key in (
                 "score_logloss", "exact_score_hit_rate", "top3_score_hit_rate",
@@ -235,6 +242,9 @@ def run_score_walk_forward(
             metrics.update({f"neutral_aware_{k}": v for k, v in neutral_metrics.items() if k != "n"})
             metrics["neutral_aware_status"] = "PASS"
             metrics["neutral_aware_error"] = ""
+            candidate_models["neutral_aware"] = neutral_model
+            candidate_distributions["neutral_aware"] = predict_score_distribution
+            candidate_status["neutral_aware"] = "PASS"
         except Exception as exc:
             for key in (
                 "score_logloss", "exact_score_hit_rate", "top3_score_hit_rate",
@@ -253,6 +263,9 @@ def run_score_walk_forward(
             metrics.update({f"recency_{k}": v for k, v in recency_metrics.items() if k != "n"})
             metrics["recency_status"] = "PASS"
             metrics["recency_error"] = ""
+            candidate_models["recency"] = recency_model
+            candidate_distributions["recency"] = predict_score_distribution
+            candidate_status["recency"] = "PASS"
         except Exception as exc:
             metrics.update({
                 "recency_score_logloss": float("nan"),
@@ -277,6 +290,9 @@ def run_score_walk_forward(
             metrics.update({f"time_decay_{k}": v for k, v in time_decay_metrics.items() if k != "n"})
             metrics["time_decay_status"] = "PASS"
             metrics["time_decay_error"] = ""
+            candidate_models["time_decay"] = time_decay_model
+            candidate_distributions["time_decay"] = predict_score_distribution
+            candidate_status["time_decay"] = "PASS"
         except Exception as exc:
             metrics.update({
                 "time_decay_score_logloss": float("nan"),
@@ -308,6 +324,9 @@ def run_score_walk_forward(
             metrics["dc_rho_fit_used"] = bool(dc_model.get("rho_fit_used", False))
             metrics["dc_status"] = "PASS"
             metrics["dc_error"] = ""
+            candidate_models["dixon_coles"] = dc_model
+            candidate_distributions["dixon_coles"] = predict_dixon_coles_distribution
+            candidate_status["dixon_coles"] = "PASS"
         except Exception as exc:
             metrics.update(
                 {
@@ -341,6 +360,9 @@ def run_score_walk_forward(
             metrics["negative_binomial_away_dispersion"] = float(nb_model.get("away_dispersion", 0.0))
             metrics["negative_binomial_status"] = "PASS"
             metrics["negative_binomial_error"] = ""
+            candidate_models["negative_binomial"] = nb_model
+            candidate_distributions["negative_binomial"] = predict_negative_binomial_distribution
+            candidate_status["negative_binomial"] = "PASS"
         except Exception as exc:
             for key in (
                 "score_logloss", "exact_score_hit_rate", "top3_score_hit_rate",
@@ -353,6 +375,32 @@ def run_score_walk_forward(
             metrics["negative_binomial_away_dispersion"] = float("nan")
             metrics["negative_binomial_status"] = "ERROR"
             metrics["negative_binomial_error"] = f"{type(exc).__name__}: {exc}"
+
+        # Preserve method-by-competition evidence for downstream selection.
+        # Each candidate was fitted only on the chronological training prefix above;
+        # this loop only re-aggregates OOS predictions by competition.
+        if "competition" in oos.columns:
+            for competition, comp_block in oos.groupby("competition", sort=True):
+                comp_record = {
+                    "oos_start": str(oos["kickoff_utc"].min()),
+                    "oos_end": str(oos["kickoff_utc"].max()),
+                    "competition": str(competition),
+                    "n": float(len(comp_block)),
+                    "score_training_rows": int(len(train)),
+                    "score_training_cutoff": str(prediction_cutoff),
+                }
+                for method, candidate in candidate_models.items():
+                    dist_fn = candidate_distributions[method]
+                    try:
+                        cm = _score_block_metrics(comp_block, candidate, distribution_fn=dist_fn)
+                        for key, value in cm.items():
+                            if key != "n":
+                                comp_record[f"{method}_{key}"] = value
+                        comp_record[f"{method}_status"] = candidate_status.get(method, "PASS")
+                    except Exception as exc:
+                        comp_record[f"{method}_status"] = "ERROR"
+                        comp_record[f"{method}_error"] = f"{type(exc).__name__}: {exc}"
+                competition_metrics_rows.append(comp_record)
 
         metrics.update(
             {
@@ -368,4 +416,6 @@ def run_score_walk_forward(
         rows.append(metrics)
         start = end
 
-    return pd.DataFrame(rows)
+    result = pd.DataFrame(rows)
+    result.attrs["competition_metrics"] = pd.DataFrame(competition_metrics_rows)
+    return result
