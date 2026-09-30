@@ -30,6 +30,8 @@ class AcquisitionConfig:
     max_discovery_competitions: int = 8
     discovery_per_competition: int = 4
     no_progress_stop_rounds: int = 1
+    minimum_rows_per_competition: int = 300
+    minimum_seasons_per_competition: int = 2
 
 
 def load_config() -> AcquisitionConfig:
@@ -51,6 +53,8 @@ def load_config() -> AcquisitionConfig:
         max_discovery_competitions=integer("SOCCER_ADAPTIVE_MAX_DISCOVERY_COMPETITIONS", 8, 1),
         discovery_per_competition=integer("SOCCER_ADAPTIVE_DISCOVERY_PER_COMPETITION", 4, 1),
         no_progress_stop_rounds=integer("SOCCER_ADAPTIVE_NO_PROGRESS_STOP_ROUNDS", 1, 0),
+        minimum_rows_per_competition=integer("SOCCER_ADAPTIVE_MIN_ROWS_PER_COMPETITION", 300, 0),
+        minimum_seasons_per_competition=integer("SOCCER_ADAPTIVE_MIN_SEASONS_PER_COMPETITION", 2, 0),
     )
 
 
@@ -117,6 +121,39 @@ def select_preferred_sources(coverage: pd.DataFrame) -> pd.DataFrame:
         work["preferred_source_rows"], errors="coerce"
     ).fillna(0).astype(int)
     return work.drop(columns=["_pit_bonus", "_rows_numeric"], errors="ignore")
+
+
+def identify_data_deficits(
+    history: pd.DataFrame,
+    target_competitions: tuple[str, ...],
+    *,
+    minimum_rows_per_competition: int = 300,
+    minimum_seasons_per_competition: int = 2,
+) -> dict[str, dict[str, int]]:
+    """Return the active competition frontier still needing acquisition."""
+    row_counts = (
+        history.groupby("competition").size().to_dict()
+        if not history.empty and "competition" in history.columns
+        else {}
+    )
+    season_counts: dict[str, int] = {}
+    if not history.empty and "competition" in history.columns:
+        season_col = "season_start" if "season_start" in history.columns else "season"
+        season_counts = history.groupby("competition")[season_col].nunique(dropna=True).to_dict()
+
+    deficits: dict[str, dict[str, int]] = {}
+    for competition in target_competitions:
+        comp = str(competition)
+        rows = int(row_counts.get(comp, 0))
+        seasons = int(season_counts.get(comp, 0))
+        if rows < int(minimum_rows_per_competition) or seasons < int(minimum_seasons_per_competition):
+            deficits[comp] = {
+                "rows": rows,
+                "minimum_rows": int(minimum_rows_per_competition),
+                "seasons": seasons,
+                "minimum_seasons": int(minimum_seasons_per_competition),
+            }
+    return deficits
 
 
 def rank_discovery_targets(
