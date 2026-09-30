@@ -445,7 +445,9 @@ def run(
     if not np.allclose(probs.sum(axis=1), 1.0, atol=1e-6):
         raise RuntimeError("Matchday intelligence produced non-normalized probabilities")
     result = eligible[["match_id", "kickoff_utc", "home_team", "away_team"]].copy()
-    result = annotate_predictions(result.join(eligible[["competition"]]), bundle)
+    policy_rows = annotate_predictions(eligible, bundle)
+    policy_columns = [c for c in policy_rows.columns if c.startswith("policy_")]
+    result = result.join(policy_rows[policy_columns].reset_index(drop=True))
     if "policy_competition" in result.columns:
         if not result["policy_competition"].astype(str).eq(eligible["competition"].astype(str).to_numpy()).all():
             raise RuntimeError("Target-by-competition policy annotation changed fixture identity")
