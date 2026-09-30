@@ -28,13 +28,16 @@ def test_target_policy_is_explicit_for_each_requested_target():
             },
             "dynamic_routing": {"enabled": True},
         },
+        "score_method_by_competition": {
+            "EPL": {"method": "dixon_coles", "status": "COMPETITION_SPECIALIST"},
+        },
     }
     p = build_target_policy(row, bundle)
     assert p["competition"] == "EPL"
     assert p["target_1x2_policy"].startswith("1X2|")
-    assert p["target_score_policy"] == "Score|dixon_coles|COMPETITION_RATE"
-    assert p["target_ou_policy"] == "O/U|DERIVED_SCORE_DISTRIBUTION|dixon_coles|COMPETITION_RATE"
-    assert p["target_btts_policy"] == "BTTS|DERIVED_SCORE_DISTRIBUTION|dixon_coles|COMPETITION_RATE"
+    assert p["target_score_policy"] == "Score|dixon_coles|COMPETITION_SPECIALIST|COMPETITION_RATE"
+    assert p["target_ou_policy"] == "O/U|DERIVED_SCORE_DISTRIBUTION|dixon_coles|COMPETITION_SPECIALIST|COMPETITION_RATE"
+    assert p["target_btts_policy"] == "BTTS|DERIVED_SCORE_DISTRIBUTION|dixon_coles|COMPETITION_SPECIALIST|COMPETITION_RATE"
     assert p["target_mom_policy"] == "MOM|UPSTREAM_PLAYER_MODEL_REQUIRED"
 
 
