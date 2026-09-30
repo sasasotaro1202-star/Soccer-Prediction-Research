@@ -23,14 +23,14 @@ def test_world_and_asian_cup_use_calendar_year_season_labels(monkeypatch):
         "fifa_world_cup/2022_fifa_world_cup.txt",
         "afc_asian_cup/2024_afc_asian_cup.txt",
     ]
-    raw = """= Tournament\nSun Jan 1 2024\nA 1-0 B @ Venue\n"""
+    raw = """= Tournament\nSun Jan 1\nA 1-0 B @ Venue\n"""
     monkeypatch.setattr(mod, "_tree_paths", lambda: paths)
     monkeypatch.setattr(mod, "_fetch_text", lambda p, c: (raw, raw.encode(), mod.RAW_BASE + p))
     history, _ = mod.load_openfootball_international_history(start_year=2022, end_year=2024, max_workers=2)
     assert not history.empty
     assert set(history.loc[history["competition"] == "WORLD_CUP", "season"]) == {"2022"}
     assert set(history.loc[history["competition"] == "ASIAN_CUP", "season"]) == {"2024"}
-
+    asian_kickoff = history.loc[history["competition"] == "ASIAN_CUP", "kickoff_utc"].iloc[0]\n    assert asian_kickoff.year == 2024\n
 
 def test_international_loader_uses_discovered_paths_without_network_for_download(tmp_path, monkeypatch):
     paths = [
