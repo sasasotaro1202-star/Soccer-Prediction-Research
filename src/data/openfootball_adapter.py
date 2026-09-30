@@ -17,6 +17,7 @@ BASE_URLS = {
 SEASON_START = {"UCL": 2010, "UEL": 2010, "DFBP": 2010, "CAR": 2010}
 DATE_RE = re.compile(r"^\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Z][a-z]{2})\s+(\d{1,2})(?:\s+(\d{4}))?.*$")
 MATCH_RE = re.compile(r"^\s*(?:(\d{1,2}:\d{2})\s+)?(.+?)\s+v\s+(.+?)\s+(\d+)\s*-\s*(\d+)(.*)$")
+INLINE_SCORE_RE = re.compile(r"^\s*(?:(\d{1,2}:\d{2})\s+)?(.+?)\s+(\d+)\s*-\s*(\d+)\s+(.+?)(?:\s+@\s+.*)?$")
 SCORE_PAIR_RE = re.compile(r"(\d+)\s*-\s*(\d+)")
 MONTHS = {m: i for i, m in enumerate(["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], 1)}
 
@@ -87,16 +88,22 @@ def parse_football_txt(text: str, competition: str, season_start: int, source_ur
             current_date, current_year, previous_month = _parse_date(line, season_start, current_year, previous_month)
             continue
         m = MATCH_RE.match(line)
-        if not m or pd.isna(current_date):
+        inline = None if m else INLINE_SCORE_RE.match(line)
+        if (not m and not inline) or pd.isna(current_date):
             continue
         try:
-            time_text, home, away = m.group(1), m.group(2).strip(), m.group(3).strip()
+            if m:
+                time_text, home, away = m.group(1), m.group(2).strip(), m.group(3).strip()
+                final_h, final_a, suffix = int(m.group(4)), int(m.group(5)), m.group(6)
+            else:
+                time_text, home = inline.group(1), inline.group(2).strip()
+                final_h, final_a = int(inline.group(3)), int(inline.group(4))
+                away, suffix = inline.group(5).strip(), ""
             kickoff = current_date
             if time_text:
                 hh, mm = map(int, time_text.split(":"))
                 kickoff = kickoff + pd.to_timedelta(hh, unit="h") + pd.to_timedelta(mm, unit="m")
-            final_h, final_a = int(m.group(4)), int(m.group(5))
-            hg, ag, result = _outcome(final_h, final_a, m.group(6))
+            hg, ag, result = _outcome(final_h, final_a, suffix)
         except (TypeError, ValueError):
             continue
         sid = hashlib.sha1(f"{competition}|{season_start}|{line_no}|{home}|{away}|{kickoff.isoformat()}".encode()).hexdigest()[:16]
