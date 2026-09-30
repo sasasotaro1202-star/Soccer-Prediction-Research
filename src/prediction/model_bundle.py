@@ -12,7 +12,13 @@ from src.models.baselines import candidates
 from src.monitoring.dynamic_routing import build_drift_reference
 from src.models.dixon_coles import fit_dixon_coles_model
 from src.models.negative_binomial import fit_negative_binomial_score_model
-from src.prediction.secondary_outputs import fit_neutral_aware_score_rate_model, fit_recency_score_rate_model, fit_score_rate_model, fit_time_decay_score_rate_model
+from src.prediction.secondary_outputs import (
+    fit_neutral_aware_score_rate_model,
+    fit_recency_score_rate_model,
+    fit_score_rate_model,
+    fit_time_decay_score_rate_model,
+    fit_xg_score_rate_model,
+)
 
 
 def _temperature_transform(proba: np.ndarray, temperature: float) -> np.ndarray:
@@ -32,6 +38,8 @@ def train_and_save_bundle(
     data_snapshot_id: str,
     score_selection: dict[str, Any] | None = None,
     score_locked_gate: dict[str, Any] | None = None,
+    score_selection_by_competition: dict[str, Any] | None = None,
+    score_locked_gate_by_competition: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Train the already-locked production ensemble on all data available after evaluation.
 
@@ -133,26 +141,81 @@ def train_and_save_bundle(
     verified_score_method = str(score_locked_gate.get("selected_method", "primary"))
     if (
         score_locked_gate.get("status") == "PASS"
-        and requested_score_method in {"neutral_aware", "recency", "time_decay", "dixon_coles", "negative_binomial"}
+        and requested_score_method in {"neutral_aware", "recency", "time_decay", "dixon_coles", "negative_binomial", "xg"}
         and verified_score_method == requested_score_method
     ):
         selected_score_method = requested_score_method
 
-    score_model = None
-    if has_score_columns:
-        if selected_score_method == "neutral_aware":
-            score_model = fit_neutral_aware_score_rate_model(d)
-        elif selected_score_method == "recency":
-            score_model = fit_recency_score_rate_model(d)
-        elif selected_score_method == "time_decay":
-            score_model = fit_time_decay_score_rate_model(d)
-        elif selected_score_method == "dixon_coles":
-            score_model = fit_dixon_coles_model(d)
-        elif selected_score_method == "negative_binomial":
-            score_model = fit_negative_binomial_score_model(d)
-        else:
-            score_model = fit_score_rate_model(d)
+    def fit_score_method(method: str, training: pd.DataFrame) -> dict[str, Any]:
+        if method == "neutral_aware":
+            return fit_neutral_aware_score_rate_model(training)
+        if method == "recency":
+            return fit_recency_score_rate_model(training)
+        if method == "time_decay":
+            return fit_time_decay_score_rate_model(training)
+        if method == "dixon_coles":
+            return fit_dixon_coles_model(training)
+        if method == "negative_binomial":
+            return fit_negative_binomial_score_model(training)
+        if method == "xg":
+            return fit_xg_score_rate_model(training)
+        return fit_score_rate_model(training)
 
+    score_model = fit_score_method(selected_score_method, d) if has_score_columns else None
+
+    # A competition specialist is materialized only when its selection and
+    # untouched locked-OOS verification both passed, and it differs from the
+    # validated global fallback. Sparse competitions remain eligible and route
+    # to the global validated model.
+    score_models_by_competition: dict[str, dict[str, Any]] = {}
+    score_method_by_competition: dict[str, dict[str, Any]] = {}
+    comp_selection = score_selection_by_competition if isinstance(score_selection_by_competition, dict) else {}
+    comp_gate = score_locked_gate_by_competition if isinstance(score_locked_gate_by_competition, dict) else {}
+    comp_entries = comp_selection.get("competitions", {}) if isinstance(comp_selection.get("competitions", {}), dict) else {}
+    comp_gate_entries = comp_gate.get("competitions", {}) if isinstance(comp_gate.get("competitions", {}), dict) else {}
+    global_method = str(selected_score_method)
+    min_specialist_training_rows = 500
+
+    if has_score_columns:
+        for competition, entry in comp_entries.items():
+            comp = str(competition).strip().upper()
+            if not comp or not isinstance(entry, dict):
+                continue
+            method = str(entry.get("selected_method", global_method))
+            gate_entry = comp_gate_entries.get(comp, {}) if isinstance(comp_gate_entries.get(comp, {}), dict) else {}
+            gate_status = str(gate_entry.get("status", "")).upper()
+            if method == global_method or gate_status != "PASS":
+                score_method_by_competition[comp] = {
+                    "method": global_method,
+                    "status": "GLOBAL_FALLBACK",
+                    "reason": "specialist_not_verified_or_same_as_global",
+                }
+                continue
+            subset = d[d["competition"].astype(str).str.strip().str.upper() == comp].copy() if "competition" in d.columns else pd.DataFrame()
+            if len(subset) < min_specialist_training_rows:
+                score_method_by_competition[comp] = {
+                    "method": global_method,
+                    "status": "GLOBAL_FALLBACK",
+                    "reason": "insufficient_specialist_training_rows",
+                    "training_rows": int(len(subset)),
+                }
+                continue
+            try:
+                specialist = fit_score_method(method, subset)
+                score_models_by_competition[comp] = specialist
+                score_method_by_competition[comp] = {
+                    "method": method,
+                    "status": "COMPETITION_SPECIALIST",
+                    "training_rows": int(len(subset)),
+                    "selection_status": str(entry.get("status", "")),
+                    "locked_verification_status": gate_status,
+                }
+            except Exception as exc:
+                score_method_by_competition[comp] = {
+                    "method": global_method,
+                    "status": "GLOBAL_FALLBACK",
+                    "reason": f"specialist_fit_error:{type(exc).__name__}",
+                }
     routing_policy = None
     raw_dynamic_routing = selection.get("dynamic_routing") or {}
     if not isinstance(raw_dynamic_routing, dict):
@@ -211,8 +274,12 @@ def train_and_save_bundle(
         "fit_end": str(d["kickoff_utc"].max()),
         "selection_source": "chronological_validation_locked_before_final_fit",
         "score_method": selected_score_method,
+        "score_method_by_competition": score_method_by_competition,
+        "score_models_by_competition": score_models_by_competition,
         "score_selection": score_selection,
         "score_locked_verification": score_locked_gate,
+        "score_selection_by_competition": score_selection_by_competition or {},
+        "score_locked_verification_by_competition": score_locked_gate_by_competition or {},
         **({"score_model": score_model} if score_model is not None else {}),
         **({"routing_policy": routing_policy} if routing_policy is not None else {}),
         "matchday_policy": selection.get("matchday_policy") if isinstance(selection.get("matchday_policy"), dict) else {"schema_version": 1, "status": "SHADOW_ONLY", "reason": "No independently validated chronological OOS matchday policy is present."},
@@ -235,6 +302,7 @@ def train_and_save_bundle(
         "weights": weights,
         "temperature": temperature,
         "score_method": selected_score_method,
+        "score_method_by_competition": score_method_by_competition,
         "routing_policy": routing_policy,
     }
 
