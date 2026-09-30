@@ -43,7 +43,14 @@ def build_target_policy(
             route = "GLOBAL"
             route_scope = "GLOBAL_FALLBACK"
 
-    score_method = str(bundle.get("score_method", "primary"))
+    global_score_method = str(bundle.get("score_method", "primary"))
+    comp_score_meta = bundle.get("score_method_by_competition") or {}
+    selected_meta = comp_score_meta.get(competition) if isinstance(comp_score_meta, dict) else None
+    score_method = (
+        str(selected_meta.get("method"))
+        if isinstance(selected_meta, dict) and selected_meta.get("method")
+        else global_score_method
+    )
     score_model = bundle.get("score_model") or {}
     comp_rates = score_model.get("competition_rates") if isinstance(score_model, dict) else {}
     score_rate_scope = (
@@ -52,7 +59,8 @@ def build_target_policy(
         else "GLOBAL_RATE"
     )
 
-    score_policy = f"{score_method}|{score_rate_scope}"
+    score_scope = "COMPETITION_SPECIALIST" if isinstance(selected_meta, dict) and selected_meta.get("status") == "COMPETITION_SPECIALIST" else "GLOBAL_FALLBACK"
+    score_policy = f"{score_method}|{score_scope}|{score_rate_scope}"
     return {
         "competition": competition,
         "policy_version": "target-x-competition-v1",
