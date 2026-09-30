@@ -30,7 +30,9 @@ def test_world_and_asian_cup_use_calendar_year_season_labels(monkeypatch):
     assert not history.empty
     assert set(history.loc[history["competition"] == "WORLD_CUP", "season"]) == {"2022"}
     assert set(history.loc[history["competition"] == "ASIAN_CUP", "season"]) == {"2024"}
-    asian_kickoff = history.loc[history["competition"] == "ASIAN_CUP", "kickoff_utc"].iloc[0]\n    assert asian_kickoff.year == 2024\n
+    asian_kickoff = history.loc[history["competition"] == "ASIAN_CUP", "kickoff_utc"].iloc[0]
+    assert asian_kickoff.year == 2024
+
 
 def test_international_loader_uses_discovered_paths_without_network_for_download(tmp_path, monkeypatch):
     paths = [
