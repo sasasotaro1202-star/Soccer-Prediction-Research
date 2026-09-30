@@ -20,7 +20,12 @@ from src.prediction.model_bundle import train_and_save_bundle
 from src.research.adoption import adoption_decision
 from src.research.llm import weakness_advice
 from src.research.registry import save_registry
-from src.research.score_model_selection import select_score_model, verify_selected_score_model
+from src.research.score_model_selection import (
+    select_score_model,
+    verify_selected_score_model,
+    select_score_models_by_competition,
+    verify_score_models_by_competition,
+)
 from src.research.stability_gate import evaluate_stability
 
 EXCLUDED_MODEL_COLUMNS = {"match_id", "competition", "season", "season_start", "kickoff_utc", "home_team", "away_team", "prediction_cutoff_at_utc", "home_goals", "away_goals", "target", "pit_verified", "feature_source_max_available_at_utc"}
@@ -488,6 +493,46 @@ def run(out_dir: str = "artifacts") -> dict:
         "locked_oos_untouched_for_selection": True,
     }
     score_locked_gate = verify_selected_score_model(score_selection, score_locked_oos, min_rows_per_block=minimum_score_rows_per_block)
+
+    # Competition-specific Score selection is a separate research layer.
+    # Development OOS chooses the method; untouched locked OOS verifies it.
+    competition_score_oos = score_oos.attrs.get("competition_metrics", pd.DataFrame())
+    competition_score_development = (
+        competition_score_oos.iloc[:-2 * competition_score_oos["competition"].nunique()]
+        if False else pd.DataFrame()
+    )
+    competition_score_selection = {"schema_version": 1, "status": "FALLBACK_GLOBAL_ONLY", "global_fallback_method": score_selection.get("selected_method", "primary"), "competitions": {}}
+    competition_score_locked_gate = {"schema_version": 1, "status": "HOLD", "locked_oos_inspected": False, "competitions": {}}
+    if not competition_score_oos.empty and {"competition", "oos_start", "oos_end"}.issubset(competition_score_oos.columns):
+        unique_blocks = sorted(competition_score_oos[["oos_start", "oos_end"]].drop_duplicates().itertuples(index=False, name=None))
+        locked_block_keys = set(unique_blocks[-2:]) if len(unique_blocks) >= 2 else set()
+        is_locked = competition_score_oos.apply(
+            lambda r: (str(r["oos_start"]), str(r["oos_end"])) in locked_block_keys, axis=1
+        )
+        comp_dev = competition_score_oos.loc[~is_locked].copy()
+        comp_lock = competition_score_oos.loc[is_locked].copy()
+        competition_score_selection = select_score_models_by_competition(
+            comp_dev,
+            score_selection,
+            min_blocks=3,
+            min_rows_per_block=minimum_score_rows_per_block,
+        )
+        competition_score_locked_gate = verify_score_models_by_competition(
+            competition_score_selection,
+            comp_lock,
+            min_metric_regression=0.02 if False else 0.02,
+            min_rows_per_block=minimum_score_rows_per_block,
+        )
+    (out / "score_model_selection_by_competition.json").write_text(
+        json.dumps(competition_score_selection, indent=2, ensure_ascii=False, default=str),
+        encoding="utf-8",
+    )
+    (out / "score_locked_gate_by_competition.json").write_text(
+        json.dumps(competition_score_locked_gate, indent=2, ensure_ascii=False, default=str),
+        encoding="utf-8",
+    )
+    if not competition_score_oos.empty:
+        competition_score_oos.to_csv(out / "score_oos_metrics_by_competition.csv", index=False)
     score_temporal = _oos_temporal_integrity(score_oos, locked_blocks=2)
     (out / "score_oos_temporal_integrity.json").write_text(
         json.dumps(score_temporal, indent=2, ensure_ascii=False, default=str),
@@ -620,6 +665,8 @@ def run(out_dir: str = "artifacts") -> dict:
                 snapshot_id(history),
                 score_selection=score_selection,
                 score_locked_gate=score_locked_gate,
+                score_selection_by_competition=competition_score_selection,
+                score_locked_gate_by_competition=competition_score_locked_gate,
             )
             (out / "validated_candidate_model.json").write_text(
                 json.dumps({**validated_candidate_bundle, "status": "VALIDATED_CANDIDATE"}, indent=2, ensure_ascii=False, default=str),
@@ -639,6 +686,7 @@ def run(out_dir: str = "artifacts") -> dict:
                     "feature_count": validated_candidate_bundle.get("feature_count"),
                     "fit_rows": validated_candidate_bundle.get("fit_rows"),
                     "score_method": validated_candidate_bundle.get("score_method", "primary"),
+                    "score_method_by_competition": validated_candidate_bundle.get("score_method_by_competition", {}),
                     "routing_policy": validated_candidate_bundle.get("routing_policy"),
                 },
                 training_end=validated_candidate_bundle.get("fit_end"),
@@ -710,6 +758,7 @@ def run(out_dir: str = "artifacts") -> dict:
                     "feature_count": model_bundle.get("feature_count"),
                     "fit_rows": model_bundle.get("fit_rows"),
                     "score_method": model_bundle.get("score_method", "primary"),
+                    "score_method_by_competition": model_bundle.get("score_method_by_competition", {}),
                     "routing_policy": model_bundle.get("routing_policy"),
                 },
                 training_end=model_bundle.get("fit_end"),
