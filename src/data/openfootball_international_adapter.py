@@ -30,6 +30,7 @@ PATH_PATTERNS: dict[str, re.Pattern[str]] = {
     "ASIAN_CUP_QUALI": re.compile(r"^afc_asian_cup_qualification/(\d{4})_afc_asian_cup_qualification\.txt$"),
     "WORLD_CUP": re.compile(r"^fifa_world_cup/(\d{4})_fifa_world_cup\.txt$"),
     "WORLD_CUP_QUALI": re.compile(r"^fifa_world_cup_qualification/(\d{4})_fifa_world_cup_qualification\.txt$"),
+    "INTL_M": re.compile(r"^friendly/(\d{4})_friendly\.txt$"),
 }
 
 HEADERS = {"User-Agent": "SoccerPredictionResearch/1.0", "Accept": "application/vnd.github+json"}
@@ -85,7 +86,7 @@ def _one(item: tuple[str, str, int, int, str]) -> tuple[pd.DataFrame, dict]:
             calendar_year=competition in {"WORLD_CUP", "ASIAN_CUP", "INTL_M"},
         )
         # World Cup, Asian Cup and international friendlies use calendar-year labels.
-        if competition in {"WORLD_CUP", "ASIAN_CUP"} and not frame.empty:
+        if competition in {"WORLD_CUP", "ASIAN_CUP", "INTL_M"} and not frame.empty:
             frame["season"] = str(season_start)
         coverage = {
             "competition": competition,
