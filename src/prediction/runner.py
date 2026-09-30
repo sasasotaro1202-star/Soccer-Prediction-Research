@@ -498,32 +498,56 @@ def run(
         result.to_csv(temp_output, index=False)
         temp_output.replace(output_file)
         return _write_status(status_file, "PREDICTED", prediction_time_utc=now.isoformat(), source_rows=int(len(fixtures)), eligible_rows=int(len(eligible)), prediction_rows=int(len(result)), standard_rows=int((~result["low_confidence"]).sum()), low_confidence_rows=int(result["low_confidence"].sum()), abstained_rows=int(result["abstain"].sum()), output_path=str(output_file), model_version=str(bundle["model_version"]), oos_claimed=bool(registry.get("oos_verified", False)), model_mode=model_mode, matchday_merge_status=matchday_merge_status)
-    selected_score_method = str(bundle.get("score_method", "primary"))
-    if selected_score_method == "neutral_aware":
-        if "neutral_venue" not in eligible.columns:
-            raise RuntimeError("Neutral-aware Score production requires explicit neutral_venue fixture evidence")
-        neutral_missing = eligible["neutral_venue"].isna()
-        if bool(neutral_missing.any()):
-            raise RuntimeError("Neutral-aware Score production blocked because neutral_venue is unknown for an eligible fixture")
-
+    global_score_method = str(bundle.get("score_method", "primary"))
+    score_models_by_competition = bundle.get("score_models_by_competition") or {}
+    score_method_by_competition = bundle.get("score_method_by_competition") or {}
     score_rows = []
+    score_methods_resolved = []
     score_market_rows = []
     mom_rows = []
     mom_statuses = []
     mom_input_available = "mom_candidates_json" in eligible.columns
     for row in eligible.itertuples(index=False):
+        competition = str(row.competition).strip().upper()
+        score_model = score_models_by_competition.get(competition) or bundle.get("score_model")
+        if not isinstance(score_model, dict):
+            raise RuntimeError(f"No validated Score model available for competition={competition}")
+        score_meta = score_method_by_competition.get(competition) if isinstance(score_method_by_competition, dict) else None
+        resolved_method = (
+            str(score_meta.get("method"))
+            if isinstance(score_meta, dict) and score_meta.get("method")
+            else global_score_method
+        )
+        if str(score_model.get("method", "")).startswith("xg_"):
+            resolved_method = "xg"
+        elif str(score_model.get("method", "")).startswith("dixon_coles_"):
+            resolved_method = "dixon_coles"
+        elif str(score_model.get("method", "")).startswith("negative_binomial_"):
+            resolved_method = "negative_binomial"
+        elif str(score_model.get("method", "")).startswith("neutral_aware_"):
+            resolved_method = "neutral_aware"
+        elif str(score_model.get("method", "")).startswith("pit_recency_"):
+            resolved_method = "recency"
+        elif str(score_model.get("method", "")).startswith("pit_time_decay_"):
+            resolved_method = "time_decay"
+        else:
+            resolved_method = "primary" if resolved_method not in {"primary", "xg", "dixon_coles", "negative_binomial", "neutral_aware", "recency", "time_decay"} else resolved_method
         neutral_venue = getattr(row, "neutral_venue", False) if hasattr(row, "neutral_venue") else False
         if pd.isna(neutral_venue):
             neutral_venue = False
+        if resolved_method == "neutral_aware":
+            if not hasattr(row, "neutral_venue") or pd.isna(getattr(row, "neutral_venue")):
+                raise RuntimeError(f"Neutral-aware Score requires explicit neutral_venue for competition={competition}")
+        score_methods_resolved.append(resolved_method)
         score_rows.append(
             predict_score_candidates(
-                bundle["score_model"], row.home_team, row.away_team, row.competition,
+                score_model, row.home_team, row.away_team, competition,
                 neutral_venue=bool(neutral_venue),
             )
         )
         score_market_rows.append(
             predict_score_markets(
-                bundle["score_model"], row.home_team, row.away_team, row.competition,
+                score_model, row.home_team, row.away_team, competition,
                 neutral_venue=bool(neutral_venue),
             )
         )
@@ -565,6 +589,10 @@ def run(
             float(x[rank - 1]["probability"]) if len(x) >= rank else np.nan
             for x in mom_rows
         ]
+    result["score_method_resolved"] = score_methods_resolved
+    result["score_specialist_used"] = [bool(str(c).strip()) for c in []] if False else [
+        str(x).strip().upper() in score_models_by_competition for x in eligible["competition"].astype(str)
+    ]
     result["mom_status"] = mom_statuses
     result["score_top3_probability_mass"] = sum(result[f"score_{rank}_probability"] for rank in range(1, 4))
     result["mom_top4_probability_mass"] = sum(result[f"mom_{rank}_probability"] for rank in range(1, 5))
