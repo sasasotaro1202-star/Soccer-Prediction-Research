@@ -163,9 +163,10 @@ def train_and_save_bundle(
 
     score_model = fit_score_method(selected_score_method, d) if has_score_columns else None
 
-    # Materialize a specialist only when it differs from the global method and
-    # has an independent PASS on untouched locked OOS. Sparse competitions stay
-    # eligible and use the global validated fallback.
+    # Materialize a specialist when the competition has an independent PASS on
+    # untouched locked OOS and enough PIT-verified training rows. The method may
+    # equal the global method; the training population is still competition-local.
+    # Sparse competitions stay eligible and use the global validated fallback.
     score_models_by_competition: dict[str, dict[str, Any]] = {}
     score_method_by_competition: dict[str, dict[str, Any]] = {}
     comp_selection = score_selection_by_competition if isinstance(score_selection_by_competition, dict) else {}
