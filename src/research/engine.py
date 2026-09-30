@@ -497,10 +497,6 @@ def run(out_dir: str = "artifacts") -> dict:
     # Competition-specific Score selection is a separate research layer.
     # Development OOS chooses the method; untouched locked OOS verifies it.
     competition_score_oos = score_oos.attrs.get("competition_metrics", pd.DataFrame())
-    competition_score_development = (
-        competition_score_oos.iloc[:-2 * competition_score_oos["competition"].nunique()]
-        if False else pd.DataFrame()
-    )
     competition_score_selection = {"schema_version": 1, "status": "FALLBACK_GLOBAL_ONLY", "global_fallback_method": score_selection.get("selected_method", "primary"), "competitions": {}}
     competition_score_locked_gate = {"schema_version": 1, "status": "HOLD", "locked_oos_inspected": False, "competitions": {}}
     if not competition_score_oos.empty and {"competition", "oos_start", "oos_end"}.issubset(competition_score_oos.columns):
@@ -520,7 +516,7 @@ def run(out_dir: str = "artifacts") -> dict:
         competition_score_locked_gate = verify_score_models_by_competition(
             competition_score_selection,
             comp_lock,
-            min_metric_regression=0.02 if False else 0.02,
+            max_metric_regression=0.02,
             min_rows_per_block=minimum_score_rows_per_block,
         )
     (out / "score_model_selection_by_competition.json").write_text(
