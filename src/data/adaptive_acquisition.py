@@ -259,15 +259,41 @@ def write_state(
     rounds: list[dict[str, Any]],
     discovery: dict[str, Any] | None = None,
 ) -> None:
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    previous: dict[str, Any] = {}
+    if path.exists():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                previous = loaded
+        except Exception as exc:
+            raise RuntimeError(
+                f"Adaptive acquisition state is unreadable: {type(exc).__name__}: {exc}"
+            ) from exc
+
+    prior_history = previous.get("discovery_history", [])
+    if not isinstance(prior_history, list):
+        raise RuntimeError("Adaptive acquisition discovery_history is invalid")
+
+    history = list(prior_history)
+    if isinstance(discovery, dict):
+        history.append(discovery)
+    history = history[-30:]
+
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "config": asdict(config),
         "rounds": rounds,
         "discovery": discovery or {},
+        "discovery_history": history,
+        "discovery_history_runs": int(len(history)),
     }
-    path = Path(output_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    tmp.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False, default=str),
+        encoding="utf-8",
+    )
     tmp.replace(path)
