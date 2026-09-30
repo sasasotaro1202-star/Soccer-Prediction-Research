@@ -99,18 +99,24 @@ def select_preferred_sources(coverage: pd.DataFrame) -> pd.DataFrame:
     work["rows"] = pd.to_numeric(work.get("rows", 0), errors="coerce").fillna(0)
     work["status"] = work["status"].astype(str) if "status" in work.columns else "UNKNOWN"
     work["_pit_bonus"] = work["pit_capable"].astype(bool).astype(int) if "pit_capable" in work.columns else 0
-    work["_rank_rows"] = work["rows"] + work["_pit_bonus"] * 0.001
+    work["_rows_numeric"] = pd.to_numeric(work["rows"], errors="coerce").fillna(0.0)
+    grouped = (
+        work.groupby(["competition", "source"], dropna=False, sort=True)
+        .agg(total_rows=("_rows_numeric", "sum"), pit_capable=("_pit_bonus", "max"))
+        .reset_index()
+    )
+    grouped["_rank"] = grouped["total_rows"] + grouped["pit_capable"] * 0.001
     preferred = (
-        work.sort_values(["competition", "_rank_rows"], ascending=[True, False], kind="mergesort")
-        .drop_duplicates("competition", keep="first")[["competition", "source", "rows"]]
-        .rename(columns={"source": "preferred_source", "rows": "preferred_source_rows"})
+        grouped.sort_values(["competition", "_rank"], ascending=[True, False], kind="mergesort")
+        .drop_duplicates("competition", keep="first")[["competition", "source", "total_rows"]]
+        .rename(columns={"source": "preferred_source", "total_rows": "preferred_source_rows"})
     )
     work = work.merge(preferred, on="competition", how="left")
     work["preferred_source"] = work["preferred_source"].fillna("")
     work["preferred_source_rows"] = pd.to_numeric(
         work["preferred_source_rows"], errors="coerce"
     ).fillna(0).astype(int)
-    return work.drop(columns=["_pit_bonus", "_rank_rows"], errors="ignore")
+    return work.drop(columns=["_pit_bonus", "_rows_numeric"], errors="ignore")
 
 
 def rank_discovery_targets(
