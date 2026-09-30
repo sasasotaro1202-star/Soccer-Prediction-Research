@@ -21,6 +21,7 @@ from src.data.adaptive_acquisition import (
     deduplicate_history,
     discover_free_github_sources,
     expanded_window,
+    identify_data_deficits,
     load_config,
     rank_discovery_targets,
     select_preferred_sources,
@@ -204,6 +205,18 @@ def load_available_history(
         else:
             no_progress_rounds = 0
         previous_rows, previous_cells = current_rows, current_cells
+        deficits = identify_data_deficits(
+            merged,
+            tuple(ACTIVE_SCOPE),
+            minimum_rows_per_competition=int(config.minimum_rows_per_competition),
+            minimum_seasons_per_competition=int(config.minimum_seasons_per_competition),
+        )
+        round_records[-1]["deficit_competitions"] = int(len(deficits))
+        round_records[-1]["deficit_sample"] = {
+            key: value for key, value in list(deficits.items())[:10]
+        }
+        if not deficits:
+            break
         if no_progress_rounds > int(config.no_progress_stop_rounds):
             break
 
@@ -238,8 +251,16 @@ def load_available_history(
     # The discovery frontier is intentionally separate from training data.
     # Only the most data-sparse active competitions are searched to keep public
     # API usage bounded, and every candidate still requires a PIT-capable adapter.
+    deficits = identify_data_deficits(
+        history,
+        tuple(ACTIVE_SCOPE),
+        minimum_rows_per_competition=int(config.minimum_rows_per_competition),
+        minimum_seasons_per_competition=int(config.minimum_seasons_per_competition),
+    )
     discovery_targets = rank_discovery_targets(
-        history, tuple(ACTIVE_SCOPE), limit=int(config.max_discovery_competitions)
+        history,
+        tuple(deficits.keys()) if deficits else tuple(ACTIVE_SCOPE),
+        limit=int(config.max_discovery_competitions),
     )
     discovery = discover_free_github_sources(
         discovery_targets, per_competition=int(config.discovery_per_competition)
