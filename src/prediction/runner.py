@@ -590,7 +590,7 @@ def run(
             for x in mom_rows
         ]
     result["score_method_resolved"] = score_methods_resolved
-    result["score_specialist_used"] = [bool(str(c).strip()) for c in []] if False else [
+    result["score_specialist_used"] = [
         str(x).strip().upper() in score_models_by_competition for x in eligible["competition"].astype(str)
     ]
     result["mom_status"] = mom_statuses
