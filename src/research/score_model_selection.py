@@ -303,3 +303,128 @@ def verify_selected_score_model(
             "block_level_score_logloss_not_materially_worse": blocks_ok,
         },
     }
+
+
+
+def select_score_models_by_competition(
+    competition_oos: pd.DataFrame,
+    global_selection: dict[str, Any] | None = None,
+    *,
+    min_blocks: int = 3,
+    min_rows_per_block: int = 0,
+) -> dict[str, Any]:
+    """Select Score methods independently per competition from development OOS only.
+
+    Sparse competitions do not get discarded. They inherit the globally validated
+    method until enough chronological competition-specific evidence exists.
+    """
+    global_selection = global_selection or {"selected_method": "primary", "status": "HOLD"}
+    result: dict[str, Any] = {
+        "schema_version": 1,
+        "status": "RESEARCH_ONLY",
+        "selection_level": "COMPETITION",
+        "global_fallback_method": str(global_selection.get("selected_method", "primary")),
+        "competitions": {},
+        "rules": {
+            "development_oos_only": True,
+            "locked_oos_inspected": False,
+            "min_blocks": int(min_blocks),
+            "min_rows_per_block": int(min_rows_per_block),
+            "sparse_competitions_use_global_fallback": True,
+        },
+    }
+    if competition_oos.empty or "competition" not in competition_oos.columns:
+        result["status"] = "FALLBACK_GLOBAL_ONLY"
+        result["reason"] = "No competition-specific development OOS evidence"
+        return result
+
+    for competition, frame in competition_oos.groupby("competition", sort=True):
+        comp = str(competition)
+        if len(frame) < int(min_blocks):
+            result["competitions"][comp] = {
+                "selected_method": result["global_fallback_method"],
+                "status": "GLOBAL_FALLBACK",
+                "reason": "insufficient_competition_oos_blocks",
+                "evaluated_blocks": int(len(frame)),
+            }
+            continue
+        local = select_score_model(
+            frame,
+            min_blocks=int(min_blocks),
+            min_rows_per_block=int(min_rows_per_block),
+        )
+        if local.get("status") == "HOLD":
+            local = {
+                **local,
+                "selected_method": result["global_fallback_method"],
+                "status": "GLOBAL_FALLBACK",
+                "reason": f"competition_specific_selection_hold:{local.get('reason', '')}",
+            }
+        result["competitions"][comp] = local
+    result["coverage"] = {
+        "competitions_with_specific_selection": int(
+            sum(v.get("status") == "ADOPT_CANDIDATE" for v in result["competitions"].values())
+        ),
+        "competitions_global_fallback": int(
+            sum(v.get("status") == "GLOBAL_FALLBACK" for v in result["competitions"].values())
+        ),
+        "competitions_observed": int(len(result["competitions"])),
+    }
+    return result
+
+
+def verify_score_models_by_competition(
+    selection_by_competition: dict[str, Any],
+    locked_competition_oos: pd.DataFrame,
+    *,
+    max_metric_regression: float = 0.02,
+    min_rows_per_block: int = 0,
+) -> dict[str, Any]:
+    """Verify each competition's selected Score method on untouched locked OOS."""
+    result = {
+        "schema_version": 1,
+        "status": "PASS",
+        "selection_level": "COMPETITION",
+        "locked_oos_inspected": True,
+        "competitions": {},
+        "rules": {
+            "locked_oos_tuning": False,
+            "max_metric_regression": float(max_metric_regression),
+            "min_rows_per_block": int(min_rows_per_block),
+        },
+    }
+    selections = selection_by_competition.get("competitions", {}) if isinstance(selection_by_competition, dict) else {}
+    if locked_competition_oos.empty or "competition" not in locked_competition_oos.columns:
+        result["status"] = "HOLD"
+        result["reason"] = "No competition-specific locked OOS evidence"
+        return result
+
+    for competition, frame in locked_competition_oos.groupby("competition", sort=True):
+        comp = str(competition)
+        selected = selections.get(comp)
+        if not isinstance(selected, dict):
+            result["competitions"][comp] = {
+                "selected_method": selection_by_competition.get("global_fallback_method", "primary"),
+                "status": "GLOBAL_FALLBACK",
+                "reason": "competition_not_seen_in_development_selection",
+            }
+            continue
+        method = str(selected.get("selected_method", "primary"))
+        local_selection = {"selected_method": method}
+        verification = verify_selected_score_model(
+            local_selection,
+            frame,
+            max_metric_regression=float(max_metric_regression),
+            min_rows_per_block=int(min_rows_per_block),
+        )
+        if verification.get("status") != "PASS":
+            # The locked OOS can reject a specialist without invalidating the
+            # entire study; that competition safely falls back to the global method.
+            verification = {
+                **verification,
+                "status": "GLOBAL_FALLBACK",
+                "fallback_method": selection_by_competition.get("global_fallback_method", "primary"),
+            }
+            result["status"] = "PARTIAL_FALLBACK"
+        result["competitions"][comp] = verification
+    return result
