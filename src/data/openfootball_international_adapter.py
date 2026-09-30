@@ -82,6 +82,7 @@ def _one(item: tuple[str, str, int, int, str]) -> tuple[pd.DataFrame, dict]:
             season_start,
             url,
             raw,
+            calendar_year=competition in {"WORLD_CUP", "ASIAN_CUP"},
         )
         # World Cup and Asian Cup are calendar-year tournaments, not league seasons.
         if competition in {"WORLD_CUP", "ASIAN_CUP"} and not frame.empty:
