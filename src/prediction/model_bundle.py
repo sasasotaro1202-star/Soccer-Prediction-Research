@@ -422,8 +422,40 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
             raise RuntimeError("Production matchday policy PASS requires untouched locked holdout evidence")
 
     score_method = str(bundle.get("score_method", "primary"))
-    if score_method not in {"primary", "neutral_aware", "recency", "time_decay", "dixon_coles", "negative_binomial"}:
+    if score_method not in {"primary", "neutral_aware", "recency", "time_decay", "dixon_coles", "negative_binomial", "xg"}:
         raise RuntimeError(f"Unsupported production score method: {score_method}")
+
+    score_models_by_competition = bundle.get("score_models_by_competition", {})
+    score_method_by_competition = bundle.get("score_method_by_competition", {})
+    score_locked_by_competition = bundle.get("score_locked_verification_by_competition", {})
+    if not isinstance(score_models_by_competition, dict):
+        raise RuntimeError("score_models_by_competition must be an object")
+    if not isinstance(score_method_by_competition, dict):
+        raise RuntimeError("score_method_by_competition must be an object")
+    if not isinstance(score_locked_by_competition, dict):
+        raise RuntimeError("score_locked_verification_by_competition must be an object")
+    specialist_prefixes = {
+        "xg": "xg_",
+        "dixon_coles": "dixon_coles_",
+        "negative_binomial": "negative_binomial_",
+        "neutral_aware": "neutral_aware_",
+        "recency": "pit_recency_",
+        "time_decay": "pit_time_decay_",
+        "primary": "pit_smoothed_",
+    }
+    for competition, specialist in score_models_by_competition.items():
+        if not isinstance(specialist, dict):
+            raise RuntimeError(f"Competition Score specialist must be an object: {competition!r}")
+        meta = score_method_by_competition.get(str(competition))
+        if not isinstance(meta, dict) or str(meta.get("status", "")).upper() != "COMPETITION_SPECIALIST":
+            raise RuntimeError(f"Competition Score specialist metadata is not validated: {competition!r}")
+        resolved_method = str(meta.get("method", ""))
+        prefix = specialist_prefixes.get(resolved_method)
+        if prefix is None or not str(specialist.get("method", "")).startswith(prefix):
+            raise RuntimeError(f"Competition Score specialist method mismatch: {competition!r}")
+        gate = score_locked_by_competition.get(str(competition))
+        if not isinstance(gate, dict) or str(gate.get("status", "")).upper() != "PASS":
+            raise RuntimeError(f"Competition Score specialist locked-OOS gate is not PASS: {competition!r}")
     if "score_model" in bundle:
         score_model = bundle.get("score_model")
         if not isinstance(score_model, dict):
@@ -436,6 +468,7 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
             "time_decay": "pit_time_decay_weighted_",
             "dixon_coles": "dixon_coles_",
             "negative_binomial": "negative_binomial_",
+            "xg": "xg_",
         }[score_method]
         if not method.startswith(expected_prefix):
             raise RuntimeError(
