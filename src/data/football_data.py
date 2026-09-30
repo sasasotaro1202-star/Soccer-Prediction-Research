@@ -173,13 +173,20 @@ def load_available_history(
             pd.concat(all_coverage, ignore_index=True) if all_coverage else pd.DataFrame()
         )
         current_rows = int(len(merged))
-        current_cells = int(
-            len(
-                coverage_rows[
-                    coverage_rows["status"].astype(str).eq("AVAILABLE")
-                ]
+        if not coverage_rows.empty:
+            coverage_key = [
+                c for c in ("competition", "season", "season_start", "source")
+                if c in coverage_rows.columns
+            ]
+            unique_coverage = (
+                coverage_rows.drop_duplicates(coverage_key, keep="last")
+                if coverage_key else coverage_rows.drop_duplicates()
             )
-        ) if not coverage_rows.empty and "status" in coverage_rows.columns else 0
+            current_cells = int(
+                unique_coverage["status"].astype(str).eq("AVAILABLE").sum()
+            ) if "status" in unique_coverage.columns else 0
+        else:
+            unique_coverage = coverage_rows
 
         round_records.append(
             {
@@ -216,6 +223,16 @@ def load_available_history(
         coverage = coverage[
             coverage["competition"].astype(str).isin(ACTIVE_SCOPE)
         ].copy()
+        coverage_key = [
+            c for c in ("competition", "season", "season_start", "source")
+            if c in coverage.columns
+        ]
+        if coverage_key:
+            coverage = (
+                coverage.sort_values("acquisition_round", kind="mergesort")
+                .drop_duplicates(coverage_key, keep="last")
+                .reset_index(drop=True)
+            )
         coverage = select_preferred_sources(coverage)
 
     # The discovery frontier is intentionally separate from training data.
@@ -227,16 +244,11 @@ def load_available_history(
     discovery = discover_free_github_sources(
         discovery_targets, per_competition=int(config.discovery_per_competition)
     )
-    try:
-        write_state(
-            "artifacts/adaptive_acquisition_state.json",
-            config=config,
-            rounds=round_records,
-            discovery=discovery,
-        )
-    except Exception:
-        # State recording is diagnostic only; acquisition integrity must not be
-        # converted into success/failure by a non-critical artifact write.
-        pass
+    write_state(
+        "artifacts/adaptive_acquisition_state.json",
+        config=config,
+        rounds=round_records,
+        discovery=discovery,
+    )
 
     return history, coverage
