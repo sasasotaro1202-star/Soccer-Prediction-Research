@@ -385,6 +385,14 @@ def predict_score_distribution(
             competition,
             max_goals=max_goals,
         )
+    if method.startswith("xg_"):
+        return predict_xg_score_distribution(
+            score_model,
+            home_team,
+            away_team,
+            competition,
+            max_goals=max_goals,
+        )
     home_lambda, away_lambda = _score_lambdas(
         score_model, home_team, away_team, competition, neutral_venue=neutral_venue
     )
