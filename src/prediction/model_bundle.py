@@ -183,11 +183,11 @@ def train_and_save_bundle(
             method = str(entry.get("selected_method", global_method))
             gate_entry = comp_gate_entries.get(comp, {}) if isinstance(comp_gate_entries.get(comp, {}), dict) else {}
             gate_status = str(gate_entry.get("status", "")).upper()
-            if method == global_method or gate_status != "PASS":
+            if gate_status != "PASS":
                 score_method_by_competition[comp] = {
                     "method": global_method,
                     "status": "GLOBAL_FALLBACK",
-                    "reason": "specialist_not_verified_or_same_as_global",
+                    "reason": "specialist_not_verified",
                 }
                 continue
             subset = (
