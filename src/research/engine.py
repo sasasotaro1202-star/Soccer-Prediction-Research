@@ -511,13 +511,17 @@ def run(out_dir: str = "artifacts") -> dict:
             comp_dev,
             score_selection,
             min_blocks=3,
-            min_rows_per_block=minimum_score_rows_per_block,
+            # Competition-specific evidence is naturally sparser than the
+            # pooled global score OOS blocks. Keep sparse competitions in scope
+            # and require only a conservative per-block sample before selecting
+            # a specialist.
+            min_rows_per_block=120,
         )
         competition_score_locked_gate = verify_score_models_by_competition(
             competition_score_selection,
             comp_lock,
             max_metric_regression=0.02,
-            min_rows_per_block=minimum_score_rows_per_block,
+            min_rows_per_block=120,
         )
     (out / "score_model_selection_by_competition.json").write_text(
         json.dumps(competition_score_selection, indent=2, ensure_ascii=False, default=str),
