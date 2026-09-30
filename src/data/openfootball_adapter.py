@@ -26,13 +26,15 @@ def _season_folder(start_year: int) -> str:
     return f"{start_year}-{str(start_year + 1)[-2:]}"
 
 
-def _parse_date(line: str, season_start: int, current_year: int | None, previous_month: int | None) -> tuple[pd.Timestamp, int | None, int | None]:
+def _parse_date(line: str, season_start: int, current_year: int | None, previous_month: int | None, *, calendar_year: bool = False) -> tuple[pd.Timestamp, int | None, int | None]:
     m = DATE_RE.match(line)
     if not m:
         return pd.NaT, current_year, previous_month
     month = MONTHS[m.group(1)]
     if m.group(3):
         year = int(m.group(3))
+    elif calendar_year:
+        year = season_start
     elif current_year is None:
         year = season_start if month >= 7 else season_start + 1
     elif previous_month is not None and month < previous_month:
@@ -77,7 +79,7 @@ def _outcome(final_h: int, final_a: int, suffix: str) -> tuple[int, int, str]:
     return final_h, final_a, "H" if final_h > final_a else "A" if final_a > final_h else "D"
 
 
-def parse_football_txt(text: str, competition: str, season_start: int, source_url: str, raw: bytes) -> pd.DataFrame:
+def parse_football_txt(text: str, competition: str, season_start: int, source_url: str, raw: bytes, *, calendar_year: bool = False) -> pd.DataFrame:
     rows: list[dict] = []
     current_date = pd.NaT
     current_year: int | None = None
@@ -85,7 +87,7 @@ def parse_football_txt(text: str, competition: str, season_start: int, source_ur
     retrieved = datetime.now(timezone.utc)
     for line_no, line in enumerate(text.splitlines(), 1):
         if DATE_RE.match(line):
-            current_date, current_year, previous_month = _parse_date(line, season_start, current_year, previous_month)
+            current_date, current_year, previous_month = _parse_date(line, season_start, current_year, previous_month, calendar_year=calendar_year)
             continue
         m = MATCH_RE.match(line)
         inline = None if m else INLINE_SCORE_RE.match(line)
