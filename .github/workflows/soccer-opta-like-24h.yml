@@ -53,6 +53,26 @@ jobs:
           }
           Path('artifacts/checkpoints/run_manifest.json').write_text(json.dumps(payload,indent=2),encoding='utf-8')
           PY
+      - name: Write success-only phase checkpoint
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/checkpoints
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload={
+              'schema_version':1,
+              'status':'SUCCESS',
+              'research_only':True,
+              'production_changed':False,
+              'github_sha':'${{ github.sha }}',
+              'run_id':'${{ github.run_id }}',
+              'phase':'source_discovery',
+          }
+          Path('artifacts/checkpoints/phase1_success.json').write_text(json.dumps(payload,indent=2)+"\\n",encoding='utf-8')
+          PY
       - name: Record phase 1 checkpoint
         if: always()
         env:
@@ -136,6 +156,26 @@ jobs:
             echo "One or more PIT diagnostic commands failed at execution level." >&2
             exit 1
           fi
+      - name: Write success-only phase checkpoint
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/checkpoints
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload={
+              'schema_version':1,
+              'status':'SUCCESS',
+              'research_only':True,
+              'production_changed':False,
+              'github_sha':'${{ github.sha }}',
+              'run_id':'${{ github.run_id }}',
+              'phase':'data_and_pit_validation',
+          }
+          Path('artifacts/checkpoints/phase2_success.json').write_text(json.dumps(payload,indent=2)+"\\n",encoding='utf-8')
+          PY
       - name: Record phase 2 checkpoint
         if: always()
         env:
@@ -191,6 +231,26 @@ jobs:
         run: python -m pytest -q
       - name: Validate cross-project research contracts
         run: python -m pytest -q tests/test_case_risk_oos.py tests/test_checkpoint_state.py tests/test_dual_memory_oos.py tests/test_source_snapshot.py
+      - name: Write success-only phase checkpoint
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/checkpoints
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload={
+              'schema_version':1,
+              'status':'SUCCESS',
+              'research_only':True,
+              'production_changed':False,
+              'github_sha':'${{ github.sha }}',
+              'run_id':'${{ github.run_id }}',
+              'phase':'oos_control',
+          }
+          Path('artifacts/checkpoints/phase3_success.json').write_text(json.dumps(payload,indent=2)+"\\n",encoding='utf-8')
+          PY
       - name: Record phase 3 checkpoint
         if: always()
         env:
@@ -254,6 +314,26 @@ jobs:
         run: |
           mkdir -p artifacts/24h
           printf '%s\n' '{"production_changed":false,"commit":"${{ github.sha }}","run_id":"${{ github.run_id }}"}' > artifacts/24h/final_checkpoint.json
+      - name: Write success-only phase checkpoint
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/checkpoints
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload={
+              'schema_version':1,
+              'status':'SUCCESS',
+              'research_only':True,
+              'production_changed':False,
+              'github_sha':'${{ github.sha }}',
+              'run_id':'${{ github.run_id }}',
+              'phase':'evidence_and_production_immutability',
+          }
+          Path('artifacts/checkpoints/phase4_success.json').write_text(json.dumps(payload,indent=2)+"\\n",encoding='utf-8')
+          PY
       - name: Record phase 4 checkpoint
         if: always()
         env:
@@ -296,6 +376,35 @@ jobs:
           pattern: soccer-opta-24h-phase*
           merge-multiple: true
           path: artifacts/phases
+      - name: Require success-only phase handoffs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('artifacts/phases')
+          expected=['phase1_success.json','phase2_success.json','phase3_success.json','phase4_success.json']
+          missing=[]
+          for name in expected:
+              p=root/'checkpoints'/name
+              if not p.is_file() or p.stat().st_size <= 0:
+                  missing.append(f'{name}:missing')
+                  continue
+              try:
+                  x=json.loads(p.read_text(encoding='utf-8'))
+              except Exception:
+                  missing.append(f'{name}:invalid_json')
+                  continue
+              if x.get('status') != 'SUCCESS': missing.append(f'{name}:status_not_success')
+              if x.get('research_only') is not True: missing.append(f'{name}:research_only_contract')
+              if x.get('production_changed') is not False: missing.append(f'{name}:production_changed_contract')
+              if x.get('github_sha') != '${{ github.sha }}': missing.append(f'{name}:sha_mismatch')
+              if str(x.get('run_id')) != str('${{ github.run_id }}'): missing.append(f'{name}:run_id_mismatch')
+          if missing:
+              raise SystemExit('SUCCESS-ONLY HANDOFF FAILED: ' + '; '.join(missing))
+          print('SUCCESS-ONLY HANDOFF: PASS')
+          PY
       - name: Reconcile immutable handoff
         env:
           P1: ${{ needs.phase1.result }}
