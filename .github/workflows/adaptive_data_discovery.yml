@@ -1,0 +1,79 @@
+name: Soccer Adaptive Data Discovery
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soccer-adaptive-data-discovery
+  cancel-in-progress: false
+
+jobs:
+  discover-and-acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30ade803
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+
+      - name: Restore adaptive acquisition cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/raw
+            artifacts/adaptive_acquisition_state.json
+          key: soccer-adaptive-data-${{ github.run_id }}
+          restore-keys: |
+            soccer-adaptive-data-
+
+      - name: Run bounded adaptive acquisition
+        env:
+          SOCCER_ADAPTIVE_ACQUISITION_ROUNDS: "4"
+          SOCCER_ADAPTIVE_EXPAND_BACK_YEARS: "3"
+          SOCCER_ADAPTIVE_EXPAND_FORWARD_YEARS: "1"
+          SOCCER_ADAPTIVE_MIN_START_YEAR: "1990"
+          SOCCER_ADAPTIVE_MAX_END_YEAR: "2026"
+          SOCCER_ADAPTIVE_MAX_DISCOVERY_COMPETITIONS: "8"
+          SOCCER_ADAPTIVE_DISCOVERY_PER_COMPETITION: "4"
+          SOCCER_ADAPTIVE_MIN_ROWS_PER_COMPETITION: "300"
+          SOCCER_ADAPTIVE_MIN_SEASONS_PER_COMPETITION: "2"
+          SOCCER_ADAPTIVE_NO_PROGRESS_STOP_ROUNDS: "1"
+          SOCCER_ENABLE_PUBLIC_SOURCE_DISCOVERY: "1"
+          PYTHONHASHSEED: "0"
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -c "from src.data.football_data import load_available_history; h,c=load_available_history(); print(\"history_rows=\", len(h)); print(\"coverage_rows=\", len(c))"
+
+      - name: Persist adaptive acquisition cache
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/raw
+            artifacts/adaptive_acquisition_state.json
+          key: soccer-adaptive-data-${{ github.run_id }}
+
+      - name: Upload discovery state
+        uses: actions/upload-artifact@v4
+        with:
+          name: adaptive-acquisition-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/adaptive_acquisition_state.json
