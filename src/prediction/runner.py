@@ -13,6 +13,7 @@ from src.prediction.model_bundle import load_bundle, predict_bundle
 from src.prediction.active_model import resolve_active_production_paths, resolve_best_available_paths
 from src.prediction.secondary_outputs import predict_mom_candidates, predict_score_candidates, predict_score_markets
 from src.prediction.matchday_intelligence import apply_matchday_intelligence
+from src.prediction.target_competition_policy import annotate_predictions
 from src.data.competition_sources import TARGET_COMPETITIONS
 
 
@@ -444,6 +445,10 @@ def run(
     if not np.allclose(probs.sum(axis=1), 1.0, atol=1e-6):
         raise RuntimeError("Matchday intelligence produced non-normalized probabilities")
     result = eligible[["match_id", "kickoff_utc", "home_team", "away_team"]].copy()
+    result = annotate_predictions(result.join(eligible[["competition"]]), bundle)
+    if "policy_competition" in result.columns:
+        if not result["policy_competition"].astype(str).eq(eligible["competition"].astype(str).to_numpy()).all():
+            raise RuntimeError("Target-by-competition policy annotation changed fixture identity")
     result["base_p_home"] = base_probs[:, 0]
     result["base_p_draw"] = base_probs[:, 1]
     result["base_p_away"] = base_probs[:, 2]
