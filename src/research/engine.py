@@ -339,6 +339,8 @@ def _build_research_gates(
         "score_oos_gate.json",
         "score_model_selection.json",
         "score_locked_gate.json",
+        "score_model_selection_by_competition.json",
+        "score_locked_gate_by_competition.json",
         "candidate_lock.json",
         "adoption_decision.json",
         "oos_temporal_integrity.json",
@@ -807,6 +809,11 @@ def run(out_dir: str = "artifacts") -> dict:
             "selection_source": "historical_validation_only",
             "temporal_integrity": oos_temporal,
             "score_temporal_integrity": score_temporal,
+        },
+        "score_by_competition": {
+            "selection": competition_score_selection,
+            "locked_verification": competition_score_locked_gate,
+            "metrics_rows": int(len(competition_score_oos)) if not competition_score_oos.empty else 0,
         },
         "stability_gate": stability,
         "accuracy_target": {
