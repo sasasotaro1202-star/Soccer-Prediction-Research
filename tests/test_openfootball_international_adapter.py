@@ -23,6 +23,7 @@ def test_world_and_asian_cup_use_calendar_year_season_labels(monkeypatch):
     paths = [
         "fifa_world_cup/2022_fifa_world_cup.txt",
         "afc_asian_cup/2024_afc_asian_cup.txt",
+        "friendly/2024_friendly.txt",
     ]
     raw = """= Tournament\nSun Jan 1\nA 1-0 B @ Venue\n"""
     monkeypatch.setattr(mod, "_tree_paths", lambda: paths)
@@ -31,6 +32,9 @@ def test_world_and_asian_cup_use_calendar_year_season_labels(monkeypatch):
     assert not history.empty
     assert set(history.loc[history["competition"] == "WORLD_CUP", "season"]) == {"2022"}
     assert set(history.loc[history["competition"] == "ASIAN_CUP", "season"]) == {"2024"}
+    assert set(history.loc[history["competition"] == "INTL_M", "season"]) == {"2024"}
+    intl_kickoff = history.loc[history["competition"] == "INTL_M", "kickoff_utc"].iloc[0]
+    assert intl_kickoff.year == 2024
     asian_kickoff = history.loc[history["competition"] == "ASIAN_CUP", "kickoff_utc"].iloc[0]
     assert asian_kickoff.year == 2024
 
