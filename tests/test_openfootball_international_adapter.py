@@ -13,6 +13,7 @@ def test_international_path_patterns_cover_major_project_targets():
         "ASIAN_CUP": "afc_asian_cup/2024_afc_asian_cup.txt",
         "WORLD_CUP": "fifa_world_cup/2026_fifa_world_cup.txt",
         "WORLD_CUP_QUALI": "fifa_world_cup_qualification/2026_fifa_world_cup_qualification.txt",
+        "INTL_M": "friendly/2026_friendly.txt",
     }
     for competition, path in samples.items():
         assert mod.PATH_PATTERNS[competition].match(path)
