@@ -97,8 +97,8 @@ def select_preferred_sources(coverage: pd.DataFrame) -> pd.DataFrame:
 
     work = coverage.copy()
     work["rows"] = pd.to_numeric(work.get("rows", 0), errors="coerce").fillna(0)
-    work["status"] = work.get("status", "").astype(str)
-    work["_pit_bonus"] = work.get("pit_capable", False).astype(bool).astype(int) if "pit_capable" in work else 0
+    work["status"] = work["status"].astype(str) if "status" in work.columns else "UNKNOWN"
+    work["_pit_bonus"] = work["pit_capable"].astype(bool).astype(int) if "pit_capable" in work.columns else 0
     work["_rank_rows"] = work["rows"] + work["_pit_bonus"] * 0.001
     preferred = (
         work.sort_values(["competition", "_rank_rows"], ascending=[True, False], kind="mergesort")
