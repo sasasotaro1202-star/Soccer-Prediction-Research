@@ -421,6 +421,41 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
     score_method = str(bundle.get("score_method", "primary"))
     if score_method not in {"primary", "neutral_aware", "recency", "time_decay", "dixon_coles", "negative_binomial"}:
         raise RuntimeError(f"Unsupported production score method: {score_method}")
+    score_models_by_competition = bundle.get("score_models_by_competition", {})
+    score_method_by_competition = bundle.get("score_method_by_competition", {})
+    if not isinstance(score_models_by_competition, dict) or not isinstance(score_method_by_competition, dict):
+        raise RuntimeError("Competition-specific Score model metadata must be objects")
+    allowed_score_methods = {"primary", "neutral_aware", "recency", "time_decay", "dixon_coles", "negative_binomial", "xg"}
+    for competition, specialist in score_models_by_competition.items():
+        if not isinstance(specialist, dict):
+            raise RuntimeError(f"Competition Score specialist is invalid for {competition!r}")
+        method = str(specialist.get("method", ""))
+        if method.startswith("xg_"):
+            resolved = "xg"
+        elif method.startswith("dixon_coles_"):
+            resolved = "dixon_coles"
+        elif method.startswith("negative_binomial_"):
+            resolved = "negative_binomial"
+        elif method.startswith("neutral_aware_"):
+            resolved = "neutral_aware"
+        elif method.startswith("pit_recency_"):
+            resolved = "recency"
+        elif method.startswith("pit_time_decay_"):
+            resolved = "time_decay"
+        elif method.startswith("pit_smoothed_"):
+            resolved = "primary"
+        else:
+            raise RuntimeError(f"Unknown competition Score specialist method for {competition!r}: {method!r}")
+        if resolved not in allowed_score_methods:
+            raise RuntimeError(f"Unsupported competition Score specialist method for {competition!r}")
+        meta = score_method_by_competition.get(str(competition))
+        if not isinstance(meta, dict) or str(meta.get("status", "")).upper() != "COMPETITION_SPECIALIST":
+            raise RuntimeError(f"Competition Score specialist lacks COMPETITION_SPECIALIST metadata for {competition!r}")
+        if str(meta.get("method")) != resolved:
+            raise RuntimeError(f"Competition Score method metadata mismatch for {competition!r}")
+        gate = (bundle.get("score_locked_verification_by_competition") or {}).get(str(competition))
+        if not isinstance(gate, dict) or str(gate.get("status", "")).upper() != "PASS":
+            raise RuntimeError(f"Competition Score specialist lacks PASS locked-OOS verification for {competition!r}")
     if "score_model" in bundle:
         score_model = bundle.get("score_model")
         if not isinstance(score_model, dict):
