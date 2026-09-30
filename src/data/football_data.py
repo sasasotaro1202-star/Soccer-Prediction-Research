@@ -17,6 +17,15 @@ from src.data.jleague_adapter import load_jleague_history
 from src.data.openfootball_adapter import load_openfootball_history
 from src.data.openfootball_international_adapter import load_openfootball_international_history
 from src.data.competition_catalog import ACTIVE_SCOPE
+from src.data.adaptive_acquisition import (
+    deduplicate_history,
+    discover_free_github_sources,
+    expanded_window,
+    load_config,
+    rank_discovery_targets,
+    select_preferred_sources,
+    write_state,
+)
 
 LEAGUES={"EPL":"E0","BL1":"D1","SA":"I1","LL":"SP1","FL1":"F1","ERE":"N1"}
 BASE="https://www.football-data.co.uk/mmz4281/{season_folder}/{league}.csv"
@@ -66,17 +75,168 @@ def _load_one(args):
         d=load_season(comp,year,cache_dir); return comp,year,d,{"competition":comp,"season":year,"status":"AVAILABLE","rows":len(d),"source":"Football-Data.co.uk"}
     except Exception as e:return comp,year,None,{"competition":comp,"season":year,"status":"UNAVAILABLE","rows":0,"source":"Football-Data.co.uk","error":str(e)}
 
-def load_available_history(start_year:int=2010,end_year:int=2025,max_workers:int=8)->tuple[pd.DataFrame,pd.DataFrame]:
-    tasks=[(c,y,"data/raw") for c in LEAGUES for y in range(start_year,end_year+1)]
-    with ThreadPoolExecutor(max_workers=max(1,min(int(max_workers),len(tasks)))) as pool: results=[f.result() for f in as_completed([pool.submit(_load_one,t) for t in tasks])]
-    results.sort(key=lambda x:(list(LEAGUES).index(x[0]),x[1])); primary_frames=[r[2] for r in results if r[2] is not None]; primary_history=pd.concat(primary_frames,ignore_index=True) if primary_frames else pd.DataFrame(); primary_coverage=pd.DataFrame([r[3] for r in results])
-    jleague_history,jleague_coverage=load_jleague_history(start_year=start_year,end_year=end_year); cup_history,cup_coverage=load_openfootball_history(start_year=start_year,end_year=end_year,max_workers=max_workers)
-    international_history,international_coverage=load_openfootball_international_history(start_year=max(2000,start_year),end_year=end_year,max_workers=max_workers)
-    frames=[x for x in (primary_history,jleague_history,cup_history,international_history) if not x.empty]; history=pd.concat(frames,ignore_index=True) if frames else pd.DataFrame()
-    if not history.empty: history=history.sort_values(["competition","kickoff_utc","home_team","away_team","source_name"],kind="mergesort").reset_index(drop=True)
-    coverage=pd.concat([primary_coverage,jleague_coverage,cup_coverage,international_coverage],ignore_index=True)
+def _load_available_history_window(
+    start_year: int,
+    end_year: int,
+    max_workers: int,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    tasks = [(c, y, "data/raw") for c in LEAGUES for y in range(start_year, end_year + 1)]
+    with ThreadPoolExecutor(max_workers=max(1, min(int(max_workers), len(tasks)))) as pool:
+        futures = [pool.submit(_load_one, t) for t in tasks]
+        results = [f.result() for f in as_completed(futures)]
+    results.sort(key=lambda x: (list(LEAGUES).index(x[0]), x[1]))
+    primary_frames = [r[2] for r in results if r[2] is not None]
+    primary_history = (
+        pd.concat(primary_frames, ignore_index=True) if primary_frames else pd.DataFrame()
+    )
+    primary_coverage = pd.DataFrame([r[3] for r in results])
+
+    jleague_history, jleague_coverage = load_jleague_history(
+        start_year=start_year, end_year=end_year
+    )
+    cup_history, cup_coverage = load_openfootball_history(
+        start_year=start_year, end_year=end_year, max_workers=max_workers
+    )
+    international_history, international_coverage = load_openfootball_international_history(
+        start_year=start_year, end_year=end_year, max_workers=max_workers
+    )
+
+    frames = [
+        x
+        for x in (
+            primary_history,
+            jleague_history,
+            cup_history,
+            international_history,
+        )
+        if not x.empty
+    ]
+    history = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
     if not history.empty:
-        history=history[history["competition"].astype(str).isin(ACTIVE_SCOPE)].copy()
+        history = history.sort_values(
+            ["competition", "kickoff_utc", "home_team", "away_team", "source_name"],
+            kind="mergesort",
+        ).reset_index(drop=True)
+        history = history[history["competition"].astype(str).isin(ACTIVE_SCOPE)].copy()
+        history = deduplicate_history(history)
+
+    coverage = pd.concat(
+        [primary_coverage, jleague_coverage, cup_coverage, international_coverage],
+        ignore_index=True,
+    )
     if not coverage.empty:
-        coverage=coverage[coverage["competition"].astype(str).isin(ACTIVE_SCOPE)].copy()
-    return history,coverage
+        coverage = coverage[coverage["competition"].astype(str).isin(ACTIVE_SCOPE)].copy()
+        coverage = select_preferred_sources(coverage)
+    return history, coverage
+
+
+def load_available_history(
+    start_year: int = 2010,
+    end_year: int = 2025,
+    max_workers: int = 8,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Adaptively acquire more free/public history when the current scope is sparse.
+
+    Every round widens the historical window, re-runs every implemented free/public
+    adapter and re-evaluates source preference. Newly discovered external sources
+    remain research-only until schema/PIT validation is implemented. The loop is
+    bounded per invocation; repeated workflow invocations continue the search.
+    """
+    config = load_config()
+    round_records: list[dict[str, object]] = []
+    all_history: list[pd.DataFrame] = []
+    all_coverage: list[pd.DataFrame] = []
+    no_progress_rounds = 0
+    previous_rows = 0
+    previous_cells = 0
+
+    for round_index in range(int(config.rounds)):
+        window_start, window_end = expanded_window(
+            int(start_year), int(end_year), round_index, config
+        )
+        history, coverage = _load_available_history_window(
+            window_start, window_end, max_workers
+        )
+        if not history.empty:
+            all_history.append(history)
+        if not coverage.empty:
+            c = coverage.copy()
+            c["acquisition_round"] = int(round_index + 1)
+            c["requested_start_year"] = int(window_start)
+            c["requested_end_year"] = int(window_end)
+            all_coverage.append(c)
+
+        merged = deduplicate_history(
+            pd.concat(all_history, ignore_index=True) if all_history else pd.DataFrame()
+        )
+        coverage_rows = (
+            pd.concat(all_coverage, ignore_index=True) if all_coverage else pd.DataFrame()
+        )
+        current_rows = int(len(merged))
+        current_cells = int(
+            len(
+                coverage_rows[
+                    coverage_rows["status"].astype(str).eq("AVAILABLE")
+                ]
+            )
+        ) if not coverage_rows.empty and "status" in coverage_rows.columns else 0
+
+        round_records.append(
+            {
+                "round": int(round_index + 1),
+                "start_year": int(window_start),
+                "end_year": int(window_end),
+                "history_rows_total": current_rows,
+                "available_coverage_records_total": current_cells,
+                "new_history_rows": max(0, current_rows - previous_rows),
+                "new_available_coverage_records": max(0, current_cells - previous_cells),
+            }
+        )
+        if current_rows == previous_rows and current_cells == previous_cells:
+            no_progress_rounds += 1
+        else:
+            no_progress_rounds = 0
+        previous_rows, previous_cells = current_rows, current_cells
+        if no_progress_rounds > int(config.no_progress_stop_rounds):
+            break
+
+    history = deduplicate_history(
+        pd.concat(all_history, ignore_index=True) if all_history else pd.DataFrame()
+    )
+    coverage = (
+        pd.concat(all_coverage, ignore_index=True) if all_coverage else pd.DataFrame()
+    )
+    if not history.empty:
+        history = history.sort_values(
+            ["competition", "kickoff_utc", "home_team", "away_team", "source_name"],
+            kind="mergesort",
+        ).reset_index(drop=True)
+        history = history[history["competition"].astype(str).isin(ACTIVE_SCOPE)].copy()
+    if not coverage.empty:
+        coverage = coverage[
+            coverage["competition"].astype(str).isin(ACTIVE_SCOPE)
+        ].copy()
+        coverage = select_preferred_sources(coverage)
+
+    # The discovery frontier is intentionally separate from training data.
+    # Only the most data-sparse active competitions are searched to keep public
+    # API usage bounded, and every candidate still requires a PIT-capable adapter.
+    discovery_targets = rank_discovery_targets(
+        history, tuple(ACTIVE_SCOPE), limit=int(config.max_discovery_competitions)
+    )
+    discovery = discover_free_github_sources(
+        discovery_targets, per_competition=int(config.discovery_per_competition)
+    )
+    try:
+        write_state(
+            "artifacts/adaptive_acquisition_state.json",
+            config=config,
+            rounds=round_records,
+            discovery=discovery,
+        )
+    except Exception:
+        # State recording is diagnostic only; acquisition integrity must not be
+        # converted into success/failure by a non-critical artifact write.
+        pass
+
+    return history, coverage
