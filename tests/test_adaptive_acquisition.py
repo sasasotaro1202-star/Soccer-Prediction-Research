@@ -6,6 +6,7 @@ from src.data.adaptive_acquisition import (
     AcquisitionConfig,
     deduplicate_history,
     expanded_window,
+    identify_data_deficits,
     rank_discovery_targets,
     select_preferred_sources,
 )
@@ -54,3 +55,19 @@ def test_discovery_targets_prioritize_sparse_competitions():
     history = pd.DataFrame({"competition": ["EPL", "EPL", "UCL"]})
     targets = rank_discovery_targets(history, ("EPL", "UCL", "J1", "J2"), limit=3)
     assert targets == ["J1", "J2", "UCL"]
+
+
+def test_data_deficits_keep_sparse_competitions_in_scope():
+    history = pd.DataFrame({
+        "competition": ["EPL"] * 4 + ["J1"],
+        "season_start": [2024, 2024, 2025, 2025, 2025],
+    })
+    deficits = identify_data_deficits(
+        history,
+        ("EPL", "J1", "UCL"),
+        minimum_rows_per_competition=3,
+        minimum_seasons_per_competition=2,
+    )
+    assert "EPL" not in deficits
+    assert deficits["J1"]["seasons"] == 1
+    assert deficits["UCL"]["rows"] == 0
