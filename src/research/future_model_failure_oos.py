@@ -161,11 +161,12 @@ def evaluate_future_model_failure_oos(
             if len(current_p) != end_k - start_k or len(future_p) != len(yf):
                 raise ValueError(f"prediction length mismatch for {name!r}")
 
+            current_p = _safe_probs(current["preds"][name])
+            current_y = y[start_k:end_k]
+            current_ll = _logloss(current_y, current_p)
             recent = histories[name][-int(recent_window):]
-            baseline = (
-                float(np.median(recent))
-                if recent else float(_logloss(yf, future_p))
-            )
+            baseline_history = list(recent) + [current_ll]
+            baseline = float(np.median(baseline_history))
             next_ll = _logloss(yf, future_p)
             failure = bool(
                 next_ll > baseline + float(min_absolute_logloss_increase)
