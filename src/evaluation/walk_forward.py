@@ -9,6 +9,7 @@ from scipy.optimize import minimize, minimize_scalar
 from src.evaluation.metrics import classification_metrics
 from src.models.baselines import candidates
 from src.monitoring.dynamic_routing import build_drift_reference, compute_drift_scores, dynamic_route_weights, history_support_risk, routing_risk_bucket, routing_risk_score
+from src.research.predictability import binary_calibration_metrics, fit_predictability_calibrator, raw_predictability
 
 TARGET_ACCURACY = 0.80
 
@@ -622,6 +623,10 @@ def run_walk_forward(
 
     results, selected = [], []
     case_rows = []
+    predictability_raw_history: list[float] = []
+    predictability_correctness_history: list[int] = []
+    predictability_calibrator_training_rows = 0
+    predictability_calibrator_status = "NOT_FROZEN"
     start = _advance_past_same_kickoff(d, min_train)
     while start < len(d):
         oos_end = _advance_past_same_kickoff(d, min(start + oos_block, len(d)))
@@ -759,6 +764,29 @@ def run_walk_forward(
             risk_temperature_modifiers,
         )
 
+        # Target-free Predictability Score: trained only from prediction-time
+        # diagnostics and calibrated from chronologically prior OOS outcomes.
+        predictability_raw = raw_predictability(
+            disagreement=oos_risk_diag.get("disagreement", np.zeros(len(oos))),
+            uncertainty=oos_risk_diag.get("uncertainty", np.zeros(len(oos))),
+            drift=oos_risk_diag.get("drift", np.zeros(len(oos))),
+            support_risk=oos_risk_diag.get("support", np.zeros(len(oos))),
+        )
+        predictability_calibrated, predictability_calibrator = fit_predictability_calibrator(
+            predictability_raw_history,
+            predictability_correctness_history,
+            np.asarray(predictability_raw, dtype=float),
+        )
+        predictability_calibrator_training_rows = int(predictability_calibrator.get("training_rows", 0))
+        predictability_calibrator_status = str(predictability_calibrator.get("status", "UNKNOWN"))
+        current_correct = (np.argmax(probs, axis=1) == oos["target"].astype(int).to_numpy()).astype(int)
+        predictability_metrics = binary_calibration_metrics(
+            current_correct,
+            predictability_calibrated,
+        )
+        if len(predictability_raw_history) >= 120 and len(set(predictability_correctness_history)) >= 2:
+            predictability_calibrator_status = "FROZEN_PRIOR_ONLY_LOGISTIC" if (oos_end + oos_block >= len(d)) else predictability_calibrator_status
+
         if case_output_path:
             labels = np.asarray([0, 1, 2], dtype=int)
             pred = np.argmax(probs, axis=1)
@@ -800,6 +828,8 @@ def run_walk_forward(
                     'uncertainty_score': float(diagnostics['uncertainty_score'][row_idx]),
                     'covariate_drift': float(diagnostics['covariate_drift'][row_idx]),
                     'history_support_risk': float(diagnostics['history_support_risk'][row_idx]),
+                    'predictability_raw': float(predictability_raw[row_idx]),
+                    'predictability_calibrated': float(predictability_calibrated[row_idx]),
                     'routing_route': str(_oos_routes[row_idx]),
                 })
 
@@ -826,7 +856,23 @@ def run_walk_forward(
             "target_met": bool(candidate_metrics["accuracy"] >= TARGET_ACCURACY),
             "target_gap": float(candidate_metrics["accuracy"] - TARGET_ACCURACY),
             "blend_optimizer_used": blend_optimizer_used,
+            "predictability_mean": float(np.mean(predictability_raw)),
+            "predictability_calibrated_mean": float(np.mean(predictability_calibrated)),
+            "predictability_brier": float(predictability_metrics["brier"]),
+            "predictability_ece": float(predictability_metrics["ece"]),
+            "predictability_accuracy_at_0_5": float(predictability_metrics["accuracy_at_0_5"]),
+            "predictability_calibrator_status": predictability_calibrator_status,
+            "predictability_calibrator_training_rows": int(predictability_calibrator_training_rows),
+            "predictability_locked_frozen": bool(oos_end + int(oos_block) >= len(d)),
+            "predictability_locked_outcomes_update_calibrator": False,
         })
+
+        # Update calibration history only after a development OOS block has matured.
+        # The final two OOS blocks remain locked and never update the calibrator.
+        if not bool(oos_end + int(oos_block) >= len(d)):
+            predictability_raw_history.extend(np.asarray(predictability_raw, dtype=float).tolist())
+            predictability_correctness_history.extend(current_correct.astype(int).tolist())
+
         start = oos_end
 
     if case_output_path:
