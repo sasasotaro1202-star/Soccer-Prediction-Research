@@ -61,12 +61,42 @@ def _utc(value: Any) -> datetime | None:
     return dt.astimezone(timezone.utc)
 
 
+_TEAM_ALIASES = {
+    "wolves": "wolverhamptonwanderers",
+    "manunited": "manchesterunited",
+    "manutd": "manchesterunited",
+    "mancity": "manchestercity",
+    "westbrom": "westbromwichalbion",
+    "westham": "westhamunited",
+    "spurs": "tottenhamhotspur",
+    "brighton": "brightonandhovealbion",
+    "newcastle": "newcastleunited",
+    "leicester": "leicestercity",
+    "norwich": "norwichcity",
+    "stoke": "stokecity",
+    "swansea": "swanseacity",
+    "cardiff": "cardiffcity",
+    "hull": "hullcity",
+    "leeds": "leedsunited",
+    "qpr": "queensparkrangers",
+    "birmingham": "birminghamcity",
+    "coventry": "coventrycity",
+    "sheffieldutd": "sheffieldunited",
+}
+
+
 def _norm_team(value: Any) -> str:
-    text = unicodedata.normalize("NFKC", str(value or "")).casefold().strip()
-    for suffix in (" afc", " fc"):
-        if text.endswith(suffix):
-            text = text[: -len(suffix)]
-    return "".join(ch for ch in text if unicodedata.category(ch)[0] not in {"P", "Z"})
+    text = unicodedata.normalize("NFKD", str(value or "")).encode(
+        "ascii", "ignore"
+    ).decode("ascii").casefold().strip()
+    normalized = "".join(
+        ch for ch in text if unicodedata.category(ch)[0] not in {"P", "Z"}
+    )
+    for suffix in ("fc", "afc"):
+        if normalized.endswith(suffix) and len(normalized) > len(suffix) + 3:
+            normalized = normalized[: -len(suffix)]
+            break
+    return _TEAM_ALIASES.get(normalized, normalized)
 
 
 def season_path(competition: str, start_year: int) -> str:
