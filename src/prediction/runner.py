@@ -283,6 +283,10 @@ def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) ->
     if missing:
         raise RuntimeError(f"Future fixture input missing required columns: {missing}")
     d = fixtures.copy()
+    d["competition"] = d["competition"].astype("string").str.strip().str.upper()
+    # Filter the production target universe before validating supplemental rows.
+    # An unrelated row with missing PIT metadata must never suppress a valid target.
+    d = d[d["competition"].isin(TARGET_COMPETITIONS)].copy()
     d["match_id"] = d["match_id"].astype("string").str.strip()
     if d["match_id"].isna().any() or d["match_id"].eq("").any():
         raise RuntimeError("Future fixture input contains missing/empty match_id values")
@@ -297,10 +301,6 @@ def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) ->
     d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
     if d["kickoff_utc"].isna().any():
         raise RuntimeError("Future fixture input contains invalid/missing kickoff_utc values")
-    d["competition"] = d["competition"].astype("string").str.strip().str.upper()
-    # Filter the production target universe before validating supplemental rows.
-    # An unrelated row with missing PIT metadata must never suppress a valid target.
-    d = d[d["competition"].isin(TARGET_COMPETITIONS)].copy()
     d["source_available_at_utc"] = pd.to_datetime(d["source_available_at_utc"], utc=True, errors="coerce")
     if d["source_available_at_utc"].isna().any():
         raise RuntimeError("Future fixture input contains invalid/missing source_available_at_utc values")
