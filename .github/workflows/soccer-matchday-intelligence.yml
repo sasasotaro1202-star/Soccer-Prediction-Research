@@ -91,6 +91,28 @@ jobs:
               raise SystemExit(f"unexpected starter_status values: {sorted(actual_status - allowed_status)}")
           print({"status": status.get("status"), "rows": len(frame), "errors": len(status.get("errors", []))})
           PY
+      - name: Publish active target coverage
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          p = Path("artifacts/matchday_intelligence_status.json")
+          print("## Active target coverage")
+          if not p.exists():
+              print("- Status artifact unavailable")
+              raise SystemExit(0)
+          status = json.loads(p.read_text(encoding="utf-8"))
+          coverage = status.get("active_target_coverage") or {}
+          print(f"- Active targets: {coverage.get('active_target_count', 0)}")
+          print(f"- Targets with upcoming fixtures in snapshot: {coverage.get('targets_with_upcoming_fixtures', 0)}")
+          print(f"- Snapshot fixture presence: {coverage.get('upcoming_fixture_presence_pct', 'NA')}%")
+          for competition, item in (coverage.get("per_competition") or {}).items():
+              sources = ", ".join(item.get("sources") or []) or "none"
+              print(f"- **{competition}**: rows={item.get('upcoming_rows', 0)}, sources={sources}")
+          PY
       - name: Prepare PIT-safe future fixture features
         if: success()
         env:
