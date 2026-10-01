@@ -325,6 +325,7 @@ def _pending_updates(group: pd.DataFrame) -> list[dict[str, Any]]:
             "rating": row["rating"],
             "minutes": row["minutes"],
             "starter": float(bool(row["is_starter"])),
+            "player_name": str(row.get("player_name") or ""),
         }
         for _, row in group.iterrows()
         if pd.notna(row["player_id"])
@@ -391,10 +392,11 @@ def _build_cases(raw: pd.DataFrame) -> pd.DataFrame:
             for pid in candidates:
                 state = states.get(pid)
                 feat = _player_features(state, target_time=cutoff)
+                state_name = str((state.rows[-1].get("player_name") if state and state.rows else "") or "")
                 name_values = group.loc[
                     group["player_id"].astype(str).eq(pid), "player_name"
                 ].dropna()
-                player_name = str(name_values.iloc[0]) if not name_values.empty else ""
+                player_name = str(name_values.iloc[0]) if not name_values.empty else state_name
                 case_rows.append({
                     "match_id": str(int(fixture_id)),
                     "competition": str(competition),
