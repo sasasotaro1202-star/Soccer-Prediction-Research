@@ -74,6 +74,8 @@ def _binary_metrics(y: np.ndarray, p: np.ndarray) -> dict[str, float | int]:
 
 
 def _validate_and_reduce(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return frame.copy()
     required = {
         "match_id", "kickoff_utc", "prediction_pit_cutoff_utc",
         "prediction_pit_gate", "experience_available_at_utc",
@@ -149,6 +151,14 @@ def _validate_and_reduce(frame: pd.DataFrame) -> pd.DataFrame:
 
 def _predictability_score(frame: pd.DataFrame) -> pd.DataFrame:
     d = frame.copy()
+    if d.empty:
+        d["confidence"] = pd.Series(dtype=float)
+        d["margin"] = pd.Series(dtype=float)
+        d["predictability_telemetry_coverage"] = pd.Series(dtype=float)
+        d["predictability_score"] = pd.Series(dtype=float)
+        d["predictability_band"] = pd.Series(dtype="string")
+        d["high_confidence_low_predictability"] = pd.Series(dtype=bool)
+        return d
     if "confidence" not in d.columns or "margin" not in d.columns:
         p = d[["p_home", "p_draw", "p_away"]].to_numpy(dtype=float)
         if not np.isfinite(p).all() or (p < 0).any() or np.any(p.sum(axis=1) <= 0):
