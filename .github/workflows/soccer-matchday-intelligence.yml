@@ -61,7 +61,7 @@ jobs:
           python -m src.data.matchday_intelligence_fetch \
             --days "${DAYS}" \
             --horizon-hours "${HORIZON_HOURS}" \
-            --max-events 500 \
+            --max-events 5000 \
             --output artifacts/future_matchday_fixtures.csv \
             --status artifacts/matchday_intelligence_status.json
       - name: Validate snapshot contract
@@ -83,6 +83,8 @@ jobs:
           missing = sorted(required - set(frame.columns))
           if missing:
               raise SystemExit(f"matchday snapshot missing required columns: {missing}")
+          if status.get("event_cap_reached") is True:
+              raise SystemExit("matchday snapshot reached event cap; refusing to predict on a potentially truncated scope")
           if frame["match_id"].duplicated().any():
               raise SystemExit("duplicate match_id in matchday snapshot")
           allowed_status = {"EXPECTED", "ANNOUNCED"}
