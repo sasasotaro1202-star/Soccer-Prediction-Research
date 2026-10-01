@@ -1,0 +1,151 @@
+name: Soccer Versioned Result PIT Research
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_groups:
+        description: "Maximum competition-season groups to inspect"
+        required: false
+        default: "32"
+      rows_per_group:
+        description: "Rows per group (0 = all rows in selected groups)"
+        required: false
+        default: "0"
+  schedule:
+    - cron: "45 */12 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soccer-versioned-pit-research
+  cancel-in-progress: true
+
+jobs:
+  versioned-pit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30af803
+        with:
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+
+      - name: Compile
+        run: python -m compileall -q src tests
+
+      - name: Versioned PIT regression tests
+        run: python -m pytest -q tests/test_versioned_result_pit.py
+
+      - name: Build bounded versioned-result evidence
+        env:
+          MAX_GROUPS: ${{ inputs.max_groups || '32' }}
+          ROWS_PER_GROUP: ${{ inputs.rows_per_group || '0' }}
+        run: |
+          set -euo pipefail
+          python -m src.data.versioned_result_pit             --input artifacts/normalized_history.csv             --output artifacts/versioned_pit_result_evidence.csv             --report artifacts/versioned_pit_result_evidence_report.csv             --max-groups "$MAX_GROUPS"             --rows-per-group "$ROWS_PER_GROUP"
+          test -s artifacts/versioned_pit_result_evidence.csv
+          test -s artifacts/versioned_pit_result_evidence_report.csv
+
+      - name: Safety gate
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+
+          evidence = pd.read_csv("artifacts/versioned_pit_result_evidence.csv")
+          report = pd.read_csv("artifacts/versioned_pit_result_evidence_report.csv")
+
+          verified = int(
+              evidence["versioned_result_evidence_status"]
+              .astype("string").eq("VERIFIED").sum()
+          )
+          malformed = int(
+              evidence["versioned_result_evidence_status"]
+              .astype("string").isin(
+                  ["VERIFIED", "UNVERIFIABLE"]
+              ).eq(False).sum()
+          )
+          state = {
+              "status": "AUDIT_ONLY",
+              "rows": int(len(evidence)),
+              "groups": int(len(report)),
+              "verified_rows": verified,
+              "malformed_status_rows": malformed,
+              "production_changed": False,
+              "production_probabilities_changed": False,
+              "production_registry_changed": False,
+              "training_enabled": False,
+              "claim": "versioned_dataset_result_publication_evidence_only",
+          }
+          if malformed:
+              raise SystemExit("versioned PIT evidence contains unsupported status values")
+          Path("artifacts/versioned_pit_result_evidence_status.json").write_text(
+              json.dumps(state, indent=2, ensure_ascii=False),
+              encoding="utf-8",
+          )
+          print(json.dumps(state, ensure_ascii=False))
+          PY
+          test -s artifacts/versioned_pit_result_evidence_status.json
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Versioned PIT evidence"
+            if [ -s artifacts/versioned_pit_result_evidence_status.json ]; then
+              python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(
+              Path("artifacts/versioned_pit_result_evidence_status.json")
+              .read_text(encoding="utf-8")
+          )
+          print(f"- Rows inspected={s.get('rows', 0)}")
+          print(f"- Competition-season groups={s.get('groups', 0)}")
+          print(f"- Versioned result evidence verified={s.get('verified_rows', 0)}")
+          print("- Production changed=False")
+          print("- Training enabled=False")
+          PY
+            else
+              echo "- Versioned PIT status unavailable."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Persist audit artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "soccer-versioned-pit-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --             artifacts/versioned_pit_result_evidence.csv             artifacts/versioned_pit_result_evidence_report.csv             artifacts/versioned_pit_result_evidence_status.json
+          if git diff --cached --quiet; then
+            echo "No versioned PIT evidence changes to commit."
+            exit 0
+          fi
+          git commit -m "ops: persist versioned result PIT evidence"
+          git fetch --prune origin main
+          git rebase origin/main
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "versioned PIT artifact push attempt ${attempt} failed; rebasing again..."
+            git fetch --prune origin main
+            git rebase origin/main
+            if [ "${attempt}" -lt 3 ]; then
+              sleep $((attempt * 5))
+            fi
+          done
+          exit 1
