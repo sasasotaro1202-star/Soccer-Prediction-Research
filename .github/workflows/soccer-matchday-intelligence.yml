@@ -87,7 +87,7 @@ jobs:
               raise SystemExit("unexpected global matchday event cap is enabled; refusing potentially truncated scope")
           if frame["match_id"].duplicated().any():
               raise SystemExit("duplicate match_id in matchday snapshot")
-          allowed_status = {"EXPECTED", "ANNOUNCED"}
+          allowed_status = {"EXPECTED", "ANNOUNCED", "CONFIRMED"}
           actual_status = set(frame["starter_status"].dropna().astype(str).str.upper())
           if not actual_status <= allowed_status:
               raise SystemExit(f"unexpected starter_status values: {sorted(actual_status - allowed_status)}")
