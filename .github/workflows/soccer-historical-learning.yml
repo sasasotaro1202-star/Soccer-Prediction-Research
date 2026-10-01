@@ -267,5 +267,8 @@ jobs:
             artifacts/target_specific/target_specific_status.json
             artifacts/target_specific/target_specific_competition_metrics.csv
             artifacts/target_specific/target_specific_competition_status.json
+            artifacts/experience_candidate_plan.json
+            artifacts/experience_candidate_status.json
+            artifacts/experience_candidate_evaluation.json
           retention-days: 14
           if-no-files-found: warn
