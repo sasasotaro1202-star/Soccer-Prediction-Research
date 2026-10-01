@@ -200,16 +200,13 @@ def build_experience_candidate_plan(
             if candidate is not None:
                 proposals.append(candidate)
 
+    predicted_idx = data[["p_home", "p_draw", "p_away"]].to_numpy(dtype=float).argmax(axis=1)
+    actual_idx = data["actual_result"].map({"H": 0, "D": 1, "A": 2}).to_numpy(dtype=int)
+    correct = pd.Series(predicted_idx == actual_idx, index=data.index)
     error_specs = [
         (
             "high_confidence_wrong",
-            (data["confidence"] >= 0.75)
-            & (data["p_home"].where(data["actual_result"] == "H", 0.0) != data["p_home"])
-            & ~(
-                ((data["actual_result"] == "H") & (data["p_home"] == data[["p_home", "p_draw", "p_away"]].max(axis=1)))
-                | ((data["actual_result"] == "D") & (data["p_draw"] == data[["p_home", "p_draw", "p_away"]].max(axis=1)))
-                | ((data["actual_result"] == "A") & (data["p_away"] == data[["p_home", "p_draw", "p_away"]].max(axis=1)))
-            ),
+            (data["confidence"] >= 0.75) & ~correct,
             "high_confidence_abstention_challenge",
             "Test whether high-confidence wrong cases are predictable from outcome-free telemetry and can support selective prediction without degrading normal cases.",
         ),
