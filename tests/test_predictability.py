@@ -61,3 +61,11 @@ def test_predictability_rejects_unbounded_inputs():
             drift=[0.0],
             support_risk=[0.0],
         )
+
+
+def test_binary_predictability_calibration_metrics():
+    from src.research.predictability import binary_calibration_metrics
+    metrics = binary_calibration_metrics([0, 1, 1, 0], [0.1, 0.9, 0.8, 0.2])
+    assert metrics["brier"] < 0.05
+    assert metrics["ece"] < 0.2
+    assert metrics["accuracy_at_0_5"] == 1.0
