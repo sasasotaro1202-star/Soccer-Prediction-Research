@@ -445,3 +445,43 @@ def test_bundle_shadow_diagnostics_support_global_only_bundle(tmp_path):
     assert np.allclose(diagnostics["covariate_drift"], 0.0)
     assert np.allclose(diagnostics["history_support_risk"], 0.0)
     assert np.all(np.isfinite(diagnostics["routing_risk"]))
+
+
+
+def test_bundle_shadow_diagnostics_support_static_contextual_routing(tmp_path):
+    df = _fixture().copy()
+    df["competition"] = np.where(np.arange(len(df)) % 2 == 0, "EPL", "LL")
+    df["elo_diff"] = 0.0
+    df["home_goal_total_avg_5"] = 2.0
+    df["away_goal_total_avg_5"] = 2.0
+    df["home_draw_rate_20"] = 0.25
+    df["away_draw_rate_20"] = 0.25
+    df["rest_diff_hours"] = 0.0
+    df["neutral_venue_known"] = True
+    df["neutral_venue"] = False
+    path = tmp_path / "production_model.pkl"
+    train_and_save_bundle(
+        df,
+        ["f1", "f2"],
+        {
+            "weights": {"logistic": 0.5, "extra_trees": 0.5},
+            "temperature": 1.0,
+            "context_weights": {
+                "COMP:EPL": {"logistic": 0.5, "extra_trees": 0.5},
+                "COMP:LL": {"logistic": 0.5, "extra_trees": 0.5},
+            },
+            "contextual_temperatures": {"COMP:EPL": 1.0, "COMP:LL": 1.0, "GLOBAL": 1.0},
+            "contextual_temperature_reasons": {"COMP:EPL": "test", "COMP:LL": "test", "GLOBAL": "test"},
+        },
+        str(path),
+        "test-version",
+        "snapshot-1",
+    )
+    bundle = load_bundle(str(path))
+    X = df.iloc[:10].copy()
+    direct = predict_bundle(bundle, X)
+    shadow, diagnostics = predict_bundle_with_diagnostics(bundle, X)
+    assert np.allclose(shadow, direct, atol=1e-12)
+    assert len(diagnostics["route"]) == len(X)
+    assert np.all(np.isfinite(diagnostics["history_support_risk"]))
+    assert np.allclose(diagnostics["history_support_risk"], 0.0)
