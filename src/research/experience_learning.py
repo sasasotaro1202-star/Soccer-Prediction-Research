@@ -249,11 +249,10 @@ def _build_replay(
 
 def _chronological_blocks(replay: pd.DataFrame) -> np.ndarray:
     n = len(replay)
-    if n == 0:
+    if n < MIN_BLOCKS * MIN_ROWS_PER_BLOCK:
         return np.array([], dtype=int)
-    blocks = max(MIN_BLOCKS, min(5, n // MIN_ROWS_PER_BLOCK))
-    if blocks < MIN_BLOCKS:
-        return np.zeros(n, dtype=int)
+    blocks = min(5, n // MIN_ROWS_PER_BLOCK)
+    # Equal-sized chronological blocks, each with at least MIN_ROWS_PER_BLOCK rows.
     return np.floor(np.arange(n) * blocks / n).astype(int).clip(0, blocks - 1)
 
 
@@ -291,11 +290,12 @@ def _evaluate_blocks(replay: pd.DataFrame) -> pd.DataFrame:
 
 
 def _candidate_status(blocks: pd.DataFrame, replay: pd.DataFrame) -> tuple[str, dict[str, Any]]:
-    if replay.empty or blocks.empty or len(blocks) < MIN_BLOCKS:
+    if replay.empty or blocks.empty or len(blocks) < MIN_BLOCKS or len(replay) < MIN_BLOCKS * MIN_ROWS_PER_BLOCK:
         return "INSUFFICIENT_EXPERIENCE", {
-            "status_reason": "At least three chronological OOS blocks are required.",
+            "status_reason": f"At least {MIN_BLOCKS} chronological OOS blocks with {MIN_ROWS_PER_BLOCK} rows each are required.",
             "blocks": int(len(blocks)),
             "rows": int(len(replay)),
+            "min_rows_required": int(MIN_BLOCKS * MIN_ROWS_PER_BLOCK),
         }
 
     locked = blocks.tail(2)
