@@ -72,7 +72,7 @@ def test_data_deficits_keep_sparse_competitions_in_scope_and_require_pit():
     assert "EPL" not in deficits
     assert deficits["J1"]["seasons"] == 1
     assert deficits["UCL"]["rows"] == 0
-    assert deficits["EPL"]["count_basis"] == "PIT_VERIFIED_ONLY"
+    assert deficits["J1"]["count_basis"] == "PIT_VERIFIED_ONLY"
 
 
 def test_write_state_persists_discovered_acquisition_report(tmp_path):
