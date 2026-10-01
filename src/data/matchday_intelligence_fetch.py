@@ -32,7 +32,7 @@ ESPN_LEAGUES: dict[str, str] = {
 }
 
 DETAILED_HORIZON_HOURS = 12.0
-MAX_EVENTS = 200
+MAX_EVENTS = 5000
 SOFASCORE_LINEUP_ENRICH_LIMIT = 16
 FOOTBALL_DATA_FIXTURES_URL = "https://www.football-data.co.uk/fixtures.csv"
 
@@ -1172,6 +1172,7 @@ def collect_matchday_snapshots(
         )
 
     snapshot_finished = _now()
+    event_cap_reached = bool(len(rows) >= int(max_events))
     if not frame.empty:
         available = pd.to_datetime(frame["matchday_available_at_utc"], utc=True, errors="coerce")
         frame["matchday_pit_verified"] = available.notna() & (available <= pd.Timestamp(snapshot_finished))
@@ -1183,6 +1184,8 @@ def collect_matchday_snapshots(
         "snapshot_started_at_utc": iso_utc(now),
         "snapshot_finished_at_utc": iso_utc(snapshot_finished),
         "rows": int(len(frame)),
+        "event_cap_reached": event_cap_reached,
+        "max_events": int(max_events),
         "errors": errors,
         "fallback_usage": fallback_usage,
         "historical_pit_claim": False,
