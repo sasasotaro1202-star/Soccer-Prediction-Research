@@ -53,9 +53,15 @@ def build(fixtures: pd.DataFrame, bundle: dict) -> pd.DataFrame:
     risk = np.asarray(diagnostics["routing_risk"], dtype=float)
     buckets = np.where(risk < 0.33, "LOW", np.where(risk < 0.66, "MEDIUM", "HIGH"))
 
+    kickoff = pd.to_datetime(fixtures["kickoff_utc"], utc=True, errors="coerce")
+    if kickoff.isna().any():
+        raise RuntimeError("diagnostic input contains invalid kickoff_utc values")
+    match_ids = fixtures["match_id"].astype(str).str.strip()
+    if match_ids.eq("").any():
+        raise RuntimeError("diagnostic input contains empty match_id values")
     result = pd.DataFrame({
-        "match_id": fixtures["match_id"].astype(str),
-        "kickoff_utc": pd.to_datetime(fixtures["kickoff_utc"], utc=True, errors="coerce").astype(str),
+        "match_id": match_ids,
+        "kickoff_utc": kickoff.astype(str),
         "competition": fixtures["competition"].astype(str),
         "home_team": fixtures["home_team"].astype(str),
         "away_team": fixtures["away_team"].astype(str),
@@ -76,7 +82,7 @@ def build(fixtures: pd.DataFrame, bundle: dict) -> pd.DataFrame:
 
     if result["match_id"].duplicated().any():
         raise RuntimeError("diagnostic output contains duplicate match_id values")
-    if result["kickoff_utc"].isna().any():
+    if result["kickoff_utc"].eq("NaT").any():
         raise RuntimeError("diagnostic output contains invalid kickoff_utc values")
     numeric = list(OUTPUT_COLUMNS[5:16])
     values = result[numeric].to_numpy(dtype=float)
