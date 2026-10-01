@@ -4,6 +4,7 @@ import pandas as pd
 
 from src.research.experience_learning import (
     _experience_adjusted_probability,
+    _teacher_pool,
     _validate_ledger,
     learn,
 )
@@ -32,6 +33,37 @@ def test_validation_rejects_teacher_available_before_teacher_prediction():
         [_row("m1", "2026-01-01T08:00:00Z", "2026-01-01T07:00:00Z", "H")]
     )
     assert _validate_ledger(frame).empty
+
+
+def test_validation_rejects_duplicate_fixture_without_state_identity():
+    rows = [
+        _row("m1", "2026-01-01T08:00:00Z", "2026-01-01T12:00:00Z", "H"),
+        _row("m1", "2026-01-01T09:00:00Z", "2026-01-01T12:00:00Z", "H"),
+    ]
+    with pytest.raises(RuntimeError, match="duplicate match_id without prediction_state_id"):
+        _validate_ledger(pd.DataFrame(rows))
+
+
+def test_validation_allows_distinct_prediction_states_for_same_fixture():
+    rows = [
+        _row(
+            "m1",
+            "2026-01-01T08:00:00Z",
+            "2026-01-01T12:00:00Z",
+            "H",
+            prediction_state_id="state-1",
+        ),
+        _row(
+            "m1",
+            "2026-01-01T09:00:00Z",
+            "2026-01-01T12:00:00Z",
+            "H",
+            prediction_state_id="state-2",
+        ),
+    ]
+    validated = _validate_ledger(pd.DataFrame(rows))
+    assert len(validated) == 2
+    assert set(validated["prediction_state_id"]) == {"state-1", "state-2"}
 
 
 def test_experience_correction_is_probability_valid():
@@ -66,6 +98,44 @@ def test_learn_fails_closed_without_pit_valid_settled_experience(tmp_path, monke
     assert result["status"] == "INSUFFICIENT_EXPERIENCE"
     assert policy.is_file()
     assert status.is_file()
+
+
+def test_teacher_pool_deduplicates_revised_states_of_one_fixture():
+    rows = [
+        _row(
+            "repeat",
+            "2026-01-01T07:00:00Z",
+            "2026-01-01T12:00:00Z",
+            "H",
+            prediction_state_id="repeat-1",
+        ),
+        _row(
+            "repeat",
+            "2026-01-01T08:00:00Z",
+            "2026-01-01T12:00:00Z",
+            "H",
+            prediction_state_id="repeat-2",
+        ),
+    ]
+    for i in range(1, 6):
+        rows.append(
+            _row(
+                f"m{i}",
+                "2026-01-01T08:00:00Z",
+                "2026-01-01T12:00:00Z",
+                "H",
+                prediction_state_id=f"state-{i}",
+            )
+        )
+    history = _validate_ledger(pd.DataFrame(rows))
+    target = history.iloc[0].copy()
+    target["prediction_pit_cutoff_utc"] = pd.Timestamp("2026-01-01T13:00:00Z")
+    pool = _teacher_pool(history, target)
+
+    assert len(pool) == 6
+    assert pool["match_id"].is_unique
+    repeat = pool.loc[pool["match_id"] == "repeat"].iloc[0]
+    assert repeat["prediction_state_id"] == "repeat-2"
 
 
 def test_teacher_outcome_after_target_cutoff_is_excluded():
