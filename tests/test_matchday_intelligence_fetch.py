@@ -447,3 +447,15 @@ def test_every_active_target_has_a_matchday_discovery_mapping():
         if not names:
             continue
         assert _sofascore_competition({"tournament": {"name": names[0]}}) == target
+
+
+def test_matchday_collection_has_no_global_event_cap_by_default():
+    from src.data.matchday_intelligence_fetch import MAX_EVENTS
+    assert MAX_EVENTS is None
+
+
+def test_matchday_workflow_does_not_pass_a_legacy_global_event_cap():
+    from pathlib import Path
+    workflow = Path(".github/workflows/soccer-matchday-intelligence.yml").read_text(encoding="utf-8")
+    assert "--max-events" not in workflow
+    assert "global_event_cap_enabled" in workflow
