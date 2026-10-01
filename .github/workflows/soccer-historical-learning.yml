@@ -191,5 +191,11 @@ jobs:
             artifacts/validated_candidate_model.json
             artifacts/validated_candidate_registry.json
             artifacts/validated_candidate_provenance.json
+            artifacts/target_specific/target_specific_oos.csv
+            artifacts/target_specific/target_specific_cases.csv
+            artifacts/target_specific/target_specific_selection.json
+            artifacts/target_specific/target_specific_status.json
+            artifacts/target_specific/target_specific_competition_metrics.csv
+            artifacts/target_specific/target_specific_competition_status.json
           retention-days: 14
           if-no-files-found: warn
