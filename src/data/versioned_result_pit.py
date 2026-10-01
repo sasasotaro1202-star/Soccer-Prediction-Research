@@ -256,7 +256,10 @@ def apply_bulk(
     work["kickoff_utc"] = pd.to_datetime(work["kickoff_utc"], utc=True, errors="coerce")
     supported = work["competition"].isin(COMPETITION_FILES) & work["season_start"].notna()
     work = work.loc[supported].copy()
-    groups = list(work.groupby(["competition", "season_start"], sort=True))
+    unresolved = work.loc[
+        work["versioned_result_evidence_status"].astype("string").ne("VERIFIED")
+    ].copy()
+    groups = list(unresolved.groupby(["competition", "season_start"], sort=True))
     if max_groups > 0:
         groups = groups[: int(max_groups)]
 
