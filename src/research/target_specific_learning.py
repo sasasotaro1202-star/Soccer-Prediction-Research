@@ -95,10 +95,14 @@ def _oos_blocks(df: pd.DataFrame, min_train: int, block_size: int):
         start = end
 
 def run_target_specific_learning(df: pd.DataFrame, *, min_train: int = 1000, block_size: int = 2000, min_blocks: int = 3) -> dict:
-    required = {"kickoff_utc","home_goals","away_goals","pit_verified"}
+    required = {"match_id","competition","kickoff_utc","home_goals","away_goals","pit_verified"}
     missing = sorted(required-set(df.columns))
     if missing: raise ValueError(f"Target-specific data missing columns: {missing}")
     d=df.copy()
+    d["match_id"]=d["match_id"].astype("string").str.strip()
+    d["competition"]=d["competition"].astype("string").str.strip().str.upper()
+    if d["match_id"].isna().any() or d["match_id"].eq("").any(): raise ValueError("Target-specific data contains missing match_id")
+    if d["competition"].isna().any() or d["competition"].eq("").any(): raise ValueError("Target-specific data contains missing competition")
     d["kickoff_utc"]=pd.to_datetime(d["kickoff_utc"],utc=True,errors="coerce")
     d["home_goals"]=pd.to_numeric(d["home_goals"],errors="coerce")
     d["away_goals"]=pd.to_numeric(d["away_goals"],errors="coerce")
@@ -106,6 +110,7 @@ def run_target_specific_learning(df: pd.DataFrame, *, min_train: int = 1000, blo
     if len(d) < min_train + block_size: raise ValueError(f"Not enough PIT-verified rows: {len(d)}")
     features=_feature_cols(d)
     all_rows=[]
+    case_rows=[]
     selections={}
     for target, label_fn in TARGETS.items():
         td=d.copy()
@@ -145,6 +150,23 @@ def run_target_specific_learning(df: pd.DataFrame, *, min_train: int = 1000, blo
             oos_score_model=fit_score_rate_model(train)
             oos_baseline=[predict_score_markets(oos_score_model,row.home_team,row.away_team,row.competition).get(market_key,float("nan")) for row in oos.itertuples(index=False)]
             baseline_mm=_metrics(oos["_target_specific"],np.asarray(oos_baseline,dtype=float))
+            for row, p_model, p_baseline, actual in zip(
+                oos.itertuples(index=False),
+                po,
+                oos_baseline,
+                oos["_target_specific"].astype(int).to_numpy(),
+            ):
+                case_rows.append({
+                    "target":target,
+                    "block":int(block_id),
+                    "match_id":str(row.match_id),
+                    "competition":str(row.competition),
+                    "kickoff_utc":str(row.kickoff_utc),
+                    "selected_model":selected,
+                    "prediction_probability":float(p_model),
+                    "baseline_score_probability":float(p_baseline),
+                    "actual":int(actual),
+                })
             target_blocks.append({
                 "target":target,
                 "block":block_id,
@@ -193,12 +215,13 @@ def run_target_specific_learning(df: pd.DataFrame, *, min_train: int = 1000, blo
             "production_usable": False,
         }
         all_rows.extend(target_blocks)
-    return {"schema_version":1,"status":"READY","targets":selections,"oos_rows":all_rows,"production_usable":False}
+    return {"schema_version":1,"status":"READY","targets":selections,"oos_rows":all_rows,"case_rows":case_rows,"production_usable":False}
 
 def write_target_specific_learning(df: pd.DataFrame, out_dir: str = "artifacts/target_specific") -> dict:
     out=Path(out_dir); out.mkdir(parents=True,exist_ok=True)
     state=run_target_specific_learning(df)
     pd.DataFrame(state["oos_rows"]).to_csv(out/"target_specific_oos.csv",index=False)
+    pd.DataFrame(state.get("case_rows", [])).to_csv(out/"target_specific_cases.csv",index=False)
     (out/"target_specific_selection.json").write_text(json.dumps(state,indent=2,ensure_ascii=False,default=str),encoding="utf-8")
     (out/"target_specific_status.json").write_text(json.dumps({"status":state["status"],"targets":list(state["targets"]),"production_usable":False},indent=2),encoding="utf-8")
     return state
