@@ -29,6 +29,12 @@ Standard prediction cutoff remains T-60 minutes where the prediction workflow us
 | 6 | API-Football | REST API | Yes (`API_FOOTBALL_KEY`) | Free tier exists; quota/history must be verified | Medium-high if archived snapshots or timestamps are available | structured fixtures, lineups, injuries, odds | No |
 | 7 | FBref | public web pages | No | Public web access | Medium; historical/PIT availability must be demonstrated | team/player statistics supplement | No |
 | 8 | Sportmonks | REST API | Yes (`SPORTMONKS_API_TOKEN`) | Free plan exists; coverage/quota must be verified | Medium-high if timestamped historical data is available | structured fallback/supplement | No |
+| 9 | openfootball/football.json | versioned public GitHub JSON | No | Free/open research data | High for result-publication evidence when first-observed commit is after conservative result lower bound | result-only publication evidence / PIT audit | No |
+
+The openfootball/football.json adapter is deliberately **not** treated as proof that
+Football-Data.co.uk published the same row at the same time. It supplies an independent
+versioned-result evidence timestamp. Any future result-only feature path must additionally
+exclude statistical fields whose own publication timestamp is not proven.
 
 ## Implementation order
 
