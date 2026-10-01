@@ -54,10 +54,25 @@ def test_generates_segment_candidate_only_when_degraded():
     assert any(c["source_dimension"] == "competition" and c["source_segment"] == "UCL" for c in plan["candidates"])
 
 
+def test_high_confidence_wrong_candidate_uses_error_telemetry():
+    rows = [_row(i, disagreement=0.01) for i in range(60)]
+    for i, row in enumerate(rows):
+        row["actual_result"] = "D" if i < 30 else "H"
+        row["shadow_model_disagreement"] = 0.30 if i < 30 else 0.01
+    plan = build_experience_candidate_plan(pd.DataFrame(rows))
+    assert plan["status"] == "READY"
+    assert any(c["source_segment"] == "high_confidence_wrong" for c in plan["candidates"])
+
+
 def test_high_disagreement_candidate_uses_shadow_telemetry():
-    rows = [_row(i, disagreement=0.30) for i in range(30)]
-    for row in rows:
-        row["actual_result"] = "D"
+    rows = [_row(i, disagreement=0.01) for i in range(60)]
+    for i, row in enumerate(rows):
+        if i < 30:
+            row["actual_result"] = "D"
+            row["shadow_model_disagreement"] = 0.30
+        else:
+            row["actual_result"] = "H"
+            row["shadow_model_disagreement"] = 0.01
     plan = build_experience_candidate_plan(pd.DataFrame(rows))
     assert plan["status"] == "READY"
     assert any(c["source_segment"] == "high_model_disagreement" for c in plan["candidates"])
