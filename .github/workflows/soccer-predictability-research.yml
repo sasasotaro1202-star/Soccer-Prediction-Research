@@ -45,7 +45,52 @@ jobs:
       - name: Build PIT-safe predictability research artifacts
         run: |
           set -euo pipefail
-          python -m src.research.predictability_map
+          if [ -s data/experience/prediction_ledger.csv ]; then
+            python -m src.research.predictability_map
+          else
+            mkdir -p artifacts/predictability
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+
+          out = Path("artifacts/predictability")
+          empty = pd.DataFrame()
+          for name in (
+              "predictability_map.csv",
+              "predictability_oos.csv",
+              "predictability_latest_cases.csv",
+              "predictability_oos_cases.csv",
+          ):
+              empty.to_csv(out / name, index=False)
+          state = {
+              "schema_version": 1,
+              "status": "WARMUP",
+              "reason": "No matured prediction ledger is present; predictability research is fail-closed.",
+              "production_usable": False,
+              "input_digest": "EMPTY",
+              "rows": 0,
+              "predictability_scored_rows": 0,
+              "high_confidence_low_predictability_rows": 0,
+              "gate": {"status": "HOLD", "blocks": 0},
+              "safety_contract": {
+                  "research_only": True,
+                  "production_changed": False,
+                  "production_probabilities_changed": False,
+                  "production_registry_changed": False,
+                  "frozen_holdout_touched": False,
+                  "outcome_data_used_only_after_maturity": True,
+                  "prediction_time_features_only": True,
+                  "chronological_oos_required_for_candidate": True,
+              },
+          }
+          (out / "predictability_status.json").write_text(
+              json.dumps(state, indent=2, ensure_ascii=False),
+              encoding="utf-8",
+          )
+          print(json.dumps(state, ensure_ascii=False))
+          PY
+          fi
           test -s artifacts/predictability/predictability_status.json
           test -s artifacts/predictability/predictability_map.csv
           test -s artifacts/predictability/predictability_oos.csv
