@@ -17,6 +17,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from src.evaluation.metrics import classification_metrics
+from src.prediction.secondary_outputs import fit_score_rate_model, predict_score_markets
 
 TARGETS = {
     "O/U": lambda h, a: int(h + a >= 3),
@@ -115,10 +116,19 @@ def run_target_specific_learning(df: pd.DataFrame, *, min_train: int = 1000, blo
                 model.fit(fit[features],fit["_target_specific"].astype(int))
                 pv=model.predict_proba(val[features])[:,1]
                 scores[name]=_metrics(val["_target_specific"],pv)
+            score_model=fit_score_rate_model(fit)
+            market_key="over_2_5" if target == "O/U" else "btts_yes"
+            val_market=[predict_score_markets(score_model,row.home_team,row.away_team,row.competition).get(market_key,float("nan")) for row in val.itertuples(index=False)]
+            scores["score_distribution"]=_metrics(val["_target_specific"],np.asarray(val_market,dtype=float))
             selected=min(scores,key=lambda k:scores[k]["logloss"])
-            model=_models()[selected]
-            model.fit(train[features],train["_target_specific"].astype(int))
-            po=model.predict_proba(oos[features])[:,1]
+            if selected == "score_distribution":
+                final_score_model=fit_score_rate_model(train)
+                oos_market=[predict_score_markets(final_score_model,row.home_team,row.away_team,row.competition).get(market_key,float("nan")) for row in oos.itertuples(index=False)]
+                po=np.asarray(oos_market,dtype=float)
+            else:
+                model=_models()[selected]
+                model.fit(train[features],train["_target_specific"].astype(int))
+                po=model.predict_proba(oos[features])[:,1]
             mm=_metrics(oos["_target_specific"],po)
             target_blocks.append({"target":target,"block":block_id,"oos_start":str(oos["kickoff_utc"].min()),"oos_end":str(oos["kickoff_utc"].max()),"selected_model":selected,**mm})
         blocks=pd.DataFrame(target_blocks)
