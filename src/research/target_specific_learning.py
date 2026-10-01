@@ -95,10 +95,14 @@ def _oos_blocks(df: pd.DataFrame, min_train: int, block_size: int):
         start = end
 
 def run_target_specific_learning(df: pd.DataFrame, *, min_train: int = 1000, block_size: int = 2000, min_blocks: int = 3) -> dict:
-    required = {"kickoff_utc","home_goals","away_goals","pit_verified"}
+    required = {"match_id","competition","kickoff_utc","home_goals","away_goals","pit_verified"}
     missing = sorted(required-set(df.columns))
     if missing: raise ValueError(f"Target-specific data missing columns: {missing}")
     d=df.copy()
+    d["match_id"]=d["match_id"].astype("string").str.strip()
+    d["competition"]=d["competition"].astype("string").str.strip().str.upper()
+    if d["match_id"].isna().any() or d["match_id"].eq("").any(): raise ValueError("Target-specific data contains missing match_id")
+    if d["competition"].isna().any() or d["competition"].eq("").any(): raise ValueError("Target-specific data contains missing competition")
     d["kickoff_utc"]=pd.to_datetime(d["kickoff_utc"],utc=True,errors="coerce")
     d["home_goals"]=pd.to_numeric(d["home_goals"],errors="coerce")
     d["away_goals"]=pd.to_numeric(d["away_goals"],errors="coerce")
@@ -155,8 +159,8 @@ def run_target_specific_learning(df: pd.DataFrame, *, min_train: int = 1000, blo
                 case_rows.append({
                     "target":target,
                     "block":int(block_id),
-                    "match_id":str(row.match_id) if hasattr(row, "match_id") else "",
-                    "competition":str(row.competition) if hasattr(row, "competition") else "__MISSING__",
+                    "match_id":str(row.match_id),
+                    "competition":str(row.competition),
                     "kickoff_utc":str(row.kickoff_utc),
                     "selected_model":selected,
                     "prediction_probability":float(p_model),
