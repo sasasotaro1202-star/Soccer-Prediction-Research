@@ -55,7 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -f artifacts/matchday-source/predictions.csv ]; then
-            python -m scripts.experience_ledger record               --predictions artifacts/matchday-source/predictions.csv               --prediction-time "$(python - <<'PY'
+            python -m scripts.experience_ledger record --predictions artifacts/matchday-source/predictions.csv --prediction-time "$(python - <<'PY'
           import json
           from pathlib import Path
           p = Path("artifacts/matchday-source/prediction_status.json")
@@ -85,47 +85,37 @@ jobs:
           python -m scripts.experience_ledger status
           test -s artifacts/experience_status.json
           test -s artifacts/experience_metrics.csv
-
-      - name: Publish experience metrics to job summary
+      - name: Learn from matured experience (PIT-safe Challenger)
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m src.research.experience_learning --ledger data/experience/prediction_ledger.csv
+          test -s artifacts/experience_learning_status.json
+          test -s artifacts/experience_policy_candidate.json
+      - name: Publish experience learning status to job summary
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          if [ ! -s artifacts/experience_status.json ]; then
-            echo "## Soccer performance" >> "$GITHUB_STEP_SUMMARY"
-            echo "No durable experience status was generated in this run." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import csv, json
+          if [ -s artifacts/experience_learning_status.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
           from pathlib import Path
-          status = json.loads(Path("artifacts/experience_status.json").read_text(encoding="utf-8"))
-          summary = status.get("summary") or {}
-          deltas = status.get("metric_deltas_vs_previous") or {}
-          print("## Soccer performance")
-          for scope in ("all", "30d", "7d"):
-              row = summary.get(scope)
-              if not isinstance(row, dict): continue
-              print(f"- **{scope} / 1X2**: n={row.get('n', 0)}, Accuracy={row.get('1x2_accuracy_pct', 'NA')}%, LogLoss={row.get('logloss', 'NA')}, Brier={row.get('brier', 'NA')}, RPS={row.get('rps', 'NA')}, ECE={row.get('ece', 'NA')}")
-              if scope in deltas: print(f"  - **1X2 changed vs previous**: {deltas[scope]}")
-          target_path = Path("artifacts/experience_metrics_by_target.csv")
-          if target_path.is_file() and target_path.stat().st_size:
-              print("")
-              print("## Target-specific performance")
-              with target_path.open(encoding="utf-8", newline="") as fh:
-                  rows = list(csv.DictReader(fh))
-              targets = ("1X2", "Score", "O/U", "BTTS", "MOM")
-              for target in targets:
-                  selected = [r for r in rows if r.get("scope") == "all" and r.get("target") == target]
-                  if not selected:
-                      print(f"- **{target}**: insufficient settled evidence")
-                      continue
-                  metrics = [f"{r.get('metric')}={r.get('accuracy_pct')}% (n={r.get('n')})" for r in selected]
-                  print(f"- **{target}**: " + ", ".join(metrics))
-          else:
-              print("- **Target-specific performance**: artifact unavailable")
-          if not deltas: print("- **No 1X2 metric change vs previous durable status detected.**")
+          s = json.loads(Path("artifacts/experience_learning_status.json").read_text(encoding="utf-8"))
+          print("## Experience learning")
+          print(f"- Status={s.get('status')}")
+          print(f"- Rows={s.get('rows', 0)}, Blocks={s.get('blocks', 0)}, Alpha={s.get('alpha', 'NA')}")
+          gate = s.get("gate") or {}
+          print(f"- Development improvement={gate.get('development_improvement', 'NA')}")
+          print(f"- Locked pass={gate.get('locked_pass', 'NA')}")
+          print(f"- Locked non-regressions={gate.get('locked_non_regressions', 'NA')}/{gate.get('locked_required', 'NA')}")
+          print("- Production probabilities unchanged: true")
           PY
+          else
+            echo "## Experience learning" >> "$GITHUB_STEP_SUMMARY"
+            echo "Experience learning status artifact unavailable." >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Commit durable experience
         shell: bash
         run: |
@@ -137,7 +127,11 @@ jobs:
             data/experience/prediction_snapshots.jsonl \
             artifacts/experience_metrics.csv \
             artifacts/experience_metrics_by_target.csv \
-            artifacts/experience_status.json
+            artifacts/experience_status.json \
+            artifacts/experience_learning_status.json \
+            artifacts/experience_learning_oos.csv \
+            artifacts/experience_learning_replay.csv \
+            artifacts/experience_policy_candidate.json
           do
             if [ -e "$path" ]; then
               git add -- "$path"
@@ -147,5 +141,5 @@ jobs:
             echo "No experience changes to commit."
             exit 0
           fi
-          git commit -m "ops: persist prediction experience and performance metrics"
+          git commit -m "ops: learn from matured prediction experience"
           git push origin HEAD:main
