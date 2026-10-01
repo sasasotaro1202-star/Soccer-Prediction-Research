@@ -293,4 +293,15 @@ jobs:
             exit 0
           fi
           git commit -m "ops: persist predictability calibration and conformal research state"
-          git push origin HEAD:main
+          for attempt in 1 2 3; do
+            git fetch --prune origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "predictability artifact push attempt ${attempt} failed; rebasing again..."
+            if [ "${attempt}" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
