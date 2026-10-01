@@ -109,3 +109,26 @@ def fit_predictability_calibrator(
         "method": "prior_only_logistic",
         "model": model,
     }
+
+
+def binary_calibration_metrics(correct: Any, probability: Any) -> dict[str, float]:
+    y = np.asarray(correct, dtype=int).reshape(-1)
+    p = np.asarray(probability, dtype=float).reshape(-1)
+    if len(y) != len(p) or len(y) == 0:
+        raise ValueError("predictability calibration arrays must have equal non-zero length")
+    if not np.isfinite(p).all() or (p < 0.0).any() or (p > 1.0).any():
+        raise ValueError("predictability probabilities are invalid")
+    if not np.isin(y, [0, 1]).all():
+        raise ValueError("predictability calibration target must be binary")
+    brier = float(np.mean((p - y) ** 2))
+    bins = np.linspace(0.0, 1.0, 11)
+    ece = 0.0
+    for i in range(10):
+        mask = (p >= bins[i]) & ((p < bins[i + 1]) if i < 9 else (p <= bins[i + 1]))
+        if mask.any():
+            ece += float(mask.mean()) * abs(float(p[mask].mean()) - float(y[mask].mean()))
+    return {
+        "brier": brier,
+        "ece": float(ece),
+        "accuracy_at_0_5": float(((p >= 0.5).astype(int) == y).mean()),
+    }
