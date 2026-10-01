@@ -93,10 +93,15 @@ def _validate_and_reduce(frame: pd.DataFrame) -> pd.DataFrame:
     for col in ("p_home", "p_draw", "p_away"):
         d[col] = pd.to_numeric(d[col], errors="coerce")
     for col in TELEMETRY:
-        if col in d.columns:
-            d[col] = pd.to_numeric(d[col], errors="coerce")
+        source = col if col in d.columns else f"shadow_{col}"
+        if source in d.columns:
+            d[col] = pd.to_numeric(d[source], errors="coerce")
     if "prediction_state_id" in d.columns:
         d["prediction_state_id"] = d["prediction_state_id"].astype("string").str.strip()
+    elif d["match_id"].duplicated().any():
+        raise RuntimeError(
+            "predictability ledger contains duplicate match_id without prediction_state_id"
+        )
 
     valid = d["prediction_pit_gate"].astype("string").eq("PASS")
     valid &= d["match_id"].notna() & d["match_id"].ne("")
@@ -243,6 +248,9 @@ def _oos_evaluate(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     rows: list[dict[str, Any]] = []
     case_rows: list[dict[str, Any]] = []
+    feature_cols = [c for c in META_FEATURES if c in data.columns]
+    if "confidence" not in feature_cols or "margin" not in feature_cols:
+        return pd.DataFrame(), pd.DataFrame()
     for block_id, train, oos in _chronological_blocks(
         data, MIN_TRAIN_ROWS, block_size
     ):
@@ -252,8 +260,8 @@ def _oos_evaluate(
             continue
 
         model = _meta_model()
-        model.fit(train[list(META_FEATURES)], y_train)
-        meta_risk = model.predict_proba(oos[list(META_FEATURES)])[:, 1]
+        model.fit(train[feature_cols], y_train)
+        meta_risk = model.predict_proba(oos[feature_cols])[:, 1]
 
         confidence_risk = np.clip(
             1.0 - oos["confidence"].to_numpy(dtype=float),
@@ -454,6 +462,7 @@ def analyze(
             "chronological_oos_required_for_candidate": True,
         },
         "meta_features": list(META_FEATURES),
+        "meta_features_available": [c for c in META_FEATURES if c in data.columns],
         "telemetry_weights": WEIGHTS,
         "latest_cases": latest.to_dict(orient="records"),
         "oos_case_rows": case_oos.to_dict(orient="records"),
