@@ -95,6 +95,13 @@ jobs:
           print({"status": "VERIFIED", "rows": len(df)})
           PY
 
+      - name: Run fail-closed forecast health audit
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m src.research.forecast_health             --output artifacts/daily_research_predictions.csv             --status artifacts/daily_research_prediction_status.json             --report artifacts/daily_research_forecast_health.json
+
       - name: Upload GitHub forecast artifacts
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
@@ -105,4 +112,5 @@ jobs:
             artifacts/matchday_intelligence_status.json
             artifacts/daily_research_predictions.csv
             artifacts/daily_research_prediction_status.json
+            artifacts/daily_research_forecast_health.json
           retention-days: 3
