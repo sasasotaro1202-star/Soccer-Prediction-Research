@@ -56,7 +56,7 @@ def _fingerprint(frame: pd.DataFrame) -> str:
     if not cols:
         raise ValueError("Cannot fingerprint OOS slice without match identity")
     rows = frame[cols].astype("string").fillna("").sort_values(cols, kind="mergesort")
-    payload = rows.to_csv(index=False, lineterminator="
+    payload = rows.to_csv(index=False, lineterminator="\\n")
 ").encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
