@@ -12,6 +12,8 @@ import pandas as pd
 from src.data.competition_sources import TARGET_COMPETITIONS
 from src.prediction.prepare_fixtures import prepare_from_files
 from src.prediction.runner import run as run_production_prediction
+from src.prediction.model_bundle import load_bundle
+from src.research.forecast_diagnostics import build as build_forecast_diagnostics
 from src.data.matchday_intelligence_fetch import ESPN_LEAGUES
 
 
@@ -267,6 +269,54 @@ def run(
 
     production = pd.read_csv(production_output)
     result = _convert_production_output(production, target)
+
+    # Research-only shadow telemetry: use the exact adopted production bundle,
+    # preserve production probabilities, and never consume outcome/target labels.
+    shadow_status = {
+        "status": "NOT_RUN",
+        "rows": 0,
+        "production_prediction_unchanged": True,
+        "outcome_free": True,
+    }
+    shadow_path = base_dir / "daily_research_uncertainty_shadow.csv"
+    shadow_status_path = base_dir / "daily_research_uncertainty_shadow_status.json"
+    try:
+        shadow_fixtures = pd.read_csv(prepared_path)
+        shadow_bundle = load_bundle("artifacts/production_model.pkl")
+        shadow = build_forecast_diagnostics(shadow_fixtures, shadow_bundle)
+        shadow = shadow[shadow["match_id"].astype(str).isin(result["match_id"].astype(str))].copy()
+        expected = result[["match_id", "home_win_probability", "draw_probability", "away_win_probability"]].copy()
+        expected["match_id"] = expected["match_id"].astype(str)
+        shadow = shadow.merge(expected, on="match_id", how="inner", validate="one_to_one")
+        if len(shadow) != len(result):
+            raise RuntimeError("uncertainty shadow telemetry does not cover every production prediction")
+        if not np.allclose(
+            shadow[["p_home", "p_draw", "p_away"]].to_numpy(dtype=float),
+            shadow[["home_win_probability", "draw_probability", "away_win_probability"]].to_numpy(dtype=float),
+            atol=1e-12,
+        ):
+            raise RuntimeError("uncertainty shadow probabilities differ from production forecast")
+        shadow = shadow.drop(columns=["home_win_probability", "draw_probability", "away_win_probability"])
+        shadow.to_csv(shadow_path, index=False)
+        shadow_status = {
+            "status": "SHADOW_TELEMETRY_WRITTEN",
+            "rows": int(len(shadow)),
+            "production_prediction_unchanged": True,
+            "outcome_free": True,
+            "output": str(shadow_path),
+        }
+    except Exception as exc:
+        # Telemetry failure must not silently alter or invalidate a valid production
+        # forecast, but it remains explicitly observable and never becomes success.
+        shadow_status = {
+            "status": "SHADOW_TELEMETRY_ERROR",
+            "rows": 0,
+            "production_prediction_unchanged": True,
+            "outcome_free": True,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+    shadow_status_path.write_text(json.dumps(shadow_status, ensure_ascii=False, indent=2), encoding="utf-8")
+
     result.to_csv(output_path, index=False)
     status = {
         "status": "PREDICTED_PRODUCTION_ADOPTED" if not result.empty else "DEFERRED_NO_PIT_ELIGIBLE_FIXTURES",
@@ -276,6 +326,7 @@ def run(
         "production_model_used": True,
         "research_heuristic_disabled": True,
         "runner_status": runner_status,
+        "uncertainty_shadow_status": shadow_status,
     }
     Path(status_path).parent.mkdir(parents=True, exist_ok=True)
     Path(status_path).write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
