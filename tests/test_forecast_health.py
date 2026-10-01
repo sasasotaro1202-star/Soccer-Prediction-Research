@@ -76,7 +76,7 @@ def test_healthy_prediction_requires_nonempty_and_future_rows(tmp_path):
     result = audit(str(output), str(status))
     assert result["status"] == "HEALTHY"
     assert result["ok"] is True
-    assert result["production_ready"] is True
+    assert result["prediction_runtime_ready"] is True
     assert result["coverage_ratio"] == 1.0
 
 
@@ -106,7 +106,7 @@ def test_no_target_is_distinguished_from_verified_prediction(tmp_path):
     result = audit(str(output), str(status))
     assert result["status"] == "NO_TARGET"
     assert result["ok"] is True
-    assert result["production_ready"] is False
+    assert result["prediction_runtime_ready"] is False
     assert result["forecast_evidence"] == "NONE"
 
 
