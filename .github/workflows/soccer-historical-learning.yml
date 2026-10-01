@@ -1,0 +1,187 @@
+name: Soccer Historical Learning
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "5 */6 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soccer-historical-learning
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: .
+  PYTHONHASHSEED: "0"
+  HISTORICAL_OUT: artifacts/historical-learning
+
+jobs:
+  historical:
+    name: Historical matches -> PIT OOS -> research candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies with bounded retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+
+      - name: Compile project
+        run: python -m compileall -q src tests
+
+      - name: Build historical PIT handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          python -m src.data.fixture_field_audit
+          PIT_ENABLE_ARCHIVE_AUDIT=1 python -m src.data.completion_gate
+          test -s artifacts/pit_replay_features.csv
+          mkdir -p "${HISTORICAL_OUT}"
+          cp artifacts/pit_replay_features.csv "${HISTORICAL_OUT}/pit_replay_features.csv"
+          if [ -s artifacts/completion_gate.json ]; then
+            cp artifacts/completion_gate.json "${HISTORICAL_OUT}/completion_gate.json"
+          fi
+
+      - name: Run historical research learner
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m src.research.engine
+          test -s artifacts/run_status.json
+          cp artifacts/run_status.json "${HISTORICAL_OUT}/run_status.json"
+
+      - name: Run target-specific historical learner
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import pandas as pd
+          from src.research.target_specific_learning import write_target_specific_learning
+          frame = pd.read_csv("artifacts/pit_replay_features.csv")
+          state = write_target_specific_learning(frame)
+          print(state.get("status"), sorted((state.get("targets") or {}).keys()))
+          PY
+          test -s artifacts/target_specific/target_specific_status.json
+
+      - name: Publish historical learning state
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          source = Path("artifacts/run_status.json")
+          state = json.loads(source.read_text(encoding="utf-8"))
+          payload = {
+              "schema_version": 1,
+              "status": state.get("status"),
+              "historical_learning": True,
+              "learning_source": "PIT_verified_historical_matches",
+              "oos_claimed": bool(state.get("oos_claimed", False)),
+              "production_changed": False,
+              "production_model_path_touched": False,
+              "experience_learning_separate": True,
+              "snapshot_id": state.get("snapshot_id"),
+              "pit_verified_rows": state.get("pit_verified_rows"),
+              "pit_total_rows": state.get("pit_total_rows"),
+              "pit_verified_rate": state.get("pit_verified_rate"),
+              "oos": state.get("oos", {}),
+              "score_oos": state.get("score_oos", {}),
+              "accuracy_target": state.get("accuracy_target", {}),
+              "adoption": state.get("adoption", {}),
+              "gates": state.get("gates", {}),
+          }
+          out = Path("artifacts/historical-learning/historical_learning_status.json")
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text(json.dumps(payload, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+          print(json.dumps(payload, indent=2, ensure_ascii=False, default=str))
+          PY
+
+      - name: Fail closed on production mutation claims
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          state = json.loads(Path("artifacts/historical-learning/historical_learning_status.json").read_text(encoding="utf-8"))
+          if state.get("historical_learning") is not True:
+              raise SystemExit("historical learning flag missing")
+          if state.get("production_changed") is not False:
+              raise SystemExit("historical learning claims production mutation")
+          if state.get("production_model_path_touched") is not False:
+              raise SystemExit("historical learning touched production model path")
+          print("historical_learning_safety: PASS")
+          PY
+
+      - name: Publish learning summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Historical learning"
+            if [ -s artifacts/historical-learning/historical_learning_status.json ]; then
+              python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path("artifacts/historical-learning/historical_learning_status.json").read_text(encoding="utf-8"))
+          print(f"- Status={s.get('status')}")
+          print(f"- PIT verified={s.get('pit_verified_rows', 'NA')}/{s.get('pit_total_rows', 'NA')} ({s.get('pit_verified_rate', 'NA')})")
+          print(f"- OOS claimed={s.get('oos_claimed')}")
+          print(f"- Production changed={s.get('production_changed')}")
+          a=s.get("accuracy_target") or {}
+          print(f"- Historical OOS accuracy={a.get('weighted_oos_accuracy', 'NA')}%")
+          print(f"- Locked OOS accuracy={a.get('locked_oos_accuracy', 'NA')}%")
+          print(f"- Adoption={((s.get('adoption') or {}).get('status', 'NA'))}")
+          PY
+            else
+              echo "- Historical learning status artifact unavailable."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload historical learning artifacts
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-historical-learning-${{ github.run_id }}
+          path: |
+            artifacts/historical-learning/
+            artifacts/run_status.json
+            artifacts/oos_metrics.csv
+            artifacts/model_selection.csv
+            artifacts/development_oos_metrics.csv
+            artifacts/locked_oos_metrics.csv
+            artifacts/score_oos_metrics.csv
+            artifacts/score_model_selection.json
+            artifacts/score_locked_gate.json
+            artifacts/calibration_gate.json
+            artifacts/adoption_decision.json
+            artifacts/validated_candidate_model.pkl
+            artifacts/validated_candidate_model.json
+            artifacts/validated_candidate_registry.json
+            artifacts/validated_candidate_provenance.json
+          retention-days: 14
+          if-no-files-found: warn
