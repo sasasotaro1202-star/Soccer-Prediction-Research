@@ -60,3 +60,21 @@ def test_calibration_cases_are_bounded():
         assert 0.0 <= float(row["raw_predictability"]) <= 1.0
         assert 0.01 <= float(row["calibrated_predictability"]) <= 0.99
         assert int(row["correct"]) in {0, 1}
+
+
+def test_calibration_derives_raw_predictability_from_shadow_telemetry():
+    df = _rows(300)
+    df = df.drop(columns=["predictability_score"])
+    for name in (
+        "predictive_entropy",
+        "model_disagreement",
+        "covariate_drift",
+        "history_support_risk",
+        "routing_risk",
+    ):
+        df["shadow_" + name] = 0.2
+    state = calibrate(df, history_rows=120, block_size=60)
+    assert state["rows"] == 300
+    assert state["production_usable"] is False
+    assert state["oos_blocks"]
+    assert state["safety_contract"]["calibration_training_is_prior_history_only"] is True
