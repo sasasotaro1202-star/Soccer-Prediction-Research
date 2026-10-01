@@ -106,6 +106,10 @@ def _validated_settled(frame: pd.DataFrame) -> pd.DataFrame:
 
     if "prediction_state_id" in d.columns:
         ids = d["prediction_state_id"].astype("string").str.strip()
+        if d["match_id"].duplicated().any() and (ids.isna().any() or ids.eq("").any()):
+            raise RuntimeError(
+                "experience candidate input contains duplicate match_id without prediction_state_id"
+            )
         if ids.isna().any() or ids.eq("").any():
             raise RuntimeError("experience candidate input contains missing prediction_state_id")
         if ids.duplicated().any():
