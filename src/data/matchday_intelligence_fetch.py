@@ -32,7 +32,7 @@ ESPN_LEAGUES: dict[str, str] = {
 }
 
 DETAILED_HORIZON_HOURS = 12.0
-MAX_EVENTS = 5000
+MAX_EVENTS: int | None = None
 SOFASCORE_LINEUP_ENRICH_LIMIT = 16
 FOOTBALL_DATA_FIXTURES_URL = "https://www.football-data.co.uk/fixtures.csv"
 
@@ -533,7 +533,7 @@ def parse_football_data_fixtures(
     now: pd.Timestamp,
     horizon_hours: float,
     available_at: str,
-    max_events: int,
+    max_events: int | None = None,
 ) -> list[dict[str, Any]]:
     required = {"Div", "Date", "Time", "HomeTeam", "AwayTeam"}
     if not required.issubset(frame.columns):
@@ -593,7 +593,7 @@ def parse_football_data_fixtures(
                 row["matchday_signal_confidence"] = 0.55
                 break
         rows.append(row)
-        if len(rows) >= int(max_events):
+        if max_events is not None and len(rows) >= int(max_events):
             break
     return rows
 
@@ -743,7 +743,7 @@ def _collect_sofascore_day(
     day: datetime,
     now_ts: pd.Timestamp,
     horizon_hours: float,
-    max_events: int,
+    max_events: int | None = None,
     detail_horizon_hours: float | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]], str | None]:
     date_key = day.strftime("%Y-%m-%d")
@@ -791,7 +791,7 @@ def _collect_sofascore_day(
         row for row in parsed
         if (_ts(row["kickoff_utc"]) is not None and _ts(row["kickoff_utc"]) <= detail_upper)
     ]
-    for row in detail_rows[:min(int(max_events), SOFASCORE_LINEUP_ENRICH_LIMIT)]:
+    for row in detail_rows[:SOFASCORE_LINEUP_ENRICH_LIMIT]:
         kickoff = _ts(row["kickoff_utc"])
         if kickoff is None:
             continue
@@ -827,7 +827,7 @@ def _collect_sofascore_day(
         available, pit_verified = _current_snapshot_pit_state(observed_at, kickoff)
         row["matchday_available_at_utc"] = available
         row["matchday_pit_verified"] = pit_verified
-    return parsed[:int(max_events)], errors, scheduled_at
+    return parsed, errors, scheduled_at
 
 
 def _collect_football_data_fallback(
@@ -835,7 +835,7 @@ def _collect_football_data_fallback(
     *,
     now_ts: pd.Timestamp,
     horizon_hours: float,
-    max_events: int,
+    max_events: int | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]], str | None]:
     try:
         frame, retrieved_at = _get_csv(
@@ -1101,24 +1101,24 @@ def collect_matchday_snapshots(
                     row["matchday_source"] = "espn+open_meteo"
 
                 rows.append(row)
-                if len(rows) >= max_events:
+                if max_events is not None and len(rows) >= max_events:
                     break
-            if len(rows) >= max_events:
+            if max_events is not None and len(rows) >= max_events:
                 break
-        if len(rows) >= max_events:
+        if max_events is not None and len(rows) >= max_events:
             break
 
         # SofaScore is a complementary coverage source, not an all-or-nothing
         # fallback. Query it even when ESPN returned some rows so cup/friendly/UEFA
         # events absent from ESPN are still discovered.
         new_day_rows: list[dict[str, Any]] = []
-        if len(rows) < max_events:
+        if max_events is None or len(rows) < max_events:
             day_rows, day_errors, _ = _collect_sofascore_day(
                 fetcher,
                 day=day_start,
                 now_ts=now_ts,
                 horizon_hours=discovery_horizon_hours,
-                max_events=max_events - len(rows),
+                max_events=None if max_events is None else max_events - len(rows),
                 detail_horizon_hours=float(horizon_hours),
             )
             for row in day_rows:
@@ -1135,12 +1135,12 @@ def collect_matchday_snapshots(
         # Football-Data is a complementary free/keyless coverage source.
         # Do not suppress it merely because SofaScore returned one or more rows;
         # a partial SofaScore snapshot can still miss another supported league.
-        if len(rows) < max_events:
+        if max_events is None or len(rows) < max_events:
             fd_rows, fd_errors, _ = _collect_football_data_fallback(
                 fetcher,
                 now_ts=now_ts,
                 horizon_hours=discovery_horizon_hours,
-                max_events=max_events - len(rows),
+                max_events=None if max_events is None else max_events - len(rows),
             )
             day_date = day_start.date()
             fd_rows = [
@@ -1172,7 +1172,7 @@ def collect_matchday_snapshots(
         )
 
     snapshot_finished = _now()
-    event_cap_reached = bool(len(rows) >= int(max_events))
+    event_cap_reached = bool(max_events is not None and len(rows) >= int(max_events))
     if not frame.empty:
         available = pd.to_datetime(frame["matchday_available_at_utc"], utc=True, errors="coerce")
         frame["matchday_pit_verified"] = available.notna() & (available <= pd.Timestamp(snapshot_finished))
@@ -1185,7 +1185,8 @@ def collect_matchday_snapshots(
         "snapshot_finished_at_utc": iso_utc(snapshot_finished),
         "rows": int(len(frame)),
         "event_cap_reached": event_cap_reached,
-        "max_events": int(max_events),
+        "max_events": None if max_events is None else int(max_events),
+        "global_event_cap_enabled": max_events is not None,
         "errors": errors,
         "fallback_usage": fallback_usage,
         "historical_pit_claim": False,
@@ -1206,7 +1207,6 @@ def main() -> int:
     parser.add_argument("--status", default="artifacts/matchday_intelligence_status.json")
     parser.add_argument("--days", type=int, default=2)
     parser.add_argument("--horizon-hours", type=float, default=DETAILED_HORIZON_HOURS)
-    parser.add_argument("--max-events", type=int, default=MAX_EVENTS)
     parser.add_argument("--cache-dir", default="cache/external")
     args = parser.parse_args()
 
@@ -1219,7 +1219,7 @@ def main() -> int:
         frame, status = collect_matchday_snapshots(
             days=max(1, args.days),
             horizon_hours=max(1.0, args.horizon_hours),
-            max_events=max(1, args.max_events),
+            max_events=MAX_EVENTS,
             cache_dir=args.cache_dir,
         )
     except Exception as exc:
