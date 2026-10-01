@@ -116,6 +116,13 @@ jobs:
           print(f"- Locked Top-4={lock.get('top4_hit_rate')} vs baseline={lock.get('baseline_top4_hit_rate')}")
           print(f"- Locked LogLoss={lock.get('logloss')} vs baseline={lock.get('baseline_logloss')}")
           print(f"- Gates={s.get('gates')}")
+          for row in (s.get("competition_metrics") or []):
+              print(
+                  f"- **{row.get('competition')} / {row.get('model')}**: "
+                  f"n={row.get('fixtures')}, Top-1={row.get('top1_hit_rate')}, "
+                  f"Top-4={row.get('top4_hit_rate')}, MRR={row.get('mrr')}, "
+                  f"LogLoss={row.get('logloss')}, CandidateRecall={row.get('candidate_recall')}"
+              )
           PY
             else
               echo "- MOM proxy research status artifact unavailable."
