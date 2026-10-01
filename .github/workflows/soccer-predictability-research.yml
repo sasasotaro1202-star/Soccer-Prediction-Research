@@ -1,0 +1,130 @@
+name: Soccer Predictability Research
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "25 */6 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soccer-predictability-research
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: .
+  PYTHONHASHSEED: "0"
+
+jobs:
+  predictability:
+    name: Predictability map -> chronological failure-risk challenger
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+
+      - name: Compile project
+        run: python -m compileall -q src tests
+
+      - name: Run predictability regression tests
+        run: python -m pytest -q tests/test_predictability_map.py
+
+      - name: Build PIT-safe predictability research artifacts
+        run: |
+          set -euo pipefail
+          python -m src.research.predictability_map
+          test -s artifacts/predictability/predictability_status.json
+          test -s artifacts/predictability/predictability_map.csv
+          test -s artifacts/predictability/predictability_oos.csv
+          test -s artifacts/predictability/predictability_latest_cases.csv
+          test -s artifacts/predictability/predictability_oos_cases.csv
+
+      - name: Fail closed on production mutation claims
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          state = json.loads(
+              Path("artifacts/predictability/predictability_status.json")
+              .read_text(encoding="utf-8")
+          )
+          safety = state.get("safety_contract") or {}
+          checks = {
+              "production_usable": state.get("production_usable") is False,
+              "research_only": safety.get("research_only") is True,
+              "production_changed": safety.get("production_changed") is False,
+              "production_probabilities_changed": safety.get("production_probabilities_changed") is False,
+              "production_registry_changed": safety.get("production_registry_changed") is False,
+              "frozen_holdout_touched": safety.get("frozen_holdout_touched") is False,
+              "outcome_data_used_only_after_maturity": safety.get("outcome_data_used_only_after_maturity") is True,
+              "prediction_time_features_only": safety.get("prediction_time_features_only") is True,
+              "chronological_oos_required_for_candidate": safety.get("chronological_oos_required_for_candidate") is True,
+          }
+          failed = [name for name, ok in checks.items() if not ok]
+          if failed:
+              raise SystemExit("PREDICTABILITY SAFETY GATE FAILED: " + ", ".join(failed))
+          print("predictability_safety: PASS")
+          PY
+
+      - name: Publish research summary
+        if: always()
+        run: |
+          set -euo pipefail
+          {
+            echo "## Predictability research"
+            if [ -s artifacts/predictability/predictability_status.json ]; then
+              python - <<'PY'
+          import json
+          from pathlib import Path
+
+          s = json.loads(
+              Path("artifacts/predictability/predictability_status.json")
+              .read_text(encoding="utf-8")
+          )
+          gate = s.get("gate") or {}
+          print(f"- Status={s.get('status')}")
+          print(f"- Matured case rows={s.get('rows', 0)}")
+          print(f"- Predictability-scored rows={s.get('predictability_scored_rows', 0)}")
+          print(f"- High-confidence/low-predictability cases={s.get('high_confidence_low_predictability_rows', 0)}")
+          print(f"- Chronological OOS blocks={gate.get('blocks', 0)}")
+          print(f"- Gate={gate.get('status', 'HOLD')}")
+          print("- Production usable=False")
+          PY
+            else
+              echo "- Predictability status artifact unavailable."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit durable predictability research artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "soccer-predictability-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for path in             artifacts/predictability/predictability_status.json             artifacts/predictability/predictability_map.csv             artifacts/predictability/predictability_oos.csv             artifacts/predictability/predictability_latest_cases.csv             artifacts/predictability/predictability_oos_cases.csv
+          do
+            if [ -e "$path" ]; then
+              git add -- "$path"
+            fi
+          done
+          if git diff --cached --quiet; then
+            echo "No predictability research changes to commit."
+            exit 0
+          fi
+          git commit -m "ops: persist predictability research state"
+          git push origin HEAD:main
