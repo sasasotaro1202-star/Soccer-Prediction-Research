@@ -175,6 +175,16 @@ def audit(output_path: str, status_path: str) -> dict[str, Any]:
     if status.get("research_heuristic_disabled") is not True:
         failures.append("heuristic_prediction_must_remain_disabled")
 
+    runner_status = status.get("runner_status")
+    if not isinstance(runner_status, dict):
+        failures.append("predicted_status_requires_runner_status_evidence")
+    else:
+        if str(runner_status.get("status", "")).upper() != "PREDICTED":
+            failures.append("runner_status_must_be_PREDICTED")
+        freshness = runner_status.get("freshness")
+        if not isinstance(freshness, dict) or str(freshness.get("status", "")).upper() != "FRESH":
+            failures.append("prediction_requires_FRESH_matchday_snapshot")
+
     if not df.empty:
         ids = df["match_id"].astype(str).str.strip()
         if ids.eq("").any():
