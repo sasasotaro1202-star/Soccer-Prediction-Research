@@ -11,7 +11,7 @@ def _rows(n: int = 300) -> pd.DataFrame:
     base = pd.Timestamp("2026-01-01T00:00:00Z")
     rows = []
     for i in range(n):
-        kickoff = base + pd.Timedelta(hours=i)
+        kickoff = base + pd.to_timedelta(i, unit="h")
         raw = 0.15 if i % 2 == 0 else 0.85
         correct = i % 2 == 0
         rows.append({
@@ -25,7 +25,11 @@ def _rows(n: int = 300) -> pd.DataFrame:
             "p_draw": 0.20,
             "p_away": 0.10 if correct else 0.70,
             "actual_result": "H" if correct else "A",
-            "predictability_score": raw,
+            "predictive_entropy": 1.0 - raw,
+            "model_disagreement": 1.0 - raw,
+            "covariate_drift": 1.0 - raw,
+            "history_support_risk": 1.0 - raw,
+            "routing_risk": 1.0 - raw,
         })
     return pd.DataFrame(rows)
 
