@@ -260,93 +260,272 @@ def _espn_event_key(e):
                 (hs.get("team") or {}).get("displayName") or hs.get("id"),
                 (aw.get("team") or {}).get("displayName") or aw.get("id"))
 
-def _settle_row(row, by_key, by_id):
+def _event_outcome_any(event):
+    """Parse a completed outcome from either SofaScore or ESPN-shaped payloads."""
+    if not isinstance(event, dict):
+        return None, None, "missing"
+    if "competitions" in event:
+        comp = (event.get("competitions") or [{}])[0]
+        competitors = comp.get("competitors", []) or []
+        h = next((x for x in competitors if x.get("homeAway") == "home"), {})
+        a = next((x for x in competitors if x.get("homeAway") == "away"), {})
+        try:
+            hg, ag = int(h.get("score")), int(a.get("score"))
+        except (TypeError, ValueError):
+            hg, ag = None, None
+        status = comp.get("status") or event.get("status") or {}
+        status_type = str(
+            (status.get("type") or {}).get("name")
+            or status.get("type")
+            or ""
+        ).lower()
+        return hg, ag, status_type
+    return _event_outcome(event)
+
+
+def _lookup_settlement_event(row, by_key, by_id):
+    return (
+        by_id.get(str(row.get("match_id") or ""))
+        or by_key.get(str(row.get("fixture_key") or ""))
+    )
+
+
+def _settle_row(
+    row,
+    sofa_by_key,
+    sofa_by_id,
+    espn_by_key,
+    espn_by_id,
+):
     if str(row.get("prediction_pit_gate") or "") != "PASS":
         return {}
-    event=by_id.get(str(row.get("match_id") or "")) or by_key.get(str(row.get("fixture_key") or ""))
-    if event is None: return {}
-    if str(event.get("id","")).isdigit():
-        pass
-    if "competitions" in event:
-        comp=(event.get("competitions") or [{}])[0]
-        h=next((x for x in comp.get("competitors",[]) or [] if x.get("homeAway")=="home"),{})
-        a=next((x for x in comp.get("competitors",[]) or [] if x.get("homeAway")=="away"),{})
-        hs=h.get("score"); aws=a.get("score")
-        try: hg,ag=int(hs),int(aws)
-        except (TypeError,ValueError): hg,ag=None,None
-        status=(comp.get("status") or event.get("status") or {})
-        status_type=str((status.get("type") or {}).get("name") or status.get("type") or "").lower()
+
+    sofa_event = _lookup_settlement_event(row, sofa_by_key, sofa_by_id)
+    espn_event = _lookup_settlement_event(row, espn_by_key, espn_by_id)
+
+    sofa_h, sofa_a, sofa_status = _event_outcome_any(sofa_event)
+    espn_h, espn_a, espn_status = _event_outcome_any(espn_event)
+
+    sofa_finished = sofa_h is not None and sofa_a is not None and sofa_status in {
+        "finished", "afterextra", "afterextratime", "afterpenalties"
+    }
+    espn_finished = espn_h is not None and espn_a is not None and espn_status in {
+        "finished", "afterextra", "afterextratime", "afterpenalties"
+    }
+    sources = int(sofa_finished) + int(espn_finished)
+    if sources == 0:
+        return {}
+    if sources == 2 and (sofa_h, sofa_a) != (espn_h, espn_a):
+        return {
+            "settlement_verification": "SOURCE_DISAGREEMENT",
+            "settlement_source": "sofascore+espn",
+            "settlement_sources_count": 2,
+        }
+
+    if sofa_finished:
+        hg, ag = sofa_h, sofa_a
+        source = "sofascore"
     else:
-        hg,ag,status_type=_event_outcome(event)
-    if hg is None or ag is None: return {}
-    actual="H" if hg>ag else "A" if hg<ag else "D"
-    p=np.array([float(row["p_home"]),float(row["p_draw"]),float(row["p_away"])])
-    pred=["H","D","A"][int(p.argmax())]
-    top=[str(row.get(f"score_{i}","")).strip() for i in (1,2,3)]
+        hg, ag = espn_h, espn_a
+        source = "espn"
+
+    if sources == 2:
+        source = "sofascore+espn"
+        verification = "DUAL_SOURCE_AGREE"
+    else:
+        verification = "SINGLE_SOURCE"
+
+    actual = "H" if hg > ag else "A" if hg < ag else "D"
+    p = np.array([
+        float(row["p_home"]),
+        float(row["p_draw"]),
+        float(row["p_away"]),
+    ])
+    pred = ["H", "D", "A"][int(p.argmax())]
+    top = [str(row.get(f"score_{i}", "")).strip() for i in (1, 2, 3)]
     settled_at = _now()
-    cutoff = pd.to_datetime(row.get("prediction_pit_cutoff_utc"), utc=True, errors="coerce")
-    kickoff = pd.to_datetime(row.get("kickoff_utc"), utc=True, errors="coerce")
+    cutoff = pd.to_datetime(
+        row.get("prediction_pit_cutoff_utc"), utc=True, errors="coerce"
+    )
+    kickoff = pd.to_datetime(
+        row.get("kickoff_utc"), utc=True, errors="coerce"
+    )
     if pd.isna(cutoff) or pd.isna(kickoff) or cutoff >= kickoff or settled_at <= cutoff:
         return {}
-    out={"actual_home_goals":hg,"actual_away_goals":ag,"actual_result":actual,"actual_score":f"{hg}-{ag}",
-         "settled_at_utc":settled_at.isoformat(),"experience_available_at_utc":settled_at.isoformat(),
-         "teacher_information_gate":"POST_KICKOFF","settlement_source":"espn" if str(row["match_id"]).startswith("espn:") else "sofascore",
-         "correct_1x2":int(pred==actual),"predicted_1x2":pred,"confidence":float(p.max()),
-         "score_top1_hit":int(top[0]==f"{hg}-{ag}"),"score_top3_hit":int(f"{hg}-{ag}" in top)}
-    if pd.notna(row.get("market_over_2_5")): out["over_2_5_correct"]=int((float(row["market_over_2_5"])>=0.5)==((hg+ag)>2.5))
-    if pd.notna(row.get("market_btts_yes")): out["btts_correct"]=int((float(row["market_btts_yes"])>=0.5)==(hg>0 and ag>0))
+
+    out = {
+        "actual_home_goals": hg,
+        "actual_away_goals": ag,
+        "actual_result": actual,
+        "actual_score": f"{hg}-{ag}",
+        "settled_at_utc": settled_at.isoformat(),
+        "experience_available_at_utc": settled_at.isoformat(),
+        "teacher_information_gate": "POST_KICKOFF",
+        "settlement_source": source,
+        "settlement_verification": verification,
+        "settlement_sources_count": sources,
+        "correct_1x2": int(pred == actual),
+        "predicted_1x2": pred,
+        "confidence": float(p.max()),
+        "score_top1_hit": int(top[0] == f"{hg}-{ag}"),
+        "score_top3_hit": int(f"{hg}-{ag}" in top),
+    }
+    if pd.notna(row.get("market_over_2_5")):
+        out["over_2_5_correct"] = int(
+            (float(row["market_over_2_5"]) >= 0.5) == ((hg + ag) > 2.5)
+        )
+    if pd.notna(row.get("market_btts_yes")):
+        out["btts_correct"] = int(
+            (float(row["market_btts_yes"]) >= 0.5) == (hg > 0 and ag > 0)
+        )
     return out
 
+
 def settle_predictions(days_back=14):
-    ledger=_read(LEDGER)
-    if ledger.empty: return {"status":"NO_LEDGER","settled":0,"pending":0}
-    now=_now(); cutoff=now-pd.Timedelta(days=max(1,int(days_back)))
-    ledger["kickoff_utc"]=pd.to_datetime(ledger["kickoff_utc"],utc=True,errors="coerce")
-    if "actual_result" not in ledger: ledger["actual_result"]=pd.NA
-    pending_mask = ledger["kickoff_utc"].notna() & (ledger["kickoff_utc"]<=now) & (ledger["kickoff_utc"]>=cutoff)
+    ledger = _read(LEDGER)
+    if ledger.empty:
+        return {"status": "NO_LEDGER", "settled": 0, "pending": 0}
+    now = _now()
+    cutoff = now - pd.Timedelta(days=max(1, int(days_back)))
+    ledger["kickoff_utc"] = pd.to_datetime(
+        ledger["kickoff_utc"], utc=True, errors="coerce"
+    )
+    if "actual_result" not in ledger:
+        ledger["actual_result"] = pd.NA
+    if "settlement_verification" not in ledger:
+        ledger["settlement_verification"] = pd.NA
+    if "settlement_sources_count" not in ledger:
+        ledger["settlement_sources_count"] = pd.NA
+
+    pending_mask = (
+        ledger["kickoff_utc"].notna()
+        & (ledger["kickoff_utc"] <= now)
+        & (ledger["kickoff_utc"] >= cutoff)
+    )
     outcome_pending = ledger["actual_result"].isna()
-    mom_pending = ledger.get("mom_settlement_status", pd.Series(pd.NA, index=ledger.index)).astype("string").ne("OFFICIAL")
-    has_mom = ledger.get("mom_1_player_id", pd.Series(pd.NA, index=ledger.index)).notna()
-    pending=ledger[pending_mask & (outcome_pending | (mom_pending & has_mom))].copy()
+    mom_pending = (
+        ledger.get(
+            "mom_settlement_status",
+            pd.Series(pd.NA, index=ledger.index),
+        )
+        .astype("string")
+        .ne("OFFICIAL")
+    )
+    has_mom = ledger.get(
+        "mom_1_player_id",
+        pd.Series(pd.NA, index=ledger.index),
+    ).notna()
+    pending = ledger[
+        pending_mask & (outcome_pending | (mom_pending & has_mom))
+    ].copy()
     if pending.empty:
-        compute_metrics(ledger); return {"status":"NOTHING_TO_SETTLE","settled":0,"pending":0}
-    dates=sorted(set(pending["kickoff_utc"].dt.strftime("%Y-%m-%d").tolist()))
-    fetcher=ExternalFetcher(cache_dir="cache/external",timeout=20,retries=3,backoff=1.0)
-    sofa_events,retrieval=_fetch_sofa_events(dates,fetcher)
-    espn_events=_fetch_espn_events(dates,fetcher)
-    by_key={}; by_id={}
+        metrics = compute_metrics(ledger)
+        return {
+            "status": "NOTHING_TO_SETTLE",
+            "settled": 0,
+            "pending": 0,
+            "dual_source_agree": int(
+                ledger["settlement_verification"].eq("DUAL_SOURCE_AGREE").sum()
+            ),
+            "source_disagreements": int(
+                ledger["settlement_verification"].eq("SOURCE_DISAGREEMENT").sum()
+            ),
+            "metrics_rows": metrics,
+        }
+
+    dates = sorted(
+        set(pending["kickoff_utc"].dt.strftime("%Y-%m-%d").tolist())
+    )
+    fetcher = ExternalFetcher(
+        cache_dir="cache/external",
+        timeout=20,
+        retries=3,
+        backoff=1.0,
+    )
+    sofa_events, retrieval = _fetch_sofa_events(dates, fetcher)
+    espn_events = _fetch_espn_events(dates, fetcher)
+    sofa_by_key, sofa_by_id = {}, {}
+    espn_by_key, espn_by_id = {}, {}
     for e in sofa_events:
-        k=_event_key(e)
-        if k: by_key[k]=e
-        by_id[_sofa_match_id(e)]=e
+        k = _event_key(e)
+        if k:
+            sofa_by_key[k] = e
+        by_id = _sofa_match_id(e)
+        if by_id:
+            sofa_by_id[by_id] = e
     for e in espn_events:
-        k=_espn_event_key(e)
-        if k: by_key[k]=e
-        by_id[_espn_match_id(e)]=e
-    settled=0
+        k = _espn_event_key(e)
+        if k:
+            espn_by_key[k] = e
+        by_id = _espn_match_id(e)
+        if by_id:
+            espn_by_id[by_id] = e
+
+    settled = 0
+    disagreements = 0
+    dual_source_agree = 0
     for idx in pending.index:
-        changes=_settle_row(ledger.loc[idx],by_key,by_id)
-        if not changes: continue
-        for k,v in changes.items(): ledger.at[idx,k]=v
-        event=by_id.get(str(ledger.at[idx,"match_id"])) or by_key.get(str(ledger.at[idx,"fixture_key"]))
-        if event is not None and any(pd.notna(ledger.at[idx,f"mom_{r}_player_id"]) for r in range(1,5)):
+        changes = _settle_row(
+            ledger.loc[idx],
+            sofa_by_key,
+            sofa_by_id,
+            espn_by_key,
+            espn_by_id,
+        )
+        if not changes:
+            continue
+        for key, value in changes.items():
+            ledger.at[idx, key] = value
+
+        if changes.get("settlement_verification") == "SOURCE_DISAGREEMENT":
+            disagreements += 1
+            continue
+
+        event = (
+            _lookup_settlement_event(ledger.loc[idx], sofa_by_key, sofa_by_id)
+            or _lookup_settlement_event(ledger.loc[idx], espn_by_key, espn_by_id)
+        )
+        if event is not None and any(
+            pd.notna(ledger.at[idx, f"mom_{rank}_player_id"])
+            for rank in range(1, 5)
+        ):
             try:
-                eid=event.get("id")
-                if eid:
-                    label=fetch_mom_label(str(eid),fetcher=fetcher)
+                event_id = event.get("id")
+                if event_id:
+                    label = fetch_mom_label(str(event_id), fetcher=fetcher)
                     if label.get("label_found"):
-                        actual_player=str(label["player_id"])
-                        ledger.at[idx,"mom_actual_player_id"]=actual_player
-                        ledger.at[idx,"mom_top1_hit"]=int(str(ledger.at[idx,"mom_1_player_id"])==actual_player)
-                        ledger.at[idx,"mom_top4_hit"]=int(actual_player in {str(ledger.at[idx,f"mom_{r}_player_id"]) for r in range(1,5)})
-                        ledger.at[idx,"mom_settlement_status"]="OFFICIAL"
+                        actual_player = str(label["player_id"])
+                        ledger.at[idx, "mom_actual_player_id"] = actual_player
+                        ledger.at[idx, "mom_top1_hit"] = int(
+                            str(ledger.at[idx, "mom_1_player_id"]) == actual_player
+                        )
+                        ledger.at[idx, "mom_top4_hit"] = int(
+                            actual_player
+                            in {
+                                str(ledger.at[idx, f"mom_{rank}_player_id"])
+                                for rank in range(1, 5)
+                            }
+                        )
+                        ledger.at[idx, "mom_settlement_status"] = "OFFICIAL"
             except Exception:
-                ledger.at[idx,"mom_settlement_status"]="UNAVAILABLE"
-        settled+=1
-    _write_csv(LEDGER,ledger)
-    metrics=compute_metrics(ledger)
-    return {"status":"SETTLED","settled":settled,"pending_after":int(ledger["actual_result"].isna().sum()),
-            "retrieval_at_utc":retrieval,"metrics_rows":metrics}
+                ledger.at[idx, "mom_settlement_status"] = "UNAVAILABLE"
+
+        if changes.get("settlement_verification") == "DUAL_SOURCE_AGREE":
+            dual_source_agree += 1
+        settled += 1
+
+    _write_csv(LEDGER, ledger)
+    metrics = compute_metrics(ledger)
+    return {
+        "status": "SETTLED",
+        "settled": settled,
+        "disagreements": disagreements,
+        "dual_source_agree": dual_source_agree,
+        "pending_after": int(ledger["actual_result"].isna().sum()),
+        "retrieval_at_utc": retrieval,
+        "metrics_rows": metrics,
+    }
+
 
 def _proper_score_metrics(frame: pd.DataFrame) -> dict[str, Any]:
     required = {"p_home", "p_draw", "p_away", "actual_result"}
