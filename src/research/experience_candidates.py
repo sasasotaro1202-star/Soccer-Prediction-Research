@@ -55,6 +55,8 @@ def _confidence_bucket(confidence: pd.Series) -> pd.Series:
 
 
 def _validated_settled(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return frame.copy()
     required = {
         "match_id",
         "kickoff_utc",
