@@ -78,6 +78,10 @@ def test_calibration_derives_raw_predictability_from_shadow_telemetry():
     df = df.drop(columns=list(telemetry))
     for name in telemetry:
         df["shadow_" + name] = 0.2
+    # Keep both correct and incorrect matured labels so the binary
+    # calibrator has a valid two-class training target.
+    df.loc[1, "actual_result"] = "H"
+    df.loc[3, "actual_result"] = "D"
     state = calibrate(df, history_rows=120, block_size=60)
     assert state["rows"] == 300
     assert state["production_usable"] is False
