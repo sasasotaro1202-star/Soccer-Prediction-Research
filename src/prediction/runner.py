@@ -220,6 +220,42 @@ def _require_fresh_matchday_snapshot(
         "max_age_minutes": float(max_age_minutes),
     }
 
+def _promote_current_matchday_pit(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) -> pd.DataFrame:
+    """Promote live matchday observation time only into the current-prediction PIT gate."""
+    d = fixtures.copy()
+    required = {"matchday_available_at_utc", "matchday_pit_verified"}
+    if not required.issubset(d.columns):
+        return d
+    available = pd.to_datetime(d["matchday_available_at_utc"], utc=True, errors="coerce")
+    verified = _strict_bool(d["matchday_pit_verified"], "matchday_pit_verified")
+    usable = verified & available.notna() & (available <= prediction_time)
+    d["source_available_at_utc"] = pd.to_datetime(d.get("source_available_at_utc", pd.Series(pd.NaT, index=d.index)), utc=True, errors="coerce")
+    d["pit_verified"] = _strict_bool(d["pit_verified"], "pit_verified") if "pit_verified" in d else pd.Series(False, index=d.index)
+    promote = usable & d["source_available_at_utc"].isna()
+    d.loc[promote, "source_available_at_utc"] = available.loc[promote]
+    d.loc[promote, "pit_verified"] = True
+    d["prediction_availability_basis"] = np.where(promote, "CURRENT_MATCHDAY_RETRIEVAL_LOWER_BOUND", np.where(d["pit_verified"], "SOURCE_AVAILABILITY", ""))
+    return d
+
+
+def _filter_prediction_window(fixtures: pd.DataFrame, prediction_time: pd.Timestamp, target_minutes_before: float | None, tolerance_minutes: float) -> tuple[pd.DataFrame, dict]:
+    if target_minutes_before is None:
+        return fixtures, {"enabled": False, "target_minutes_before": None, "tolerance_minutes": None}
+    target = float(target_minutes_before)
+    tolerance = float(tolerance_minutes)
+    if not np.isfinite(target) or target <= 0:
+        raise ValueError("target_minutes_before must be finite and positive")
+    if not np.isfinite(tolerance) or tolerance < 0 or tolerance >= target:
+        raise ValueError("prediction window tolerance must be finite, non-negative and smaller than target")
+    d = fixtures.copy()
+    kickoff = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
+    minutes_before = (kickoff - prediction_time).dt.total_seconds() / 60.0
+    lower = target - tolerance
+    upper = target + tolerance
+    mask = kickoff.notna() & (minutes_before >= lower) & (minutes_before <= upper)
+    selected = d.loc[mask].copy()
+    selected["prediction_window_minutes_before"] = minutes_before.loc[selected.index]
+    return selected.sort_values(["kickoff_utc", "match_id"], kind="mergesort"), {"enabled": True, "target_minutes_before": target, "tolerance_minutes": tolerance, "window_start_minutes_before": lower, "window_end_minutes_before": upper, "fixtures_in_window": int(len(selected)), "fixtures_considered": int(len(d))}
 def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) -> pd.DataFrame:
     missing = sorted(REQUIRED_FIXTURE_COLUMNS - set(fixtures.columns))
     if missing:
@@ -363,6 +399,8 @@ def run(
     prediction_time: str | None = None,
     registry_path: str = "artifacts/model_registry.json",
     model_policy: str = "best_available",
+    prediction_window_minutes_before: float | None = None,
+    prediction_window_tolerance_minutes: float = 5.0,
 ) -> dict:
     status_file = Path(status_path)
     now = _normalize_prediction_time(prediction_time)
@@ -404,6 +442,13 @@ def run(
             "artifacts/matchday_intelligence_status.json", now, max_age_minutes=15.0
         )
     fixtures, matchday_merge_status = _merge_matchday_snapshot(fixtures, now)
+    fixtures = _promote_current_matchday_pit(fixtures, now)
+    fixtures, prediction_window = _filter_prediction_window(
+        fixtures,
+        now,
+        prediction_window_minutes_before,
+        prediction_window_tolerance_minutes,
+    )
     eligible = _eligible_fixtures(fixtures, now)
     if eligible.empty:
         return _write_status(
@@ -415,6 +460,7 @@ def run(
             oos_claimed=False,
             matchday_merge_status=matchday_merge_status,
             freshness=freshness,
+            prediction_window=prediction_window,
         )
 
     raw_probs = predict_bundle(bundle, eligible)
@@ -475,6 +521,14 @@ def run(
     result["abstain"] = result["low_confidence"]
     result["prediction_set"] = np.where(result["low_confidence"], "LOW_CONFIDENCE", "STANDARD")
     result["prediction_time_utc"] = now.isoformat()
+    result["prediction_window_minutes_before"] = pd.to_numeric(
+        eligible.get("prediction_window_minutes_before", pd.Series(np.nan, index=eligible.index)),
+        errors="coerce",
+    ).to_numpy()
+    result["prediction_availability_basis"] = eligible.get(
+        "prediction_availability_basis",
+        pd.Series("", index=eligible.index, dtype="string"),
+    ).astype("string").to_numpy()
     result["matchday_status"] = matchday_diagnostics["status"].astype(str).to_numpy()
     result["matchday_applied"] = (matchday_diagnostics["applied"].astype(bool) & bool(matchday_live_enabled)).to_numpy()
     result["matchday_shadow_applied"] = matchday_diagnostics["applied"].astype(bool).to_numpy()
@@ -619,6 +673,7 @@ def run(
         model_mode=model_mode,
         oos_claimed=bool(registry.get("oos_verified", False)),
         matchday_merge_status=matchday_merge_status,
+        prediction_window=prediction_window,
     )
 
 
@@ -631,8 +686,20 @@ def main() -> int:
     parser.add_argument("--prediction-time", default=None)
     parser.add_argument("--registry", default="artifacts/model_registry.json")
     parser.add_argument("--model-policy", choices=["production", "best_available"], default="best_available")
+    parser.add_argument("--prediction-window-minutes-before", type=float, default=None)
+    parser.add_argument("--prediction-window-tolerance-minutes", type=float, default=5.0)
     args = parser.parse_args()
-    result = run(args.fixtures, args.bundle, args.output, args.status, args.prediction_time, args.registry, args.model_policy)
+    result = run(
+        args.fixtures,
+        args.bundle,
+        args.output,
+        args.status,
+        args.prediction_time,
+        args.registry,
+        args.model_policy,
+        args.prediction_window_minutes_before,
+        args.prediction_window_tolerance_minutes,
+    )
     print(json.dumps(result, ensure_ascii=False, default=str))
     return 0
 
