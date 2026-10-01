@@ -16,6 +16,7 @@ from urllib3.util.retry import Retry
 from src.data.jleague_adapter import load_jleague_history
 from src.data.openfootball_adapter import load_openfootball_history
 from src.data.openfootball_international_adapter import load_openfootball_international_history
+from src.data.github_candidate_adapter import acquire_discovered_candidates
 from src.data.competition_catalog import ACTIVE_SCOPE
 from src.data.adaptive_acquisition import (
     deduplicate_history,
@@ -265,11 +266,29 @@ def load_available_history(
     discovery = discover_free_github_sources(
         discovery_targets, per_competition=int(config.discovery_per_competition)
     )
+    discovered_history, discovered_report = acquire_discovered_candidates(
+        discovery,
+        max_competitions=min(int(config.max_discovery_competitions), 4),
+        max_candidates_total=6,
+    )
+    if not discovered_history.empty:
+        history = deduplicate_history(
+            pd.concat([history, discovered_history], ignore_index=True)
+        )
+        history = history[
+            history["competition"].astype(str).isin(ACTIVE_SCOPE)
+        ].copy()
+        history = history.sort_values(
+            ["competition", "kickoff_utc", "home_team", "away_team", "source_name"],
+            kind="mergesort",
+        ).reset_index(drop=True)
+
     write_state(
         "artifacts/adaptive_acquisition_state.json",
         config=config,
         rounds=round_records,
         discovery=discovery,
+        discovered_acquisition=discovered_report,
     )
 
     return history, coverage
