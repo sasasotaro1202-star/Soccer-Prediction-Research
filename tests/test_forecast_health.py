@@ -17,6 +17,14 @@ def _write_status(path: Path, **overrides):
         "prediction_rows": 2,
         "production_model_used": True,
         "research_heuristic_disabled": True,
+        "runner_status": {
+            "status": "PREDICTED",
+            "freshness": {
+                "status": "FRESH",
+                "age_minutes": 4.0,
+                "max_age_minutes": 15.0,
+            },
+        },
     }
     value.update(overrides)
     path.write_text(json.dumps(value), encoding="utf-8")
@@ -149,6 +157,36 @@ def test_probability_corruption_blocks_prediction(tmp_path):
     result = audit(str(output), str(status))
     assert result["ok"] is False
     assert any("1X2 probabilities" in x for x in result["failures"])
+
+
+
+
+def test_missing_freshness_evidence_blocks_predicted_status(tmp_path):
+    output = tmp_path / "forecast.csv"
+    status = tmp_path / "status.json"
+    _write_status(status)
+    payload = json.loads(status.read_text(encoding="utf-8"))
+    payload["runner_status"]["freshness"]["status"] = "STALE"
+    status.write_text(json.dumps(payload), encoding="utf-8")
+    _write_forecast(output, [_forecast_row("m1", "2026-10-01T09:00:00Z")])
+
+    result = audit(str(output), str(status))
+    assert result["ok"] is False
+    assert "prediction_requires_FRESH_matchday_snapshot" in result["failures"]
+
+
+def test_missing_runner_status_blocks_predicted_status(tmp_path):
+    output = tmp_path / "forecast.csv"
+    status = tmp_path / "status.json"
+    _write_status(status)
+    payload = json.loads(status.read_text(encoding="utf-8"))
+    payload.pop("runner_status")
+    status.write_text(json.dumps(payload), encoding="utf-8")
+    _write_forecast(output, [_forecast_row("m1", "2026-10-01T09:00:00Z")])
+
+    result = audit(str(output), str(status))
+    assert result["ok"] is False
+    assert "predicted_status_requires_runner_status_evidence" in result["failures"]
 
 
 def test_missing_status_is_fail_closed(tmp_path):
