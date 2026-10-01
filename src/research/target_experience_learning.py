@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
-from src.evaluation.metrics import classification_metrics
 
 TARGETS = {
     "O/U": ("over_2_5", lambda h, a: int(h + a >= 3)),
@@ -59,16 +58,27 @@ def _logit(p):
     return np.log(p / (1.0 - p))
 
 
+def _binary_ece(y, p, bins=10):
+    y = np.asarray(y, dtype=int)
+    p = np.asarray(p, dtype=float)
+    edges = np.linspace(0.0, 1.0, bins + 1)
+    total = 0.0
+    for i in range(bins):
+        lo, hi = edges[i], edges[i + 1]
+        mask = (p >= lo) & ((p < hi) if i < bins - 1 else (p <= hi))
+        if mask.any():
+            total += float(mask.mean()) * abs(float(p[mask].mean()) - float(y[mask].mean()))
+    return float(total)
+
 def _score(y, p):
     y = np.asarray(y, dtype=int)
     p = np.clip(np.asarray(p, dtype=float), 1e-9, 1 - 1e-9)
-    m = classification_metrics(y, np.column_stack([1.0 - p, p]))
     return {
         "n": int(len(y)),
         "accuracy": float(((p >= 0.5).astype(int) == y).mean()),
-        "logloss": float(m["logloss"]),
-        "brier": float(np.mean((p - y) ** 2)),
-        "ece": float(m["ece"]),
+        "logloss": float(-np.mean(y * np.log(p) + (1-y) * np.log(1-p))),
+        "brier": float(np.mean((p-y) ** 2)),
+        "ece": _binary_ece(y, p),
     }
 
 
