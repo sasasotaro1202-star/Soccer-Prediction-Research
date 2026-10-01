@@ -103,3 +103,8 @@ def test_missing_shadow_telemetry_is_safe():
     plan = build_experience_candidate_plan(pd.DataFrame(rows))
     assert plan["status"] in {"READY", "WARMUP"}
     assert all(candidate["research_only"] for candidate in plan["candidates"])
+
+def test_mature_history_without_degradation_is_not_warmup():
+    rows = [_row(i) for i in range(60)]
+    plan = build_experience_candidate_plan(pd.DataFrame(rows))
+    assert plan["status"] == "NO_ACTIONABLE_DEGRADATION"
