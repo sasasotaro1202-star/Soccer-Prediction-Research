@@ -43,7 +43,7 @@ def test_future_failure_predictor_is_chronological_and_research_only():
     assert state["horizon_blocks"] == 1
     assert state["production_usable"] is False
     assert state["promotion_evidence_eligible"] is False
-    assert state["transitions"] == 6
+    assert state["transitions"] == 5
 
 
 def test_future_failure_rejects_missing_model_prediction():

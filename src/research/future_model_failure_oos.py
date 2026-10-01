@@ -147,8 +147,6 @@ def evaluate_future_model_failure_oos(
         future = folds[k + 1]
         start_k, end_k = int(current["end"]), int(current["te"])
         start_next, end_next = int(future["end"]), int(future["te"])
-        if start_k != (int(folds[k - 1]["te"]) if k > 0 else start_k):
-            pass
         yf = y[start_next:end_next]
         if len(yf) != end_next - start_next:
             raise ValueError("future fold target bounds are invalid")
@@ -223,7 +221,7 @@ def evaluate_future_model_failure_oos(
     return {
         "status": "EVALUATED",
         "models": metrics,
-        "transitions": int(len(folds) - 1),
+        "transitions": int(max(0, len(folds) - 2)),
         "horizon_blocks": 1,
         "label_rule": {
             "baseline_window": int(recent_window),
