@@ -1,6 +1,14 @@
 name: Soccer Predictability Research
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "src/research/predictability_map.py"
+      - "src/research/temporal_conformal_sets.py"
+      - "tests/test_predictability_map.py"
+      - "tests/test_temporal_conformal_sets.py"
+      - ".github/workflows/soccer-predictability-research.yml"
   workflow_dispatch:
   schedule:
     - cron: "25 */6 * * *"
