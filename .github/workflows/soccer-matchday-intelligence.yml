@@ -15,7 +15,7 @@ on:
         required: false
         default: "12"
   schedule:
-    - cron: "7,22,37,52 * * * *"
+    - cron: "*/5 * * * *"
 
 permissions:
   contents: read
@@ -61,6 +61,7 @@ jobs:
           python -m src.data.matchday_intelligence_fetch \
             --days "${DAYS}" \
             --horizon-hours "${HORIZON_HOURS}" \
+            --max-events 500 \
             --output artifacts/future_matchday_fixtures.csv \
             --status artifacts/matchday_intelligence_status.json
       - name: Validate snapshot contract
@@ -104,7 +105,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -s models/current/production_model.pkl ] && [ -s models/current/production_model.json ] && [ -s models/current/model_registry.json ] && [ -s models/current/production_provenance.json ]; then
-            python -m src.prediction.runner               --fixtures artifacts/future_fixtures.csv               --output artifacts/predictions.csv               --status artifacts/prediction_status.json               --model-policy production
+            python -m src.prediction.runner               --fixtures artifacts/future_fixtures.csv               --output artifacts/predictions.csv               --status artifacts/prediction_status.json               --model-policy production               --prediction-window-minutes-before 30               --prediction-window-tolerance-minutes 5
           else
             printf '%s\n' '{"status":"DEFERRED_NO_ADOPTED_PRODUCTION_MODEL","reason":"No complete adopted production model bundle is present; validated candidates remain research-only."}' > artifacts/prediction_status.json
             echo "No adopted production model present; prediction execution deferred."
