@@ -143,6 +143,7 @@ def run_target_specific_learning(df: pd.DataFrame, *, min_train: int = 1000, blo
                 "validation_selected_logloss":float(scores[selected]["logloss"]),
                 "validation_score_distribution_logloss":float(score_metrics["logloss"]),
                 "baseline_score_distribution_logloss":float(baseline_mm["logloss"]),
+                "baseline_score_distribution_accuracy":float(baseline_mm["accuracy"]),
                 "baseline_score_distribution_brier":float(baseline_mm["brier"]),
                 "baseline_score_distribution_ece":float(baseline_mm["ece"]),
                 **mm,
@@ -158,7 +159,7 @@ def run_target_specific_learning(df: pd.DataFrame, *, min_train: int = 1000, blo
             (locked["logloss"] <= locked["baseline_score_distribution_logloss"]).all()
             and (locked["brier"] <= locked["baseline_score_distribution_brier"]).all()
             and (locked["ece"] <= locked["baseline_score_distribution_ece"]).all()
-            and (locked["accuracy"] >= (locked["accuracy"] - 1e-12)).all()
+            and (locked["accuracy"] >= locked["baseline_score_distribution_accuracy"]).all()
         )
         selections[target]={
             "selected_by_block": target_blocks,
@@ -170,6 +171,7 @@ def run_target_specific_learning(df: pd.DataFrame, *, min_train: int = 1000, blo
             "locked_baseline_logloss": float(locked["baseline_score_distribution_logloss"].mean()),
             "locked_brier": float(locked["brier"].mean()),
             "locked_baseline_brier": float(locked["baseline_score_distribution_brier"].mean()),
+            "locked_baseline_accuracy": float(locked["baseline_score_distribution_accuracy"].mean()),
             "locked_ece": float(locked["ece"].mean()),
             "locked_baseline_ece": float(locked["baseline_score_distribution_ece"].mean()),
             "development_improvement": development_improvement,
