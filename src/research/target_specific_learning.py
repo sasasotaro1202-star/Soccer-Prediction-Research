@@ -101,9 +101,14 @@ def run_target_specific_learning(df: pd.DataFrame, *, min_train: int = 1000, blo
         target_blocks=[]
         candidates=_models()
         for block_id,(train,oos) in enumerate(_oos_blocks(td,min_train,block_size)):
-            fit_n=max(120, int(len(train)*0.8))
-            fit=train.iloc[:fit_n]; val=train.iloc[fit_n:]
-            if len(val)<60: val=fit; fit=train.iloc[:-60]
+            if len(train) < 120:
+                raise ValueError(f"{target}: each OOS block requires at least 120 pre-block training rows")
+            val_n = max(60, min(200, int(len(train) * 0.2)))
+            val_n = min(val_n, len(train) - 60)
+            fit = train.iloc[:-val_n]
+            val = train.iloc[-val_n:]
+            if len(fit) < 60 or len(val) < 60:
+                raise ValueError(f"{target}: chronological validation split requires at least 60 fit and 60 validation rows")
             scores={}
             for name in candidates:
                 model=_models()[name]
@@ -126,7 +131,7 @@ def run_target_specific_learning(df: pd.DataFrame, *, min_train: int = 1000, blo
             "locked_brier": float(locked["brier"].mean()),
             "locked_ece": float(locked["ece"].mean()),
             "locked_accuracy": float(locked["accuracy"].mean()),
-            "locked_non_regression": bool((locked["logloss"] <= locked["logloss"].iloc[0] if len(locked)>1 else True).all()),
+            "locked_blocks_finite": bool(np.isfinite(locked[["logloss","brier","ece","accuracy"]].to_numpy(dtype=float)).all()),
             "training_source": "PIT_verified_historical_matches",
             "production_usable": False,
         }
