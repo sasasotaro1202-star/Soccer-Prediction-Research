@@ -766,6 +766,18 @@ def run_walk_forward(
             confidence = ordered[:, -1]
             margin = ordered[:, -1] - ordered[:, -2]
             risk = np.asarray(oos_risk_diag.get('risk', np.zeros(len(oos))), dtype=float)
+            diagnostics = {
+                'model_disagreement': np.asarray(oos_risk_diag.get('disagreement', np.zeros(len(oos))), dtype=float),
+                'predictive_entropy': np.asarray(oos_risk_diag.get('entropy', np.zeros(len(oos))), dtype=float),
+                'uncertainty_score': np.asarray(oos_risk_diag.get('uncertainty', np.zeros(len(oos))), dtype=float),
+                'covariate_drift': np.asarray(oos_risk_diag.get('drift', np.zeros(len(oos))), dtype=float),
+                'history_support_risk': np.asarray(oos_risk_diag.get('support', np.zeros(len(oos))), dtype=float),
+            }
+            for key, values in diagnostics.items():
+                if values.shape != (len(oos),) or not np.isfinite(values).all():
+                    raise RuntimeError(f'Invalid OOS case diagnostic: {key}')
+                if np.any(values < 0.0) or np.any(values > 1.0):
+                    raise RuntimeError(f'Unbounded OOS case diagnostic: {key}')
             for row_idx, (_, row) in enumerate(oos.reset_index(drop=True).iterrows()):
                 case_rows.append({
                     'match_id': str(row['match_id']),
@@ -783,6 +795,12 @@ def run_walk_forward(
                     'margin': float(margin[row_idx]),
                     'risk_score': float(risk[row_idx]),
                     'risk_bucket': str(routing_risk_bucket(np.asarray([risk[row_idx]]))[0]),
+                    'model_disagreement': float(diagnostics['model_disagreement'][row_idx]),
+                    'predictive_entropy': float(diagnostics['predictive_entropy'][row_idx]),
+                    'uncertainty_score': float(diagnostics['uncertainty_score'][row_idx]),
+                    'covariate_drift': float(diagnostics['covariate_drift'][row_idx]),
+                    'history_support_risk': float(diagnostics['history_support_risk'][row_idx]),
+                    'routing_route': str(_oos_routes[row_idx]),
                 })
 
         candidate_metrics = classification_metrics(oos.target.astype(int), probs)
