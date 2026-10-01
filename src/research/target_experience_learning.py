@@ -48,6 +48,28 @@ def _validate(ledger: pd.DataFrame) -> pd.DataFrame:
     ]
     if d["match_id"].isna().any() or d["match_id"].astype(str).str.strip().eq("").any():
         raise RuntimeError("target experience ledger contains invalid match_id")
+
+    # One realized fixture must produce one experience/evaluation row. Ledgers can
+    # legitimately contain multiple pre-kickoff prediction states for the same
+    # fixture, so retain the latest PIT-safe state while refusing inconsistent
+    # realized outcomes for the same match.
+    duplicate_mask = d["match_id"].duplicated(keep=False)
+    if duplicate_mask.any():
+        duplicated = d.loc[duplicate_mask].copy()
+        for col in ("kickoff_utc", "actual_home_goals", "actual_away_goals"):
+            conflicts = duplicated.groupby("match_id", sort=False)[col].nunique(dropna=False)
+            if bool((conflicts > 1).any()):
+                raise RuntimeError(
+                    f"target experience ledger has inconsistent {col} across prediction states"
+                )
+        d = (
+            d.sort_values(
+                ["match_id", "prediction_pit_cutoff_utc", "experience_available_at_utc"],
+                kind="mergesort",
+            )
+            .drop_duplicates("match_id", keep="last")
+        )
+
     return d.sort_values(
         ["prediction_pit_cutoff_utc", "kickoff_utc", "match_id"], kind="mergesort"
     ).reset_index(drop=True)
