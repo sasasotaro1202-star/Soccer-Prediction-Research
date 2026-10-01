@@ -57,3 +57,32 @@ def test_prediction_window_rejects_invalid_tolerance():
     except ValueError:
         return
     raise AssertionError("invalid tolerance must fail closed")
+
+
+def test_target_filter_ignores_unrelated_malformed_fixture_rows():
+    from src.prediction.runner import _eligible_fixtures
+    now = pd.Timestamp("2026-10-01T12:00:00Z")
+    frame = pd.DataFrame([
+        {
+            "match_id": "target",
+            "kickoff_utc": "2026-10-01T12:30:00Z",
+            "home_team": "A",
+            "away_team": "B",
+            "competition": "EPL",
+            "source_available_at_utc": "2026-10-01T11:00:00Z",
+            "pit_verified": True,
+            "starter_status": "EXPECTED",
+        },
+        {
+            "match_id": "unrelated",
+            "kickoff_utc": "not-a-date",
+            "home_team": "X",
+            "away_team": "Y",
+            "competition": "NOT_TARGET",
+            "source_available_at_utc": "not-a-date",
+            "pit_verified": False,
+            "starter_status": "BAD",
+        },
+    ])
+    out = _eligible_fixtures(frame, now)
+    assert out["match_id"].tolist() == ["target"]
