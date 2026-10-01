@@ -34,6 +34,7 @@ def _probabilities(frame: pd.DataFrame) -> np.ndarray:
 def _validate(frame: pd.DataFrame) -> pd.DataFrame:
     required = {
         "match_id",
+        "kickoff_utc",
         "prediction_pit_cutoff_utc",
         "experience_available_at_utc",
         "prediction_pit_gate",
@@ -49,6 +50,9 @@ def _validate(frame: pd.DataFrame) -> pd.DataFrame:
         raise RuntimeError(f"conformal ledger missing required columns: {missing}")
     d = frame.copy()
     d["match_id"] = d["match_id"].astype("string").str.strip()
+    d["kickoff_utc"] = pd.to_datetime(
+        d["kickoff_utc"], utc=True, errors="coerce"
+    )
     d["prediction_pit_cutoff_utc"] = pd.to_datetime(
         d["prediction_pit_cutoff_utc"], utc=True, errors="coerce"
     )
@@ -61,6 +65,8 @@ def _validate(frame: pd.DataFrame) -> pd.DataFrame:
     valid &= d["prediction_pit_gate"].astype("string").eq("PASS")
     valid &= d["prediction_pit_cutoff_utc"].notna()
     valid &= d["experience_available_at_utc"].notna()
+    valid &= d["prediction_pit_cutoff_utc"] < d["kickoff_utc"]
+    valid &= d["experience_available_at_utc"] > d["kickoff_utc"]
     valid &= d["experience_available_at_utc"] > d["prediction_pit_cutoff_utc"]
     valid &= d["actual_result"].isin(LABELS)
     valid &= np.isfinite(p).all(axis=1)
@@ -211,17 +217,8 @@ def temporal_prediction_sets(
             "singleton_rate": float(single.mean()),
             "singleton_accuracy": (
                 float(
-                    (
-                        single_rows["set"]
-                        .astype("string")
-                        .str.split("|")
-                        .map(lambda xs: bool(xs and xs[0] == str(single_rows.loc[xs.index[0], "actual_result"])) if False else False)
-                    ).mean()
-                )
-                if False else float(
                     sum(
-                        len(str(row.set).split("|")) == 1
-                        and str(row.set).split("|")[0] == str(row.actual_result)
+                        str(row.set).split("|")[0] == str(row.actual_result)
                         for row in single_rows.itertuples(index=False)
                     ) / len(single_rows)
                 )
@@ -236,6 +233,7 @@ def temporal_prediction_sets(
             "match_id",
             "prediction_state_id",
             "prediction_pit_cutoff_utc",
+            "kickoff_utc",
             "experience_available_at_utc",
             "p_home",
             "p_draw",
