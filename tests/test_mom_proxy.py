@@ -144,3 +144,7 @@ def test_chronological_oos_research_keeps_exact_top4_contract():
     mass = output.groupby(["model", "match_id"])["probability"].sum()
     assert np.isfinite(mass).all()
     assert (mass <= 1.0 + 1e-12).all()
+    competition = pd.DataFrame(state["competition_metrics"])
+    assert not competition.empty
+    assert set(competition["competition"]) == {"EPL", "J1"}
+    assert (competition["fixtures"] > 0).all()
