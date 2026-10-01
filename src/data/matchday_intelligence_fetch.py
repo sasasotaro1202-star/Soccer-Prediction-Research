@@ -827,7 +827,8 @@ def _collect_sofascore_day(
         available, pit_verified = _current_snapshot_pit_state(observed_at, kickoff)
         row["matchday_available_at_utc"] = available
         row["matchday_pit_verified"] = pit_verified
-    return parsed, errors, scheduled_at
+    limited = parsed if max_events is None else parsed[:int(max_events)]
+    return limited, errors, scheduled_at
 
 
 def _collect_football_data_fallback(
