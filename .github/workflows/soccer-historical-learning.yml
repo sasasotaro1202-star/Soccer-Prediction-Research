@@ -86,6 +86,14 @@ jobs:
           PY
           test -s artifacts/target_specific/target_specific_status.json
 
+      - name: Run competition-target diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m src.research.competition_target_diagnostics
+          test -s artifacts/target_specific/target_specific_competition_metrics.csv
+          test -s artifacts/target_specific/target_specific_competition_status.json
+
       - name: Publish historical learning state
         shell: bash
         run: |
