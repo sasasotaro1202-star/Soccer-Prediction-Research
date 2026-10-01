@@ -1,6 +1,13 @@
 name: Soccer Versioned Result PIT Research
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "src/data/versioned_result_pit.py"
+      - "tests/test_versioned_result_pit.py"
+      - ".github/workflows/soccer-versioned-pit-research.yml"
+      - "artifacts/normalized_history.csv"
   workflow_dispatch:
     inputs:
       max_groups:
