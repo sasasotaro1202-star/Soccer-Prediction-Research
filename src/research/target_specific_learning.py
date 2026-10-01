@@ -16,7 +16,6 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from src.evaluation.metrics import classification_metrics
 from src.prediction.secondary_outputs import fit_score_rate_model, predict_score_markets
 
 TARGETS = {
@@ -62,18 +61,30 @@ def _feature_cols(df: pd.DataFrame) -> list[str]:
         raise ValueError("No numeric target-specific features available")
     return cols
 
+def _binary_ece(y: np.ndarray, p: np.ndarray, bins: int = 10) -> float:
+    y = np.asarray(y, dtype=int).reshape(-1)
+    p = np.asarray(p, dtype=float).reshape(-1)
+    edges = np.linspace(0.0, 1.0, bins + 1)
+    total = 0.0
+    for i in range(bins):
+        lo, hi = edges[i], edges[i + 1]
+        mask = (p >= lo) & ((p < hi) if i < bins - 1 else (p <= hi))
+        if mask.any():
+            total += float(mask.mean()) * abs(float(p[mask].mean()) - float(y[mask].mean()))
+    return float(total)
+
 def _metrics(y: np.ndarray, p: np.ndarray) -> dict:
     p = np.asarray(p, dtype=float).reshape(-1)
     p = np.clip(p, 1e-9, 1 - 1e-9)
     y = np.asarray(y, dtype=int).reshape(-1)
-    m = classification_metrics(y, np.column_stack([1.0-p, p]))
+    logloss = float(-np.mean(y * np.log(p) + (1-y) * np.log(1-p)))
     pred = (p >= 0.5).astype(int)
     return {
         "n": int(len(y)),
         "accuracy": float((pred == y).mean()),
-        "logloss": float(m["logloss"]),
+        "logloss": logloss,
         "brier": float(np.mean((p-y) ** 2)),
-        "ece": float(m["ece"]),
+        "ece": _binary_ece(y, p),
     }
 
 def _oos_blocks(df: pd.DataFrame, min_train: int, block_size: int):
