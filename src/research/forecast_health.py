@@ -102,7 +102,7 @@ def audit(output_path: str, status_path: str) -> dict[str, Any]:
         "status": "BLOCKED",
         "ok": False,
         "forecast_evidence": "NONE",
-        "production_ready": False,
+        "prediction_runtime_ready": False,
         "failures": [],
     }
 
@@ -148,7 +148,7 @@ def audit(output_path: str, status_path: str) -> dict[str, Any]:
         report["status"] = "NO_TARGET"
         report["forecast_evidence"] = "NONE"
         report["ok"] = not failures
-        report["production_ready"] = False
+        report["prediction_runtime_ready"] = False
         report["failures"] = failures
         return report
 
@@ -197,7 +197,7 @@ def audit(output_path: str, status_path: str) -> dict[str, Any]:
     report["status"] = "HEALTHY" if not failures else "BLOCKED"
     report["ok"] = not failures
     report["forecast_evidence"] = "PREDICTION_VERIFIED" if not failures else "PREDICTION_INVALID"
-    report["production_ready"] = not failures
+    report["prediction_runtime_ready"] = not failures
     report["coverage_ratio"] = (
         report["prediction_rows"] / report["target_rows"]
         if report["target_rows"] > 0 else 0.0
