@@ -421,3 +421,29 @@ def test_sofascore_slug_discovers_current_asian_games_women():
         }
     }
     assert _sofascore_competition(event) == "AG_W"
+
+
+def test_every_active_target_has_a_matchday_discovery_mapping():
+    from src.data.competition_sources import TARGET_COMPETITIONS
+    from src.data.matchday_intelligence_fetch import SOFASCORE_COMPETITIONS, _sofascore_competition
+
+    direct = {value for value in SOFASCORE_COMPETITIONS.values() if value}
+    slug_targets = {
+        "WORLD_CUP": {"slug": "fifa-world-cup", "name": "FIFA World Cup"},
+        "ASIAN_CUP": {"slug": "afc-asian-cup", "name": "AFC Asian Cup"},
+    }
+    covered = set(direct) | set(slug_targets) | {"U23_M", "U18_M"}
+    missing = set(TARGET_COMPETITIONS) - covered
+    assert not missing, f"active targets lack a discovery mapping: {sorted(missing)}"
+
+    for target, payload in slug_targets.items():
+        assert _sofascore_competition({"tournament": payload}) == target
+
+    assert _sofascore_competition({"tournament": {"name": "U23 International"}}) == "U23_M"
+    assert _sofascore_competition({"tournament": {"name": "U18 International"}}) == "U18_M"
+
+    for target in TARGET_COMPETITIONS:
+        names = [name for name, value in SOFASCORE_COMPETITIONS.items() if value == target]
+        if not names:
+            continue
+        assert _sofascore_competition({"tournament": {"name": names[0]}}) == target
