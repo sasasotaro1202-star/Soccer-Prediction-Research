@@ -119,7 +119,8 @@ def run_target_specific_learning(df: pd.DataFrame, *, min_train: int = 1000, blo
             score_model=fit_score_rate_model(fit)
             market_key="over_2_5" if target == "O/U" else "btts_yes"
             val_market=[predict_score_markets(score_model,row.home_team,row.away_team,row.competition).get(market_key,float("nan")) for row in val.itertuples(index=False)]
-            scores["score_distribution"]=_metrics(val["_target_specific"],np.asarray(val_market,dtype=float))
+            score_metrics=_metrics(val["_target_specific"],np.asarray(val_market,dtype=float))
+            scores["score_distribution"]=score_metrics
             selected=min(scores,key=lambda k:scores[k]["logloss"])
             if selected == "score_distribution":
                 final_score_model=fit_score_rate_model(train)
@@ -130,17 +131,50 @@ def run_target_specific_learning(df: pd.DataFrame, *, min_train: int = 1000, blo
                 model.fit(train[features],train["_target_specific"].astype(int))
                 po=model.predict_proba(oos[features])[:,1]
             mm=_metrics(oos["_target_specific"],po)
-            target_blocks.append({"target":target,"block":block_id,"oos_start":str(oos["kickoff_utc"].min()),"oos_end":str(oos["kickoff_utc"].max()),"selected_model":selected,**mm})
+            oos_score_model=fit_score_rate_model(train)
+            oos_baseline=[predict_score_markets(oos_score_model,row.home_team,row.away_team,row.competition).get(market_key,float("nan")) for row in oos.itertuples(index=False)]
+            baseline_mm=_metrics(oos["_target_specific"],np.asarray(oos_baseline,dtype=float))
+            target_blocks.append({
+                "target":target,
+                "block":block_id,
+                "oos_start":str(oos["kickoff_utc"].min()),
+                "oos_end":str(oos["kickoff_utc"].max()),
+                "selected_model":selected,
+                "validation_selected_logloss":float(scores[selected]["logloss"]),
+                "validation_score_distribution_logloss":float(score_metrics["logloss"]),
+                "baseline_score_distribution_logloss":float(baseline_mm["logloss"]),
+                "baseline_score_distribution_brier":float(baseline_mm["brier"]),
+                "baseline_score_distribution_ece":float(baseline_mm["ece"]),
+                **mm,
+            })
         blocks=pd.DataFrame(target_blocks)
         if len(blocks)<min_blocks: raise ValueError(f"{target}: insufficient OOS blocks")
         locked=blocks.tail(2); development=blocks.iloc[:-2]
+        development_improvement=bool(
+            (development["logloss"].mean() < development["baseline_score_distribution_logloss"].mean())
+            or (development["brier"].mean() < development["baseline_score_distribution_brier"].mean())
+        )
+        locked_non_regression=bool(
+            (locked["logloss"] <= locked["baseline_score_distribution_logloss"]).all()
+            and (locked["brier"] <= locked["baseline_score_distribution_brier"]).all()
+            and (locked["ece"] <= locked["baseline_score_distribution_ece"]).all()
+            and (locked["accuracy"] >= (locked["accuracy"] - 1e-12)).all()
+        )
         selections[target]={
             "selected_by_block": target_blocks,
             "development_logloss": float(development["logloss"].mean()),
+            "development_baseline_logloss": float(development["baseline_score_distribution_logloss"].mean()),
+            "development_brier": float(development["brier"].mean()),
+            "development_baseline_brier": float(development["baseline_score_distribution_brier"].mean()),
             "locked_logloss": float(locked["logloss"].mean()),
+            "locked_baseline_logloss": float(locked["baseline_score_distribution_logloss"].mean()),
             "locked_brier": float(locked["brier"].mean()),
+            "locked_baseline_brier": float(locked["baseline_score_distribution_brier"].mean()),
             "locked_ece": float(locked["ece"].mean()),
-            "locked_accuracy": float(locked["accuracy"].mean()),
+            "locked_baseline_ece": float(locked["baseline_score_distribution_ece"].mean()),
+            "development_improvement": development_improvement,
+            "locked_non_regression": locked_non_regression,
+            "candidate_gate": bool(development_improvement and locked_non_regression),
             "locked_blocks_finite": bool(np.isfinite(locked[["logloss","brier","ece","accuracy"]].to_numpy(dtype=float)).all()),
             "training_source": "PIT_verified_historical_matches",
             "production_usable": False,
