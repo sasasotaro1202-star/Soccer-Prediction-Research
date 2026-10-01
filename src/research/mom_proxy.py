@@ -256,6 +256,10 @@ def _fixture_scores(case_frames: list[pd.DataFrame], model_name: str, model, tem
                 "proxy_winner_player_id": winner,
                 "proxy_winner_name": str(frame.iloc[0].get("proxy_winner_name") or ""),
                 "proxy_winner_in_candidate_pool": bool(covered),
+                "proxy_winner_rank": int(rank),
+                "proxy_winner_probability": float(p_true),
+                "proxy_winner_rank": int(rank),
+                "proxy_winner_probability": float(p_true),
             })
     n = int(metrics["fixtures"])
     return {
@@ -531,6 +535,46 @@ def run_mom_proxy_research(
         rows.extend(selected_rows)
 
     block_df = pd.DataFrame(block_rows)
+
+    competition_metrics: list[dict[str, Any]] = []
+    if rows:
+        top4_rows = pd.DataFrame(rows)
+        for (competition, model, match_id), frame in top4_rows.groupby(
+            ["competition", "model", "match_id"], sort=True
+        ):
+            first = frame.iloc[0]
+            covered = bool(first["proxy_winner_in_candidate_pool"])
+            rank = int(first["proxy_winner_rank"])
+            probability = float(first["proxy_winner_probability"])
+            top4_hit = bool((frame["player_id"].astype(str) == str(first["proxy_winner_player_id"])).any())
+            competition_metrics.append({
+                "competition": str(competition),
+                "model": str(model),
+                "fixtures": 1,
+                "top1_hit": int(covered and rank == 1),
+                "top4_hit": int(top4_hit),
+                "mrr": (1.0 / rank) if covered else 0.0,
+                "logloss": -math.log(max(probability, EPS)),
+                "candidate_recall": int(covered),
+            })
+        comp_frame = pd.DataFrame(competition_metrics)
+        if not comp_frame.empty:
+            comp_frame = comp_frame.groupby(
+                ["competition", "model"], as_index=False, sort=True
+            ).agg({
+                "fixtures": "sum",
+                "top1_hit": "sum",
+                "top4_hit": "sum",
+                "mrr": "sum",
+                "logloss": "sum",
+                "candidate_recall": "mean",
+            })
+            comp_frame["top1_hit_rate"] = comp_frame["top1_hit"] / comp_frame["fixtures"]
+            comp_frame["top4_hit_rate"] = comp_frame["top4_hit"] / comp_frame["fixtures"]
+            comp_frame["mrr"] = comp_frame["mrr"] / comp_frame["fixtures"]
+            comp_frame["logloss"] = comp_frame["logloss"] / comp_frame["fixtures"]
+            competition_metrics = comp_frame.to_dict(orient="records")
+
     dev = block_df[~block_df["locked_block"]]
     locked = block_df[block_df["locked_block"]]
     gates = {
@@ -579,6 +623,7 @@ def run_mom_proxy_research(
         },
         "gates": gates,
         "method_blocks": block_rows,
+        "competition_metrics": competition_metrics,
         "output_contract": {
             "top_k": 4,
             "probabilities_sum_over_full_candidate_pool": True,
@@ -696,6 +741,9 @@ def save_mom_proxy_artifacts(
     result = run_mom_proxy_research(cases)
     pd.DataFrame(result["blocks"]).to_csv(out / "mom_proxy_oos.csv", index=False)
     pd.DataFrame(result["rows"]).to_csv(out / "mom_proxy_cases.csv", index=False)
+    pd.DataFrame(result["state"].get("competition_metrics", [])).to_csv(
+        out / "mom_proxy_competition_metrics.csv", index=False
+    )
     state = dict(result["state"])
     state["source_url"] = "https://huggingface.co/datasets/eatpizzanot/soccer-dataset"
     state["source_license"] = "CC-BY-4.0"
