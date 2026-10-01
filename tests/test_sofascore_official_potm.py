@@ -91,3 +91,31 @@ def test_fetch_retries_only_bounded_transient_http_failures(monkeypatch):
     result = fetch_official_potm("1", session=FakeSession(), retries=3)
     assert result["status"] == "FOUND"
     assert calls["n"] == 3
+
+
+def test_attach_labels_rejects_teacher_retrieved_before_kickoff(monkeypatch):
+    events = pd.DataFrame({
+        "sofascore_event_id": ["1"],
+        "kickoff_utc": ["2026-10-01T12:00:00Z"],
+    })
+    monkeypatch.setattr(
+        "src.research.sofascore_official_potm.fetch_official_potm",
+        lambda *args, **kwargs: {
+            "event_id": "1",
+            "label_type": "SOFASCORE_OFFICIAL_POTM",
+            "player_id": "7",
+            "player_name": "A Player",
+            "rating_value": 8.0,
+            "rating_label": "rating",
+            "label_retrieved_at_utc": "2026-10-01T11:59:00Z",
+            "source_url": "x",
+            "status": "FOUND",
+            "historical_publication_time_verified": False,
+        },
+    )
+    try:
+        attach_labels(events)
+    except RuntimeError as exc:
+        assert "before kickoff" in str(exc)
+    else:
+        raise AssertionError("pre-kickoff teacher retrieval must fail closed")
