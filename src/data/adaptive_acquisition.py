@@ -100,6 +100,10 @@ def select_preferred_sources(coverage: pd.DataFrame) -> pd.DataFrame:
         return coverage.copy()
 
     work = coverage.copy()
+    # This function is intentionally re-entrant. Previous calls may already have
+    # annotated preferred-source columns; remove those derived columns before
+    # recomputing the canonical preference from the raw coverage evidence.
+    work = work.drop(columns=["preferred_source", "preferred_source_rows"], errors="ignore")
     work["rows"] = pd.to_numeric(work.get("rows", 0), errors="coerce").fillna(0)
     work["status"] = work["status"].astype(str) if "status" in work.columns else "UNKNOWN"
     work["_pit_bonus"] = work["pit_capable"].astype(bool).astype(int) if "pit_capable" in work.columns else 0
