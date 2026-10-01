@@ -459,3 +459,9 @@ def test_matchday_workflow_does_not_pass_a_legacy_global_event_cap():
     workflow = Path(".github/workflows/soccer-matchday-intelligence.yml").read_text(encoding="utf-8")
     assert "--max-events" not in workflow
     assert "global_event_cap_enabled" in workflow
+
+
+def test_matchday_workflow_allows_confirmed_lineups():
+    from pathlib import Path
+    workflow = Path(".github/workflows/soccer-matchday-intelligence.yml").read_text(encoding="utf-8")
+    assert '{"EXPECTED", "ANNOUNCED", "CONFIRMED"}' in workflow
