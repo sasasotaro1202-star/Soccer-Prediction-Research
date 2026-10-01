@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from src.data.external_fetch import ExternalFetcher, iso_utc
+from src.data.live_scope_coverage import active_target_coverage
 
 
 ESPN_LEAGUES: dict[str, str] = {
@@ -1191,6 +1192,7 @@ def collect_matchday_snapshots(
         "detail_horizon_hours": float(horizon_hours),
         "requested_calendar_days": int(max(1, int(days))),
         "scanned_calendar_days": int(scan_days),
+        "active_target_coverage": active_target_coverage(frame),
     }
     return frame, status
 
