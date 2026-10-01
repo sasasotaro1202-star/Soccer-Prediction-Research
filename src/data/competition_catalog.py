@@ -186,9 +186,8 @@ def research_targets() -> list[CompetitionSpec]:
 
 # Active scope is intentionally narrower than the broad research catalog.
 # Parked competitions remain catalogued for later expansion, but acquisition,
-# OOS rACTIVE_SCOPE = frozenset(TARGET_COMPETITIONS)_CUP", "EMP_CUP", "INTL_M", "INTL_W",
-    "U23_M", "U18_M",
-})
+# OOS research, and production promotion should follow the canonical target list.
+ACTIVE_SCOPE = frozenset(TARGET_COMPETITIONS)
 
 def active_competitions() -> tuple[CompetitionSpec, ...]:
     return tuple(spec for spec in COMPETITION_CATALOG if spec.code in ACTIVE_SCOPE)
