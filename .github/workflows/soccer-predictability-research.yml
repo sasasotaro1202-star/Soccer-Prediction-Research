@@ -1,18 +1,6 @@
 name: Soccer Predictability Research
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "src/research/predictability_map.py"
-      - "src/research/temporal_conformal_sets.py"
-      - "src/research/predictability_calibration.py"
-      - "tests/test_predictability_map.py"
-      - "tests/test_temporal_conformal_sets.py"
-      - "tests/test_predictability_calibration.py"
-      - "src/research/future_model_failure_oos.py"
-      - "tests/test_future_model_failure_oos.py"
-      - ".github/workflows/soccer-predictability-research.yml"
   workflow_dispatch:
   schedule:
     - cron: "25 */6 * * *"
