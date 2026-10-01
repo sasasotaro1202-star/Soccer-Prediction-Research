@@ -239,8 +239,21 @@ def _promote_current_matchday_pit(fixtures: pd.DataFrame, prediction_time: pd.Ti
 
 
 def _filter_prediction_window(fixtures: pd.DataFrame, prediction_time: pd.Timestamp, target_minutes_before: float | None, tolerance_minutes: float) -> tuple[pd.DataFrame, dict]:
+    """Apply a soft pre-kickoff timing policy.
+
+    The configured target is a preferred timing, not an exact execution window.
+    A fixture becomes prediction-eligible once it enters the target+buffer
+    horizon and remains eligible until kickoff. This lets the scheduler recover
+    from delayed discovery or transient source failures without dropping a match
+    because the 25-35 minute band was missed.
+    """
     if target_minutes_before is None:
-        return fixtures, {"enabled": False, "target_minutes_before": None, "tolerance_minutes": None}
+        return fixtures, {
+            "enabled": False,
+            "mode": "NO_TIMING_FILTER",
+            "target_minutes_before": None,
+            "tolerance_minutes": None,
+        }
     target = float(target_minutes_before)
     tolerance = float(tolerance_minutes)
     if not np.isfinite(target) or target <= 0:
@@ -250,12 +263,21 @@ def _filter_prediction_window(fixtures: pd.DataFrame, prediction_time: pd.Timest
     d = fixtures.copy()
     kickoff = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
     minutes_before = (kickoff - prediction_time).dt.total_seconds() / 60.0
-    lower = target - tolerance
     upper = target + tolerance
-    mask = kickoff.notna() & (minutes_before >= lower) & (minutes_before <= upper)
+    mask = kickoff.notna() & (minutes_before > 0) & (minutes_before <= upper)
     selected = d.loc[mask].copy()
     selected["prediction_window_minutes_before"] = minutes_before.loc[selected.index]
-    return selected.sort_values(["kickoff_utc", "match_id"], kind="mergesort"), {"enabled": True, "target_minutes_before": target, "tolerance_minutes": tolerance, "window_start_minutes_before": lower, "window_end_minutes_before": upper, "fixtures_in_window": int(len(selected)), "fixtures_considered": int(len(d))}
+    return selected.sort_values(["kickoff_utc", "match_id"], kind="mergesort"), {
+        "enabled": True,
+        "mode": "SOFT_TARGET",
+        "target_minutes_before": target,
+        "tolerance_minutes": tolerance,
+        "preferred_timing_minutes_before": target,
+        "deadline_minutes_before": upper,
+        "fixtures_in_window": int(len(selected)),
+        "fixtures_considered": int(len(d)),
+    }
+
 def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) -> pd.DataFrame:
     missing = sorted(REQUIRED_FIXTURE_COLUMNS - set(fixtures.columns))
     if missing:
