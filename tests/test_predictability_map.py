@@ -97,3 +97,39 @@ def test_empty_ledger_is_safe_warmup():
     assert state["rows"] == 0
     assert state["production_usable"] is False
     assert state["safety_contract"]["production_changed"] is False
+
+
+def test_shadow_prefixed_telemetry_is_consumed():
+    row = _row(0, risk=0.2)
+    for name in (
+        "predictive_entropy",
+        "model_disagreement",
+        "covariate_drift",
+        "history_support_risk",
+        "routing_risk",
+    ):
+        row["shadow_" + name] = row.pop(name)
+    scored = _predictability_score(
+        pd.DataFrame([row])
+        .assign(
+            predictive_entropy=lambda d: d["shadow_predictive_entropy"],
+            model_disagreement=lambda d: d["shadow_model_disagreement"],
+            covariate_drift=lambda d: d["shadow_covariate_drift"],
+            history_support_risk=lambda d: d["shadow_history_support_risk"],
+            routing_risk=lambda d: d["shadow_routing_risk"],
+        )
+    )
+    assert pd.notna(scored.loc[0, "predictability_score"])
+
+
+def test_duplicate_fixture_without_state_identity_fails_closed():
+    rows = [_row(i, risk=0.2) for i in range(60)]
+    rows[1]["match_id"] = rows[0]["match_id"]
+    rows[0].pop("prediction_state_id")
+    rows[1].pop("prediction_state_id")
+    try:
+        analyze(pd.DataFrame(rows))
+    except RuntimeError as exc:
+        assert "duplicate match_id without prediction_state_id" in str(exc)
+    else:
+        raise AssertionError("duplicate fixture without state identity must fail closed")
