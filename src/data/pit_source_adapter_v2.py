@@ -193,7 +193,18 @@ class FootballDataWaybackAdapter:
         candidates = [c for c in captures if (_utc(c.get("timestamp")) is not None and min_search_bound is not None and _utc(c.get("timestamp")) >= min_search_bound)]
         candidates.sort(key=lambda c:c.get("timestamp", ""))
         if not candidates:
-            return [SourceEvidence(None, "UNVERIFIABLE", reason=f"captures_exist_but_no_capture_after_result_lower_bound:{bound_reason}") for _, bound_reason in bounds]
+            return [
+                SourceEvidence(
+                    None,
+                    "UNVERIFIABLE",
+                    reason=(
+                        f"captures_exist_but_no_capture_after_result_lower_bound:{bound_reason}"
+                        if bound_reason
+                        else "captures_exist_but_no_capture_after_result_lower_bound"
+                    ),
+                )
+                for _, bound_reason in bounds
+            ]
         def fetch(c): return c, self._load_snapshot_keys(c, url)
         keysets=[]
         with ThreadPoolExecutor(max_workers=workers or self.max_workers) as pool:
