@@ -92,3 +92,13 @@ def test_candidate_plan_is_research_only():
     assert plan["safety_contract"]["production_changed"] is False
     assert plan["safety_contract"]["frozen_holdout_allowed"] is False
     assert all(candidate["research_only"] for candidate in plan["candidates"])
+
+def test_missing_shadow_telemetry_is_safe():
+    rows = [_row(i) for i in range(60)]
+    for row in rows:
+        row.pop("shadow_model_disagreement", None)
+        row.pop("shadow_uncertainty_score", None)
+        row.pop("shadow_routing_risk", None)
+    plan = build_experience_candidate_plan(pd.DataFrame(rows))
+    assert plan["status"] in {"READY", "WARMUP"}
+    assert all(candidate["research_only"] for candidate in plan["candidates"])
