@@ -150,6 +150,10 @@ jobs:
           status = json.loads(Path("artifacts/experience_status.json").read_text(encoding="utf-8"))
           summary = status.get("summary") or {}
           deltas = status.get("metric_deltas_vs_previous") or {}
+          print(
+              f"- **Settlement verification**: dual-source={status.get('dual_source_agree_predictions', 0)}, "
+              f"source-disagreement={status.get('source_disagreement_predictions', 0)}"
+          )
           for scope in ("all", "30d", "7d"):
               row = summary.get(scope)
               if not isinstance(row, dict):
