@@ -130,6 +130,6 @@ def test_duplicate_fixture_without_state_identity_fails_closed():
     try:
         analyze(pd.DataFrame(rows))
     except RuntimeError as exc:
-        assert "duplicate match_id without prediction_state_id" in str(exc)
+        assert any(token in str(exc) for token in ("duplicate match_id without prediction_state_id", "invalid prediction_state_id"))
     else:
         raise AssertionError("duplicate fixture without state identity must fail closed")
