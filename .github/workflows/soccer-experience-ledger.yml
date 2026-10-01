@@ -55,16 +55,21 @@ jobs:
         run: |
           set -euo pipefail
           if [ -f artifacts/matchday-source/predictions.csv ]; then
-            python -m scripts.experience_ledger record --predictions artifacts/matchday-source/predictions.csv --prediction-time "$(python - <<'PY'
+            PREDICTION_TIME="$(python - <<'PY'
           import json
           from pathlib import Path
           p = Path("artifacts/matchday-source/prediction_status.json")
           if not p.exists():
               print("")
           else:
-              print(json.loads(p.read_text()).get("prediction_time_utc", ""))
+              print(json.loads(p.read_text(encoding="utf-8")).get("prediction_time_utc", ""))
           PY
             )"
+            if [ -s artifacts/matchday-source/forecast_uncertainty_shadow.csv ]; then
+              python -m scripts.experience_ledger record                 --predictions artifacts/matchday-source/predictions.csv                 --prediction-time "$PREDICTION_TIME"                 --diagnostics artifacts/matchday-source/forecast_uncertainty_shadow.csv
+            else
+              python -m scripts.experience_ledger record                 --predictions artifacts/matchday-source/predictions.csv                 --prediction-time "$PREDICTION_TIME"
+            fi
           elif [ -f artifacts/predictions.csv ] && [ -f artifacts/prediction_status.json ]; then
             python -m scripts.experience_ledger record \
               --predictions artifacts/predictions.csv \

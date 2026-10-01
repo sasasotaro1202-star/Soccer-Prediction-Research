@@ -368,3 +368,45 @@ def test_target_metrics_include_binary_probability_quality(tmp_path, monkeypatch
     assert float(btts["ece"]) >= 0.0
 
 
+
+
+def test_record_prediction_joins_outcome_free_shadow_telemetry(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+
+    ledger = tmp_path / "ledger.csv"
+    snapshots = tmp_path / "snapshots.jsonl"
+    predictions = tmp_path / "predictions.csv"
+    diagnostics = tmp_path / "shadow.csv"
+    monkeypatch.setattr(mod, "LEDGER", ledger)
+    monkeypatch.setattr(mod, "PREDICTION_SNAPSHOTS", snapshots)
+
+    pd.DataFrame([{
+        "match_id": "m1",
+        "kickoff_utc": "2026-09-26T10:00:00Z",
+        "prediction_time_utc": "2026-09-26T08:00:00Z",
+        "home_team": "A",
+        "away_team": "B",
+        "competition": "EPL",
+        "p_home": 0.6,
+        "p_draw": 0.2,
+        "p_away": 0.2,
+        "model_version": "v1",
+    }]).to_csv(predictions, index=False)
+    pd.DataFrame([{
+        "match_id": "m1",
+        "model_disagreement": 0.2,
+        "predictive_entropy": 0.4,
+        "uncertainty_score": 0.3,
+        "covariate_drift": 0.1,
+        "history_support_risk": 0.5,
+        "routing_risk": 0.35,
+        "routing_risk_bucket": "MEDIUM",
+        "routing_route": "GLOBAL",
+    }]).to_csv(diagnostics, index=False)
+
+    result = mod.record_prediction_file(str(predictions), diagnostics_path=str(diagnostics))
+    assert result["shadow_telemetry_joined"] == 1
+    assert result["shadow_telemetry_coverage"] == "FULL"
+    saved = pd.read_csv(ledger).iloc[0]
+    assert float(saved["shadow_uncertainty_score"]) == 0.3
+    assert saved["shadow_routing_risk_bucket"] == "MEDIUM"
