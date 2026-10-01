@@ -301,7 +301,12 @@ def _candidate_status(blocks: pd.DataFrame, replay: pd.DataFrame) -> tuple[str, 
     locked = blocks.tail(2)
     development = blocks.iloc[:-2]
     locked_non_regressions = int(
-        ((locked["delta_logloss"] <= 0.0) & (locked["delta_brier"] <= 0.0)).sum()
+        (
+            (locked["delta_logloss"] <= 0.0)
+            & (locked["delta_brier"] <= 0.0)
+            & (locked["delta_ece"] <= 0.0)
+            & (locked["delta_accuracy_pct"] >= 0.0)
+        ).sum()
     )
     development_improvement = bool(
         (development["delta_logloss"] < 0.0).any()
@@ -310,7 +315,7 @@ def _candidate_status(blocks: pd.DataFrame, replay: pd.DataFrame) -> tuple[str, 
     locked_pass = locked_non_regressions == len(locked)
     candidate = bool(locked_pass and development_improvement)
     return ("PROMOTION_CANDIDATE" if candidate else "HOLD"), {
-        "status_reason": "Candidate requires development improvement and non-regression in both locked blocks.",
+        "status_reason": "Candidate requires development improvement and locked-block non-regression for LogLoss, Brier, ECE, and Accuracy.",
         "blocks": int(len(blocks)),
         "rows": int(len(replay)),
         "development_blocks": int(len(development)),
