@@ -89,3 +89,11 @@ def test_chronological_failure_risk_candidate_is_research_only():
     assert state["production_usable"] is False
     assert state["safety_contract"]["production_probabilities_changed"] is False
     assert state["safety_contract"]["frozen_holdout_touched"] is False
+
+
+def test_empty_ledger_is_safe_warmup():
+    state = analyze(pd.DataFrame())
+    assert state["status"] == "WARMUP"
+    assert state["rows"] == 0
+    assert state["production_usable"] is False
+    assert state["safety_contract"]["production_changed"] is False
