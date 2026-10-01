@@ -273,18 +273,17 @@ def _eligible_fixtures(fixtures: pd.DataFrame, prediction_time: pd.Timestamp) ->
         if d[team_col].isna().any() or d[team_col].eq("").any():
             raise RuntimeError(f"Future fixture input contains missing/empty {team_col} values")
     d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
-    d["source_available_at_utc"] = pd.to_datetime(d["source_available_at_utc"], utc=True, errors="coerce")
     if d["kickoff_utc"].isna().any():
         raise RuntimeError("Future fixture input contains invalid/missing kickoff_utc values")
+    d["competition"] = d["competition"].astype("string").str.strip().str.upper()
+    # Filter the production target universe before validating supplemental rows.
+    # An unrelated row with missing PIT metadata must never suppress a valid target.
+    d = d[d["competition"].isin(TARGET_COMPETITIONS)].copy()
+    d["source_available_at_utc"] = pd.to_datetime(d["source_available_at_utc"], utc=True, errors="coerce")
     if d["source_available_at_utc"].isna().any():
         raise RuntimeError("Future fixture input contains invalid/missing source_available_at_utc values")
     d["pit_verified"] = _strict_bool(d["pit_verified"], "pit_verified")
     d["starter_status"] = d["starter_status"].astype("string").str.upper().str.strip()
-    d["competition"] = d["competition"].astype("string").str.strip().str.upper()
-    # Live auxiliary/supplemental competitions may coexist in the acquisition
-    # snapshot, but they are not production-prediction targets until they pass
-    # the same historical PIT/OOS/completion gates as the active scope.
-    d = d[d["competition"].isin(TARGET_COMPETITIONS)].copy()
     if d["starter_status"].isna().any() or d["starter_status"].eq("").any():
         raise RuntimeError("Future fixture input contains missing/empty starter_status values")
     d = d[
