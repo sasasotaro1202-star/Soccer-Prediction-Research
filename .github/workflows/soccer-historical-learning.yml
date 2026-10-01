@@ -94,6 +94,33 @@ jobs:
           test -s artifacts/target_specific/target_specific_competition_metrics.csv
           test -s artifacts/target_specific/target_specific_competition_status.json
 
+      - name: Publish target-specific O/U BTTS diagnostics to summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -s artifacts/target_specific/target_specific_competition_metrics.csv ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import csv
+          from pathlib import Path
+          p = Path("artifacts/target_specific/target_specific_competition_metrics.csv")
+          rows = list(csv.DictReader(p.open(encoding="utf-8", newline="")))
+          print("")
+          print("## Target-specific O/U / BTTS by competition")
+          for r in rows:
+              print(
+                  f"- **{r.get('competition')} / {r.get('target')}**: "
+                  f"n={r.get('n')}, blocks={r.get('blocks')}, "
+                  f"LogLoss {r.get('candidate_logloss')} vs {r.get('baseline_logloss')}, "
+                  f"Brier {r.get('candidate_brier')} vs {r.get('baseline_brier')}, "
+                  f"ECE {r.get('candidate_ece')} vs {r.get('baseline_ece')}, "
+                  f"specialist_research_ready={r.get('evidence_ready_for_specialist_research')}"
+              )
+          PY
+          else
+            echo "- Target-specific competition diagnostics artifact unavailable." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Publish historical learning state
         shell: bash
         run: |
