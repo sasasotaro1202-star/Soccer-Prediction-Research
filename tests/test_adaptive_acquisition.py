@@ -73,3 +73,20 @@ def test_data_deficits_keep_sparse_competitions_in_scope_and_require_pit():
     assert deficits["J1"]["seasons"] == 1
     assert deficits["UCL"]["rows"] == 0
     assert deficits["EPL"]["count_basis"] == "PIT_VERIFIED_ONLY"
+
+
+def test_write_state_persists_discovered_acquisition_report(tmp_path):
+    from src.data.adaptive_acquisition import write_state
+
+    path = tmp_path / "adaptive_state.json"
+    report = {"status": "COMPLETED", "acquired_candidates": 2, "acquired_rows": 120}
+    write_state(
+        path,
+        config=AcquisitionConfig(),
+        rounds=[{"round": 1, "history_rows_total": 10}],
+        discovery={"status": "COMPLETED"},
+        discovered_acquisition=report,
+    )
+    import json
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["discovered_acquisition"] == report
