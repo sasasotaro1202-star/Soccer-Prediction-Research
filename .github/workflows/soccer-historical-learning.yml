@@ -73,6 +73,19 @@ jobs:
           test -s artifacts/run_status.json
           cp artifacts/run_status.json "${HISTORICAL_OUT}/run_status.json"
 
+      - name: Run target-specific historical learner
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import pandas as pd
+          from src.research.target_specific_learning import write_target_specific_learning
+          frame = pd.read_csv("artifacts/pit_replay_features.csv")
+          state = write_target_specific_learning(frame)
+          print(state.get("status"), sorted((state.get("targets") or {}).keys()))
+          PY
+          test -s artifacts/target_specific/target_specific_status.json
+
       - name: Publish historical learning state
         shell: bash
         run: |
