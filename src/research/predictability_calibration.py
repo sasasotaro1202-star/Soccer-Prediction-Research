@@ -16,6 +16,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+from src.research.predictability_map import TELEMETRY, WEIGHTS
+
 MIN_HISTORY = 120
 BLOCK_SIZE = 60
 MIN_BLOCKS = 3
@@ -51,7 +53,6 @@ def _prepare(frame: pd.DataFrame) -> pd.DataFrame:
         "p_home",
         "p_draw",
         "p_away",
-        "predictability_score",
     }
     if frame.empty:
         return frame.copy()
@@ -70,17 +71,46 @@ def _prepare(frame: pd.DataFrame) -> pd.DataFrame:
     d["predictability_score"] = pd.to_numeric(d["predictability_score"], errors="coerce")
     for c in ("p_home", "p_draw", "p_away"):
         d[c] = pd.to_numeric(d[c], errors="coerce")
+    for name in TELEMETRY:
+        source = name if name in d.columns else f"shadow_{name}"
+        if source in d.columns:
+            d[name] = pd.to_numeric(d[source], errors="coerce")
     valid = d["match_id"].notna() & d["match_id"].ne("")
     valid &= d["prediction_pit_gate"].astype("string").eq("PASS")
     valid &= d["prediction_pit_cutoff_utc"].notna()
     valid &= d["experience_available_at_utc"].notna()
     valid &= d["experience_available_at_utc"] > d["prediction_pit_cutoff_utc"]
     valid &= d["actual_result"].isin({"H", "D", "A"})
-    valid &= d["predictability_score"].between(0.0, 1.0, inclusive="both")
     p = d[["p_home", "p_draw", "p_away"]].to_numpy(dtype=float)
     valid &= np.isfinite(p).all(axis=1) & (p >= 0.0).all(axis=1)
     valid &= p.sum(axis=1) > 0.0
     d = d.loc[valid].copy()
+    if d.empty:
+        return d
+
+    telemetry_weight = np.zeros(len(d), dtype=float)
+    telemetry_risk = np.zeros(len(d), dtype=float)
+    for name in TELEMETRY:
+        if name not in d.columns:
+            continue
+        value = pd.to_numeric(d[name], errors="coerce").to_numpy(dtype=float)
+        finite = np.isfinite(value)
+        weight = float(WEIGHTS[name])
+        telemetry_risk += np.where(finite, np.clip(value, 0.0, 1.0) * weight, 0.0)
+        telemetry_weight += np.where(finite, weight, 0.0)
+    d["predictability_score"] = np.where(
+        telemetry_weight > 0.70,
+        np.clip(
+            1.0 - telemetry_risk / np.maximum(telemetry_weight, 1e-9),
+            0.0,
+            1.0,
+        ),
+        np.nan,
+    )
+    d["predictability_score"] = pd.to_numeric(
+        d["predictability_score"], errors="coerce"
+    )
+    d = d.loc[d["predictability_score"].notna()].copy()
     if d.empty:
         return d
     if "prediction_state_id" in d.columns:
