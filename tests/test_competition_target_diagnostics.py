@@ -5,12 +5,12 @@ from src.research.competition_target_diagnostics import build_competition_target
 
 def test_competition_target_diagnostics_tracks_targets_and_leagues():
     rows = []
-    for i in range(240):
+    for i in range(480):
         rows.append({
-            "target": "O/U" if i % 2 == 0 else "BTTS",
-            "block": i // 20,
+            "target": "O/U" if i % 4 < 2 else "BTTS",
+            "block": i // 120,
             "match_id": f"m{i}",
-            "competition": "EPL" if i % 4 < 2 else "LaLiga",
+            "competition": "EPL" if i % 2 == 0 else "LaLiga",
             "kickoff_utc": pd.Timestamp("2024-01-01", tz="UTC") + pd.Timedelta(days=i),
             "prediction_probability": 0.72 if i % 3 else 0.28,
             "baseline_score_probability": 0.60 if i % 3 else 0.40,
