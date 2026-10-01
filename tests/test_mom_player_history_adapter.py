@@ -65,6 +65,10 @@ def test_build_mom_features_uses_only_prior_known_player_facts():
     assert (out["feature_available_at_utc"] <= out["prediction_cutoff_at_utc"]).all()
     assert (out["prediction_cutoff_at_utc"] == out["kickoff_utc"] - pd.Timedelta(minutes=60)).all()
     assert out["pit_verified"].all()
+    contract = mom_data_contract_report(out)
+    assert contract["prediction_cutoff_verified"]
+    assert contract["feature_availability_verified"]
+    assert contract["feature_availability_cutoff_violations"] == 0
     assert np.isfinite(out[list(MOM_FEATURE_COLUMNS)].to_numpy(dtype=float)).all()
 
 
