@@ -155,3 +155,27 @@ def test_versioned_bridge_is_bounded_by_group_limit(monkeypatch, tmp_path):
     _, report = mod.apply_bulk(history, max_groups=1, cache_dir=tmp_path)
     assert len(report) == 1
     assert len(seen) == 1
+
+
+def test_resume_skips_completed_groups_and_advances_to_next_group(monkeypatch, tmp_path):
+    history = pd.concat([
+        _history(),
+        _history().assign(
+            match_id=["m3", "m4"],
+            season_start=2023,
+        ),
+    ], ignore_index=True)
+    history["versioned_result_evidence_status"] = "UNVERIFIABLE"
+    history.loc[history["season_start"] == 2024, "versioned_result_evidence_status"] = "VERIFIED"
+
+    seen = []
+    monkeypatch.setattr(
+        mod,
+        "_commits",
+        lambda path, **kwargs: seen.append(path) or [],
+    )
+
+    _, report = mod.apply_bulk(history, max_groups=1, cache_dir=tmp_path)
+    assert len(report) == 1
+    assert report.iloc[0]["season_start"] == 2023
+    assert seen == ["2023-24/en.1.json"]
