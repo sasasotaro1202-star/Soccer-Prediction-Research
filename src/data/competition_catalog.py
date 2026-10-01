@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
+from src.data.competition_sources import TARGET_COMPETITIONS
+
 
 @dataclass(frozen=True)
 class CompetitionSpec:
@@ -184,15 +186,7 @@ def research_targets() -> list[CompetitionSpec]:
 
 # Active scope is intentionally narrower than the broad research catalog.
 # Parked competitions remain catalogued for later expansion, but acquisition,
-# OOS research and production work must not spend resources on them.
-ACTIVE_SCOPE = frozenset({
-    "EPL", "AG_M", "AG_W", "ERE", "LL", "SA", "BL1",
-    "J1", "J2", "J3", "FL1",
-    "UCL", "UEL", "UECL", "UEFA_SUPER_CUP", "UEFA_YOUTH_LEAGUE", "UWCL", "UWEC", "WORLD_CUP", "ASIAN_CUP",
-    "UEFA_EURO_M", "UEFA_EURO_QUALI_M", "UEFA_NATIONS_LEAGUE_M",
-    "UEFA_EURO_W", "UEFA_EURO_QUALI_W", "UEFA_NATIONS_LEAGUE_W",
-    "UEFA_U21", "UEFA_U19", "UEFA_U17", "UEFA_WU19", "UEFA_WU17",
-    "UEFA_REGIONS_CUP", "EMP_CUP", "INTL_M", "INTL_W",
+# OOS rACTIVE_SCOPE = frozenset(TARGET_COMPETITIONS)_CUP", "EMP_CUP", "INTL_M", "INTL_W",
     "U23_M", "U18_M",
 })
 
