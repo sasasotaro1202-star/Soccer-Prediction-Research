@@ -46,6 +46,7 @@ def _metrics(y: np.ndarray, p: np.ndarray) -> dict[str, float | int]:
 def _prepare(frame: pd.DataFrame) -> pd.DataFrame:
     required = {
         "match_id",
+        "kickoff_utc",
         "prediction_pit_cutoff_utc",
         "experience_available_at_utc",
         "prediction_pit_gate",
@@ -61,6 +62,7 @@ def _prepare(frame: pd.DataFrame) -> pd.DataFrame:
         raise RuntimeError(f"predictability calibration ledger missing columns: {missing}")
     d = frame.copy()
     d["match_id"] = d["match_id"].astype("string").str.strip()
+    d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
     d["prediction_pit_cutoff_utc"] = pd.to_datetime(
         d["prediction_pit_cutoff_utc"], utc=True, errors="coerce"
     )
@@ -68,7 +70,6 @@ def _prepare(frame: pd.DataFrame) -> pd.DataFrame:
         d["experience_available_at_utc"], utc=True, errors="coerce"
     )
     d["actual_result"] = d["actual_result"].astype("string").str.strip().str.upper()
-    d["predictability_score"] = pd.to_numeric(d["predictability_score"], errors="coerce")
     for c in ("p_home", "p_draw", "p_away"):
         d[c] = pd.to_numeric(d[c], errors="coerce")
     for name in TELEMETRY:
@@ -79,6 +80,8 @@ def _prepare(frame: pd.DataFrame) -> pd.DataFrame:
     valid &= d["prediction_pit_gate"].astype("string").eq("PASS")
     valid &= d["prediction_pit_cutoff_utc"].notna()
     valid &= d["experience_available_at_utc"].notna()
+    valid &= d["prediction_pit_cutoff_utc"] < d["kickoff_utc"]
+    valid &= d["experience_available_at_utc"] > d["kickoff_utc"]
     valid &= d["experience_available_at_utc"] > d["prediction_pit_cutoff_utc"]
     valid &= d["actual_result"].isin({"H", "D", "A"})
     p = d[["p_home", "p_draw", "p_away"]].to_numpy(dtype=float)
