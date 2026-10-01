@@ -106,5 +106,7 @@ def test_missing_shadow_telemetry_is_safe():
 
 def test_mature_history_without_degradation_is_not_warmup():
     rows = [_row(i) for i in range(60)]
+    for row in rows:
+        row["actual_result"] = "H"
     plan = build_experience_candidate_plan(pd.DataFrame(rows))
     assert plan["status"] == "NO_ACTIONABLE_DEGRADATION"
