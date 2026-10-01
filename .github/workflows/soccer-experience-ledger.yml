@@ -109,6 +109,14 @@ jobs:
           python -m src.research.experience_learning --ledger data/experience/prediction_ledger.csv
           test -s artifacts/experience_learning_status.json
           test -s artifacts/experience_policy_candidate.json
+
+      - name: Learn target-specific matured experience (O-U and BTTS)
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m src.research.target_experience_learning
+          test -s artifacts/target_experience/target_experience_status.json
       - name: Publish experience and learning status to job summary
         if: always()
         shell: bash
@@ -183,7 +191,7 @@ jobs:
             artifacts/experience_learning_status.json \
             artifacts/experience_learning_oos.csv \
             artifacts/experience_learning_replay.csv \
-            artifacts/experience_policy_candidate.json
+            artifacts/experience_policy_candidate.json             artifacts/target_experience/target_experience_status.json             artifacts/target_experience/target_experience_oos.csv
           do
             if [ -e "$path" ]; then
               git add -- "$path"
