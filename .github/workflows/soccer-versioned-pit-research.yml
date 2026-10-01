@@ -13,7 +13,7 @@ on:
       max_groups:
         description: "Maximum competition-season groups to inspect"
         required: false
-        default: "32"
+        default: "8"
       rows_per_group:
         description: "Rows per group (0 = all rows in selected groups)"
         required: false
@@ -55,11 +55,13 @@ jobs:
 
       - name: Build bounded versioned-result evidence
         env:
-          MAX_GROUPS: ${{ inputs.max_groups || '32' }}
+          MAX_GROUPS: ${{ inputs.max_groups || '8' }}
           ROWS_PER_GROUP: ${{ inputs.rows_per_group || '0' }}
         run: |
           set -euo pipefail
-          python -m src.data.versioned_result_pit             --input artifacts/normalized_history.csv             --output artifacts/versioned_pit_result_evidence.csv             --report artifacts/versioned_pit_result_evidence_report.csv             --max-groups "$MAX_GROUPS"             --rows-per-group "$ROWS_PER_GROUP"
+          INPUT="artifacts/normalized_history.csv"
+          if [ -s artifacts/versioned_pit_result_evidence.csv ]; then INPUT="artifacts/versioned_pit_result_evidence.csv"; fi
+          python -m src.data.versioned_result_pit             --input "$INPUT"             --output artifacts/versioned_pit_result_evidence.csv             --report artifacts/versioned_pit_result_evidence_report.csv             --max-groups "$MAX_GROUPS"             --rows-per-group "$ROWS_PER_GROUP"
           test -s artifacts/versioned_pit_result_evidence.csv
           test -s artifacts/versioned_pit_result_evidence_report.csv
 
