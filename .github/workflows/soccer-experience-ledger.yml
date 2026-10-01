@@ -117,6 +117,26 @@ jobs:
           set -euo pipefail
           python -m src.research.target_experience_learning
           test -s artifacts/target_experience/target_experience_status.json
+      - name: Generate matured-experience research candidates
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m scripts.generate_experience_candidates
+          test -s artifacts/experience_candidate_plan.json
+          test -s artifacts/experience_candidate_status.json
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          s = json.loads(Path("artifacts/experience_candidate_status.json").read_text(encoding="utf-8"))
+          print("")
+          print("## Experience research candidates")
+          print(f"- Status={s.get('status')}")
+          print(f"- Matured rows={s.get('settled_rows', 0)}")
+          print(f"- Candidate count={s.get('candidate_count', 0)}")
+          print("- Production changed=False")
+          PY
+
       - name: Publish experience and learning status to job summary
         if: always()
         shell: bash
@@ -194,6 +214,8 @@ jobs:
             artifacts/experience_policy_candidate.json \
             artifacts/target_experience/target_experience_status.json \
             artifacts/target_experience/target_experience_oos.csv
+            artifacts/experience_candidate_plan.json
+            artifacts/experience_candidate_status.json
           do
             if [ -e "$path" ]; then
               git add -- "$path"
