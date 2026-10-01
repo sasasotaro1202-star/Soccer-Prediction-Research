@@ -148,3 +148,9 @@ def test_chronological_oos_research_keeps_exact_top4_contract():
     assert not competition.empty
     assert set(competition["competition"]) == {"EPL", "J1"}
     assert (competition["fixtures"] > 0).all()
+
+
+def test_softmax_handles_nonfinite_scores_without_nan_mass():
+    probs = _softmax([np.nan, -np.inf, 1.0, 2.0])
+    assert np.isfinite(probs).all()
+    assert np.isclose(probs.sum(), 1.0, atol=1e-12)
