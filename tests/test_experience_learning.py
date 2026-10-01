@@ -98,3 +98,39 @@ def test_chronological_blocks_require_minimum_rows():
     blocks = _chronological_blocks(pd.DataFrame({"x": range(90)}))
     assert len(blocks) == 90
     assert len(set(blocks.tolist())) == 3
+
+
+def test_learn_builds_candidate_from_chronological_matured_experience(tmp_path, monkeypatch):
+    ledger = tmp_path / "ledger.csv"
+    policy = tmp_path / "policy.json"
+    metrics = tmp_path / "metrics.csv"
+    status = tmp_path / "status.json"
+    monkeypatch.setattr("src.research.experience_learning.POLICY", policy)
+    monkeypatch.setattr("src.research.experience_learning.METRICS", metrics)
+    monkeypatch.setattr("src.research.experience_learning.STATUS", status)
+
+    rows = []
+    for i in range(90):
+        day = pd.Timestamp("2026-01-01T00:00:00Z") + pd.Timedelta(days=i)
+        rows.append(
+            _row(
+                f"m{i}",
+                (day + pd.Timedelta(hours=8)).isoformat(),
+                (day + pd.Timedelta(hours=11)).isoformat(),
+                "H",
+                kickoff_utc=(day + pd.Timedelta(hours=10)).isoformat(),
+                p_home=0.45,
+                p_draw=0.30,
+                p_away=0.25,
+            )
+        )
+    pd.DataFrame(rows).to_csv(ledger, index=False)
+
+    result = learn(ledger)
+
+    assert result["rows"] == 90
+    assert result["blocks"] == 3
+    assert result["status"] in {"PROMOTION_CANDIDATE", "HOLD"}
+    assert policy.is_file()
+    assert metrics.is_file()
+    assert status.is_file()
