@@ -586,12 +586,12 @@ def predict_bundle_with_diagnostics(
         )
         diagnostics = {
             "route": list(routes),
-            "model_disagreement": np.asarray(routing_diag["disagreement"], dtype=float),
+            "model_disagreement": np.asarray(routing_diag.get("disagreement", np.zeros(len(X))), dtype=float),
             "predictive_entropy": normalized_entropy(probs),
-            "uncertainty_score": np.asarray(routing_diag["uncertainty"], dtype=float),
-            "covariate_drift": np.asarray(routing_diag["drift"], dtype=float),
-            "history_support_risk": np.asarray(routing_diag["support"], dtype=float),
-            "routing_risk": np.asarray(routing_diag["risk"], dtype=float),
+            "uncertainty_score": np.asarray(routing_diag.get("uncertainty", np.zeros(len(X))), dtype=float),
+            "covariate_drift": np.asarray(routing_diag.get("drift", np.zeros(len(X))), dtype=float),
+            "history_support_risk": np.asarray(routing_diag.get("support", np.zeros(len(X))), dtype=float),
+            "routing_risk": np.asarray(routing_diag.get("risk", np.zeros(len(X))), dtype=float),
         }
     else:
         model_predictions: dict[str, np.ndarray] = {}
