@@ -109,6 +109,28 @@ jobs:
           python -m src.research.experience_learning --ledger data/experience/prediction_ledger.csv
           test -s artifacts/experience_learning_status.json
           test -s artifacts/experience_policy_candidate.json
+      - name: Generate experience-driven research candidate plan
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m scripts.generate_experience_candidates
+          test -s artifacts/experience_candidate_plan.json
+          test -s artifacts/experience_candidate_status.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          plan = json.loads(Path("artifacts/experience_candidate_plan.json").read_text(encoding="utf-8"))
+          safety = plan.get("safety_contract") or {}
+          if safety.get("research_only") is not True:
+              raise SystemExit("experience candidate plan is not research-only")
+          if safety.get("production_changed") is not False:
+              raise SystemExit("experience candidate plan claims production mutation")
+          if safety.get("frozen_holdout_allowed") is not False:
+              raise SystemExit("experience candidate plan cannot consume frozen holdout")
+          print({"status": plan.get("status"), "settled_rows": plan.get("settled_rows", 0), "candidates": len(plan.get("candidates", []))})
+          PY
+
       - name: Publish experience and learning status to job summary
         if: always()
         shell: bash
@@ -151,6 +173,22 @@ jobs:
             echo "- No durable experience performance status was generated in this run." >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Experience-driven research candidates" >> "$GITHUB_STEP_SUMMARY"
+          if [ -s artifacts/experience_candidate_status.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          s = json.loads(Path("artifacts/experience_candidate_status.json").read_text(encoding="utf-8"))
+          print(f"- Status={s.get('status')}")
+          print(f"- Settled rows={s.get('settled_rows', 0)}")
+          print(f"- Candidate count={s.get('candidate_count', 0)}")
+          print(f"- Research-only={s.get('research_only')}")
+          print(f"- Production changed={s.get('production_changed')}")
+          PY
+          else
+            echo "- Candidate status artifact unavailable." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "## Experience learning" >> "$GITHUB_STEP_SUMMARY"
           if [ -s artifacts/experience_learning_status.json ]; then
             python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
@@ -183,7 +221,9 @@ jobs:
             artifacts/experience_learning_status.json \
             artifacts/experience_learning_oos.csv \
             artifacts/experience_learning_replay.csv \
-            artifacts/experience_policy_candidate.json
+            artifacts/experience_policy_candidate.json \
+            artifacts/experience_candidate_plan.json \
+            artifacts/experience_candidate_status.json
           do
             if [ -e "$path" ]; then
               git add -- "$path"
