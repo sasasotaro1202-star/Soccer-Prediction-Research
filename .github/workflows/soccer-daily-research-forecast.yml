@@ -122,4 +122,6 @@ jobs:
             artifacts/daily_research_predictions.csv
             artifacts/daily_research_prediction_status.json
             artifacts/daily_research_forecast_health.json
+            artifacts/daily_research_uncertainty_shadow.csv
+            artifacts/daily_research_uncertainty_shadow_status.json
           retention-days: 3
