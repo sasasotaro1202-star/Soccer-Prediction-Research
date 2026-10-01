@@ -47,8 +47,55 @@ jobs:
       - name: Compile project
         run: python -m compileall -q src tests
 
-      - name: Run predictability regression tests
-        run: python -m pytest -q tests/test_predictability_map.py
+      - name: Run predictability and conformal regression tests
+        run: python -m pytest -q tests/test_predictability_map.py tests/test_temporal_conformal_sets.py
+
+      - name: Build maturity-gated conformal research artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/conformal
+          if [ -s data/experience/prediction_ledger.csv ]; then
+            python -m src.research.temporal_conformal_sets
+          else
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+
+          out = Path("artifacts/conformal")
+          pd.DataFrame().to_csv(out / "prediction_sets.csv", index=False)
+          state = {
+              "schema_version": 1,
+              "status": "WARMUP",
+              "rows": 0,
+              "eligible_rows": 0,
+              "production_usable": False,
+              "metrics": {
+                  "total_rows": 0,
+                  "eligible_rows": 0,
+                  "coverage": None,
+                  "mean_set_size": None,
+                  "singleton_rate": None,
+                  "singleton_accuracy": None,
+                  "abstain_rate": None,
+              },
+              "safety_contract": {
+                  "research_only": True,
+                  "production_changed": False,
+                  "production_probabilities_changed": False,
+                  "outcome_data_used_only_after_maturity": True,
+                  "locked_holdout_touched": False,
+                  "same_prediction_time_excluded": True,
+              },
+          }
+          (out / "conformal_status.json").write_text(
+              json.dumps(state, indent=2, ensure_ascii=False),
+              encoding="utf-8",
+          )
+          PY
+          fi
+          test -s artifacts/conformal/conformal_status.json
+          test -s artifacts/conformal/prediction_sets.csv
 
       - name: Build PIT-safe predictability research artifacts
         run: |
