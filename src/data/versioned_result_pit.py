@@ -262,9 +262,25 @@ def apply_bulk(
 
     report_rows: list[dict[str, Any]] = []
     for (competition, season_start), group in groups:
-        rows = group
+        unresolved_group = group.loc[
+            group["versioned_result_evidence_status"].astype("string").ne("VERIFIED")
+        ].copy()
+        if unresolved_group.empty:
+            report_rows.append({
+                "competition": str(competition),
+                "season_start": int(season_start),
+                "rows_considered": 0,
+                "verified_rows": int(group["versioned_result_evidence_status"].astype("string").eq("VERIFIED").sum()),
+                "unverifiable_rows": 0,
+                "ambiguous_match_keys": 0,
+                "commit_count": 0,
+                "status": "CHECKPOINT_COMPLETE",
+                "source": "openfootball/football.json",
+            })
+            continue
+        rows = unresolved_group
         if rows_per_group and int(rows_per_group) > 0:
-            rows = group.head(int(rows_per_group))
+            rows = unresolved_group.head(int(rows_per_group))
         path = season_path(str(competition), int(season_start))
         try:
             commits = _commits(path, cache_dir=cache_dir, timeout=timeout)
