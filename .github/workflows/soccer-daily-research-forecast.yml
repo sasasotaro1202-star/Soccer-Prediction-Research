@@ -92,7 +92,16 @@ jobs:
                   mom = [float(row[f"mom_{n}_probability"]) for n in range(1, 5)]
                   if abs(sum(mom) - 1.0) > 1e-6:
                       raise SystemExit("MOM probability sum invariant failed")
-          print({"status": "VERIFIED", "rows": len(df)})
+          import json
+          from pathlib import Path
+          forecast_status = json.loads(
+              Path("artifacts/daily_research_prediction_status.json").read_text(encoding="utf-8")
+          ).get("status")
+          print({
+              "status": "OUTPUT_CONTRACT_VALID",
+              "forecast_status": forecast_status,
+              "rows": len(df),
+          })
           PY
 
       - name: Run fail-closed forecast health audit
