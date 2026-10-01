@@ -221,7 +221,7 @@ def evaluate_future_model_failure_oos(
     return {
         "status": "EVALUATED",
         "models": metrics,
-        "transitions": int(max(0, len(folds) - 2)),
+        "transitions": int(len(folds) - 1),
         "horizon_blocks": 1,
         "label_rule": {
             "baseline_window": int(recent_window),
