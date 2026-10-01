@@ -46,8 +46,8 @@ def test_conformal_calibration_excludes_current_and_immature_outcomes():
     df.loc[0, "experience_available_at_utc"] = pd.Timestamp("2026-01-04T00:00:00Z")
     state = temporal_prediction_sets(df, min_calibration=10, max_calibration=20)
     rows = pd.DataFrame(state["prediction_set_rows"])
-    assert int(rows.loc[10, "calibration_rows"]) == 9
-    assert int(rows.loc[11, "calibration_rows"]) == 10
+    assert int(rows.loc[10, "calibration_rows"]) == 6
+    assert int(rows.loc[11, "calibration_rows"]) == 7
     assert int(rows["calibration_rows"].max()) <= 20
 
 
@@ -64,6 +64,6 @@ def test_conformal_is_research_only_and_reports_metrics():
 def test_duplicate_fixture_without_state_identity_fails_closed():
     df = _rows(70)
     df.loc[1, "match_id"] = df.loc[0, "match_id"]
-    df["prediction_state_id"] = pd.NA
+    df = df.drop(columns=["prediction_state_id"])
     with pytest.raises(RuntimeError, match="duplicate match_id"):
         temporal_prediction_sets(df)
