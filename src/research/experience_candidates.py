@@ -212,19 +212,31 @@ def build_experience_candidate_plan(
         ),
         (
             "high_model_disagreement",
-            pd.to_numeric(data.get("shadow_model_disagreement"), errors="coerce") >= 0.20,
+            (
+                pd.to_numeric(data["shadow_model_disagreement"], errors="coerce")
+                if "shadow_model_disagreement" in data.columns
+                else pd.Series(np.nan, index=data.index)
+            ) >= 0.20,
             "disagreement_trigger_challenge",
             "Test whether high model disagreement predicts elevated future error and supports routing, abstention, or fallback.",
         ),
         (
             "high_uncertainty",
-            pd.to_numeric(data.get("shadow_uncertainty_score"), errors="coerce") >= 0.60,
+            (
+                pd.to_numeric(data["shadow_uncertainty_score"], errors="coerce")
+                if "shadow_uncertainty_score" in data.columns
+                else pd.Series(np.nan, index=data.index)
+            ) >= 0.60,
             "uncertainty_policy_challenge",
             "Test whether outcome-free uncertainty telemetry identifies a recurring high-loss regime suitable for selective prediction or recalibration.",
         ),
         (
             "high_routing_risk",
-            pd.to_numeric(data.get("shadow_routing_risk"), errors="coerce") >= 0.50,
+            (
+                pd.to_numeric(data["shadow_routing_risk"], errors="coerce")
+                if "shadow_routing_risk" in data.columns
+                else pd.Series(np.nan, index=data.index)
+            ) >= 0.50,
             "routing_risk_challenge",
             "Test whether routing-risk telemetry identifies cases where the dynamic route needs an OOS-validated fallback or alternative information path.",
         ),
