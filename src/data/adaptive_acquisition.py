@@ -268,6 +268,7 @@ def write_state(
     config: AcquisitionConfig,
     rounds: list[dict[str, Any]],
     discovery: dict[str, Any] | None = None,
+    discovered_acquisition: dict[str, Any] | None = None,
 ) -> None:
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
