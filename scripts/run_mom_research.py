@@ -289,6 +289,7 @@ def run(
     season_start_year: int = DEFAULT_SEASON_START_YEAR,
     tournament_id: int = DEFAULT_TOURNAMENT_ID,
     season_id: int = DEFAULT_SOFASCORE_SEASON_ID,
+    prediction_cutoff_minutes: float = DEFAULT_PREDICTION_CUTOFF_MINUTES,
     output_dir: str = "artifacts/mom_research",
 ) -> int:
     root = Path(output_dir)
