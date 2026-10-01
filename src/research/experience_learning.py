@@ -121,6 +121,7 @@ def _validate_ledger(frame: pd.DataFrame) -> pd.DataFrame:
     pit_ok &= d["kickoff_utc"].notna()
     pit_ok &= d["experience_available_at_utc"].notna()
     pit_ok &= d["prediction_pit_cutoff_utc"] < d["kickoff_utc"]
+    pit_ok &= d["experience_available_at_utc"] > d["kickoff_utc"]
     pit_ok &= d["experience_available_at_utc"] > d["prediction_pit_cutoff_utc"]
     d = d.loc[pit_ok].copy()
 
