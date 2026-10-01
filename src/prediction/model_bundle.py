@@ -9,7 +9,12 @@ import pandas as pd
 
 from src.evaluation.walk_forward import _apply_contextual_temperatures, _routed_ensemble_proba
 from src.models.baselines import candidates
-from src.monitoring.dynamic_routing import build_drift_reference
+from src.monitoring.dynamic_routing import (
+    build_drift_reference,
+    mean_js_disagreement,
+    normalized_entropy,
+    routing_risk_score,
+)
 from src.models.dixon_coles import fit_dixon_coles_model
 from src.models.negative_binomial import fit_negative_binomial_score_model
 from src.prediction.secondary_outputs import (
@@ -539,3 +544,94 @@ def predict_bundle(bundle: dict[str, Any], X: pd.DataFrame) -> np.ndarray:
     probs = np.clip(probs, 1e-9, 1.0)
     probs /= probs.sum(axis=1, keepdims=True)
     return _temperature_transform(probs, float(bundle["temperature"]))
+
+
+def predict_bundle_with_diagnostics(
+    bundle: dict[str, Any],
+    X: pd.DataFrame,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    """Return normal probabilities plus bounded, outcome-free diagnostics."""
+    feature_cols = bundle["feature_cols"]
+    missing = [c for c in feature_cols if c not in X.columns]
+    if missing:
+        raise RuntimeError(f"Prediction input missing model features: {missing[:10]}")
+
+    routing = bundle.get("routing_policy")
+    if isinstance(routing, dict):
+        probs, routes, routing_diag = _routed_ensemble_proba(
+            X,
+            bundle["models"],
+            feature_cols,
+            routing.get("context_weights", {}),
+            {str(k): float(v) for k, v in routing.get("fallback_weights", bundle["weights"]).items()},
+            dynamic_policy=routing.get("dynamic_routing"),
+            return_diagnostics=True,
+        )
+        probs = np.clip(probs, 1e-9, 1.0)
+        probs /= probs.sum(axis=1, keepdims=True)
+        probs = _apply_contextual_temperatures(
+            probs,
+            routes,
+            {str(k): float(v) for k, v in routing.get("contextual_temperatures", {}).items()},
+            float(routing.get("fallback_temperature", bundle["temperature"])),
+        )
+        from src.evaluation.walk_forward import _apply_risk_temperature_modifiers
+        probs = _apply_risk_temperature_modifiers(
+            probs,
+            routing_diag.get("risk", np.zeros(len(X))),
+            {str(k): float(v) for k, v in routing.get("risk_temperature_modifiers", {}).items()},
+        )
+        diagnostics = {
+            "route": list(routes),
+            "model_disagreement": np.asarray(routing_diag.get("disagreement", np.zeros(len(X))), dtype=float),
+            "predictive_entropy": normalized_entropy(probs),
+            "uncertainty_score": np.asarray(routing_diag.get("uncertainty", np.zeros(len(X))), dtype=float),
+            "covariate_drift": np.asarray(routing_diag.get("drift", np.zeros(len(X))), dtype=float),
+            "history_support_risk": np.asarray(routing_diag.get("support", np.zeros(len(X))), dtype=float),
+            "routing_risk": np.asarray(routing_diag.get("risk", np.zeros(len(X))), dtype=float),
+        }
+    else:
+        model_predictions = {}
+        for name, model in bundle["models"].items():
+            pred = np.asarray(model.predict_proba(X[feature_cols]), dtype=float)
+            if pred.shape != (len(X), 3) or not np.isfinite(pred).all():
+                raise RuntimeError(f"Model {name!r} produced invalid diagnostic probabilities")
+            sums = pred.sum(axis=1, keepdims=True)
+            if np.any(sums <= 0):
+                raise RuntimeError(f"Model {name!r} produced zero diagnostic probability row")
+            model_predictions[name] = pred / sums
+        disagreement, _ = mean_js_disagreement(model_predictions)
+        probs = np.zeros((len(X), 3), dtype=float)
+        for name, pred in model_predictions.items():
+            probs += float(bundle["weights"][name]) * pred
+        probs = np.clip(probs, 1e-9, 1.0)
+        probs /= probs.sum(axis=1, keepdims=True)
+        probs = _temperature_transform(probs, float(bundle["temperature"]))
+        entropy = normalized_entropy(probs)
+        uncertainty = np.clip(0.55 * entropy + 0.45 * disagreement, 0.0, 1.0)
+        zero = np.zeros(len(X), dtype=float)
+        diagnostics = {
+            "route": ["GLOBAL"] * len(X),
+            "model_disagreement": disagreement,
+            "predictive_entropy": entropy,
+            "uncertainty_score": uncertainty,
+            "covariate_drift": zero.copy(),
+            "history_support_risk": zero.copy(),
+            "routing_risk": routing_risk_score(zero, uncertainty),
+        }
+
+    for key in (
+        "model_disagreement",
+        "predictive_entropy",
+        "uncertainty_score",
+        "covariate_drift",
+        "history_support_risk",
+        "routing_risk",
+    ):
+        values = np.asarray(diagnostics[key], dtype=float)
+        if values.shape != (len(X),) or not np.isfinite(values).all() or np.any(values < 0.0) or np.any(values > 1.0):
+            raise RuntimeError(f"Diagnostic {key!r} is outside the bounded [0,1] contract")
+        diagnostics[key] = values
+    if len(diagnostics["route"]) != len(X):
+        raise RuntimeError("Diagnostic route count does not match prediction rows")
+    return probs, diagnostics

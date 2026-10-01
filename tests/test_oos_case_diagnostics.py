@@ -45,9 +45,18 @@ def test_run_walk_forward_writes_per_match_risk_diagnostics(monkeypatch, tmp_pat
         "match_id", "competition", "kickoff_utc", "actual", "prediction",
         "correct", "p_home", "p_draw", "p_away", "confidence", "margin",
         "risk_score", "risk_bucket",
+        "model_disagreement", "predictive_entropy", "uncertainty_score",
+        "covariate_drift", "history_support_risk", "routing_route",
     }
     assert required.issubset(cases.columns)
     assert len(cases) == int(metrics["n"].sum())
     assert cases["match_id"].is_unique
     assert cases["risk_bucket"].isin({"LOW", "MEDIUM", "HIGH"}).all()
+    for column in (
+        "model_disagreement", "predictive_entropy", "uncertainty_score",
+        "covariate_drift", "history_support_risk",
+    ):
+        assert np.isfinite(cases[column]).all()
+        assert ((cases[column] >= 0.0) & (cases[column] <= 1.0)).all()
+    assert cases["routing_route"].notna().all()
     assert np.allclose(cases[["p_home", "p_draw", "p_away"]].sum(axis=1), 1.0)
