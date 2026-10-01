@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 
 import numpy as np
@@ -18,6 +19,9 @@ from src.prediction.secondary_outputs import (
     fit_xg_score_rate_model,
     predict_score_distribution,
     predict_xg_score_distribution,
+)
+from src.research.score_distribution_ensemble import (
+    evaluate_block as evaluate_distribution_ensemble,
 )
 
 
@@ -188,6 +192,7 @@ def run_score_walk_forward(
 
     rows = []
     competition_metrics_rows = []
+    distribution_history: dict[str, list[float]] = {}
     start = _advance_past_same_kickoff(d, int(min_train))
     while start < len(d):
         end = _advance_past_same_kickoff(d, min(start + int(oos_block), len(d)))
@@ -402,6 +407,30 @@ def run_score_walk_forward(
                         comp_record[f"{method}_error"] = f"{type(exc).__name__}: {exc}"
                 competition_metrics_rows.append(comp_record)
 
+        # Research-only joint score-distribution ensemble. Its weights are based
+        # only on earlier OOS blocks, so the current block cannot influence itself.
+        distribution_ensemble_status = "DEFERRED"
+        try:
+            dist_metrics, dist_weights = evaluate_distribution_ensemble(
+                oos,
+                candidate_models,
+                candidate_distributions,
+                distribution_history,
+            )
+            metrics.update({
+                f"distribution_ensemble_{key}": value
+                for key, value in dist_metrics.items()
+            })
+            metrics["distribution_ensemble_weights"] = json.dumps(
+                dist_weights, sort_keys=True
+            )
+            distribution_ensemble_status = "PASS"
+        except Exception as exc:
+            metrics["distribution_ensemble_error"] = (
+                f"{type(exc).__name__}: {exc}"
+            )
+        metrics["distribution_ensemble_status"] = distribution_ensemble_status
+
         metrics.update(
             {
                 "oos_start": str(oos["kickoff_utc"].min()),
@@ -414,6 +443,21 @@ def run_score_walk_forward(
             }
         )
         rows.append(metrics)
+
+        # Matured outcomes from the current OOS block become available only
+        # after it is fully scored and therefore can affect future blocks.
+        if distribution_ensemble_status == "PASS":
+            distribution_history.setdefault("primary", []).append(
+                float(metrics["score_logloss"])
+            )
+            if metrics.get("dc_status") == "PASS":
+                distribution_history.setdefault("dixon_coles", []).append(
+                    float(metrics["dc_score_logloss"])
+                )
+            if metrics.get("xg_status") == "PASS":
+                distribution_history.setdefault("xg", []).append(
+                    float(metrics["xg_score_logloss"])
+                )
         start = end
 
     result = pd.DataFrame(rows)
