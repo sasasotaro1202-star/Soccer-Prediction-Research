@@ -204,3 +204,17 @@ def test_learn_builds_candidate_from_chronological_matured_experience(tmp_path, 
     assert policy.is_file()
     assert metrics.is_file()
     assert status.is_file()
+
+def test_validation_rejects_impossible_experience_timestamp():
+    frame = pd.DataFrame(
+        [
+            _row(
+                "m1",
+                "2026-01-01T08:00:00Z",
+                "2026-01-01T09:00:00Z",
+                "H",
+            )
+        ]
+    )
+    assert _validate_ledger(frame).empty
+
