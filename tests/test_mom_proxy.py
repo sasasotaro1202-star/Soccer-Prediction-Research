@@ -109,7 +109,7 @@ def test_chronological_oos_research_keeps_exact_top4_contract():
     rows = []
     for match_index in range(160):
         winner = f"p{match_index % 4}"
-        kickoff = pd.Timestamp("2020-01-01T12:00:00Z") + pd.Timedelta(days=match_index)
+        kickoff = pd.Timestamp("2020-01-01T12:00:00Z") + pd.Timedelta(days=int(match_index))
         for p in range(4):
             pid = f"p{p}"
             signal = 8.5 if pid == winner else 6.0 + 0.1 * p
@@ -131,8 +131,8 @@ def test_chronological_oos_research_keeps_exact_top4_contract():
     cases = pd.DataFrame(rows)
     result = run_mom_proxy_research(
         cases,
-        min_train_fixtures=100,
-        oos_block_fixtures=20,
+        min_train_fixtures=150,
+        oos_block_fixtures=5,
         min_blocks=3,
     )
     state = result["state"]
