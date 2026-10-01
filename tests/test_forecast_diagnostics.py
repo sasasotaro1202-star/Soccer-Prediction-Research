@@ -72,3 +72,24 @@ def test_forecast_diagnostics_reject_missing_features(tmp_path):
     fixtures = _fixtures()[["match_id", "kickoff_utc", "competition", "home_team", "away_team", "f1"]]
     with pytest.raises(RuntimeError, match="missing"):
         build(fixtures, bundle)
+
+
+
+def test_forecast_diagnostics_reject_invalid_kickoff(tmp_path):
+    df = _training()
+    path = tmp_path / "bundle.pkl"
+    train_and_save_bundle(
+        df,
+        ["f1", "f2"],
+        {"weights": {"logistic": 1.0}, "temperature": 1.0},
+        str(path),
+        "diag-test",
+        "snapshot",
+    )
+    bundle = load_bundle(str(path))
+    fixtures = _fixtures()[[
+        "match_id", "kickoff_utc", "competition", "home_team", "away_team", "f1", "f2"
+    ]].copy()
+    fixtures.loc[0, "kickoff_utc"] = "not-a-timestamp"
+    with pytest.raises(RuntimeError, match="invalid kickoff_utc"):
+        build(fixtures, bundle)
