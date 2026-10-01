@@ -81,6 +81,7 @@ def test_high_disagreement_candidate_uses_shadow_telemetry():
 def test_duplicate_fixture_without_state_identity_fails_closed():
     rows = [_row(i) for i in range(30)]
     rows[1]["match_id"] = rows[0]["match_id"]
+    rows[0].pop("prediction_state_id")
     rows[1].pop("prediction_state_id")
     with pytest.raises(RuntimeError, match="duplicate match_id without prediction_state_id"):
         build_experience_candidate_plan(pd.DataFrame(rows))
