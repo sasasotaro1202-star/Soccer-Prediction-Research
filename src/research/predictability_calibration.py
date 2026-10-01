@@ -72,6 +72,16 @@ def _prepare(frame: pd.DataFrame) -> pd.DataFrame:
     d["actual_result"] = d["actual_result"].astype("string").str.strip().str.upper()
     for c in ("p_home", "p_draw", "p_away"):
         d[c] = pd.to_numeric(d[c], errors="coerce")
+    if "prediction_state_id" in d.columns:
+        ids = d["prediction_state_id"].astype("string").str.strip()
+        if ids.isna().any() or ids.eq("").any():
+            raise RuntimeError("predictability calibration ledger contains missing prediction_state_id")
+        if ids.duplicated().any():
+            raise RuntimeError("predictability calibration ledger contains duplicate prediction_state_id")
+    elif d["match_id"].duplicated().any():
+        raise RuntimeError(
+            "predictability calibration ledger contains duplicate match_id without prediction_state_id"
+        )
     for name in TELEMETRY:
         source = name if name in d.columns else f"shadow_{name}"
         if source in d.columns:
@@ -116,14 +126,6 @@ def _prepare(frame: pd.DataFrame) -> pd.DataFrame:
     d = d.loc[d["predictability_score"].notna()].copy()
     if d.empty:
         return d
-    if "prediction_state_id" in d.columns:
-        ids = d["prediction_state_id"].astype("string").str.strip()
-        if ids.isna().any() or ids.eq("").any() or ids.duplicated().any():
-            raise RuntimeError("predictability calibration ledger contains invalid prediction_state_id")
-    elif d["match_id"].duplicated().any():
-        raise RuntimeError(
-            "predictability calibration ledger contains duplicate match_id without prediction_state_id"
-        )
     p = d[["p_home", "p_draw", "p_away"]].to_numpy(dtype=float)
     p /= p.sum(axis=1, keepdims=True)
     d[["p_home", "p_draw", "p_away"]] = p
