@@ -66,7 +66,11 @@ def _append_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
         for row in rows:
             fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True, default=str) + "\n")
 
-def record_prediction_file(predictions_path: str, prediction_time: str | None = None) -> dict:
+def record_prediction_file(
+    predictions_path: str,
+    prediction_time: str | None = None,
+    diagnostics_path: str | None = None,
+) -> dict:
     src = Path(predictions_path)
     if not src.is_file() or src.stat().st_size == 0:
         return {"status":"NO_PREDICTIONS","added":0,"ledger_rows":len(_read(LEDGER))}
@@ -78,6 +82,41 @@ def record_prediction_file(predictions_path: str, prediction_time: str | None = 
     if missing:
         raise RuntimeError(f"prediction ledger input missing required columns: {missing}")
     incoming = incoming.copy()
+    shadow_joined = 0
+    shadow_coverage = "NOT_REQUESTED"
+    if diagnostics_path:
+        diag_path = Path(diagnostics_path)
+        if diag_path.is_file() and diag_path.stat().st_size:
+            diagnostics = pd.read_csv(diag_path)
+            if "match_id" not in diagnostics.columns:
+                raise RuntimeError("experience diagnostics input missing match_id")
+            if diagnostics["match_id"].astype(str).duplicated().any():
+                raise RuntimeError("experience diagnostics input contains duplicate match_id values")
+            telemetry_cols = [
+                "model_disagreement",
+                "predictive_entropy",
+                "uncertainty_score",
+                "covariate_drift",
+                "history_support_risk",
+                "routing_risk",
+                "routing_risk_bucket",
+                "routing_route",
+            ]
+            available = [c for c in telemetry_cols if c in diagnostics.columns]
+            if not available:
+                raise RuntimeError("experience diagnostics input contains no recognized telemetry fields")
+            diagnostics["match_id"] = diagnostics["match_id"].astype(str)
+            incoming_ids = incoming["match_id"].astype(str)
+            covered = incoming_ids.isin(set(diagnostics["match_id"]))
+            shadow_coverage = "FULL" if bool(covered.all()) else "PARTIAL"
+            if covered.any():
+                shadow_joined = int(covered.sum())
+            diag_small = diagnostics[["match_id", *available]].copy()
+            diag_small = diag_small.rename(columns={c: f"shadow_{c}" for c in available})
+            incoming["match_id"] = incoming_ids
+            incoming = incoming.merge(diag_small, on="match_id", how="left", validate="one_to_one")
+        else:
+            shadow_coverage = "MISSING"
     if "prediction_time_utc" in incoming.columns:
         cutoffs = pd.to_datetime(incoming["prediction_time_utc"], utc=True, errors="coerce")
     elif prediction_time:
@@ -150,6 +189,8 @@ def record_prediction_file(predictions_path: str, prediction_time: str | None = 
     return {"status":"RECORDED","added":len(new_rows),"ledger_rows":len(combined),
             "batch_duplicates_dropped":batch_duplicates_dropped,
             "prediction_snapshots_appended":len(snapshot_rows),
+            "shadow_telemetry_joined": shadow_joined,
+            "shadow_telemetry_coverage": shadow_coverage,
             "unique_fixtures":int(combined["match_id"].nunique()) if not combined.empty else 0}
 
 def _score_value(score_obj):
@@ -652,12 +693,12 @@ def compute_metrics(ledger=None):
 
 def main():
     p=argparse.ArgumentParser(); sub=p.add_subparsers(dest="command",required=True)
-    a=sub.add_parser("record"); a.add_argument("--predictions",default="artifacts/predictions.csv"); a.add_argument("--prediction-time")
+    a=sub.add_parser("record"); a.add_argument("--predictions",default="artifacts/predictions.csv"); a.add_argument("--prediction-time"); a.add_argument("--diagnostics")
     b=sub.add_parser("settle"); b.add_argument("--days-back",type=int,default=14)
     sub.add_parser("metrics")
     sub.add_parser("status")
     args=p.parse_args()
-    if args.command=="record": print(json.dumps(record_prediction_file(args.predictions,args.prediction_time),ensure_ascii=False,default=str))
+    if args.command=="record": print(json.dumps(record_prediction_file(args.predictions,args.prediction_time,args.diagnostics),ensure_ascii=False,default=str))
     elif args.command=="settle": print(json.dumps(settle_predictions(args.days_back),ensure_ascii=False,default=str))
     elif args.command=="metrics": print(json.dumps({"status":"METRICS","rows":compute_metrics()},ensure_ascii=False,default=str))
     elif args.command=="status":
