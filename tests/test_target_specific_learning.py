@@ -6,6 +6,7 @@ def test_target_specific_learning_has_independent_targets_and_no_production_use(
     for i in range(320):
         rows.append({
             "match_id": f"m{i}", "kickoff_utc": f"2020-01-{1+i:02d}" if i < 28 else f"2020-02-{(i-27):02d}",
+            "home_team": f"H{i % 12}", "away_team": f"A{i % 12}",
             "home_goals": i % 4, "away_goals": (i*2) % 3, "pit_verified": True,
             "competition": "EPL", "feature_a": float(i % 7), "feature_b": float((i*3)%11),
         })
