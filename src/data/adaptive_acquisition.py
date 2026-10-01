@@ -100,6 +100,14 @@ def select_preferred_sources(coverage: pd.DataFrame) -> pd.DataFrame:
         return coverage.copy()
 
     work = coverage.copy()
+    # The function can be called repeatedly as adaptive acquisition widens the
+    # history window. Derived preference columns from an earlier pass must be
+    # discarded before recomputation; otherwise pandas suffixes them during the
+    # merge and the canonical columns disappear.
+    work = work.drop(
+        columns=["preferred_source", "preferred_source_rows"],
+        errors="ignore",
+    )
     work["rows"] = pd.to_numeric(work.get("rows", 0), errors="coerce").fillna(0)
     work["status"] = work["status"].astype(str) if "status" in work.columns else "UNKNOWN"
     work["_pit_bonus"] = work["pit_capable"].astype(bool).astype(int) if "pit_capable" in work.columns else 0

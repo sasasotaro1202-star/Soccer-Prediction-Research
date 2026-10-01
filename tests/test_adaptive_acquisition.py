@@ -51,6 +51,20 @@ def test_preferred_source_is_selected_without_dropping_alternates():
     assert out.loc[out["competition"].eq("EPL"), "preferred_source"].iloc[0] == "B"
 
 
+def test_preferred_source_selection_is_idempotent_on_annotated_coverage():
+    coverage = pd.DataFrame(
+        [
+            {"competition": "EPL", "source": "A", "rows": 100, "status": "AVAILABLE", "pit_capable": False},
+            {"competition": "EPL", "source": "B", "rows": 120, "status": "AVAILABLE", "pit_capable": True},
+        ]
+    )
+    first = select_preferred_sources(coverage)
+    second = select_preferred_sources(first)
+    assert second["preferred_source"].tolist() == first["preferred_source"].tolist()
+    assert second["preferred_source_rows"].tolist() == first["preferred_source_rows"].tolist()
+    assert len(second) == len(first)
+
+
 def test_discovery_targets_prioritize_sparse_competitions():
     history = pd.DataFrame({"competition": ["EPL", "EPL", "UCL"]})
     targets = rank_discovery_targets(history, ("EPL", "UCL", "J1", "J2"), limit=3)
