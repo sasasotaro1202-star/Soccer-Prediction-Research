@@ -410,3 +410,92 @@ def test_record_prediction_joins_outcome_free_shadow_telemetry(tmp_path, monkeyp
     saved = pd.read_csv(ledger).iloc[0]
     assert float(saved["shadow_uncertainty_score"]) == 0.3
     assert saved["shadow_routing_risk_bucket"] == "MEDIUM"
+
+
+def _settlement_test_row():
+    return pd.Series({
+        "match_id": "test-match",
+        "fixture_key": "2026-10-01T18:00:00+00:00|teama|teamb",
+        "kickoff_utc": "2026-10-01T18:00:00Z",
+        "prediction_pit_cutoff_utc": "2026-10-01T16:00:00Z",
+        "prediction_pit_gate": "PASS",
+        "p_home": 0.60,
+        "p_draw": 0.20,
+        "p_away": 0.20,
+        "score_1": "1-0",
+        "score_2": "1-1",
+        "score_3": "2-0",
+        "market_over_2_5": 0.50,
+        "market_btts_yes": 0.50,
+    })
+
+
+def _sofa_event(hg=2, ag=1):
+    return {
+        "id": 101,
+        "startTimestamp": 1790877600,
+        "homeTeam": {"name": "Team A"},
+        "awayTeam": {"name": "Team B"},
+        "homeScore": {"current": hg},
+        "awayScore": {"current": ag},
+        "status": {"type": "finished"},
+    }
+
+
+def _espn_event(hg=2, ag=1):
+    return {
+        "id": "espn-101",
+        "date": "2026-10-01T18:00:00Z",
+        "competitions": [{
+            "competitors": [
+                {"homeAway": "home", "team": {"displayName": "Team A"}, "score": str(hg)},
+                {"homeAway": "away", "team": {"displayName": "Team B"}, "score": str(ag)},
+            ],
+            "status": {"type": {"name": "STATUS_FINAL"}},
+        }],
+    }
+
+
+def test_settlement_requires_matching_outcomes_when_both_sources_are_finished():
+    from scripts.experience_ledger import _settle_row
+    row = _settlement_test_row()
+    out = _settle_row(
+        row,
+        {"2026-10-01T18:00:00+00:00|teama|teamb": _sofa_event(2, 1)},
+        {},
+        {"2026-10-01T18:00:00+00:00|teama|teamb": _espn_event(2, 1)},
+        {},
+    )
+    assert out["settlement_verification"] == "DUAL_SOURCE_AGREE"
+    assert out["settlement_sources_count"] == 2
+    assert out["actual_score"] == "2-1"
+
+
+def test_settlement_does_not_teach_from_source_disagreement():
+    from scripts.experience_ledger import _settle_row
+    row = _settlement_test_row()
+    out = _settle_row(
+        row,
+        {"2026-10-01T18:00:00+00:00|teama|teamb": _sofa_event(2, 1)},
+        {},
+        {"2026-10-01T18:00:00+00:00|teama|teamb": _espn_event(1, 0)},
+        {},
+    )
+    assert out["settlement_verification"] == "SOURCE_DISAGREEMENT"
+    assert "actual_result" not in out
+    assert "correct_1x2" not in out
+
+
+def test_settlement_records_single_source_without_marking_consensus():
+    from scripts.experience_ledger import _settle_row
+    row = _settlement_test_row()
+    out = _settle_row(
+        row,
+        {},
+        {},
+        {},
+        {"test-match": _espn_event(2, 1)},
+    )
+    assert out["settlement_verification"] == "SINGLE_SOURCE"
+    assert out["settlement_sources_count"] == 1
+    assert out["settlement_source"] == "espn"
