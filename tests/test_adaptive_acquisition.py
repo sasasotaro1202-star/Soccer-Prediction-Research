@@ -57,10 +57,11 @@ def test_discovery_targets_prioritize_sparse_competitions():
     assert targets == ["J1", "J2", "UCL"]
 
 
-def test_data_deficits_keep_sparse_competitions_in_scope():
+def test_data_deficits_keep_sparse_competitions_in_scope_and_require_pit():
     history = pd.DataFrame({
-        "competition": ["EPL"] * 4 + ["J1"],
-        "season_start": [2024, 2024, 2025, 2025, 2025],
+        "competition": ["EPL"] * 5 + ["J1"],
+        "season_start": [2024, 2024, 2025, 2025, 2025, 2025],
+        "pit_verified": [True, True, True, True, False, True],
     })
     deficits = identify_data_deficits(
         history,
@@ -71,3 +72,4 @@ def test_data_deficits_keep_sparse_competitions_in_scope():
     assert "EPL" not in deficits
     assert deficits["J1"]["seasons"] == 1
     assert deficits["UCL"]["rows"] == 0
+    assert deficits["EPL"]["count_basis"] == "PIT_VERIFIED_ONLY"
