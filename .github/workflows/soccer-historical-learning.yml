@@ -86,6 +86,49 @@ jobs:
           PY
           test -s artifacts/target_specific/target_specific_status.json
 
+      - name: Build experience candidate plan for scoped OOS research
+        if: success()
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m scripts.generate_experience_candidates
+          test -s artifacts/experience_candidate_plan.json
+          python scripts/evaluate_experience_candidates.py
+          test -s artifacts/experience_candidate_evaluation.json
+
+      - name: Publish scoped experience candidate evaluation
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -s artifacts/experience_candidate_evaluation.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          s=json.loads(Path("artifacts/experience_candidate_evaluation.json").read_text(encoding="utf-8"))
+          print("")
+          print("## Experience candidate scoped OOS")
+          print(f"- Status={s.get('status')}")
+          print(f"- Evaluations={s.get('candidate_count', 0)}")
+          policy=s.get("policy") or {}
+          print(f"- Diagnostic reuse only={policy.get('diagnostic_reuse_only')}")
+          print(f"- Fresh OOS required={policy.get('fresh_oos_required')}")
+          print(f"- Locked holdout used={policy.get('locked_holdout_used')}")
+          for row in s.get("evaluations") or []:
+              print(
+                  f"- **{row.get('source_dimension')}={row.get('source_segment')}**: "
+                  f"status={row.get('status')}, folds={row.get('folds', 'NA')}, "
+                  f"n/fold>={row.get('min_rows_per_fold', 'NA')}, "
+                  f"ΔLogLoss={row.get('logloss_delta_scoped_minus_global', 'NA')}, "
+                  f"ΔAccuracy={row.get('accuracy_delta_scoped_minus_global', 'NA')}, "
+                  f"next={row.get('next_action', 'NA')}"
+              )
+          PY
+          else
+            echo "- Experience candidate scoped-OOS artifact unavailable." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Run competition-target diagnostics
         shell: bash
         run: |
