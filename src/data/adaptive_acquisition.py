@@ -298,6 +298,7 @@ def write_state(
         "config": asdict(config),
         "rounds": rounds,
         "discovery": discovery or {},
+        "discovered_acquisition": discovered_acquisition or {},
         "discovery_history": history,
         "discovery_history_runs": int(len(history)),
     }
