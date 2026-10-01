@@ -193,33 +193,48 @@ jobs:
           test -s artifacts/predictability/predictability_latest_cases.csv
           test -s artifacts/predictability/predictability_oos_cases.csv
 
-      - name: Fail closed on production mutation claims
+      - name: Fail closed on research safety contracts
         run: |
           set -euo pipefail
           python - <<'PY'
           import json
           from pathlib import Path
 
-          state = json.loads(
-              Path("artifacts/predictability/predictability_status.json")
-              .read_text(encoding="utf-8")
-          )
-          safety = state.get("safety_contract") or {}
-          checks = {
-              "production_usable": state.get("production_usable") is False,
-              "research_only": safety.get("research_only") is True,
-              "production_changed": safety.get("production_changed") is False,
-              "production_probabilities_changed": safety.get("production_probabilities_changed") is False,
-              "production_registry_changed": safety.get("production_registry_changed") is False,
-              "frozen_holdout_touched": safety.get("frozen_holdout_touched") is False,
-              "outcome_data_used_only_after_maturity": safety.get("outcome_data_used_only_after_maturity") is True,
-              "prediction_time_features_only": safety.get("prediction_time_features_only") is True,
-              "chronological_oos_required_for_candidate": safety.get("chronological_oos_required_for_candidate") is True,
+          artifacts = {
+              "predictability": Path("artifacts/predictability/predictability_status.json"),
+              "calibration": Path("artifacts/predictability_calibration/predictability_calibration_status.json"),
+              "conformal": Path("artifacts/conformal/conformal_status.json"),
           }
-          failed = [name for name, ok in checks.items() if not ok]
+          failed = []
+          for name, path in artifacts.items():
+              if not path.is_file() or path.stat().st_size <= 0:
+                  failed.append(f"{name}:missing_status")
+                  continue
+              state = json.loads(path.read_text(encoding="utf-8"))
+              safety = state.get("safety_contract") or {}
+              required = {
+                  "production_usable": state.get("production_usable") is False,
+                  "research_only": safety.get("research_only") is True,
+                  "production_changed": safety.get("production_changed") is False,
+                  "production_probabilities_changed": safety.get("production_probabilities_changed") is False,
+                  "frozen_holdout_touched": safety.get("frozen_holdout_touched") is False,
+                  "outcome_data_used_only_after_maturity": safety.get("outcome_data_used_only_after_maturity") is True,
+              }
+              if name == "predictability":
+                  required["production_registry_changed"] = safety.get("production_registry_changed") is False
+                  required["prediction_time_features_only"] = safety.get("prediction_time_features_only") is True
+                  required["chronological_oos_required_for_candidate"] = safety.get("chronological_oos_required_for_candidate") is True
+              elif name == "calibration":
+                  required["prior_history_only"] = safety.get("calibration_training_is_prior_history_only") is True
+                  required["locked_suffix_not_trained"] = safety.get("locked_suffix_outcomes_never_train_calibrator") is True
+              elif name == "conformal":
+                  required["same_prediction_time_excluded"] = safety.get("same_prediction_time_excluded") is True
+              for check, ok in required.items():
+                  if not ok:
+                      failed.append(f"{name}:{check}")
           if failed:
-              raise SystemExit("PREDICTABILITY SAFETY GATE FAILED: " + ", ".join(failed))
-          print("predictability_safety: PASS")
+              raise SystemExit("RESEARCH SAFETY GATE FAILED: " + ", ".join(failed))
+          print("predictability_calibration_conformal_safety: PASS")
           PY
 
       - name: Publish research summary
@@ -257,7 +272,17 @@ jobs:
           set -euo pipefail
           git config user.name "soccer-predictability-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          for path in             artifacts/predictability/predictability_status.json             artifacts/predictability/predictability_map.csv             artifacts/predictability/predictability_oos.csv             artifacts/predictability/predictability_latest_cases.csv             artifacts/predictability/predictability_oos_cases.csv
+          for path in \
+            artifacts/predictability/predictability_status.json \
+            artifacts/predictability/predictability_map.csv \
+            artifacts/predictability/predictability_oos.csv \
+            artifacts/predictability/predictability_latest_cases.csv \
+            artifacts/predictability/predictability_oos_cases.csv \
+            artifacts/predictability_calibration/predictability_calibration_status.json \
+            artifacts/predictability_calibration/predictability_calibration_oos.csv \
+            artifacts/predictability_calibration/predictability_calibration_cases.csv \
+            artifacts/conformal/conformal_status.json \
+            artifacts/conformal/prediction_sets.csv
           do
             if [ -e "$path" ]; then
               git add -- "$path"
@@ -267,5 +292,5 @@ jobs:
             echo "No predictability research changes to commit."
             exit 0
           fi
-          git commit -m "ops: persist predictability research state"
+          git commit -m "ops: persist predictability calibration and conformal research state"
           git push origin HEAD:main
