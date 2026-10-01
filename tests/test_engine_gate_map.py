@@ -41,10 +41,15 @@ def _make_artifacts(tmp_path):
         "locked_oos_metrics.csv",
         "score_oos_metrics.csv",
         "score_model_selection.json",
+        "score_model_selection_by_competition.json",
+        "score_locked_gate_by_competition.json",
         "candidate_lock.json",
         "adoption_decision.json",
     ):
-        (tmp_path / name).write_text("x,y\n1,2\n", encoding="utf-8")
+        if name.endswith(".json"):
+            _write_json(tmp_path / name, {"status": "PASS"})
+        else:
+            (tmp_path / name).write_text("x,y\n1,2\n", encoding="utf-8")
 
 
 def _frames():
