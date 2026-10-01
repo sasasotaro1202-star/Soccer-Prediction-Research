@@ -133,6 +133,49 @@ jobs:
             printf '%s\n' '{"status":"DEFERRED_NO_ADOPTED_PRODUCTION_MODEL","reason":"No complete adopted production model bundle is present; validated candidates remain research-only."}' > artifacts/prediction_status.json
             echo "No adopted production model present; prediction execution deferred."
           fi
+      - name: Generate outcome-free uncertainty shadow telemetry
+        if: success()
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          if [ -s models/current/production_model.pkl ] && [ -s artifacts/future_fixtures.csv ] && [ -s artifacts/predictions.csv ]; then
+            python -m src.research.forecast_diagnostics \
+              --fixtures artifacts/future_fixtures.csv \
+              --bundle models/current/production_model.pkl \
+              --output artifacts/forecast_uncertainty_shadow.csv \
+              --status artifacts/forecast_uncertainty_shadow_status.json
+            python - <<'PY'
+          import numpy as np
+          import pandas as pd
+          from pathlib import Path
+          shadow = pd.read_csv("artifacts/forecast_uncertainty_shadow.csv")
+          pred = pd.read_csv("artifacts/predictions.csv")
+          if shadow["match_id"].astype(str).duplicated().any():
+              raise SystemExit("uncertainty shadow contains duplicate match_id")
+          pred_ids = pred["match_id"].astype(str)
+          shadow_ids = shadow["match_id"].astype(str)
+          if not set(pred_ids).issubset(set(shadow_ids)):
+              raise SystemExit("uncertainty shadow does not cover every prediction")
+          merged = shadow.merge(
+              pred[["match_id","p_home","p_draw","p_away"]],
+              on="match_id", how="inner", validate="one_to_one"
+          )
+          if len(merged) != len(pred):
+              raise SystemExit("uncertainty shadow/prediction coverage mismatch")
+          if not np.allclose(
+              merged[["p_home_x","p_draw_x","p_away_x"]].to_numpy(float),
+              merged[["p_home_y","p_draw_y","p_away_y"]].to_numpy(float),
+              atol=1e-12,
+          ):
+              raise SystemExit("uncertainty shadow probabilities differ from production predictions")
+          print({"status":"SHADOW_TELEMETRY_MATCHED","rows":len(shadow)})
+          PY
+          else
+            printf '%s\n' '{"status":"SHADOW_TELEMETRY_SKIPPED","rows":0,"outcome_free":true,"production_prediction_unchanged":true}' > artifacts/forecast_uncertainty_shadow_status.json
+            echo "No adopted production prediction artifact available; shadow telemetry skipped."
+          fi
+
       - name: Upload matchday intelligence artifact
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
@@ -144,4 +187,6 @@ jobs:
             artifacts/future_fixtures.csv
             artifacts/predictions.csv
             artifacts/prediction_status.json
+            artifacts/forecast_uncertainty_shadow.csv
+            artifacts/forecast_uncertainty_shadow_status.json
           retention-days: 2
