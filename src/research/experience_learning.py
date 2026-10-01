@@ -91,11 +91,19 @@ def _validate_ledger(frame: pd.DataFrame) -> pd.DataFrame:
 
     if d["match_id"].isna().any() or d["match_id"].astype(str).str.strip().eq("").any():
         raise RuntimeError("experience learning ledger contains missing match_id")
-    if d["match_id"].duplicated().any():
-        # A fixture can legitimately have multiple prediction states, so only
-        # duplicate prediction-state rows are unsafe. When available, use it.
-        if "prediction_state_id" in d.columns and d["prediction_state_id"].duplicated().any():
+    if "prediction_state_id" in d.columns:
+        state_ids = d["prediction_state_id"].astype("string").str.strip()
+        if state_ids.isna().any() or state_ids.eq("").any():
+            raise RuntimeError("experience learning ledger contains missing prediction_state_id")
+        if state_ids.duplicated().any():
             raise RuntimeError("experience learning ledger contains duplicate prediction_state_id")
+    if d["match_id"].duplicated().any() and "prediction_state_id" not in d.columns:
+        # Multiple states for one fixture are legitimate only when the ledger
+        # carries a stable state identity; otherwise the row-level history
+        # cannot be interpreted deterministically.
+        raise RuntimeError(
+            "experience learning ledger contains duplicate match_id without prediction_state_id"
+        )
 
     for c in ("p_home", "p_draw", "p_away"):
         d[c] = pd.to_numeric(d[c], errors="coerce")
@@ -113,6 +121,7 @@ def _validate_ledger(frame: pd.DataFrame) -> pd.DataFrame:
     pit_ok &= d["kickoff_utc"].notna()
     pit_ok &= d["experience_available_at_utc"].notna()
     pit_ok &= d["prediction_pit_cutoff_utc"] < d["kickoff_utc"]
+    pit_ok &= d["experience_available_at_utc"] > d["kickoff_utc"]
     pit_ok &= d["experience_available_at_utc"] > d["prediction_pit_cutoff_utc"]
     d = d.loc[pit_ok].copy()
 
@@ -123,6 +132,31 @@ def _validate_ledger(frame: pd.DataFrame) -> pd.DataFrame:
     d["confidence_bucket"] = d["confidence"].map(_confidence_bucket)
     d = d.sort_values(["prediction_pit_cutoff_utc", "kickoff_utc", "match_id"], kind="mergesort")
     return d.reset_index(drop=True)
+
+
+def _dedupe_teacher_pool(pool: pd.DataFrame) -> pd.DataFrame:
+    """Count each matured fixture outcome once within a teacher pool.
+
+    A fixture may have multiple pre-kickoff prediction states. Those states are
+    useful in the ledger, but a single realized outcome must not be multiplied
+    into the empirical teacher distribution merely because it was revised.
+    Keep the latest prediction state available by the target cutoff.
+    """
+    if pool.empty or "match_id" not in pool.columns:
+        return pool
+    sort_cols = [
+        c for c in (
+            "match_id",
+            "experience_available_at_utc",
+            "prediction_pit_cutoff_utc",
+        )
+        if c in pool.columns
+    ]
+    return (
+        pool.sort_values(sort_cols, kind="mergesort")
+        .drop_duplicates("match_id", keep="last")
+        .copy()
+    )
 
 
 def _teacher_pool(history: pd.DataFrame, target: pd.Series) -> pd.DataFrame:
@@ -159,10 +193,11 @@ def _teacher_pool(history: pd.DataFrame, target: pd.Series) -> pd.DataFrame:
         ("global", pd.Series(True, index=eligible.index)),
     ]
     for name, mask in predicates:
-        pool = eligible.loc[mask].copy()
+        pool = _dedupe_teacher_pool(eligible.loc[mask].copy())
         if len(pool) >= MIN_TEACHER_ROWS:
             pool.attrs["source"] = name
             return pool
+    eligible = _dedupe_teacher_pool(eligible)
     eligible.attrs["source"] = "global_insufficient_history"
     return eligible
 
