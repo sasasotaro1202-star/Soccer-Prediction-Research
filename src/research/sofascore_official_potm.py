@@ -156,6 +156,15 @@ def attach_labels(
             )
     labels = pd.DataFrame(records).rename(columns={"event_id": event_id_column})
     out = d.merge(labels, on=event_id_column, how="left", validate="one_to_one")
+    if "kickoff_utc" in out.columns:
+        kickoff = pd.to_datetime(out["kickoff_utc"], utc=True, errors="coerce")
+        retrieved = pd.to_datetime(out["label_retrieved_at_utc"], utc=True, errors="coerce")
+        found = out["status"].astype(str).eq("FOUND")
+        invalid = found & (kickoff.isna() | retrieved.isna() | (retrieved <= kickoff))
+        if bool(invalid.any()):
+            raise RuntimeError(
+                "Official POTM teacher was retrieved at or before kickoff; refusing unsafe label rows"
+            )
     return out
 
 def save_labels(
