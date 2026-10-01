@@ -68,14 +68,15 @@ def test_calibration_cases_are_bounded():
 
 def test_calibration_derives_raw_predictability_from_shadow_telemetry():
     df = _rows(300)
-    df = df.drop(columns=["predictability_score"])
-    for name in (
+    telemetry = (
         "predictive_entropy",
         "model_disagreement",
         "covariate_drift",
         "history_support_risk",
         "routing_risk",
-    ):
+    )
+    df = df.drop(columns=list(telemetry))
+    for name in telemetry:
         df["shadow_" + name] = 0.2
     state = calibrate(df, history_rows=120, block_size=60)
     assert state["rows"] == 300
