@@ -725,6 +725,10 @@ def load_source_cases(*, start_year: int = 2012, end_year: int = 2025, cache_dir
     )
     if merged.empty:
         raise ValueError("MOM proxy source produced no active-scope player rows")
+    if (merged["known_at"] <= merged["kickoff_utc"]).any():
+        raise RuntimeError(
+            "MOM proxy source violates the conservative PIT boundary: known_at must be after kickoff"
+        )
     return merged
 
 def save_mom_proxy_artifacts(
