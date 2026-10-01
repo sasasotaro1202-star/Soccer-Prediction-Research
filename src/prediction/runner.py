@@ -546,6 +546,19 @@ def run(
         eligible.get("prediction_window_minutes_before", pd.Series(np.nan, index=eligible.index)),
         errors="coerce",
     ).to_numpy()
+    result["prediction_timing_policy"] = str(prediction_window.get("mode", "NO_TIMING_FILTER"))
+    preferred = prediction_window.get("preferred_timing_minutes_before")
+    deadline = prediction_window.get("deadline_minutes_before")
+    actual_timing = pd.to_numeric(result["prediction_window_minutes_before"], errors="coerce")
+    if preferred is not None and deadline is not None:
+        lower_preferred = float(preferred) - float(prediction_window.get("tolerance_minutes", 0.0))
+        result["prediction_timing_class"] = np.where(
+            actual_timing > float(preferred) + 1e-9,
+            "EARLY",
+            np.where(actual_timing < lower_preferred - 1e-9, "RESCUE", "PREFERRED"),
+        )
+    else:
+        result["prediction_timing_class"] = "UNCONSTRAINED"
     result["prediction_availability_basis"] = eligible.get(
         "prediction_availability_basis",
         pd.Series("", index=eligible.index, dtype="string"),
