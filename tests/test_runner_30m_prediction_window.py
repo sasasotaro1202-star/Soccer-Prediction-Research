@@ -31,7 +31,7 @@ def test_current_matchday_snapshot_can_close_live_pit_without_changing_historica
     assert out.loc[out["match_id"].eq("m2"), "prediction_availability_basis"].iloc[0] == "SOURCE_AVAILABILITY"
 
 
-def test_prediction_window_selects_only_25_to_35_minutes_before_kickoff():
+def test_prediction_window_uses_30_minutes_as_soft_target_with_pre_kickoff_rescue():
     now = pd.Timestamp("2026-10-01T12:00:00Z")
     frame = pd.DataFrame([
         {"match_id": "early", "kickoff_utc": "2026-10-01T12:36:00Z"},
@@ -39,11 +39,15 @@ def test_prediction_window_selects_only_25_to_35_minutes_before_kickoff():
         {"match_id": "center", "kickoff_utc": "2026-10-01T12:30:00Z"},
         {"match_id": "high", "kickoff_utc": "2026-10-01T12:25:00Z"},
         {"match_id": "late", "kickoff_utc": "2026-10-01T12:24:00Z"},
+        {"match_id": "rescue", "kickoff_utc": "2026-10-01T12:20:00Z"},
+        {"match_id": "too_early", "kickoff_utc": "2026-10-01T12:36:00Z"},
     ])
     selected, meta = _filter_prediction_window(frame, now, 30, 5)
-    assert selected["match_id"].tolist() == ["center", "high", "low"]
-    assert meta["fixtures_in_window"] == 3
-
+    assert selected["match_id"].tolist() == ["rescue", "late", "high", "center", "low"]
+    assert meta["mode"] == "SOFT_TARGET"
+    assert meta["preferred_timing_minutes_before"] == 30.0
+    assert meta["deadline_minutes_before"] == 35.0
+    assert meta["fixtures_in_window"] == 5
 
 def test_prediction_window_rejects_invalid_tolerance():
     frame = pd.DataFrame([{"match_id": "m", "kickoff_utc": "2026-10-01T12:30:00Z"}])
