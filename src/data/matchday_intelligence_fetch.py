@@ -480,6 +480,12 @@ def _sofascore_competition(event: dict[str, Any]) -> str | None:
         name = str(candidate.get("name") or "").strip()
         if name in SOFASCORE_COMPETITIONS:
             return SOFASCORE_COMPETITIONS[name]
+        normalized = " ".join((slug + " " + name.lower()).replace("_", "-").split())
+        is_women = "women" in normalized or "womens" in normalized
+        if not is_women and ("u23" in normalized or "under-23" in normalized or "olympic football" in normalized):
+            return "U23_M"
+        if not is_women and ("u18" in normalized or "under-18" in normalized):
+            return "U18_M"
     return None
 
 
