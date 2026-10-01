@@ -73,6 +73,38 @@ jobs:
           test -s artifacts/run_status.json
           cp artifacts/run_status.json "${HISTORICAL_OUT}/run_status.json"
 
+      - name: Publish Predictability diagnostics
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -s artifacts/oos_metrics.csv ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import pandas as pd
+          frame = pd.read_csv("artifacts/oos_metrics.csv")
+          cols = [
+              "predictability_mean",
+              "predictability_calibrated_mean",
+              "predictability_brier",
+              "predictability_ece",
+              "predictability_accuracy_at_0_5",
+              "predictability_calibrator_training_rows",
+              "predictability_locked_frozen",
+              "predictability_locked_outcomes_update_calibrator",
+          ]
+          print("")
+          print("## Predictability diagnostics")
+          for _, row in frame.iterrows():
+              vals = []
+              for col in cols:
+                  if col in frame.columns:
+                      vals.append(f"{col}={row[col]}")
+              print(f"- OOS {row.get('oos_start')} -> " + ", ".join(vals))
+          PY
+          else
+            echo "- Predictability OOS metrics unavailable." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Run target-specific historical learner
         shell: bash
         run: |
