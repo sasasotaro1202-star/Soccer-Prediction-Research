@@ -70,6 +70,9 @@ def _validate(frame: pd.DataFrame) -> pd.DataFrame:
     valid &= d["experience_available_at_utc"] > d["prediction_pit_cutoff_utc"]
     valid &= d["actual_result"].isin(LABELS)
     valid &= np.isfinite(p).all(axis=1)
+    pit_rows = d["prediction_pit_gate"].astype("string").eq("PASS")
+    if bool((pit_rows & ~valid).any()):
+        raise RuntimeError("conformal maturity/PIT validation failed for a PASS ledger row")
     d = d.loc[valid].copy()
     if d.empty:
         return d
