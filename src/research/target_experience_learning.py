@@ -128,7 +128,16 @@ def learn_target_specific_experience(ledger: pd.DataFrame) -> dict:
                 (td.index < idx)
                 & (td["experience_available_at_utc"] <= cutoff)
                 & (td["prediction_pit_cutoff_utc"] < cutoff)
-            ]
+            ].copy()
+            # One realized fixture outcome must count once as an experience teacher,
+            # even if that fixture had multiple pre-kickoff prediction states.
+            teachers = (
+                teachers.sort_values(
+                    ["match_id", "experience_available_at_utc", "prediction_pit_cutoff_utc"],
+                    kind="mergesort",
+                )
+                .drop_duplicates("match_id", keep="last")
+            )
             p = float(row["p"])
             adjusted = p
             used = False
