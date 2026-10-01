@@ -191,7 +191,9 @@ jobs:
             artifacts/experience_learning_status.json \
             artifacts/experience_learning_oos.csv \
             artifacts/experience_learning_replay.csv \
-            artifacts/experience_policy_candidate.json             artifacts/target_experience/target_experience_status.json             artifacts/target_experience/target_experience_oos.csv
+            artifacts/experience_policy_candidate.json \
+            artifacts/target_experience/target_experience_status.json \
+            artifacts/target_experience/target_experience_oos.csv
           do
             if [ -e "$path" ]; then
               git add -- "$path"
