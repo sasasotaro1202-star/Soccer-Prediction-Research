@@ -731,6 +731,8 @@ def compute_metrics(ledger=None):
             "status": "NO_SETTLED_PREDICTIONS",
             "settled_predictions": 0,
             "ledger_rows": 0,
+            "dual_source_agree_predictions": 0,
+            "source_disagreement_predictions": 0,
             "generated_at_utc": _now().isoformat(),
             "metrics_file": str(METRICS),
             "summary": {"all": {"n": 0, "probability_rows": 0}},
@@ -767,6 +769,14 @@ def compute_metrics(ledger=None):
             "status": "NO_SETTLED_PREDICTIONS",
             "settled_predictions": 0,
             "ledger_rows": len(ledger),
+            "dual_source_agree_predictions": int(
+                ledger.get("settlement_verification", pd.Series(dtype="string"))
+                .astype("string").eq("DUAL_SOURCE_AGREE").sum()
+            ),
+            "source_disagreement_predictions": int(
+                ledger.get("settlement_verification", pd.Series(dtype="string"))
+                .astype("string").eq("SOURCE_DISAGREEMENT").sum()
+            ),
             "generated_at_utc": _now().isoformat(),
             "metrics_file": str(METRICS),
             "summary": {"all": {"n": 0, "probability_rows": 0}},
@@ -792,6 +802,14 @@ def compute_metrics(ledger=None):
         for cls,name in [("H","home"),("D","draw"),("A","away")]:
             vals=pd.to_numeric(x.loc[x["actual_result"]==cls,"correct_1x2"],errors="coerce").dropna()
             if not vals.empty:r[name+"_hit_rate_pct"]=round(vals.mean()*100,4)
+        if "settlement_verification" in x:
+            verification = x["settlement_verification"].astype("string")
+            known = verification.isin(["DUAL_SOURCE_AGREE", "SINGLE_SOURCE"])
+            r["dual_source_agree_rate_pct"] = (
+                round(float(verification[known].eq("DUAL_SOURCE_AGREE").mean() * 100), 4)
+                if bool(known.any()) else None
+            )
+            r["source_disagreement_n"] = int(verification.eq("SOURCE_DISAGREEMENT").sum())
         r["models"]="|".join(sorted(set(x["model_version"].dropna().astype(str)))) if "model_version" in x else ""
         r["competitions"]=int(x["competition"].nunique()) if "competition" in x else 0
         rows.append(r)
@@ -861,6 +879,14 @@ def compute_metrics(ledger=None):
         except (OSError, json.JSONDecodeError):
             previous_status = {}
     current_status = {"status":"OK","settled_predictions":len(d),"ledger_rows":len(ledger),
+                      "dual_source_agree_predictions": int(
+                          d.get("settlement_verification", pd.Series(dtype="string"))
+                          .astype("string").eq("DUAL_SOURCE_AGREE").sum()
+                      ),
+                      "source_disagreement_predictions": int(
+                          ledger.get("settlement_verification", pd.Series(dtype="string"))
+                          .astype("string").eq("SOURCE_DISAGREEMENT").sum()
+                      ),
                       "generated_at_utc":_now().isoformat(),"metrics_file":str(METRICS),
                       "summary":summary}
     current_status["metric_deltas_vs_previous"] = _status_metric_deltas(previous_status, current_status)
