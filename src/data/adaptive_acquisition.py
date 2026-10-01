@@ -131,15 +131,24 @@ def identify_data_deficits(
     minimum_seasons_per_competition: int = 2,
 ) -> dict[str, dict[str, int]]:
     """Return the active competition frontier still needing acquisition."""
+    if history.empty or "competition" not in history.columns:
+        verified = pd.DataFrame(columns=list(history.columns))
+    else:
+        verified = history.copy()
+        if "pit_verified" in verified.columns:
+            verified = verified.loc[verified["pit_verified"].eq(True)].copy()
+        else:
+            # No explicit PIT flag means the row cannot close an acquisition deficit.
+            verified = verified.iloc[0:0].copy()
+
     row_counts = (
-        history.groupby("competition").size().to_dict()
-        if not history.empty and "competition" in history.columns
-        else {}
+        verified.groupby("competition").size().to_dict()
+        if not verified.empty else {}
     )
     season_counts: dict[str, int] = {}
-    if not history.empty and "competition" in history.columns:
-        season_col = "season_start" if "season_start" in history.columns else "season"
-        season_counts = history.groupby("competition")[season_col].nunique(dropna=True).to_dict()
+    if not verified.empty:
+        season_col = "season_start" if "season_start" in verified.columns else "season"
+        season_counts = verified.groupby("competition")[season_col].nunique(dropna=True).to_dict()
 
     deficits: dict[str, dict[str, int]] = {}
     for competition in target_competitions:
@@ -152,6 +161,7 @@ def identify_data_deficits(
                 "minimum_rows": int(minimum_rows_per_competition),
                 "seasons": seasons,
                 "minimum_seasons": int(minimum_seasons_per_competition),
+                "count_basis": "PIT_VERIFIED_ONLY",
             }
     return deficits
 
