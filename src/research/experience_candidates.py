@@ -268,7 +268,11 @@ def build_experience_candidate_plan(
 
     return {
         "schema_version": SCHEMA_VERSION,
-        "status": "READY" if proposals else "WARMUP",
+        "status": (
+            "READY"
+            if proposals
+            else ("NO_ACTIONABLE_DEGRADATION" if len(data) >= MIN_OBSERVATIONS else "WARMUP")
+        ),
         "source": "matured_experience_ledger",
         "settled_rows": int(len(data)),
         "candidates": proposals[: int(max_candidates)],
