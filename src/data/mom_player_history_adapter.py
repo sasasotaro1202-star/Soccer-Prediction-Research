@@ -435,13 +435,38 @@ def mom_data_contract_report(feature_rows: pd.DataFrame) -> dict[str, Any]:
         return {"status": "DEFERRED_NO_PIT_PLAYER_DATA", "matches": 0, "rows": 0}
     pit = feature_rows.get("pit_verified", pd.Series(False, index=feature_rows.index)).astype(bool)
     match_counts = feature_rows.groupby("match_id")["player_id"].nunique()
+    cutoff = pd.to_datetime(
+        feature_rows.get("prediction_cutoff_at_utc"),
+        utc=True,
+        errors="coerce",
+    )
+    available = pd.to_datetime(
+        feature_rows.get("feature_available_at_utc"),
+        utc=True,
+        errors="coerce",
+    )
+    cutoff_valid = bool(cutoff.notna().all()) if len(cutoff) else False
+    availability_valid = bool(available.notna().all()) if len(available) else False
+    cutoff_violations = int(
+        (available > cutoff).sum()
+    ) if cutoff_valid and availability_valid else int(len(feature_rows))
+    ready = bool(
+        pit.all()
+        and (match_counts >= 4).all()
+        and cutoff_valid
+        and availability_valid
+        and cutoff_violations == 0
+    )
     return {
-        "status": "READY_FOR_OOS" if bool(pit.all()) and bool((match_counts >= 4).all()) else "DEFERRED_INSUFFICIENT_PIT_CANDIDATES",
+        "status": "READY_FOR_OOS" if ready else "DEFERRED_INSUFFICIENT_PIT_CANDIDATES",
         "matches": int(feature_rows["match_id"].nunique()),
         "rows": int(len(feature_rows)),
         "pit_verified_rows": int(pit.sum()),
         "matches_with_at_least_4_candidates": int((match_counts >= 4).sum()),
         "minimum_candidates": int(match_counts.min()),
+        "prediction_cutoff_verified": bool(cutoff_valid),
+        "feature_availability_verified": bool(availability_valid and cutoff_violations == 0),
+        "feature_availability_cutoff_violations": cutoff_violations,
         "fail_closed": True,
         "source_repository": SOCCER_DATASET_REPOSITORY,
         "source_commit": SOCCER_DATASET_COMMIT,
