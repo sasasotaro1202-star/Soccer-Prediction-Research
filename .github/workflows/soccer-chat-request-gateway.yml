@@ -155,16 +155,17 @@ print(str(data.get("requested_at","")).strip())
 PY
             )"
             printf "%s\n" "{\"ref\":\"main\"}" > "/tmp/dispatch-${request_id}.json"
+            export REQUEST_ID="${request_id}" OPERATION="${operation}" WORKFLOW_FILE="${workflow_file}" REQUESTED_AT="${requested_at}" ACCEPTED_COMMIT="${GITHUB_SHA}"
             state_payload="$(python - <<PY
-import json
-print(json.dumps({"request_id":"${request_id}","operation":"${operation}","workflow":"${workflow_file}","requested_at":"${requested_at}","accepted_commit":"${GITHUB_SHA}","status":"DISPATCHING"}))
+import json, os
+print(json.dumps({"request_id":os.environ["REQUEST_ID"],"operation":os.environ["OPERATION"],"workflow":os.environ["WORKFLOW_FILE"],"requested_at":os.environ["REQUESTED_AT"],"accepted_commit":os.environ["ACCEPTED_COMMIT"],"status":"DISPATCHING"}))
 PY
             )"
             write_state "${state_path}" "${state_payload}" ""
             dispatch_workflow "${workflow_file}" "${request_id}" "/tmp/dispatch-${request_id}.json"
             final_payload="$(python - <<PY
-import json
-print(json.dumps({"request_id":"${request_id}","operation":"${operation}","workflow":"${workflow_file}","requested_at":"${requested_at}","accepted_commit":"${GITHUB_SHA}","status":"DISPATCHED","note":"Long-running work continues asynchronously; the chat request does not poll for completion."}, ensure_ascii=False))
+import json, os
+print(json.dumps({"request_id":os.environ["REQUEST_ID"],"operation":os.environ["OPERATION"],"workflow":os.environ["WORKFLOW_FILE"],"requested_at":os.environ["REQUESTED_AT"],"accepted_commit":os.environ["ACCEPTED_COMMIT"],"status":"DISPATCHED","note":"Long-running work continues asynchronously; the chat request does not poll for completion."}, ensure_ascii=False))
 PY
             )"
             state_code="$(get_state "${state_path}" "${state_file}")"
