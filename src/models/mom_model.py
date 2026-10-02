@@ -417,6 +417,7 @@ def predict_mom_distribution(
     if not np.isfinite(temperature) or temperature <= 0:
         raise ValueError("MOM model temperature is invalid")
 
+    pt = None
     if prediction_time is not None:
         pt = pd.Timestamp(prediction_time)
         if pt.tzinfo is None:
@@ -454,6 +455,8 @@ def predict_mom_distribution(
             raise RuntimeError(f"MOM probability distribution is invalid for match_id={match_id!r}")
 
     out = d[["match_id", "player_id", "kickoff_utc"]].copy()
+    if pt is not None:
+        out["prediction_cutoff_at_utc"] = pt
     out["probability"] = probabilities
     return out.sort_values(["match_id", "probability", "player_id"], ascending=[True, False, True], kind="mergesort").reset_index(drop=True)
 
