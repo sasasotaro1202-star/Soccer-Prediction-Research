@@ -35,7 +35,13 @@ MIN_BLOCKS = 3
 def _read(path: Path) -> pd.DataFrame:
     if not path.is_file() or path.stat().st_size == 0:
         return pd.DataFrame()
-    return pd.read_csv(path)
+    try:
+        return pd.read_csv(path)
+    except pd.errors.EmptyDataError:
+        # A zero-row/headerless ledger is an expected warmup state, not a
+        # schema-valid experience dataset. Convert it to explicit empty state
+        # so the caller remains fail-closed without crashing the workflow.
+        return pd.DataFrame()
 
 
 def _now() -> str:
