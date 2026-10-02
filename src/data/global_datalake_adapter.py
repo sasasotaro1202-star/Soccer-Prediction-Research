@@ -13,6 +13,8 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 from src.data.competition_catalog import ACTIVE_SCOPE
 
 BASE_URL = "https://huggingface.co/datasets/eatpizzanot/soccer-dataset/resolve/main"
@@ -53,7 +55,7 @@ FIXTURE_COLUMNS = (
 )
 
 
-def _download(url: str, path: Path, *, timeout: int = 120, retries: int = 3) -> str:
+def _download(url: str, path: Path, *, timeout: float | tuple[float, float] | None = None, retries: int = 6) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_file() and path.stat().st_size > 0:
         return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -62,9 +64,12 @@ def _download(url: str, path: Path, *, timeout: int = 120, retries: int = 3) -> 
     for attempt in range(1, max(1, int(retries)) + 1):
         tmp = path.with_suffix(path.suffix + ".tmp")
         try:
-            response = requests.get(
+            response = resilient_get(
+                requests.get,
                 url,
                 timeout=timeout,
+                retries=1,
+                backoff=2.0,
                 headers={
                     "User-Agent": "Soccer-Prediction-Research/1.0",
                     "Accept": "application/octet-stream",
