@@ -49,6 +49,7 @@ DEFAULT_END = "2025-06-01"
 # Verified public SofaScore season identifier for Premier League 24/25.
 # Keep this explicit for PIT/reproducibility; do not discover it from a challenge-prone endpoint.
 DEFAULT_SOFASCORE_SEASON_ID = 61627
+DEFAULT_PREDICTION_CUTOFF_MINUTES = 60.0
 
 
 def _load_frames(
