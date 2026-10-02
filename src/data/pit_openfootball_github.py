@@ -15,6 +15,8 @@ from typing import Any
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 from src.data.openfootball_adapter import parse_football_txt
 
 GITHUB_API = "https://api.github.com"
@@ -47,25 +49,18 @@ def _headers() -> dict[str, str]:
         h["Authorization"] = f"Bearer {token}"
     return h
 
-def _request(url: str, timeout: int = 30) -> requests.Response:
-    last_status = None
-    for attempt in range(1, 4):
-        r = requests.get(url, headers=_headers(), timeout=timeout)
-        last_status = r.status_code
-        remaining = r.headers.get("X-RateLimit-Remaining")
-        if r.status_code == 403 and remaining == "0":
-            raise RuntimeError("github_api_rate_limit_exhausted")
-        if r.status_code in {429, 500, 502, 503, 504} and attempt < 3:
-            retry_after = r.headers.get("Retry-After")
-            try:
-                delay = min(30.0, max(1.0, float(retry_after))) if retry_after else float(attempt * 2)
-            except ValueError:
-                delay = float(attempt * 2)
-            time.sleep(delay)
-            continue
-        r.raise_for_status()
-        return r
-    raise RuntimeError(f"github_request_failed_after_retries:last_status={last_status}")
+def _request(url: str, timeout: float | tuple[float, float] | None = None) -> requests.Response:
+    r = resilient_get(
+        requests.get,
+        url,
+        headers=_headers(),
+        timeout=timeout,
+        retries=6,
+        backoff=2.0,
+    )
+    if r.status_code == 403 and r.headers.get("X-RateLimit-Remaining") == "0":
+        raise RuntimeError("github_api_rate_limit_exhausted")
+    return r
 
 def _season(start_year: int) -> str:
     return f"{start_year}-{str(start_year + 1)[-2:]}"
