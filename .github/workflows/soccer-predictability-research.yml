@@ -127,7 +127,7 @@ jobs:
                   "production_changed": False,
                   "production_probabilities_changed": False,
                   "outcome_data_used_only_after_maturity": True,
-                  "locked_holdout_touched": False,
+                  "frozen_holdout_touched": False,
                   "same_prediction_time_excluded": True,
               },
           }
