@@ -201,15 +201,19 @@ def build_mom_feature_rows(
     min_history_appearances: int = 3,
     lookback_appearances: int = 10,
     half_life_appearances: float = 5.0,
+    prediction_cutoff_minutes: float = 60.0,
 ) -> pd.DataFrame:
     """Create one pre-match feature row per eligible player-candidate.
 
     Candidate eligibility is based only on a player's earlier appearances for the
     same team. No target-match lineup, rating, minutes or statistics are used.
-    Prior player-match facts must have `known_at < target kickoff`.
+    Prior player-match facts must satisfy `known_at <= prediction_time`, where
+    prediction_time is the configured number of minutes before target kickoff.
     """
     if min_history_appearances < 1 or lookback_appearances < min_history_appearances:
         raise ValueError("invalid player history window")
+    if not np.isfinite(float(prediction_cutoff_minutes)) or float(prediction_cutoff_minutes) < 0.0:
+        raise ValueError("prediction_cutoff_minutes must be finite and non-negative")
     f, p, s = _prepare_inputs(fixtures, player_matches, player_stats, match_stats)
     fixture_known = s[["fixture_id", "known_at"]].drop_duplicates("fixture_id")
     played = f.loc[f["is_played"]].merge(
@@ -249,13 +253,14 @@ def build_mom_feature_rows(
     for fixture in played.itertuples(index=False):
         target_id = str(int(fixture.id))
         target_kickoff = fixture.date_utc
+        prediction_cutoff = target_kickoff - pd.Timedelta(minutes=float(prediction_cutoff_minutes))
         sides = {
             float(fixture.home_team_id): float(fixture.away_team_id),
             float(fixture.away_team_id): float(fixture.home_team_id),
         }
         prior_player_rows = p.loc[
             (p["match_kickoff_utc"] < target_kickoff)
-            & (p["known_at"] < target_kickoff)
+            & (p["known_at"] <= prediction_cutoff)
         ].copy()
         if not prior_player_rows.empty:
             latest_team_by_player = (
@@ -271,11 +276,11 @@ def build_mom_feature_rows(
         for team_id, opponent_id in sides.items():
             prior_team_matches = [
                 x for x in team_goals.get(team_id, [])
-                if x[0] < target_kickoff and x[1] < target_kickoff
+                if x[0] < target_kickoff and x[1] <= prediction_cutoff
             ]
             prior_opponent_matches = [
                 x for x in team_goals.get(opponent_id, [])
-                if x[0] < target_kickoff and x[1] < target_kickoff
+                if x[0] < target_kickoff and x[1] <= prediction_cutoff
             ]
             if not prior_team_matches:
                 continue
@@ -286,7 +291,7 @@ def build_mom_feature_rows(
             candidate_players = p.loc[
                 (p["team_id"] == team_id)
                 & (p["match_kickoff_utc"] < target_kickoff)
-                & (p["known_at"] < target_kickoff)
+                & (p["known_at"] <= prediction_cutoff)
             ].copy()
             if latest_team_by_player:
                 candidate_players = candidate_players.loc[
@@ -339,8 +344,9 @@ def build_mom_feature_rows(
                     "player_id": str(int(player_id)),
                     "player_name": str(g["player_name"].iloc[-1]),
                     "kickoff_utc": target_kickoff,
+                    "prediction_cutoff_at_utc": prediction_cutoff,
                     "feature_available_at_utc": feature_available_at,
-                    "pit_verified": bool((g["known_at"] < target_kickoff).all()),
+                    "pit_verified": bool((g["known_at"] <= prediction_cutoff).all()),
                     "recent_rating_ewm": rating_ewm,
                     "recent_minutes_ewm": float(np.average(minutes, weights=weights)),
                     "recent_goals_per90_ewm": float(np.average(goals / per90_den, weights=weights)),
@@ -385,7 +391,7 @@ def build_mom_feature_rows(
         raise RuntimeError("MOM feature construction produced infinite values")
     out = out.loc[
         out["pit_verified"]
-        & (out["feature_available_at_utc"] < out["kickoff_utc"])
+        & (out["feature_available_at_utc"] <= out["prediction_cutoff_at_utc"])
     ].copy()
     return out.reset_index(drop=True)
 
