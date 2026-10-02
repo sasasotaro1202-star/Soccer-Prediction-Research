@@ -18,6 +18,8 @@ from urllib.parse import urlparse
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 from src.data.pit_source_adapter_v2 import _date_key, _row_key, _result_lower_bound
 
 ARQUIVO_CDX = "https://arquivo.pt/wayback/cdx"
@@ -94,12 +96,11 @@ def _normalise_cdx_payload(payload):
     return [dict(zip([str(x) for x in header], row)) for row in payload[1:] if isinstance(row, (list, tuple))]
 
 
-def _captures(url: str, retries: int = 2, timeout: int = 10):
+def _captures(url: str, retries: int = 6, timeout: float | tuple[float, float] | None = None):
     params = {"url": url, "output": "json", "filter": "statuscode:200", "fl": "timestamp,original,mimetype,statuscode,digest"}
     for attempt in range(max(1, retries)):
         try:
-            r = requests.get(ARQUIVO_CDX, params=params, timeout=timeout, headers={"User-Agent": USER_AGENT})
-            r.raise_for_status()
+            r = resilient_get(requests.get, ARQUIVO_CDX, params=params, timeout=timeout, retries=1, backoff=2.0, headers={"User-Agent": USER_AGENT})
             return _normalise_cdx_payload(r.json())
         except (requests.RequestException, ValueError, TypeError):
             if attempt + 1 < retries:
@@ -118,15 +119,14 @@ def _keyset(raw: bytes):
     return {_normalised_row_key(r) for r in frame.to_dict("records") if _normalised_row_key(r) is not None}
 
 
-def _fetch_capture(capture, original_url, retries=2, timeout=10):
+def _fetch_capture(capture, original_url, retries=6, timeout: float | tuple[float, float] | None = None):
     ts = str(capture.get("timestamp", "")).strip()
     if not ts:
         return None
     replay_url = f"{ARQUIVO_WEB}/{ts}/{original_url}"
     for attempt in range(max(1, retries)):
         try:
-            r = requests.get(replay_url, timeout=timeout, allow_redirects=True, headers={"User-Agent": USER_AGENT, "Accept": "text/csv,text/plain,*/*"})
-            r.raise_for_status()
+            r = resilient_get(requests.get, replay_url, timeout=timeout, retries=1, backoff=2.0, allow_redirects=True, headers={"User-Agent": USER_AGENT, "Accept": "text/csv,text/plain,*/*"})
             final_url = str(getattr(r, "url", replay_url))
             parsed = urlparse(final_url)
             if parsed.hostname not in {"arquivo.pt", "www.arquivo.pt"} or not parsed.path.startswith(f"/wayback/{ts}"):
