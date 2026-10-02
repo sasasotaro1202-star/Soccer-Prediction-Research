@@ -32,3 +32,16 @@ def test_chat_execution_contract_forbids_sync_polling():
     assert "without polling" in text
     assert "allow-listed" in text
     assert "PIT, OOS, holdout" in text
+
+def test_chat_gateway_run_block_has_valid_yaml_indentation():
+    lines = WORKFLOW.read_text(encoding="utf-8").splitlines()
+    in_run = False
+    for line in lines:
+        if line.startswith("        run: |"):
+            in_run = True
+            continue
+        if in_run and line.startswith("      - name:"):
+            in_run = False
+            continue
+        if in_run and line.strip():
+            assert line.startswith("          "), line
