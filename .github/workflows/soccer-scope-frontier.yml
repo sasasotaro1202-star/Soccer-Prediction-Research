@@ -30,6 +30,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt
+
       - name: Discover and update research frontier
         env:
           PYTHONPATH: .
