@@ -18,6 +18,8 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 BASE = "https://raw.githubusercontent.com/openfootball/internationals/master/{directory}/{year}_{filename}.txt"
 
 TOURNAMENTS = {
@@ -141,10 +143,16 @@ def load_international_season(competition: str, season_year: int, cache_dir: str
     if cache.exists():
         raw = cache.read_bytes()
     else:
-        response = requests.get(url, timeout=45, headers=HEADERS)
+        response = resilient_get(
+            requests.get,
+            url,
+            timeout=None,
+            retries=6,
+            backoff=2.0,
+            headers=HEADERS,
+        )
         if response.status_code == 404:
             return pd.DataFrame()
-        response.raise_for_status()
         raw = response.content
         cache.write_bytes(raw)
     return parse_football_txt(raw.decode("utf-8", errors="replace"), competition, season_year, url, raw)
