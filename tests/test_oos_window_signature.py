@@ -39,3 +39,15 @@ def test_signature_accepts_existing_oos_field_names():
         }
     ])
     assert signature is not None
+
+
+def test_signature_rejects_duplicate_fold_ids_even_with_identical_or_changed_boundaries():
+    rows = [
+        {"fold": 1, "test_start": "2025-01-01T00:00:00+00:00", "test_end": "2025-01-31T00:00:00+00:00"},
+        {"fold": 1, "test_start": "2025-01-01T00:00:00+00:00", "test_end": "2025-01-31T00:00:00+00:00"},
+    ]
+    assert exact_oos_window_signature(rows) is None
+    assert exact_oos_window_signature([
+        rows[0],
+        {"fold": 1, "test_start": "2025-02-01T00:00:00+00:00", "test_end": "2025-02-28T00:00:00+00:00"},
+    ]) is None
