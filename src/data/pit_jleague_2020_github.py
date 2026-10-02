@@ -27,6 +27,8 @@ from typing import Any
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 from src.data.pit_source_adapter_v2 import _result_lower_bound
 
 GITHUB_API = "https://api.github.com"
@@ -61,24 +63,18 @@ def _headers() -> dict[str, str]:
     return headers
 
 
-def _request_json(url: str, timeout: int = 30) -> Any:
-    for attempt in range(1, 4):
-        try:
-            response = requests.get(url, headers=_headers(), timeout=timeout)
-            if response.status_code == 403 and response.headers.get("X-RateLimit-Remaining") == "0":
-                raise RuntimeError("github_api_rate_limit_exhausted")
-            if response.status_code in {429, 500, 502, 503, 504} and attempt < 3:
-                retry_after = response.headers.get("Retry-After")
-                delay = float(retry_after) if retry_after and str(retry_after).replace(".", "", 1).isdigit() else float(attempt * 2)
-                time.sleep(min(30.0, max(1.0, delay)))
-                continue
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException:
-            if attempt >= 3:
-                raise
-            time.sleep(float(attempt * 2))
-    raise RuntimeError("github_request_failed_after_retries")
+def _request_json(url: str, timeout: float | tuple[float, float] | None = None) -> Any:
+    response = resilient_get(
+        requests.get,
+        url,
+        headers=_headers(),
+        timeout=timeout,
+        retries=6,
+        backoff=2.0,
+    )
+    if response.status_code == 403 and response.headers.get("X-RateLimit-Remaining") == "0":
+        raise RuntimeError("github_api_rate_limit_exhausted")
+    return response.json()
 
 
 def _cache_path(cache_dir: str, prefix: str, key: str, suffix: str) -> Path:
@@ -214,7 +210,7 @@ def _git_snapshot_text(sha: str, cache_dir: str, *, timeout: int = 120) -> str:
     return text
 
 
-def _snapshot_text(sha: str, cache_dir: str, *, timeout: int = 30) -> str:
+def _snapshot_text(sha: str, cache_dir: str, *, timeout: float | tuple[float, float] | None = None) -> str:
     cache = _cache_path(cache_dir, "snapshot", sha, ".csv")
     if cache.exists():
         return cache.read_text(encoding="utf-8-sig")
@@ -223,24 +219,22 @@ def _snapshot_text(sha: str, cache_dir: str, *, timeout: int = 30) -> str:
         f"https://raw.githubusercontent.com/{REPOSITORY}/{sha}/"
         f"Match%20Data/JLeague-2020.csv"
     )
-    last_exc: Exception | None = None
-    for attempt in range(1, 4):
-        try:
-            response = requests.get(
-                url,
-                headers={"User-Agent": "SoccerPredictionResearch/JLeague2020PIT"},
-                timeout=timeout,
-            )
-            response.raise_for_status()
-            text = response.content.decode("utf-8-sig", errors="replace")
-            if text.lstrip().lower().startswith(("<!doctype html", "<html")):
-                raise ValueError("html_instead_of_jleague_snapshot")
-            cache.write_text(text, encoding="utf-8")
-            return text
-        except (requests.RequestException, OSError, ValueError) as exc:
-            last_exc = exc
-            if attempt < 3:
-                time.sleep(float(attempt * 2))
+    try:
+        response = resilient_get(
+            requests.get,
+            url,
+            headers={"User-Agent": "SoccerPredictionResearch/JLeague2020PIT"},
+            timeout=timeout,
+            retries=6,
+            backoff=2.0,
+        )
+        text = response.content.decode("utf-8-sig", errors="replace")
+        if text.lstrip().lower().startswith(("<!doctype html", "<html")):
+            raise ValueError("html_instead_of_jleague_snapshot")
+        cache.write_text(text, encoding="utf-8")
+        return text
+    except (requests.RequestException, OSError, ValueError) as exc:
+        last_exc = exc
 
     # Raw GitHub is outside the REST API path, but a local immutable clone is
     # the final free recovery path when raw serving itself is unavailable.
