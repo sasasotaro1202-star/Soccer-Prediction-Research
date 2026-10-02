@@ -121,24 +121,20 @@ def _headers() -> dict[str, str]:
 
 
 def _request(url: str, *, params: dict[str, Any] | None = None, timeout: float | tuple[float, float] | None = None, retries: int = 6) -> requests.Response:
-    last_error: Exception | None = None
-    for attempt in range(1, int(retries) + 1):
-        try:
-            response = resilient_get(
-                requests.get,
-                url,
-                params=params,
-                headers=_headers(),
-                timeout=timeout,
-                retries=retries,
-                backoff=2.0,
-            )
-            return response
-        except (requests.RequestException, OSError) as exc:
-            last_error = exc
-            if attempt < retries:
-                time.sleep(float(attempt * 2))
-    raise RuntimeError(f"github request failed after {retries} attempts: {type(last_error).__name__}: {last_error}")
+    try:
+        return resilient_get(
+            requests.get,
+            url,
+            params=params,
+            headers=_headers(),
+            timeout=timeout,
+            retries=retries,
+            backoff=2.0,
+        )
+    except (requests.RequestException, OSError) as exc:
+        raise RuntimeError(
+            f"github request failed after {retries} attempts: {type(exc).__name__}: {exc}"
+        ) from exc
 
 
 def _cache_key(*parts: str) -> str:
