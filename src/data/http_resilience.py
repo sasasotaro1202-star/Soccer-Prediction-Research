@@ -49,10 +49,18 @@ def _env_int(name: str, default: int, *, minimum: int = 1) -> int:
 
 
 def default_timeout() -> tuple[float, float]:
-    """Return connect/read timeouts, overridable without code changes."""
+    """Return connect/read timeouts, overridable only above the safety floor."""
     return (
-        _env_float("SOCCER_HTTP_CONNECT_TIMEOUT", DEFAULT_CONNECT_TIMEOUT, minimum=1.0),
-        _env_float("SOCCER_HTTP_READ_TIMEOUT", DEFAULT_READ_TIMEOUT, minimum=5.0),
+        _env_float(
+            "SOCCER_HTTP_CONNECT_TIMEOUT",
+            DEFAULT_CONNECT_TIMEOUT,
+            minimum=MIN_CONNECT_TIMEOUT,
+        ),
+        _env_float(
+            "SOCCER_HTTP_READ_TIMEOUT",
+            DEFAULT_READ_TIMEOUT,
+            minimum=MIN_READ_TIMEOUT,
+        ),
     )
 
 
