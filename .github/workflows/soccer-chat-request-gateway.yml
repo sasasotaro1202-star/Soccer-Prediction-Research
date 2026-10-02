@@ -73,12 +73,12 @@ jobs:
             local sha="$3"
             export STATE_PAYLOAD="${payload}" STATE_SHA="${sha}"
             python - <<PY > /tmp/state-put.json
-import base64, json, os
-value = {"message":"chore: record chat request state","content":base64.b64encode(os.environ["STATE_PAYLOAD"].encode()).decode(),"branch":"main"}
-if os.environ["STATE_SHA"]:
-    value["sha"] = os.environ["STATE_SHA"]
-print(json.dumps(value))
-PY
+          import base64, json, os
+          value = {"message":"chore: record chat request state","content":base64.b64encode(os.environ["STATE_PAYLOAD"].encode()).decode(),"branch":"main"}
+          if os.environ["STATE_SHA"]:
+              value["sha"] = os.environ["STATE_SHA"]
+          print(json.dumps(value))
+          PY
             local put_code
             put_code="$(curl "${CURL_TIMEOUT_ARGS[@]}" -sS -o /tmp/state-put-response.json -w "%{http_code}" -X PUT \
               -H "Authorization: Bearer ${GH_TOKEN}" \
@@ -101,21 +101,21 @@ PY
             [ -e "${request_file}" ] || continue
             found=1
             request_id="$(python - "${request_file}" <<PY
-import json, re, sys
-from pathlib import Path
-data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-value = str(data.get("request_id","")).strip()
-if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", value):
-    raise SystemExit("INVALID_REQUEST_ID")
-print(value)
-PY
+          import json, re, sys
+          from pathlib import Path
+          data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          value = str(data.get("request_id","")).strip()
+          if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", value):
+              raise SystemExit("INVALID_REQUEST_ID")
+          print(value)
+          PY
             )"
             operation="$(python - "${request_file}" <<PY
-import json, sys
-from pathlib import Path
-data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-print(str(data.get("operation","")).strip())
-PY
+          import json, sys
+          from pathlib import Path
+          data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          print(str(data.get("operation","")).strip())
+          PY
             )"
             case "${operation}" in
               daily_forecast) workflow_file="soccer-daily-research-forecast.yml" ;;
@@ -133,11 +133,11 @@ PY
             state_code="$(get_state "${state_path}" "${state_file}")"
             if [ "${state_code}" = "200" ]; then
               existing_status="$(python - <<PY
-import base64, json
-from pathlib import Path
-raw = json.loads(Path("/tmp/request-state.json").read_text(encoding="utf-8"))["content"]
-print(json.loads(base64.b64decode(raw).decode("utf-8"))["status"])
-PY
+          import base64, json
+          from pathlib import Path
+          raw = json.loads(Path("/tmp/request-state.json").read_text(encoding="utf-8"))["content"]
+          print(json.loads(base64.b64decode(raw).decode("utf-8"))["status"])
+          PY
               )"
               echo "CHAT REQUEST: request ${request_id} already has state ${existing_status}; no duplicate dispatch."
               continue
@@ -148,34 +148,34 @@ PY
             fi
 
             requested_at="$(python - "${request_file}" <<PY
-import json, sys
-from pathlib import Path
-data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-print(str(data.get("requested_at","")).strip())
-PY
+          import json, sys
+          from pathlib import Path
+          data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          print(str(data.get("requested_at","")).strip())
+          PY
             )"
             printf "%s\n" "{\"ref\":\"main\"}" > "/tmp/dispatch-${request_id}.json"
             export REQUEST_ID="${request_id}" OPERATION="${operation}" WORKFLOW_FILE="${workflow_file}" REQUESTED_AT="${requested_at}" ACCEPTED_COMMIT="${GITHUB_SHA}"
             state_payload="$(python - <<PY
-import json, os
-print(json.dumps({"request_id":os.environ["REQUEST_ID"],"operation":os.environ["OPERATION"],"workflow":os.environ["WORKFLOW_FILE"],"requested_at":os.environ["REQUESTED_AT"],"accepted_commit":os.environ["ACCEPTED_COMMIT"],"status":"DISPATCHING"}))
-PY
+          import json, os
+          print(json.dumps({"request_id":os.environ["REQUEST_ID"],"operation":os.environ["OPERATION"],"workflow":os.environ["WORKFLOW_FILE"],"requested_at":os.environ["REQUESTED_AT"],"accepted_commit":os.environ["ACCEPTED_COMMIT"],"status":"DISPATCHING"}))
+          PY
             )"
             write_state "${state_path}" "${state_payload}" ""
             dispatch_workflow "${workflow_file}" "${request_id}" "/tmp/dispatch-${request_id}.json"
             final_payload="$(python - <<PY
-import json, os
-print(json.dumps({"request_id":os.environ["REQUEST_ID"],"operation":os.environ["OPERATION"],"workflow":os.environ["WORKFLOW_FILE"],"requested_at":os.environ["REQUESTED_AT"],"accepted_commit":os.environ["ACCEPTED_COMMIT"],"status":"DISPATCHED","note":"Long-running work continues asynchronously; the chat request does not poll for completion."}, ensure_ascii=False))
-PY
+          import json, os
+          print(json.dumps({"request_id":os.environ["REQUEST_ID"],"operation":os.environ["OPERATION"],"workflow":os.environ["WORKFLOW_FILE"],"requested_at":os.environ["REQUESTED_AT"],"accepted_commit":os.environ["ACCEPTED_COMMIT"],"status":"DISPATCHED","note":"Long-running work continues asynchronously; the chat request does not poll for completion."}, ensure_ascii=False))
+          PY
             )"
             state_code="$(get_state "${state_path}" "${state_file}")"
             state_sha=""
             if [ "${state_code}" = "200" ]; then
               state_sha="$(python - <<PY
-import json
-from pathlib import Path
-print(json.loads(Path("/tmp/request-state.json").read_text(encoding="utf-8"))["sha"])
-PY
+          import json
+          from pathlib import Path
+          print(json.loads(Path("/tmp/request-state.json").read_text(encoding="utf-8"))["sha"])
+          PY
               )"
             elif [ "${state_code}" != "404" ]; then
               echo "CHAT REQUEST: state refresh failed for ${request_id} (HTTP ${state_code})." >&2
