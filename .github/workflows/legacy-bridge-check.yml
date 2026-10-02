@@ -3,6 +3,8 @@ name: Legacy V9/V12 Bridge Check
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "requests/**"
   workflow_dispatch:
 
 permissions:
