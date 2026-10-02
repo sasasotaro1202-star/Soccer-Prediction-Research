@@ -19,6 +19,8 @@ from typing import Any
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 
 @dataclass(frozen=True)
 class AcquisitionConfig:
@@ -195,7 +197,7 @@ def discover_free_github_sources(
     competitions: list[str],
     *,
     per_competition: int = 4,
-    timeout: int = 15,
+    timeout: float | tuple[float, float] | None = None,
 ) -> dict[str, Any]:
     """Search public GitHub repository metadata for candidate datasets.
 
@@ -231,13 +233,15 @@ def discover_free_github_sources(
         seen: set[str] = set()
         for query in queries:
             try:
-                response = requests.get(
+                response = resilient_get(
+                    requests.get,
                     "https://api.github.com/search/repositories",
                     params={"q": query, "per_page": int(per_competition)},
                     headers=headers,
                     timeout=timeout,
+                    retries=6,
+                    backoff=2.0,
                 )
-                response.raise_for_status()
                 payload = response.json()
                 for item in payload.get("items", []):
                     full_name = str(item.get("full_name", "")).strip()
