@@ -268,4 +268,4 @@ def test_versioned_bridge_respects_bounded_commit_page_limit(monkeypatch, tmp_pa
 
     assert len(commits) == mod.DEFAULT_PER_PAGE * 3
     assert calls == [1, 2, 3]
-\n
+
