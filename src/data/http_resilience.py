@@ -62,30 +62,27 @@ def default_retries() -> int:
 def _retry_delay(
     attempt: int,
     response: requests.Response | None = None,
+    *,
+    backoff: float | None = None,
+    max_backoff: float | None = None,
 ) -> float:
     if response is not None:
         raw = response.headers.get("Retry-After")
         if raw:
             try:
                 return min(
-                    _env_float(
-                        "SOCCER_HTTP_MAX_BACKOFF",
-                        DEFAULT_MAX_BACKOFF_SECONDS,
-                        minimum=0.0,
-                    ),
+                    DEFAULT_MAX_BACKOFF_SECONDS if max_backoff is None else float(max_backoff),
                     max(1.0, float(raw)),
                 )
             except (TypeError, ValueError):
                 pass
-    base = _env_float(
-        "SOCCER_HTTP_BACKOFF",
-        DEFAULT_BACKOFF_SECONDS,
-        minimum=0.0,
+    base = (
+        _env_float("SOCCER_HTTP_BACKOFF", DEFAULT_BACKOFF_SECONDS, minimum=0.0)
+        if backoff is None else max(0.0, float(backoff))
     )
-    maximum = _env_float(
-        "SOCCER_HTTP_MAX_BACKOFF",
-        DEFAULT_MAX_BACKOFF_SECONDS,
-        minimum=0.0,
+    maximum = (
+        _env_float("SOCCER_HTTP_MAX_BACKOFF", DEFAULT_MAX_BACKOFF_SECONDS, minimum=0.0)
+        if max_backoff is None else max(0.0, float(max_backoff))
     )
     # Small jitter prevents synchronized retries across parallel research jobs.
     delay = min(maximum, base * (2 ** max(0, attempt - 1)))
@@ -100,6 +97,8 @@ def resilient_get(
     headers: dict[str, str] | None = None,
     timeout: float | tuple[float, float] | None = None,
     retries: int | None = None,
+    backoff: float | None = None,
+    max_backoff: float | None = None,
     **kwargs: Any,
 ) -> requests.Response:
     """GET with long read timeout and retry handling for transient failures.
@@ -124,7 +123,7 @@ def resilient_get(
             )
             if int(getattr(response, "status_code", 200)) in TRANSIENT_STATUS_CODES:
                 if attempt < max_retries:
-                    time.sleep(_retry_delay(attempt, response))
+                    time.sleep(_retry_delay(attempt, response, backoff=backoff, max_backoff=max_backoff))
                     continue
             response.raise_for_status()
             return response
@@ -132,7 +131,7 @@ def resilient_get(
             last_error = exc
             if attempt >= max_retries:
                 raise
-            time.sleep(_retry_delay(attempt, response))
+            time.sleep(_retry_delay(attempt, response, backoff=backoff, max_backoff=max_backoff))
 
     if last_error is not None:
         raise last_error
