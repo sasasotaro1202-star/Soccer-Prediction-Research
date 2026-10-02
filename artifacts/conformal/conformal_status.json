@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "status": "WARMUP",
+  "rows": 0,
+  "eligible_rows": 0,
+  "production_usable": false,
+  "metrics": {
+    "total_rows": 0,
+    "eligible_rows": 0,
+    "coverage": null,
+    "mean_set_size": null,
+    "singleton_rate": null,
+    "singleton_accuracy": null,
+    "abstain_rate": null
+  },
+  "safety_contract": {
+    "research_only": true,
+    "production_changed": false,
+    "production_probabilities_changed": false,
+    "outcome_data_used_only_after_maturity": true,
+    "frozen_holdout_touched": false,
+    "same_prediction_time_excluded": true
+  }
+}

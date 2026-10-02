@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "status": "WARMUP",
+  "reason": "No matured prediction ledger is present; predictability research is fail-closed.",
+  "production_usable": false,
+  "input_digest": "EMPTY",
+  "rows": 0,
+  "predictability_scored_rows": 0,
+  "high_confidence_low_predictability_rows": 0,
+  "gate": {
+    "status": "HOLD",
+    "blocks": 0
+  },
+  "safety_contract": {
+    "research_only": true,
+    "production_changed": false,
+    "production_probabilities_changed": false,
+    "production_registry_changed": false,
+    "frozen_holdout_touched": false,
+    "outcome_data_used_only_after_maturity": true,
+    "prediction_time_features_only": true,
+    "chronological_oos_required_for_candidate": true
+  }
+}

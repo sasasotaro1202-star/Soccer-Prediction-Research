@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "status": "WARMUP",
+  "rows": 0,
+  "production_usable": false,
+  "oos_blocks": [],
+  "gate": {
+    "status": "HOLD",
+    "blocks": 0
+  },
+  "safety_contract": {
+    "research_only": true,
+    "production_changed": false,
+    "production_probabilities_changed": false,
+    "frozen_holdout_touched": false,
+    "outcome_data_used_only_after_maturity": true,
+    "calibration_training_is_prior_history_only": true,
+    "locked_suffix_outcomes_never_train_calibrator": true
+  }
+}
