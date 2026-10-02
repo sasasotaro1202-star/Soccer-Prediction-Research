@@ -33,7 +33,10 @@ class MOMBlockMetrics:
     min_candidate_count: int
 
 
-def _validate_history(frame: pd.DataFrame) -> pd.DataFrame:
+def _validate_history(frame: pd.DataFrame, *, prediction_cutoff_minutes: int = 60) -> pd.DataFrame:
+    if int(prediction_cutoff_minutes) < 0:
+        raise ValueError("prediction_cutoff_minutes must be non-negative")
+
     required = {
         "match_id",
         "player_id",
@@ -69,6 +72,11 @@ def _validate_history(frame: pd.DataFrame) -> pd.DataFrame:
         raise RuntimeError("MOM WFO contains duplicate match_id/player_id rows")
     if bool((d["feature_available_at_utc"] > d["kickoff_utc"]).any()):
         raise RuntimeError("MOM WFO contains a feature timestamp after kickoff")
+    cutoff = d["kickoff_utc"] - pd.Timedelta(minutes=int(prediction_cutoff_minutes))
+    if bool((cutoff >= d["kickoff_utc"]).any()):
+        raise RuntimeError("MOM WFO prediction cutoff must be before kickoff")
+    if bool((d["feature_available_at_utc"] > cutoff).any()):
+        raise RuntimeError("MOM WFO contains a feature timestamp after prediction cutoff")
 
     d["is_motm"] = pd.to_numeric(d["is_motm"], errors="coerce")
     if d["is_motm"].isna().any() or ~d["is_motm"].isin([0, 1]).all():
@@ -175,6 +183,7 @@ def _evaluate_predictions(test: pd.DataFrame, distribution: pd.DataFrame) -> dic
 def run_mom_walk_forward(
     history: pd.DataFrame,
     *,
+    prediction_cutoff_minutes: int = 60,
     n_blocks: int = 6,
     locked_blocks: int = 2,
     min_train_matches: int = 10,
@@ -184,7 +193,7 @@ def run_mom_walk_forward(
     method: str = "binary_logit",
 ) -> pd.DataFrame:
     """Run expanding-window chronological OOS evaluation by complete match blocks."""
-    d = _validate_history(history)
+    d = _validate_history(history, prediction_cutoff_minutes=prediction_cutoff_minutes)
     match_order = (
         d[["match_id", "kickoff_utc"]]
         .drop_duplicates("match_id")
@@ -222,7 +231,7 @@ def run_mom_walk_forward(
             distributions = []
             for match_id, group in test.groupby("match_id", sort=False):
                 kickoff = group["kickoff_utc"].iloc[0]
-                prediction_time = kickoff - pd.Timedelta(seconds=1)
+                prediction_time = kickoff - pd.Timedelta(minutes=int(prediction_cutoff_minutes))
                 pred_input = group.drop(columns=["is_motm"]).copy()
                 component_dists = [
                     predict_mom_distribution(
@@ -266,7 +275,7 @@ def run_mom_walk_forward(
             distributions = []
             for match_id, group in test.groupby("match_id", sort=False):
                 kickoff = group["kickoff_utc"].iloc[0]
-                prediction_time = kickoff - pd.Timedelta(seconds=1)
+                prediction_time = kickoff - pd.Timedelta(minutes=int(prediction_cutoff_minutes))
                 pred_input = group.drop(columns=["is_motm"]).copy()
                 dist = predict_mom_distribution(
                     model,
@@ -367,6 +376,7 @@ def _fit_matchwise_temperature(
 def run_mom_walk_forward_calibrated_soft_ensemble(
     history: pd.DataFrame,
     *,
+    prediction_cutoff_minutes: int = 60,
     n_blocks: int = 6,
     locked_blocks: int = 2,
     min_train_matches: int = 30,
@@ -383,7 +393,7 @@ def run_mom_walk_forward_calibrated_soft_ensemble(
     ensemble is refit on the full training window before OOS prediction. Ranking is
     invariant to positive temperature scaling; only probability calibration changes.
     """
-    d = _validate_history(history)
+    d = _validate_history(history, prediction_cutoff_minutes=prediction_cutoff_minutes)
     match_order = (
         d[["match_id", "kickoff_utc"]]
         .drop_duplicates("match_id")
@@ -428,7 +438,7 @@ def run_mom_walk_forward_calibrated_soft_ensemble(
         calibration_parts = []
         for match_id, group in calibration.groupby("match_id", sort=False):
             kickoff = group["kickoff_utc"].iloc[0]
-            prediction_time = kickoff - pd.Timedelta(seconds=1)
+            prediction_time = kickoff - pd.Timedelta(minutes=int(prediction_cutoff_minutes))
             pred_input = group.drop(columns=["is_motm"]).copy()
             component_dists = [
                 predict_mom_distribution(
