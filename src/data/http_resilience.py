@@ -17,11 +17,13 @@ import requests
 
 
 TRANSIENT_STATUS_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
-DEFAULT_CONNECT_TIMEOUT = 30.0
-DEFAULT_READ_TIMEOUT = 300.0
+DEFAULT_CONNECT_TIMEOUT = 60.0
+DEFAULT_READ_TIMEOUT = 600.0
+MIN_CONNECT_TIMEOUT = 30.0
+MIN_READ_TIMEOUT = 600.0
 DEFAULT_RETRIES = 8
 DEFAULT_BACKOFF_SECONDS = 2.0
-DEFAULT_MAX_BACKOFF_SECONDS = 30.0
+DEFAULT_MAX_BACKOFF_SECONDS = 60.0
 
 
 def _env_float(name: str, default: float, *, minimum: float = 0.0) -> float:
@@ -105,7 +107,21 @@ def resilient_get(
     errors, 429s and common 5xx responses are retried. The final failure is
     raised normally so callers retain fail-closed behaviour.
     """
-    request_timeout = default_timeout() if timeout is None else timeout
+    if timeout is None:
+        request_timeout = default_timeout()
+    elif isinstance(timeout, tuple):
+        request_timeout = (
+            max(MIN_CONNECT_TIMEOUT, float(timeout[0])),
+            max(MIN_READ_TIMEOUT, float(timeout[1])),
+        )
+    else:
+        # Do not allow legacy callers to silently reintroduce very short
+        # socket/read timeouts. A caller may increase this, never reduce it.
+        value = float(timeout)
+        request_timeout = (
+            max(MIN_CONNECT_TIMEOUT, value),
+            max(MIN_READ_TIMEOUT, value),
+        )
     max_retries = default_retries() if retries is None else max(1, int(retries))
     last_error: Exception | None = None
 
