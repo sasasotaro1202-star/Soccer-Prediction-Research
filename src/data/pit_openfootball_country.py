@@ -20,6 +20,8 @@ from typing import Any
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 from src.data.openfootball_adapter import parse_football_txt
 from src.data.pit_source_adapter_v2 import _result_lower_bound
 
@@ -59,26 +61,21 @@ def _headers() -> dict[str, str]:
         headers["Authorization"] = f"Bearer {token}"
     return headers
 
-def _request_json(url: str, timeout: int = 30) -> Any:
-    last = None
-    for attempt in range(1, 4):
-        try:
-            r = requests.get(url, headers=_headers(), timeout=timeout)
-            last = r.status_code
-            if r.status_code == 403 and r.headers.get("X-RateLimit-Remaining") == "0":
-                raise RuntimeError("github_api_rate_limit_exhausted")
-            if r.status_code in {429, 500, 502, 503, 504} and attempt < 3:
-                retry_after = r.headers.get("Retry-After")
-                delay = float(retry_after) if retry_after and str(retry_after).replace(".", "", 1).isdigit() else float(attempt * 2)
-                time.sleep(min(30.0, max(1.0, delay)))
-                continue
-            r.raise_for_status()
-            return r.json()
-        except requests.RequestException as exc:
-            if attempt >= 3:
-                raise RuntimeError(f"github_request_failed:{type(exc).__name__}:{exc}") from exc
-            time.sleep(float(attempt * 2))
-    raise RuntimeError(f"github_request_failed_after_retries:last_status={last}")
+def _request_json(url: str, timeout: float | tuple[float, float] | None = None) -> Any:
+    try:
+        r = resilient_get(
+            requests.get,
+            url,
+            headers=_headers(),
+            timeout=timeout,
+            retries=6,
+            backoff=2.0,
+        )
+        if r.status_code == 403 and r.headers.get("X-RateLimit-Remaining") == "0":
+            raise RuntimeError("github_api_rate_limit_exhausted")
+        return r.json()
+    except requests.RequestException as exc:
+        raise RuntimeError(f"github_request_failed:{type(exc).__name__}:{exc}") from exc
 
 def _cache_file(cache_dir: str, prefix: str, *parts: str) -> Path:
     key = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:24]
@@ -149,26 +146,27 @@ def _commits(
         # Do not replace a previously good non-empty cache with an empty failure.
         raise
 
-def _snapshot(repo: str, path: str, sha: str, cache_dir: str, timeout: int) -> str:
+def _snapshot(repo: str, path: str, sha: str, cache_dir: str, timeout: float | tuple[float, float] | None) -> str:
     cache = _cache_file(cache_dir, "snapshot", repo, path, sha)
     if cache.exists():
         return cache.read_text(encoding="utf-8")
     url = f"https://raw.githubusercontent.com/{repo}/{sha}/{path}"
-    last = None
-    for attempt in range(1, 4):
-        try:
-            r = requests.get(url, headers={"User-Agent": "SoccerPredictionResearch/OpenFootballPIT"}, timeout=timeout)
-            r.raise_for_status()
-            text = r.content.decode("utf-8", errors="replace")
-            if text.lstrip().lower().startswith(("<!doctype html", "<html")):
-                raise ValueError("html_instead_of_snapshot")
-            cache.write_text(text, encoding="utf-8")
-            return text
-        except (requests.RequestException, OSError, ValueError) as exc:
-            last = exc
-            if attempt < 3:
-                time.sleep(float(attempt * 2))
-    raise RuntimeError(f"snapshot_fetch_failed:{type(last).__name__}:{last}")
+    try:
+        r = resilient_get(
+            requests.get,
+            url,
+            headers={"User-Agent": "SoccerPredictionResearch/OpenFootballPIT"},
+            timeout=timeout,
+            retries=6,
+            backoff=2.0,
+        )
+        text = r.content.decode("utf-8", errors="replace")
+        if text.lstrip().lower().startswith(("<!doctype html", "<html")):
+            raise ValueError("html_instead_of_snapshot")
+        cache.write_text(text, encoding="utf-8")
+        return text
+    except (requests.RequestException, OSError, ValueError) as exc:
+        raise RuntimeError(f"snapshot_fetch_failed:{type(exc).__name__}:{exc}") from exc
 
 def _norm(value: object) -> str:
     text = unicodedata.normalize("NFKD", str(value))
