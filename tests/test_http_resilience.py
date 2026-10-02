@@ -6,7 +6,7 @@ from src.data import http_resilience
 
 
 def test_default_http_timeout_is_long_read_timeout():
-    assert http_resilience.default_timeout() == (30.0, 300.0)
+    assert http_resilience.default_timeout() == (60.0, 600.0)
     assert http_resilience.default_retries() == 8
 
 
@@ -22,7 +22,7 @@ def test_resilient_get_retries_timeout_then_succeeds(monkeypatch):
 
     def fake_get(*args, **kwargs):
         calls["n"] += 1
-        assert kwargs["timeout"] == (30.0, 300.0)
+        assert kwargs["timeout"] == (60.0, 600.0)
         if calls["n"] < 3:
             raise requests.Timeout("temporary read timeout")
         return Response()
@@ -94,3 +94,33 @@ def test_resilient_get_does_not_retry_non_transient_http_error(monkeypatch):
         raise AssertionError("non-transient HTTP errors must remain hard failures")
 
     assert calls["n"] == 1
+
+
+def test_resilient_get_clamps_legacy_short_timeouts(monkeypatch):
+    observed = {}
+
+    class Response:
+        status_code = 200
+        headers = {}
+        def raise_for_status(self):
+            return None
+
+    def fake_get(*args, **kwargs):
+        observed["timeout"] = kwargs["timeout"]
+        return Response()
+
+    http_resilience.resilient_get(
+        fake_get,
+        "https://example.test/legacy",
+        timeout=10,
+        retries=1,
+    )
+    assert observed["timeout"] == (30.0, 600.0)
+
+    http_resilience.resilient_get(
+        fake_get,
+        "https://example.test/legacy-tuple",
+        timeout=(1, 20),
+        retries=1,
+    )
+    assert observed["timeout"] == (30.0, 600.0)
