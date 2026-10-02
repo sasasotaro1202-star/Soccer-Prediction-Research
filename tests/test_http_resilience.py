@@ -12,6 +12,29 @@ def test_default_http_timeout_is_long_read_timeout():
     assert http_resilience.default_retries() == 8
 
 
+def test_interactive_get_uses_bounded_profile(monkeypatch):
+    observed = {}
+
+    class Response:
+        status_code = 200
+        headers = {}
+        def raise_for_status(self):
+            return None
+
+    def fake_get(*args, **kwargs):
+        observed.update(kwargs)
+        return Response()
+
+    monkeypatch.setattr(http_resilience.requests, "get", fake_get)
+    response = http_resilience.interactive_get(
+        "https://example.test/chat-safe",
+        deadline_seconds=12,
+    )
+    assert response.status_code == 200
+    assert observed["timeout"] == (12.0, 12.0)
+    assert observed["headers"] is None
+
+
 def test_interactive_profile_is_bounded():
     timeout, retries, max_backoff = http_resilience.profile_defaults("interactive")
     assert timeout == (15.0, 30.0)
