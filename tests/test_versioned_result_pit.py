@@ -225,8 +225,14 @@ def test_empty_input_schema_is_preserved(tmp_path, monkeypatch):
     assert list(report.columns) == list(mod.REPORT_COLUMNS)
 
 def test_versioned_bridge_paginates_commit_history(monkeypatch, tmp_path):
+    first_page = [
+        {"sha": "newest", "commit": {"committer": {"date": "2026-01-01T00:00:00Z"}}}
+    ] + [
+        {"sha": f"filler-{i}", "commit": {"committer": {"date": "2026-01-01T00:00:00Z"}}}
+        for i in range(mod.DEFAULT_PER_PAGE - 1)
+    ]
     pages = {
-        1: [{"sha": "newest", "commit": {"committer": {"date": "2026-01-01T00:00:00Z"}}}],
+        1: first_page,
         2: [{"sha": "older", "commit": {"committer": {"date": "2025-01-01T00:00:00Z"}}}],
     }
     calls = []
@@ -246,7 +252,9 @@ def test_versioned_bridge_paginates_commit_history(monkeypatch, tmp_path):
 
     commits = mod._commits("2025-26/en.1.json", cache_dir=tmp_path, max_pages=12)
 
-    assert [c["sha"] for c in commits] == ["newest", "older"]
+    assert len(commits) == mod.DEFAULT_PER_PAGE + 1
+    assert commits[0]["sha"] == "newest"
+    assert commits[-1]["sha"] == "older"
     assert [c["page"] for c in calls] == [1, 2]
     assert all(c["per_page"] == mod.DEFAULT_PER_PAGE for c in calls)
 
