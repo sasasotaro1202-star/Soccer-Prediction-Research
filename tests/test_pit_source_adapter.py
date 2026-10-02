@@ -245,7 +245,7 @@ def test_malformed_snapshot_cache_is_invalidated_and_refetched(tmp_path, monkeyp
 def test_compatibility_adapter_has_no_direct_requests_get_or_legacy_timeout():
     import inspect
 
-    source = inspect.getsource(adapter.FootballDataWaybackAdapter)
+    source = inspect.getsource(FootballDataWaybackAdapter)
     assert "requests.get(" not in source
     assert "max(self.timeout" not in source
     assert "resilient_get(" in source
