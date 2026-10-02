@@ -12,6 +12,61 @@ def test_default_http_timeout_is_long_read_timeout():
     assert http_resilience.default_retries() == 8
 
 
+def test_interactive_profile_is_bounded():
+    timeout, retries, max_backoff = http_resilience.profile_defaults("interactive")
+    assert timeout == (15.0, 30.0)
+    assert retries == 2
+    assert max_backoff == 4.0
+
+
+def test_resilient_get_interactive_profile_uses_short_budget(monkeypatch):
+    observed = {}
+
+    class Response:
+        status_code = 200
+        headers = {}
+        def raise_for_status(self):
+            return None
+
+    def fake_get(*args, **kwargs):
+        observed["timeout"] = kwargs["timeout"]
+        return Response()
+
+    http_resilience.resilient_get(
+        fake_get,
+        "https://example.test/interactive",
+        profile="interactive",
+        retries=1,
+        deadline_seconds=5,
+    )
+    assert observed["timeout"] == (15.0, 30.0)
+
+
+def test_resilient_get_rejects_retry_when_interactive_deadline_is_exhausted(monkeypatch):
+    calls = {"n": 0}
+    monkeypatch.setattr(http_resilience.time, "monotonic", lambda: 10.0)
+    monkeypatch.setattr(http_resilience.time, "sleep", lambda _: None)
+
+    def fake_get(*args, **kwargs):
+        calls["n"] += 1
+        raise requests.Timeout("temporary")
+
+    try:
+        http_resilience.resilient_get(
+            fake_get,
+            "https://example.test/deadline",
+            profile="interactive",
+            retries=2,
+            deadline_seconds=1,
+            backoff=2,
+        )
+    except TimeoutError:
+        pass
+    else:
+        raise AssertionError("interactive deadline must fail fast rather than retry indefinitely")
+    assert calls["n"] == 1
+
+
 def test_resilient_get_retries_timeout_then_succeeds(monkeypatch):
     calls = {"n": 0}
     sleeps = []
