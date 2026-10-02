@@ -16,6 +16,8 @@ from typing import Any
 
 import requests
 
+from src.data.http_resilience import resilient_get
+
 GITHUB_API = "https://api.github.com"
 REPOSITORY = "openfootball/football.json"
 
@@ -73,10 +75,15 @@ def _headers() -> dict[str, str]:
     return headers
 
 
-def _request(url: str, timeout: int = 30) -> requests.Response:
-    response = requests.get(url, headers=_headers(), timeout=timeout)
-    response.raise_for_status()
-    return response
+def _request(url: str, timeout: float | tuple[float, float] | None = None) -> requests.Response:
+    return resilient_get(
+        requests.get,
+        url,
+        headers=_headers(),
+        timeout=timeout,
+        retries=6,
+        backoff=2.0,
+    )
 
 
 def _row_key(date: str, home: str, away: str, home_goals: float, away_goals: float) -> tuple:
