@@ -260,6 +260,24 @@ def _espn_event_key(e):
                 (hs.get("team") or {}).get("displayName") or hs.get("id"),
                 (aw.get("team") or {}).get("displayName") or aw.get("id"))
 
+def _normalise_settlement_status(value: Any) -> str:
+    """Map provider-specific completed states onto the ledger's canonical status."""
+    text = str(value or "").strip().lower()
+    if text in {"finished", "afterextra", "afterextratime", "afterpenalties"}:
+        return text
+    # ESPN commonly exposes terminal games as STATUS_FINAL / STATUS_FINAL_*.
+    # These are valid post-match outcomes and must not silently degrade to
+    # a single-source settlement when SofaScore also has the same result.
+    if text.startswith("status_final") or text in {
+        "final",
+        "completed",
+        "complete",
+        "match_finished",
+    }:
+        return "finished"
+    return text
+
+
 def _event_outcome_any(event):
     """Parse a completed outcome from either SofaScore or ESPN-shaped payloads."""
     if not isinstance(event, dict):
@@ -274,13 +292,14 @@ def _event_outcome_any(event):
         except (TypeError, ValueError):
             hg, ag = None, None
         status = comp.get("status") or event.get("status") or {}
-        status_type = str(
+        status_type = _normalise_settlement_status(
             (status.get("type") or {}).get("name")
-            or status.get("type")
-            or ""
-        ).lower()
+            if isinstance(status.get("type"), dict)
+            else status.get("type")
+        )
         return hg, ag, status_type
-    return _event_outcome(event)
+    hg, ag, status = _event_outcome(event)
+    return hg, ag, _normalise_settlement_status(status)
 
 
 def _lookup_settlement_event(row, by_key, by_id):
@@ -293,10 +312,20 @@ def _lookup_settlement_event(row, by_key, by_id):
 def _settle_row(
     row,
     sofa_by_key,
-    sofa_by_id,
-    espn_by_key,
-    espn_by_id,
+    sofa_by_id=None,
+    espn_by_key=None,
+    espn_by_id=None,
 ):
+    """Settle a PIT-valid prediction using all supplied provider indexes.
+
+    The optional indexes preserve the historical three-argument helper contract
+    used by lightweight PIT tests; the production caller still supplies both
+    provider key/id indexes. Missing optional indexes are treated as empty.
+    """
+    sofa_by_id = sofa_by_id or {}
+    espn_by_key = espn_by_key or {}
+    espn_by_id = espn_by_id or {}
+
     if str(row.get("prediction_pit_gate") or "") != "PASS":
         return {}
 
