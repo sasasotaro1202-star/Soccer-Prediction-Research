@@ -489,7 +489,7 @@ jobs:
             MAIN_SHA=""
             CURRENT_MAIN_MATCHES="false"
             echo "LATEST_MAIN_HANDOFF: unable to verify latest main; persistence will be skipped." >&2
-            cat /tmp/latest-main-fetch.log >&2 || true
+            cat /tmp/latest-main-fetch.log >&2
           fi
           echo "current_main_matches=${CURRENT_MAIN_MATCHES}" >> "$GITHUB_OUTPUT"
           export MAIN_SHA CURRENT_MAIN_MATCHES
