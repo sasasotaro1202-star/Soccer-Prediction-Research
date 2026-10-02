@@ -891,7 +891,7 @@ def collect_matchday_snapshots(
         float(horizon_hours),
         max(24.0, float(max(1, int(days))) * 24.0),
     )
-    fetcher = ExternalFetcher(cache_dir=cache_dir, timeout=20.0, retries=3, backoff=1.0)
+    fetcher = ExternalFetcher(cache_dir=cache_dir, timeout=None, retries=8, backoff=2.0)
     rows: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     seen: set[str] = set()
