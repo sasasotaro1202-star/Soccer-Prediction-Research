@@ -42,6 +42,32 @@ def test_resilient_get_interactive_profile_uses_short_budget(monkeypatch):
     assert observed["timeout"] == (15.0, 30.0)
 
 
+def test_resilient_get_clamps_request_timeout_to_remaining_deadline(monkeypatch):
+    observed = {}
+
+    class Response:
+        status_code = 200
+        headers = {}
+        def raise_for_status(self):
+            return None
+
+    monotonic_values = iter([0.0, 0.0, 4.0])
+    monkeypatch.setattr(http_resilience.time, "monotonic", lambda: next(monotonic_values))
+
+    def fake_get(*args, **kwargs):
+        observed["timeout"] = kwargs["timeout"]
+        return Response()
+
+    http_resilience.resilient_get(
+        fake_get,
+        "https://example.test/deadline-clamp",
+        profile="interactive",
+        retries=1,
+        deadline_seconds=4,
+    )
+    assert observed["timeout"] == (4.0, 4.0)
+
+
 def test_resilient_get_rejects_retry_when_interactive_deadline_is_exhausted(monkeypatch):
     calls = {"n": 0}
     monkeypatch.setattr(http_resilience.time, "monotonic", lambda: 10.0)
