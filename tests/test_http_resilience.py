@@ -145,3 +145,16 @@ def test_9h_watchdog_bounds_all_control_plane_http_calls():
     assert "timeout-minutes: 10" in text
     assert "CURL_TIMEOUT_ARGS=(--connect-timeout 30 --max-time 120)" in text
     assert text.count('"${CURL_TIMEOUT_ARGS[@]}"') == 4
+
+
+def test_football_data_uses_shared_http_resilience():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "data"
+        / "football_data.py"
+    ).read_text(encoding="utf-8")
+    assert "from src.data.http_resilience import resilient_get" in source
+    assert "return resilient_get(" in source
+    assert "timeout=(30.0, 300.0)" not in source
+    assert "session.get(" not in source
