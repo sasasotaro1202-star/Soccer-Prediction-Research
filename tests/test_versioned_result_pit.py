@@ -179,3 +179,47 @@ def test_resume_skips_completed_groups_and_advances_to_next_group(monkeypatch, t
     assert len(report) == 1
     assert report.iloc[0]["season_start"] == 2023
     assert seen == ["2023-24/en.1.json"]
+
+
+
+def test_empty_input_schema_is_preserved(tmp_path, monkeypatch):
+    input_path = tmp_path / "empty.csv"
+    output_path = tmp_path / "evidence.csv"
+    report_path = tmp_path / "report.csv"
+    input_path.write_bytes(b"")
+
+    monkeypatch.setattr(
+        mod,
+        "apply_bulk",
+        lambda history, **kwargs: (
+            history.assign(**{
+                "versioned_result_source": "openfootball/football.json",
+                "versioned_result_available_at_utc": pd.NaT,
+                "versioned_result_evidence_status": "UNVERIFIABLE",
+                "versioned_result_commit_sha": None,
+                "versioned_result_evidence_url": None,
+                "versioned_result_evidence_reason": "empty_input",
+            }),
+            pd.DataFrame(columns=mod.REPORT_COLUMNS),
+        ),
+    )
+    monkeypatch.setattr(
+        __import__("sys"),
+        "argv",
+        [
+            "versioned_result_pit",
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_path),
+            "--report",
+            str(report_path),
+        ],
+    )
+
+    assert mod.main() == 0
+    evidence = pd.read_csv(output_path)
+    assert "versioned_result_evidence_status" in evidence.columns
+    assert len(evidence) == 0
+    report = pd.read_csv(report_path)
+    assert list(report.columns) == list(mod.REPORT_COLUMNS)
