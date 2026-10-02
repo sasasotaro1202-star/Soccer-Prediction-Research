@@ -492,7 +492,7 @@ def run_mom_walk_forward_calibrated_soft_ensemble(
         oos_parts = []
         for match_id, group in test.groupby("match_id", sort=False):
             kickoff = group["kickoff_utc"].iloc[0]
-            prediction_time = kickoff - pd.Timedelta(seconds=1)
+            prediction_time = kickoff - pd.Timedelta(minutes=int(prediction_cutoff_minutes))
             pred_input = group.drop(columns=["is_motm"]).copy()
             component_dists = [
                 predict_mom_distribution(
