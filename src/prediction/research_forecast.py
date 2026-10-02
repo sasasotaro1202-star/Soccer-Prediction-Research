@@ -346,8 +346,17 @@ def main() -> int:
     args = parser.parse_args()
     status = run(args.fixtures, args.output, args.status, args.prediction_time)
     if args.verify:
-        status.update(verify(args.output))
-        Path(args.status).write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
+        # Verification is an output-contract check, not a replacement for the
+        # canonical operational run status. Preserve states such as
+        # PREDICTED_PRODUCTION_ADOPTED, NO_TARGET_FIXTURES and DEFERRED_* so
+        # downstream fail-closed health gates can distinguish them.
+        verification = verify(args.output)
+        status["output_contract_verification"] = verification
+        status["output_contract_verified"] = verification.get("status") == "VERIFIED"
+        Path(args.status).write_text(
+            json.dumps(status, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
     print(json.dumps(status, ensure_ascii=False))
     return 0
 
