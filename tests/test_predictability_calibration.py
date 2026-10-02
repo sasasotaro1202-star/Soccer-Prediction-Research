@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -92,3 +94,11 @@ def test_calibration_derives_raw_predictability_from_shadow_telemetry():
 def test_calibration_always_exposes_frozen_holdout_safety_key():
     state = calibrate(pd.DataFrame())
     assert state["safety_contract"]["frozen_holdout_touched"] is False
+
+
+
+def test_predictability_workflow_warmup_uses_frozen_holdout_key():
+    workflow = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "soccer-predictability-research.yml"
+    text = workflow.read_text(encoding="utf-8")
+    assert '"frozen_holdout_touched": False' in text
+    assert '"locked_holdout_touched": False' not in text
