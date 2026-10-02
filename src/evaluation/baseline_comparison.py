@@ -95,3 +95,93 @@ def compare_same_oos(
         "same_oos": True,
         "selection_allowed": False,
     }
+
+
+
+def paired_bootstrap(
+    oos: pd.DataFrame,
+    baseline: pd.DataFrame,
+    candidate: pd.DataFrame,
+    *,
+    id_col: str = "match_id",
+    target_col: str = "target",
+    metric: str = "logloss",
+    n_resamples: int = 2000,
+    seed: int = 13013,
+) -> dict[str, Any]:
+    """Estimate a paired OOS uncertainty interval for candidate-minus-baseline.
+
+    Research-only: rows and outcomes are locked by the caller. Resampling keeps
+    baseline/candidate predictions paired on the same fixture, avoiding the
+    variance inflation of independent bootstrap samples. Lower values are
+    better for logloss and Brier; a two-sided p-value is reported only as a
+    descriptive uncertainty statistic, not as an adoption rule.
+    """
+    if metric not in {"logloss", "brier"}:
+        raise ValueError("paired_bootstrap supports only logloss and brier")
+    if not isinstance(n_resamples, int) or n_resamples < 100:
+        raise ValueError("n_resamples must be >= 100")
+    compared = compare_same_oos(
+        oos,
+        baseline,
+        candidate,
+        id_col=id_col,
+        target_col=target_col,
+    )
+    merged = oos[[id_col, target_col]].merge(
+        baseline[[id_col, "H", "D", "A"]].rename(
+            columns={"H": "bH", "D": "bD", "A": "bA"}
+        ),
+        on=id_col,
+        how="inner",
+        validate="one_to_one",
+    ).merge(
+        candidate[[id_col, "H", "D", "A"]].rename(
+            columns={"H": "cH", "D": "cD", "A": "cA"}
+        ),
+        on=id_col,
+        how="inner",
+        validate="one_to_one",
+    )
+    y = merged[target_col].astype(int).to_numpy()
+    bp = merged[["bH", "bD", "bA"]].to_numpy(dtype=float)
+    cp = merged[["cH", "cD", "cA"]].to_numpy(dtype=float)
+    bp = np.clip(bp, 1e-12, 1.0)
+    cp = np.clip(cp, 1e-12, 1.0)
+    bp /= bp.sum(axis=1, keepdims=True)
+    cp /= cp.sum(axis=1, keepdims=True)
+    row_index = np.arange(len(y))
+    if metric == "logloss":
+        baseline_loss = -np.log(bp[row_index, y])
+        candidate_loss = -np.log(cp[row_index, y])
+    else:
+        one_hot = np.zeros_like(bp)
+        one_hot[row_index, y] = 1.0
+        baseline_loss = np.sum((bp - one_hot) ** 2, axis=1)
+        candidate_loss = np.sum((cp - one_hot) ** 2, axis=1)
+    deltas = candidate_loss - baseline_loss
+    observed = float(np.mean(deltas))
+    rng = np.random.default_rng(seed)
+    indices = rng.integers(0, len(deltas), size=(n_resamples, len(deltas)))
+    sampled = deltas[indices].mean(axis=1)
+    low, high = np.quantile(sampled, [0.025, 0.975])
+    p_two_sided = float(
+        2.0 * min(
+            np.mean(sampled >= 0.0),
+            np.mean(sampled <= 0.0),
+        )
+    )
+    p_two_sided = float(np.clip(p_two_sided, 0.0, 1.0))
+    return {
+        "n": int(len(deltas)),
+        "metric": metric,
+        "observed_delta_candidate_minus_baseline": observed,
+        "ci_95_low": float(low),
+        "ci_95_high": float(high),
+        "p_two_sided": p_two_sided,
+        "n_resamples": int(n_resamples),
+        "seed": int(seed),
+        "same_oos": bool(compared["same_oos"]),
+        "research_only": True,
+        "selection_allowed": False,
+    }
