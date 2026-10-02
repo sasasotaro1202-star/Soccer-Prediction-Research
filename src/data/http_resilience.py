@@ -25,6 +25,14 @@ DEFAULT_RETRIES = 8
 DEFAULT_BACKOFF_SECONDS = 2.0
 DEFAULT_MAX_BACKOFF_SECONDS = 60.0
 
+# Chat/interactive callers must not inherit the long batch/archive budget. They
+# can opt into this bounded profile explicitly while batch workflows keep the
+# existing long-read defaults.
+INTERACTIVE_CONNECT_TIMEOUT = 15.0
+INTERACTIVE_READ_TIMEOUT = 30.0
+INTERACTIVE_RETRIES = 2
+INTERACTIVE_MAX_BACKOFF_SECONDS = 4.0
+
 
 def _env_float(name: str, default: float, *, minimum: float = 0.0) -> float:
     raw = os.getenv(name)
@@ -64,8 +72,21 @@ def default_timeout() -> tuple[float, float]:
     )
 
 
-def default_retries() -> int:
+def default_retries(*, profile: str = "batch") -> int:
+    if str(profile).strip().lower() == "interactive":
+        return _env_int("SOCCER_HTTP_INTERACTIVE_RETRIES", INTERACTIVE_RETRIES, minimum=1)
     return _env_int("SOCCER_HTTP_RETRIES", DEFAULT_RETRIES, minimum=1)
+
+
+def profile_defaults(profile: str = "batch") -> tuple[tuple[float, float], int, float]:
+    """Return timeout/retry/backoff defaults for batch or interactive callers."""
+    if str(profile).strip().lower() == "interactive":
+        return (
+            (INTERACTIVE_CONNECT_TIMEOUT, INTERACTIVE_READ_TIMEOUT),
+            default_retries(profile="interactive"),
+            INTERACTIVE_MAX_BACKOFF_SECONDS,
+        )
+    return (default_timeout(), default_retries(profile="batch"), DEFAULT_MAX_BACKOFF_SECONDS)
 
 
 def _retry_delay(
@@ -107,6 +128,8 @@ def resilient_get(
     retries: int | None = None,
     backoff: float | None = None,
     max_backoff: float | None = None,
+    profile: str = "batch",
+    deadline_seconds: float | None = None,
     **kwargs: Any,
 ) -> requests.Response:
     """GET with long read timeout and retry handling for transient failures.
@@ -115,8 +138,10 @@ def resilient_get(
     errors, 429s and common 5xx responses are retried. The final failure is
     raised normally so callers retain fail-closed behaviour.
     """
+    profile_name = str(profile).strip().lower()
+    profile_timeout, profile_retries, profile_max_backoff = profile_defaults(profile_name)
     if timeout is None:
-        request_timeout = default_timeout()
+        request_timeout = profile_timeout
     elif isinstance(timeout, tuple):
         request_timeout = (
             max(MIN_CONNECT_TIMEOUT, float(timeout[0])),
@@ -130,10 +155,13 @@ def resilient_get(
             max(MIN_CONNECT_TIMEOUT, value),
             max(MIN_READ_TIMEOUT, value),
         )
-    max_retries = default_retries() if retries is None else max(1, int(retries))
+    max_retries = profile_retries if retries is None else max(1, int(retries))
     last_error: Exception | None = None
+    started = time.monotonic()
 
     for attempt in range(1, max_retries + 1):
+        if deadline_seconds is not None and time.monotonic() - started >= max(0.0, float(deadline_seconds)):
+            raise TimeoutError("resilient_get deadline exhausted before request attempt")
         response: requests.Response | None = None
         try:
             response = getter(
@@ -147,7 +175,10 @@ def resilient_get(
             last_error = exc
             if attempt >= max_retries:
                 raise
-            time.sleep(_retry_delay(attempt, None, backoff=backoff, max_backoff=max_backoff))
+            delay = _retry_delay(attempt, None, backoff=backoff, max_backoff=(profile_max_backoff if max_backoff is None else max_backoff))
+            if deadline_seconds is not None and time.monotonic() - started + delay >= max(0.0, float(deadline_seconds)):
+                raise TimeoutError("resilient_get deadline exhausted before retry") from exc
+            time.sleep(delay)
             continue
 
         status_code = int(getattr(response, "status_code", 200))
@@ -156,7 +187,10 @@ def resilient_get(
                 # Release the transient response before sleeping/retrying so repeated
                 # 429/5xx responses cannot accumulate open connection resources.
                 response.close()
-                time.sleep(_retry_delay(attempt, response, backoff=backoff, max_backoff=max_backoff))
+                delay = _retry_delay(attempt, response, backoff=backoff, max_backoff=(profile_max_backoff if max_backoff is None else max_backoff))
+                if deadline_seconds is not None and time.monotonic() - started + delay >= max(0.0, float(deadline_seconds)):
+                    raise TimeoutError("resilient_get deadline exhausted before retry")
+                time.sleep(delay)
                 continue
 
         # Permanent HTTP errors are source-state signals, not transient network failures.
