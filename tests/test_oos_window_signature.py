@@ -30,6 +30,14 @@ def test_signature_fails_closed_on_missing_boundaries_or_fold():
     assert exact_oos_window_signature([]) is None
 
 
+def test_signature_fails_closed_on_duplicate_fold_identity():
+    rows = [
+        {"fold": 1, "test_start": "2025-01-01", "test_end": "2025-01-31"},
+        {"fold": 1, "test_start": "2025-02-01", "test_end": "2025-02-28"},
+    ]
+    assert exact_oos_window_signature(rows) is None
+
+
 def test_signature_accepts_existing_oos_field_names():
     signature = exact_oos_window_signature([
         {
