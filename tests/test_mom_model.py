@@ -65,6 +65,7 @@ def test_fit_supports_hist_gbdt_research_challenger():
     assert len(dist) == 6
     assert np.isfinite(dist["probability"]).all()
     assert float(dist["probability"].sum()) == pytest.approx(1.0, abs=1e-10)
+    assert "prediction_cutoff_at_utc" in dist.columns
 
 
 def test_prediction_is_full_distribution_and_top4_is_exactly_four():
