@@ -1,0 +1,200 @@
+name: Soccer Chat Request Gateway
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "requests/inbox/*.json"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: soccer-chat-request-gateway-main
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout request snapshot
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Dispatch accepted long-running work
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURL_TIMEOUT_ARGS=(--connect-timeout 15 --max-time 45)
+          mkdir -p artifacts/chat_requests
+          found=0
+
+          dispatch_workflow() {
+            local workflow_file="$1"
+            local request_id="$2"
+            local body_file="$3"
+            local code
+            code="$(curl "${CURL_TIMEOUT_ARGS[@]}" -sS -o "/tmp/dispatch-${request_id}.json" -w "%{http_code}" -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -H "Content-Type: application/json" \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_file}/dispatches" \
+              --data-binary "@${body_file}")"
+            if [ "${code}" != "204" ]; then
+              echo "CHAT REQUEST: workflow dispatch failed (HTTP ${code})" >&2
+              cat "/tmp/dispatch-${request_id}.json" >&2
+              return 1
+            fi
+          }
+
+          get_state() {
+            local state_path="$1"
+            local output="$2"
+            curl "${CURL_TIMEOUT_ARGS[@]}" -sS -o "${output}" -w "%{http_code}" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/contents/${state_path}?ref=main"
+          }
+
+          write_state() {
+            local path="$1"
+            local payload="$2"
+            local sha="$3"
+            export STATE_PAYLOAD="${payload}" STATE_SHA="${sha}"
+            python - <<PY > /tmp/state-put.json
+import base64, json, os
+value = {"message":"chore: record chat request state","content":base64.b64encode(os.environ["STATE_PAYLOAD"].encode()).decode(),"branch":"main"}
+if os.environ["STATE_SHA"]:
+    value["sha"] = os.environ["STATE_SHA"]
+print(json.dumps(value))
+PY
+            local put_code
+            put_code="$(curl "${CURL_TIMEOUT_ARGS[@]}" -sS -o /tmp/state-put-response.json -w "%{http_code}" -X PUT \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -H "Content-Type: application/json" \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/contents/${path}" \
+              --data-binary @/tmp/state-put.json)"
+            case "${put_code}" in
+              200|201) ;;
+              *)
+                echo "CHAT REQUEST: state write failed (HTTP ${put_code})." >&2
+                cat /tmp/state-put-response.json >&2
+                return 1
+                ;;
+            esac
+          }
+
+          for request_file in requests/inbox/*.json; do
+            [ -e "${request_file}" ] || continue
+            found=1
+            request_id="$(python - "${request_file}" <<PY
+import json, re, sys
+from pathlib import Path
+data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+value = str(data.get("request_id","")).strip()
+if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", value):
+    raise SystemExit("INVALID_REQUEST_ID")
+print(value)
+PY
+            )"
+            operation="$(python - "${request_file}" <<PY
+import json, sys
+from pathlib import Path
+data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+print(str(data.get("operation","")).strip())
+PY
+            )"
+            case "${operation}" in
+              daily_forecast) workflow_file="soccer-daily-research-forecast.yml" ;;
+              matchday_intelligence) workflow_file="soccer-matchday-intelligence.yml" ;;
+              predictability_research) workflow_file="soccer-predictability-research.yml" ;;
+              research_9h) workflow_file="soccer-9h-autonomous.yml" ;;
+              *)
+                echo "CHAT REQUEST: unsupported operation ${operation} in ${request_file}" >&2
+                exit 1
+                ;;
+            esac
+
+            state_path="requests/state/${request_id}.json"
+            state_file="/tmp/request-state.json"
+            state_code="$(get_state "${state_path}" "${state_file}")"
+            if [ "${state_code}" = "200" ]; then
+              existing_status="$(python - <<PY
+import base64, json
+from pathlib import Path
+raw = json.loads(Path("/tmp/request-state.json").read_text(encoding="utf-8"))["content"]
+print(json.loads(base64.b64decode(raw).decode("utf-8"))["status"])
+PY
+              )"
+              echo "CHAT REQUEST: request ${request_id} already has state ${existing_status}; no duplicate dispatch."
+              continue
+            elif [ "${state_code}" != "404" ]; then
+              echo "CHAT REQUEST: state lookup failed for ${request_id} (HTTP ${state_code})." >&2
+              cat "${state_file}" >&2
+              exit 1
+            fi
+
+            requested_at="$(python - "${request_file}" <<PY
+import json, sys
+from pathlib import Path
+data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+print(str(data.get("requested_at","")).strip())
+PY
+            )"
+            printf "%s\n" "{\"ref\":\"main\"}" > "/tmp/dispatch-${request_id}.json"
+            state_payload="$(python - <<PY
+import json
+print(json.dumps({"request_id":"${request_id}","operation":"${operation}","workflow":"${workflow_file}","requested_at":"${requested_at}","accepted_commit":"${GITHUB_SHA}","status":"DISPATCHING"}))
+PY
+            )"
+            write_state "${state_path}" "${state_payload}" ""
+            dispatch_workflow "${workflow_file}" "${request_id}" "/tmp/dispatch-${request_id}.json"
+            final_payload="$(python - <<PY
+import json
+print(json.dumps({"request_id":"${request_id}","operation":"${operation}","workflow":"${workflow_file}","requested_at":"${requested_at}","accepted_commit":"${GITHUB_SHA}","status":"DISPATCHED","note":"Long-running work continues asynchronously; the chat request does not poll for completion."}, ensure_ascii=False))
+PY
+            )"
+            state_code="$(get_state "${state_path}" "${state_file}")"
+            state_sha=""
+            if [ "${state_code}" = "200" ]; then
+              state_sha="$(python - <<PY
+import json
+from pathlib import Path
+print(json.loads(Path("/tmp/request-state.json").read_text(encoding="utf-8"))["sha"])
+PY
+              )"
+            elif [ "${state_code}" != "404" ]; then
+              echo "CHAT REQUEST: state refresh failed for ${request_id} (HTTP ${state_code})." >&2
+              cat "${state_file}" >&2
+              exit 1
+            fi
+            write_state "${state_path}" "${final_payload}" "${state_sha}"
+            cp "${request_file}" "artifacts/chat_requests/${request_id}.json"
+            printf "%s\n" "${final_payload}" > "artifacts/chat_requests/${request_id}.state.json"
+          done
+
+          if [ "${found}" = "0" ]; then
+            echo "CHAT REQUEST: no inbox requests found; nothing to dispatch."
+          fi
+
+      - name: Upload gateway acknowledgement
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-chat-request-gateway-${{ github.run_id }}
+          path: artifacts/chat_requests
+          if-no-files-found: ignore
+          retention-days: 3
