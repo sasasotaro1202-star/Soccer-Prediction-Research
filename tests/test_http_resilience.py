@@ -124,3 +124,9 @@ def test_resilient_get_clamps_legacy_short_timeouts(monkeypatch):
         retries=1,
     )
     assert observed["timeout"] == (30.0, 600.0)
+
+
+def test_default_http_timeout_clamps_short_environment_overrides(monkeypatch):
+    monkeypatch.setenv("SOCCER_HTTP_CONNECT_TIMEOUT", "1")
+    monkeypatch.setenv("SOCCER_HTTP_READ_TIMEOUT", "10")
+    assert http_resilience.default_timeout() == (30.0, 600.0)
