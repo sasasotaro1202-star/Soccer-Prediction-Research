@@ -8,6 +8,8 @@ from io import BytesIO
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 from src.data.pit_source_adapter_v2 import *
 from src.data.pit_source_adapter_v2 import (
     FootballDataWaybackAdapter as _BaseAdapter,
@@ -37,7 +39,7 @@ class FootballDataWaybackAdapter(_BaseAdapter):
 
     _date_key = staticmethod(_DATE_KEY)
 
-    def __init__(self, *args, snapshot_retries: int = 4, retry_backoff: float = 1.5, **kwargs):
+    def __init__(self, *args, snapshot_retries: int = 6, retry_backoff: float = 2.0, **kwargs):
         super().__init__(*args, **kwargs)
         self.snapshot_retries = max(1, int(snapshot_retries))
         self.retry_backoff = max(0.0, float(retry_backoff))
@@ -97,12 +99,14 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                 else:
                     for snapshot_url in snapshot_urls:
                         try:
-                            response = requests.get(
+                            response = resilient_get(
+                                requests.get,
                                 snapshot_url,
                                 timeout=self.timeout,
+                                retries=1,
+                                backoff=self.retry_backoff,
                                 headers={"User-Agent": "SoccerPredictionResearch/1.0 PIT-Audit"},
                             )
-                            response.raise_for_status()
                             candidate = response.content
                             if candidate[:512].lstrip().lower().startswith((b"<!doctype html", b"<html")):
                                 raise ValueError("html_instead_of_snapshot")
