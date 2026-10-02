@@ -49,6 +49,19 @@ EVIDENCE_FIELDS = {
     "versioned_result_evidence_reason": "",
 }
 
+EMPTY_HISTORY_COLUMNS = (
+    "match_id",
+    "competition",
+    "season_start",
+    "kickoff_utc",
+    "kickoff_time_available",
+    "home_team",
+    "away_team",
+    "home_goals",
+    "away_goals",
+    "result",
+)
+
 REPORT_COLUMNS = (
     "competition",
     "season_start",
@@ -392,7 +405,11 @@ def main() -> int:
     try:
         frame = pd.read_csv(args.input)
     except pd.errors.EmptyDataError:
-        frame = pd.DataFrame()
+        # Preserve an explicit schema when the upstream history artifact is
+        # genuinely unavailable/empty. A zero-byte evidence file would make
+        # the downstream safety gate unable to distinguish "no input" from a
+        # malformed artifact.
+        frame = pd.DataFrame(columns=EMPTY_HISTORY_COLUMNS)
     enriched, report = apply_bulk(
         frame,
         max_groups=args.max_groups,
