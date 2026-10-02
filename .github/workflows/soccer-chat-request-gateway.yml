@@ -154,7 +154,11 @@ jobs:
           print(str(data.get("requested_at","")).strip())
           PY
             )"
-            printf "%s\n" "{\"ref\":\"main\"}" > "/tmp/dispatch-${request_id}.json"
+            if [ "${operation}" = "matchday_intelligence" ]; then
+              printf "%s\n" "{\"ref\":\"main\",\"inputs\":{\"prediction_mode\":\"on_demand\"}}" > "/tmp/dispatch-${request_id}.json"
+            else
+              printf "%s\n" "{\"ref\":\"main\"}" > "/tmp/dispatch-${request_id}.json"
+            fi
             export REQUEST_ID="${request_id}" OPERATION="${operation}" WORKFLOW_FILE="${workflow_file}" REQUESTED_AT="${requested_at}" ACCEPTED_COMMIT="${GITHUB_SHA}"
             state_payload="$(python - <<PY
           import json, os
