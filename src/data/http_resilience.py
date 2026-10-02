@@ -9,7 +9,6 @@ PIT semantics: callers still provide and validate their own availability timesta
 from __future__ import annotations
 
 import os
-import random
 import time
 from collections.abc import Callable
 from typing import Any
@@ -84,9 +83,8 @@ def _retry_delay(
         _env_float("SOCCER_HTTP_MAX_BACKOFF", DEFAULT_MAX_BACKOFF_SECONDS, minimum=0.0)
         if max_backoff is None else max(0.0, float(max_backoff))
     )
-    # Small jitter prevents synchronized retries across parallel research jobs.
     delay = min(maximum, base * (2 ** max(0, attempt - 1)))
-    return max(0.0, delay + random.uniform(0.0, min(1.0, delay * 0.25)))
+    return max(0.0, delay)
 
 
 def resilient_get(
