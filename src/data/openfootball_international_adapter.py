@@ -16,6 +16,8 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 from src.data.openfootball_adapter import parse_football_txt
 
 TREE_URL = "https://api.github.com/repos/openfootball/internationals/git/trees/master?recursive=1"
@@ -37,8 +39,7 @@ HEADERS = {"User-Agent": "SoccerPredictionResearch/1.0", "Accept": "application/
 
 
 def _tree_paths() -> list[str]:
-    response = requests.get(TREE_URL, timeout=45, headers=HEADERS)
-    response.raise_for_status()
+    response = resilient_get(requests.get, TREE_URL, timeout=None, retries=6, backoff=2.0, headers=HEADERS)
     payload = response.json()
     if payload.get("truncated"):
         raise RuntimeError("openfootball international source tree is truncated; refusing incomplete discovery")
@@ -60,8 +61,7 @@ def _fetch_text(relative_path: str, cache_dir: str) -> tuple[str, bytes, str]:
     cache = _cache_path(cache_dir, relative_path)
     raw = cache.read_bytes() if cache.exists() and cache.stat().st_size > 0 else None
     if raw is None:
-        response = requests.get(url, timeout=45, headers={"User-Agent": HEADERS["User-Agent"]})
-        response.raise_for_status()
+        response = resilient_get(requests.get, url, timeout=None, retries=6, backoff=2.0, headers={"User-Agent": HEADERS["User-Agent"]})
         raw = response.content
         cache.write_bytes(raw)
     return raw.decode("utf-8", errors="replace"), raw, url
