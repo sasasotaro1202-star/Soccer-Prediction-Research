@@ -89,3 +89,11 @@ def test_production_gate_failure_never_authorizes_persistence():
     assert "production_contract_passed == 'true'" in text
     assert "fail_closed_for_persistence" in text
     assert "False production contract remains a recorded research gate" in text
+
+ 
+def test_recovery_controller_bounds_all_github_api_requests():
+    text = RECOVERY.read_text(encoding="utf-8")
+    assert "CURL_TIMEOUT_ARGS=(--connect-timeout 30 --max-time 120)" in text
+    curl_lines = [line for line in text.splitlines() if "curl " in line]
+    assert len(curl_lines) == 11
+    assert all('CURL_TIMEOUT_ARGS[@]' in line for line in curl_lines)
