@@ -140,6 +140,7 @@ def temporal_prediction_sets(
                 "production_probabilities_changed": False,
                 "outcome_data_used_only_after_maturity": True,
                 "locked_holdout_touched": False,
+                "frozen_holdout_touched": False,
                 "same_prediction_time_excluded": True,
             },
         }
@@ -269,6 +270,7 @@ def temporal_prediction_sets(
             "outcome_data_used_only_after_maturity": True,
             "locked_holdout_touched": False,
             "same_prediction_time_excluded": True,
+            "frozen_holdout_touched": False,
             "calibration_rule": "prior prediction cutoff < target cutoff AND outcome maturity <= target cutoff",
         },
     }
