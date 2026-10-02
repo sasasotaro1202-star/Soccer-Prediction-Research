@@ -62,8 +62,13 @@ def test_build_mom_features_uses_only_prior_known_player_facts():
     out = build_mom_feature_rows(fixtures, players, player_stats, stats, min_history_appearances=1, lookback_appearances=5)
     assert not out.empty
     assert set(MOM_FEATURE_COLUMNS).issubset(out.columns)
-    assert (out["feature_available_at_utc"] < out["kickoff_utc"]).all()
+    assert (out["feature_available_at_utc"] <= out["prediction_cutoff_at_utc"]).all()
+    assert (out["prediction_cutoff_at_utc"] == out["kickoff_utc"] - pd.Timedelta(minutes=60)).all()
     assert out["pit_verified"].all()
+    contract = mom_data_contract_report(out)
+    assert contract["prediction_cutoff_verified"]
+    assert contract["feature_availability_verified"]
+    assert contract["feature_availability_cutoff_violations"] == 0
     assert np.isfinite(out[list(MOM_FEATURE_COLUMNS)].to_numpy(dtype=float)).all()
 
 
@@ -98,8 +103,8 @@ def test_target_fixture_statistics_do_not_enter_candidate_features():
     )
     assert not before_target.empty
     assert list(before_target["player_id"]) == list(after_target["player_id"])
-    assert (before_target["feature_available_at_utc"] < target_kickoff).all()
-    assert (after_target["feature_available_at_utc"] < target_kickoff).all()
+    assert (before_target["feature_available_at_utc"] <= before_target["prediction_cutoff_at_utc"]).all()
+    assert (after_target["feature_available_at_utc"] <= after_target["prediction_cutoff_at_utc"]).all()
     assert np.allclose(
         before_target[list(MOM_FEATURE_COLUMNS)].to_numpy(dtype=float),
         after_target[list(MOM_FEATURE_COLUMNS)].to_numpy(dtype=float),
@@ -131,3 +136,63 @@ def test_contract_reports_deferred_without_candidates():
     report = mom_data_contract_report(pd.DataFrame())
     assert report["status"] == "DEFERRED_NO_PIT_PLAYER_DATA"
     assert report["matches"] == 0
+
+
+def test_mom_features_respect_explicit_prediction_cutoff_not_just_kickoff():
+    fixtures, players, player_stats, stats = _frames()
+    target_kickoff = fixtures.loc[fixtures["id"] == 5, "date_utc"].iloc[0]
+    # Fixture 4 is before target kickoff, but its source becomes available only
+    # 30 minutes before the target. It must not enter a 60-minute-before prediction.
+    late_known = target_kickoff - pd.Timedelta(minutes=30)
+    stats = stats.copy()
+    stats.loc[stats["fixture_id"] == 4, "known_at"] = late_known
+
+    players = players.copy()
+    player_stats = player_stats.copy()
+    # Make a player appear only in fixture 4 so the cutoff effect is directly observable.
+    players.loc[players["fixture_id"] == 4, "player_id"] = players.loc[
+        players["fixture_id"] == 4, "player_id"
+    ].astype(int) + 9000
+    player_stats.loc[player_stats["fixture_id"] == 4, "player_id"] = player_stats.loc[
+        player_stats["fixture_id"] == 4, "player_id"
+    ].astype(int) + 9000
+    players.loc[players["fixture_id"] == 4, "player_name"] = "LateKnownPlayer"
+
+    out = build_mom_feature_rows(
+        fixtures,
+        players,
+        player_stats,
+        stats,
+        min_history_appearances=1,
+        prediction_cutoff_minutes=60,
+    )
+
+    target = out.loc[out["match_id"] == "5"]
+    assert not target.empty
+    assert "LateKnownPlayer" not in set(target["player_name"])
+    assert (target["prediction_cutoff_at_utc"] == target_kickoff - pd.Timedelta(minutes=60)).all()
+    assert (target["feature_available_at_utc"] <= target["prediction_cutoff_at_utc"]).all()
+    assert target["pit_verified"].all()
+
+
+def test_mom_features_allow_information_exactly_at_prediction_cutoff():
+    fixtures, players, player_stats, stats = _frames()
+    target_kickoff = fixtures.loc[fixtures["id"] == 5, "date_utc"].iloc[0]
+    stats = stats.copy()
+    stats.loc[stats["fixture_id"] == 4, "known_at"] = target_kickoff - pd.Timedelta(minutes=60)
+
+    out = build_mom_feature_rows(
+        fixtures,
+        players,
+        player_stats,
+        stats,
+        min_history_appearances=1,
+        prediction_cutoff_minutes=60,
+    )
+
+    target = out.loc[
+        (out["match_id"] == "5") & (out["player_name"] == "P105_4")
+    ]
+    assert not target.empty
+    assert (target["feature_available_at_utc"] <= target["prediction_cutoff_at_utc"]).all()
+    assert target["pit_verified"].all()
