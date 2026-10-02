@@ -465,3 +465,15 @@ def test_matchday_workflow_allows_confirmed_lineups():
     from pathlib import Path
     workflow = Path(".github/workflows/soccer-matchday-intelligence.yml").read_text(encoding="utf-8")
     assert '{"EXPECTED", "ANNOUNCED", "CONFIRMED"}' in workflow
+
+
+def test_daily_forecast_workflow_max_events_matches_fetch_cli_contract():
+    from pathlib import Path
+    import inspect
+    import src.data.matchday_intelligence_fetch as m
+
+    workflow = Path(".github/workflows/soccer-daily-research-forecast.yml").read_text(encoding="utf-8")
+    source = inspect.getsource(m.main)
+    assert "--max-events 200" in workflow
+    assert 'parser.add_argument(\n        "--max-events",' in source
+    assert "max_events=args.max_events" in source
