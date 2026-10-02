@@ -32,6 +32,8 @@ INTERACTIVE_CONNECT_TIMEOUT = 15.0
 INTERACTIVE_READ_TIMEOUT = 30.0
 INTERACTIVE_RETRIES = 2
 INTERACTIVE_MAX_BACKOFF_SECONDS = 4.0
+INTERACTIVE_MIN_CONNECT_TIMEOUT = 15.0
+INTERACTIVE_MIN_READ_TIMEOUT = 30.0
 
 
 def _env_float(name: str, default: float, *, minimum: float = 0.0) -> float:
@@ -169,7 +171,7 @@ def resilient_get(
     deadline_seconds: float | None = None,
     **kwargs: Any,
 ) -> requests.Response:
-    """GET with long read timeout and retry handling for transient failures.
+    """GET with profile-aware timeout and retry handling for transient failures.
 
     A hard non-transient HTTP error is raised immediately. Timeouts, connection
     errors, 429s and common 5xx responses are retried. The final failure is
@@ -177,20 +179,27 @@ def resilient_get(
     """
     profile_name = (default_profile() if profile is None else str(profile).strip().lower())
     profile_timeout, profile_retries, profile_max_backoff = profile_defaults(profile_name)
+    if profile_name == "interactive":
+        min_connect_timeout = INTERACTIVE_MIN_CONNECT_TIMEOUT
+        min_read_timeout = INTERACTIVE_MIN_READ_TIMEOUT
+    else:
+        min_connect_timeout = MIN_CONNECT_TIMEOUT
+        min_read_timeout = MIN_READ_TIMEOUT
+
     if timeout is None:
         request_timeout = profile_timeout
     elif isinstance(timeout, tuple):
         request_timeout = (
-            max(MIN_CONNECT_TIMEOUT, float(timeout[0])),
-            max(MIN_READ_TIMEOUT, float(timeout[1])),
+            max(min_connect_timeout, float(timeout[0])),
+            max(min_read_timeout, float(timeout[1])),
         )
     else:
-        # Do not allow legacy callers to silently reintroduce very short
-        # socket/read timeouts. A caller may increase this, never reduce it.
+        # Never allow a caller to bypass the selected profile's safety floor.
+        # Batch retains the historical long-read floor; interactive stays short.
         value = float(timeout)
         request_timeout = (
-            max(MIN_CONNECT_TIMEOUT, value),
-            max(MIN_READ_TIMEOUT, value),
+            max(min_connect_timeout, value),
+            max(min_read_timeout, value),
         )
     max_retries = profile_retries if retries is None else max(1, int(retries))
     last_error: Exception | None = None
