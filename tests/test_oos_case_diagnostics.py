@@ -21,6 +21,9 @@ def test_run_walk_forward_writes_per_match_risk_diagnostics(monkeypatch, tmp_pat
     frame = pd.DataFrame({
         "match_id": [f"m{i}" for i in range(n)],
         "kickoff_utc": kickoff,
+        "prediction_cutoff_at_utc": kickoff - pd.Timedelta(minutes=60),
+        "feature_source_max_available_at_utc": kickoff - pd.Timedelta(minutes=120),
+        "source_available_at_utc": kickoff + pd.Timedelta(minutes=180),
         "competition": ["TEST"] * n,
         "season_start": [2024] * n,
         "target": target,
