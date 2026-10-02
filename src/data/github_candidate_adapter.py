@@ -19,6 +19,8 @@ from urllib.parse import quote
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 
 GITHUB_API = "https://api.github.com"
 TARGET_ALIASES = {
@@ -39,10 +41,13 @@ TARGET_ALIASES = {
 }
 
 
-def _api_get(url: str, *, timeout: int = 20) -> requests.Response:
-    response = requests.get(
+def _api_get(url: str, *, timeout: float | tuple[float, float] | None = None) -> requests.Response:
+    response = resilient_get(
+        requests.get,
         url,
         timeout=timeout,
+        retries=6,
+        backoff=2.0,
         headers={
             "Accept": "application/vnd.github+json",
             "User-Agent": "SoccerPredictionResearch-candidate-adapter",
