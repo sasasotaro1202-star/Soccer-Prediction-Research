@@ -62,7 +62,7 @@ def test_resilient_get_interactive_profile_uses_short_budget(monkeypatch):
         retries=1,
         deadline_seconds=5,
     )
-    assert observed["timeout"] == (15.0, 30.0)
+    assert observed["timeout"] == (5.0, 5.0)
 
 
 def test_resilient_get_clamps_request_timeout_to_remaining_deadline(monkeypatch):
