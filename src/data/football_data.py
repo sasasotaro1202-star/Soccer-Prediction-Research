@@ -35,16 +35,17 @@ COMPETITION_TZ={"EPL":"Europe/London","BL1":"Europe/Berlin","SA":"Europe/Rome","
 RAW_STAT_MAP={"home_shots":"HS","away_shots":"AS","home_shots_on_target":"HST","away_shots_on_target":"AST","home_corners":"HC","away_corners":"AC","home_fouls":"HF","away_fouls":"AF","home_yellow_cards":"HY","away_yellow_cards":"AY","home_red_cards":"HR","away_red_cards":"AR"}
 HEADERS={"User-Agent":"SoccerPredictionResearch/1.0"}
 
-def _http_get(url: str, *, timeout: int = 45, params: dict | None = None) -> requests.Response:
+def _http_get(url: str, *, timeout: float | tuple[float, float] = (30.0, 300.0), params: dict | None = None) -> requests.Response:
     """Bounded retrying GET for transient public-data failures.
 
     Retries are limited to connection errors, timeouts, throttling and 5xx
     responses. A genuine 4xx/404 remains a real data-availability signal and is
     surfaced to the adapter/audit instead of being hidden.
     """
-    retry = Retry(total=4, connect=4, read=4, status=4, backoff_factor=1.0,
-                  status_forcelist=(429, 500, 502, 503, 504),
-                  allowed_methods=frozenset({"GET"}), raise_on_status=False)
+    retry = Retry(total=6, connect=6, read=6, status=6, backoff_factor=2.0,
+                  status_forcelist=(408, 425, 429, 500, 502, 503, 504),
+                  allowed_methods=frozenset({"GET"}), raise_on_status=False,
+                  respect_retry_after_header=True)
     session = requests.Session()
     session.mount("https://", HTTPAdapter(max_retries=retry))
     response = session.get(url, params=params, timeout=timeout, headers=HEADERS)
@@ -63,7 +64,7 @@ def load_season(competition:str,start_year:int,cache_dir:str="data/raw")->pd.Dat
     league=LEAGUES[competition]; url=BASE.format(season_folder=season_folder(start_year),league=league); path=Path(cache_dir)/f"{competition}_{start_year}.csv"; path.parent.mkdir(parents=True,exist_ok=True)
     if path.exists(): raw=path.read_bytes()
     else:
-        r=_http_get(url,timeout=45); raw=r.content; path.write_bytes(raw)
+        r=_http_get(url,timeout=(30.0, 300.0)); raw=r.content; path.write_bytes(raw)
     df=pd.read_csv(BytesIO(raw)); required={"Date","HomeTeam","AwayTeam","FTHG","FTAG","FTR"}; missing=required-set(df.columns)
     if missing: raise ValueError(f"{url}: missing columns {sorted(missing)}")
     kickoff,precision=_parse_kickoff(df,competition)
