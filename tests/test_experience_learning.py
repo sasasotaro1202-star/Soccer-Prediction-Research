@@ -236,3 +236,19 @@ def test_learn_handles_headerless_empty_ledger_as_insufficient_experience(tmp_pa
     assert result["status"] == "INSUFFICIENT_EXPERIENCE"
     assert policy.is_file()
     assert status.is_file()
+
+
+def test_learn_blocks_legacy_ledger_schema_without_claiming_success(tmp_path, monkeypatch):
+    ledger = tmp_path / "legacy.csv"
+    policy = tmp_path / "policy.json"
+    metrics = tmp_path / "metrics.csv"
+    status = tmp_path / "status.json"
+    monkeypatch.setattr("src.research.experience_learning.POLICY", policy)
+    monkeypatch.setattr("src.research.experience_learning.METRICS", metrics)
+    monkeypatch.setattr("src.research.experience_learning.STATUS", status)
+    pd.DataFrame([{"match_id": "legacy", "p_home": 0.5, "p_draw": 0.2, "p_away": 0.3}]).to_csv(ledger, index=False)
+    result = learn(ledger)
+    assert result["status"] == "BLOCKED_LEDGER_SCHEMA"
+    assert result["fail_closed"] is True
+    assert result["production_usable"] is False
+    assert "experience_available_at_utc" in result["missing_columns"]
