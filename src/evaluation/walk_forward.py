@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
+from collections.abc import Mapping
 
 import numpy as np
 import pandas as pd
@@ -12,6 +15,73 @@ from src.monitoring.dynamic_routing import build_drift_reference, compute_drift_
 from src.research.oos_window_signature import exact_oos_window_signature
 
 TARGET_ACCURACY = 0.80
+
+
+PIT_LINEAGE_SCHEMA_VERSION = 1
+
+
+def _pit_lineage_for_case(row: Mapping[str, object]) -> dict[str, object]:
+    """Build deterministic, audit-only PIT lineage for one OOS case.
+
+    Prediction-time feature availability and post-match outcome publication are
+    deliberately recorded as separate timestamps. Only the former participates
+    in the PIT validity gate.
+    """
+    match_id = str(row.get("match_id", "")).strip()
+    kickoff = pd.to_datetime(row.get("kickoff_utc"), utc=True, errors="coerce")
+    cutoff = pd.to_datetime(row.get("prediction_cutoff_at_utc"), utc=True, errors="coerce")
+    feature_available = pd.to_datetime(
+        row.get("feature_source_max_available_at_utc"), utc=True, errors="coerce"
+    )
+    outcome_available = pd.to_datetime(
+        row.get("source_available_at_utc"), utc=True, errors="coerce"
+    )
+
+    if not match_id:
+        raise RuntimeError("OOS case PIT lineage missing match_id")
+    if pd.isna(kickoff):
+        raise RuntimeError("OOS case PIT lineage missing kickoff time")
+    if pd.isna(cutoff):
+        raise RuntimeError(
+            f"OOS case PIT lineage missing prediction cutoff: match_id={match_id}"
+        )
+    if not bool(row.get("pit_verified", False)):
+        raise RuntimeError(
+            f"OOS case PIT lineage requires pit_verified=True: match_id={match_id}"
+        )
+    if pd.isna(feature_available):
+        raise RuntimeError(
+            f"OOS case PIT lineage missing feature availability boundary: match_id={match_id}"
+        )
+    if feature_available > cutoff:
+        raise RuntimeError(
+            "OOS case PIT violation: feature source became available after "
+            f"prediction cutoff: match_id={match_id}"
+        )
+
+    def iso(value: pd.Timestamp) -> str:
+        return value.isoformat() if pd.notna(value) else ""
+
+    canonical = {
+        "schema_version": PIT_LINEAGE_SCHEMA_VERSION,
+        "match_id": match_id,
+        "kickoff_utc": iso(kickoff),
+        "prediction_cutoff_at_utc": iso(cutoff),
+        "feature_source_max_available_at_utc": iso(feature_available),
+        "outcome_source_available_at_utc": iso(outcome_available),
+        "pit_verified": True,
+    }
+    lineage_hash = hashlib.sha256(
+        json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    ).hexdigest()[:20]
+    return {
+        "pit_lineage_schema_version": PIT_LINEAGE_SCHEMA_VERSION,
+        "pit_lineage_status": "PASS",
+        "prediction_cutoff_at_utc": canonical["prediction_cutoff_at_utc"],
+        "feature_source_max_available_at_utc": canonical["feature_source_max_available_at_utc"],
+        "outcome_source_available_at_utc": canonical["outcome_source_available_at_utc"],
+        "pit_lineage_hash": f"pit:{lineage_hash}",
+    }
 
 
 def _fit_predict(model, fit, target):
@@ -782,6 +852,7 @@ def run_walk_forward(
                 if np.any(values < 0.0) or np.any(values > 1.0):
                     raise RuntimeError(f'Unbounded OOS case diagnostic: {key}')
             for row_idx, (_, row) in enumerate(oos.reset_index(drop=True).iterrows()):
+                pit_lineage = _pit_lineage_for_case(row)
                 case_rows.append({
                     'match_id': str(row['match_id']),
                     'oos_fold': int(fold_index),
@@ -806,6 +877,7 @@ def run_walk_forward(
                     'covariate_drift': float(diagnostics['covariate_drift'][row_idx]),
                     'history_support_risk': float(diagnostics['history_support_risk'][row_idx]),
                     'routing_route': str(_oos_routes[row_idx]),
+                    **pit_lineage,
                 })
 
         candidate_metrics = classification_metrics(oos.target.astype(int), probs)
@@ -816,7 +888,6 @@ def run_walk_forward(
         results.append({
             "oos_fold": int(fold_index),
             "oos_start": str(oos.kickoff_utc.min()),
-            "oos_end": str(oos.kickoff_utc.max()),
             "oos_end": str(oos.kickoff_utc.max()),
             "leagues": "|".join(sorted(oos["competition"].astype(str).unique())),
             "seasons": "|".join(sorted(oos["season_start"].astype(str).unique())) if "season_start" in oos.columns else "",
