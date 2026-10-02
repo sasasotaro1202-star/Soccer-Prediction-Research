@@ -119,17 +119,22 @@ def resilient_get(
                 timeout=request_timeout,
                 **kwargs,
             )
-            if int(getattr(response, "status_code", 200)) in TRANSIENT_STATUS_CODES:
-                if attempt < max_retries:
-                    time.sleep(_retry_delay(attempt, response, backoff=backoff, max_backoff=max_backoff))
-                    continue
-            response.raise_for_status()
-            return response
         except (requests.Timeout, requests.ConnectionError, requests.RequestException, OSError) as exc:
             last_error = exc
             if attempt >= max_retries:
                 raise
-            time.sleep(_retry_delay(attempt, response, backoff=backoff, max_backoff=max_backoff))
+            time.sleep(_retry_delay(attempt, None, backoff=backoff, max_backoff=max_backoff))
+            continue
+
+        status_code = int(getattr(response, "status_code", 200))
+        if status_code in TRANSIENT_STATUS_CODES:
+            if attempt < max_retries:
+                time.sleep(_retry_delay(attempt, response, backoff=backoff, max_backoff=max_backoff))
+                continue
+
+        # Permanent HTTP errors are source-state signals, not transient network failures.
+        response.raise_for_status()
+        return response
 
     if last_error is not None:
         raise last_error
