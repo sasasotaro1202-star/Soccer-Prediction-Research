@@ -219,3 +219,20 @@ def test_validation_rejects_impossible_experience_timestamp():
     )
     assert _validate_ledger(frame).empty
 
+
+
+def test_learn_handles_headerless_empty_ledger_as_insufficient_experience(tmp_path, monkeypatch):
+    ledger = tmp_path / "ledger.csv"
+    policy = tmp_path / "policy.json"
+    metrics = tmp_path / "metrics.csv"
+    status = tmp_path / "status.json"
+    ledger.write_text("\n", encoding="utf-8")
+    monkeypatch.setattr("src.research.experience_learning.POLICY", policy)
+    monkeypatch.setattr("src.research.experience_learning.METRICS", metrics)
+    monkeypatch.setattr("src.research.experience_learning.STATUS", status)
+
+    result = learn(ledger)
+
+    assert result["status"] == "INSUFFICIENT_EXPERIENCE"
+    assert policy.is_file()
+    assert status.is_file()
