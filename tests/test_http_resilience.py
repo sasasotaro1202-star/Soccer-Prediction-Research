@@ -157,6 +157,7 @@ def test_resilient_get_retries_timeout_then_succeeds(monkeypatch):
         "https://example.test/data",
         retries=3,
         backoff=2.0,
+        profile="batch",
     )
 
     assert response.status_code == 200
