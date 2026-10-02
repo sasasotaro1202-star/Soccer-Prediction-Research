@@ -109,6 +109,14 @@ jobs:
           python -m src.research.experience_learning --ledger data/experience/prediction_ledger.csv
           test -s artifacts/experience_learning_status.json
           test -s artifacts/experience_policy_candidate.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          status = json.loads(Path("artifacts/experience_learning_status.json").read_text(encoding="utf-8"))
+          if status.get("status") == "BLOCKED_LEDGER_SCHEMA":
+              raise SystemExit("experience learning is blocked by invalid ledger schema")
+          print(f"experience learning status={status.get('status')}")
+          PY
 
       - name: Learn target-specific matured experience (O-U and BTTS)
         env:
@@ -117,6 +125,14 @@ jobs:
           set -euo pipefail
           python -m src.research.target_experience_learning
           test -s artifacts/target_experience/target_experience_status.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          status = json.loads(Path("artifacts/target_experience/target_experience_status.json").read_text(encoding="utf-8"))
+          if status.get("status") == "BLOCKED_LEDGER_SCHEMA":
+              raise SystemExit("target-specific experience learning is blocked by invalid ledger schema")
+          print(f"target experience learning status={status.get('status')}")
+          PY
       - name: Generate matured-experience research candidates
         env:
           PYTHONPATH: .
