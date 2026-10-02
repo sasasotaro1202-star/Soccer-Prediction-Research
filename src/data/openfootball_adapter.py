@@ -10,6 +10,8 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 BASE_URLS = {
     "UCL": "https://raw.githubusercontent.com/openfootball/champions-league/master/{season}/cl.txt",
     "UEL": "https://raw.githubusercontent.com/openfootball/champions-league/master/{season}/el.txt",
@@ -162,8 +164,7 @@ def load_openfootball_season(competition: str, start_year: int, cache_dir: str =
 
     # Stale/corrupt cached content is never used silently. Re-fetch the exact
     # public source and fail closed when the refreshed content is still invalid.
-    response = requests.get(url, timeout=45, headers={"User-Agent": "SoccerPredictionResearch/1.0"})
-    response.raise_for_status()
+    response = resilient_get(requests.get, url, timeout=None, retries=6, backoff=2.0, headers={"User-Agent": "SoccerPredictionResearch/1.0"})
     raw = response.content
     parsed = parse_football_txt(
         raw.decode("utf-8", errors="replace"),
