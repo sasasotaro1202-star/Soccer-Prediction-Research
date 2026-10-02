@@ -10,7 +10,7 @@ def exact_oos_window_signature(rows: Iterable[Mapping[str, Any]]) -> str | None:
     Every window must expose a stable fold identifier plus explicit start/end
     boundaries. Missing boundaries fail closed.
     """
-    identities: set[tuple[int, str, str]] = set()
+    identities: dict[int, tuple[str, str]] = {}
     seen = False
     for row in rows:
         seen = True
@@ -24,7 +24,12 @@ def exact_oos_window_signature(rows: Iterable[Mapping[str, Any]]) -> str | None:
         end = str(row.get("test_end") or row.get("oos_end") or "").strip()
         if not start or not end:
             return None
-        identities.add((int(fold_value), start, end))
+        fold = int(fold_value)
+        if fold in identities:
+            # Each fold ID must identify one exact window. Duplicate rows are
+            # ambiguous even when their boundaries happen to be identical.
+            return None
+        identities[fold] = (start, end)
 
     if not seen or not identities:
         return None
