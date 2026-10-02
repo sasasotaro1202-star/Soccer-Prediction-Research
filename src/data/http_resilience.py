@@ -160,15 +160,27 @@ def resilient_get(
     started = time.monotonic()
 
     for attempt in range(1, max_retries + 1):
-        if deadline_seconds is not None and time.monotonic() - started >= max(0.0, float(deadline_seconds)):
-            raise TimeoutError("resilient_get deadline exhausted before request attempt")
+        remaining = None
+        if deadline_seconds is not None:
+            remaining = max(0.0, float(deadline_seconds) - (time.monotonic() - started))
+            if remaining <= 0.0:
+                raise TimeoutError("resilient_get deadline exhausted before request attempt")
+        effective_timeout = request_timeout
+        # A caller-supplied deadline is a hard wall for the entire operation.
+        # Therefore a single socket/read timeout must never extend beyond the
+        # remaining interactive budget.
+        if remaining is not None:
+            effective_timeout = (
+                min(float(request_timeout[0]), remaining),
+                min(float(request_timeout[1]), remaining),
+            )
         response: requests.Response | None = None
         try:
             response = getter(
                 url,
                 params=params,
                 headers=headers,
-                timeout=request_timeout,
+                timeout=effective_timeout,
                 **kwargs,
             )
         except (requests.Timeout, requests.ConnectionError, requests.RequestException, OSError) as exc:
