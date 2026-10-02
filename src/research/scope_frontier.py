@@ -10,25 +10,32 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.request import Request, urlopen
+import requests
 
 from src.data.competition_sources import TARGET_COMPETITIONS
+from src.data.http_resilience import resilient_get
 from src.data.matchday_intelligence_fetch import _sofascore_competition
 
 SOFASCORE_URL = "https://www.sofascore.com/api/v1/sport/football/scheduled-events/{date}"
 
 
-def _fetch_json(day: date, timeout: float = 20.0) -> dict[str, Any]:
-    request = Request(
+def _fetch_json(
+    day: date,
+    timeout: float | tuple[float, float] | None = None,
+) -> dict[str, Any]:
+    response = resilient_get(
+        requests.get,
         SOFASCORE_URL.format(date=day.isoformat()),
         headers={
             "User-Agent": "Soccer-Prediction-Research/1.0",
             "Accept": "application/json",
             "Referer": "https://www.sofascore.com/",
         },
+        timeout=timeout,
+        retries=6,
+        backoff=2.0,
     )
-    with urlopen(request, timeout=timeout) as response:
-        payload = json.loads(response.read().decode("utf-8"))
+    payload = response.json()
     if not isinstance(payload, dict):
         raise RuntimeError("SofaScore response root must be an object")
     return payload
