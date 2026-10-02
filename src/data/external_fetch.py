@@ -18,6 +18,8 @@ from typing import Any
 
 import requests
 
+from src.data.http_resilience import resilient_get
+
 
 @dataclass(frozen=True)
 class FetchMetadata:
@@ -73,9 +75,14 @@ def pit_is_safe(feature_available_at: str | None, prediction_cutoff_at: str | No
 class ExternalFetcher:
     """Retry-bounded HTTP client with content-addressed raw cache."""
 
-    def __init__(self, cache_dir: str | Path = "cache/external", timeout: float = 30.0, retries: int = 3, backoff: float = 1.5):
+    def __init__(self, cache_dir: str | Path = "cache/external", timeout: float | tuple[float, float] | None = None, retries: int = 8, backoff: float = 2.0):
         self.cache_dir = Path(cache_dir)
-        self.timeout = max(1.0, float(timeout))
+        if timeout is None:
+            self.timeout = None
+        elif isinstance(timeout, tuple):
+            self.timeout = (max(1.0, float(timeout[0])), max(5.0, float(timeout[1])))
+        else:
+            self.timeout = max(1.0, float(timeout))
         self.retries = max(1, int(retries))
         self.backoff = max(0.0, float(backoff))
 
@@ -122,22 +129,15 @@ class ExternalFetcher:
             except (OSError, ValueError, TypeError):
                 pass
 
-        last_error: Exception | None = None
-        response: requests.Response | None = None
-        for attempt in range(1, self.retries + 1):
-            try:
-                response = requests.get(url, params=params, headers=headers, timeout=self.timeout)
-                if response.status_code in {429, 500, 502, 503, 504}:
-                    raise requests.HTTPError(f"transient_http_{response.status_code}", response=response)
-                response.raise_for_status()
-                break
-            except (requests.RequestException, OSError) as exc:
-                last_error = exc
-                if attempt < self.retries:
-                    time.sleep(self.backoff * attempt)
-        if response is None:
-            raise RuntimeError(f"external fetch failed after {self.retries} attempts: {last_error}")
-
+        response = resilient_get(
+            requests.get,
+            url,
+            params=params,
+            headers=headers,
+            timeout=self.timeout,
+            retries=self.retries,
+            backoff=self.backoff,
+        )
         body = response.content
         retrieved_at = iso_utc(utc_now())
         metadata = FetchMetadata(
