@@ -45,7 +45,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+        run: python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt
 
       - name: Compile
         run: python -m compileall -q src tests
