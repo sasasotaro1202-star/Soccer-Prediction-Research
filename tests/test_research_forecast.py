@@ -83,3 +83,41 @@ def test_daily_research_forecast_defers_without_adopted_model(tmp_path, monkeypa
     frame = pd.read_csv(output)
     assert list(frame.columns) == list(FORECAST_COLUMNS)
     assert frame.empty
+
+
+def test_verify_preserves_canonical_run_status_and_rows(tmp_path, monkeypatch):
+    import json
+    import sys
+    import src.prediction.research_forecast as module
+
+    status_path = tmp_path / "status.json"
+    module.run = lambda *args: {
+        "status": "PREDICTED_PRODUCTION_ADOPTED",
+        "prediction_time_utc": "2030-01-01T00:00:00Z",
+        "rows": 2,
+        "prediction_rows": 2,
+    }
+    monkeypatch.setattr(module, "verify", lambda path: {
+        "status": "VERIFIED",
+        "rows": 2,
+    })
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "research_forecast",
+            "--fixtures", str(tmp_path / "fixtures.csv"),
+            "--output", str(tmp_path / "forecast.csv"),
+            "--status", str(status_path),
+            "--verify",
+        ],
+    )
+
+    module.main()
+
+    payload = json.loads(status_path.read_text(encoding="utf-8"))
+    assert payload["status"] == "PREDICTED_PRODUCTION_ADOPTED"
+    assert payload["rows"] == 2
+    assert payload["prediction_rows"] == 2
+    assert payload["output_contract_verified"] is True
+    assert payload["output_contract_verification"]["status"] == "VERIFIED"
