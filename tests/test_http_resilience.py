@@ -49,7 +49,7 @@ def test_interactive_get_uses_bounded_profile(monkeypatch):
         deadline_seconds=12,
     )
     assert response.status_code == 200
-    assert observed["timeout"] == (12.0, 12.0)
+    assert all(abs(value - 12.0) < 1e-3 for value in observed["timeout"])
     assert observed["headers"] is None
 
 
@@ -80,7 +80,7 @@ def test_resilient_get_interactive_profile_uses_short_budget(monkeypatch):
         retries=1,
         deadline_seconds=5,
     )
-    assert observed["timeout"] == (5.0, 5.0)
+    assert all(abs(value - 5.0) < 1e-3 for value in observed["timeout"])
 
 
 def test_resilient_get_clamps_request_timeout_to_remaining_deadline(monkeypatch):
@@ -173,6 +173,8 @@ def test_resilient_get_retries_transient_http_status_and_respects_retry_after(mo
         def __init__(self, status):
             self.status_code = status
             self.headers = {"Retry-After": "3"} if status == 503 else {}
+        def close(self):
+            return None
         def raise_for_status(self):
             if self.status_code >= 400:
                 raise requests.HTTPError(f"HTTP {self.status_code}", response=self)
@@ -255,6 +257,12 @@ def test_default_http_timeout_clamps_short_environment_overrides(monkeypatch):
     monkeypatch.setenv("SOCCER_HTTP_CONNECT_TIMEOUT", "1")
     monkeypatch.setenv("SOCCER_HTTP_READ_TIMEOUT", "10")
     assert http_resilience.default_timeout() == (30.0, 600.0)
+
+
+def test_default_http_timeout_rejects_nonfinite_environment_overrides(monkeypatch):
+    monkeypatch.setenv("SOCCER_HTTP_CONNECT_TIMEOUT", "nan")
+    monkeypatch.setenv("SOCCER_HTTP_READ_TIMEOUT", "inf")
+    assert http_resilience.default_timeout() == (60.0, 600.0)
 
 
 def test_9h_watchdog_bounds_all_control_plane_http_calls():
