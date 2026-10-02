@@ -168,7 +168,7 @@ jobs:
                   ;;
                 *)
                   echo "WATCHDOG: fresh 9H dispatch failed with HTTP ${code}." >&2
-                  cat /tmp/dispatch.json >&2 || true
+                  cat /tmp/dispatch.json >&2
                   return 1
                   ;;
               esac
