@@ -14,6 +14,8 @@ from typing import Any
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 from src.data.football_data import BASE, season_folder
 
 WAYBACK_CDX = "https://web.archive.org/cdx/search/cdx"
@@ -121,7 +123,7 @@ def _result_lower_bound(row: pd.Series) -> tuple[datetime | None, str]:
 
 
 class FootballDataWaybackAdapter:
-    def __init__(self, cache_dir: str = "data/raw/pit_evidence", timeout: int = 30, max_workers: int = DEFAULT_MAX_WORKERS):
+    def __init__(self, cache_dir: str = "data/raw/pit_evidence", timeout: float | tuple[float, float] | None = None, max_workers: int = DEFAULT_MAX_WORKERS):
         self.cache_dir = Path(cache_dir); self.cache_dir.mkdir(parents=True, exist_ok=True); self.timeout = timeout; self.max_workers = max(1, int(max_workers))
         self._captures: dict[str, list[dict[str, str]]] = {}; self._capture_diag: dict[str, CaptureDiagnostic] = {}; self._snapshot_diag: dict[str, SnapshotDiagnostic] = {}
     @staticmethod
@@ -142,7 +144,7 @@ class FootballDataWaybackAdapter:
                 self._capture_diag[url] = CaptureDiagnostic("CDX_CACHE_FAILURE", error_type=type(exc).__name__, error=str(exc))
         params = {"url": url, "output": "json", "filter": "statuscode:200", "fl": "timestamp,digest,original,statuscode,mimetype"}
         try:
-            response = requests.get(WAYBACK_CDX, params=params, timeout=self.timeout, headers={"User-Agent": "SoccerPredictionResearch/1.0 PIT-Audit"}); response.raise_for_status(); payload = response.json()
+            response = resilient_get(requests.get, WAYBACK_CDX, params=params, timeout=self.timeout, retries=6, backoff=2.0, headers={"User-Agent": "SoccerPredictionResearch/1.0 PIT-Audit"}); payload = response.json()
         except requests.RequestException as exc:
             self._captures[url] = []; self._capture_diag[url] = CaptureDiagnostic("CDX_REQUEST_FAILURE", error_type=type(exc).__name__, error=str(exc)); return []
         except (ValueError, TypeError) as exc:
@@ -164,7 +166,7 @@ class FootballDataWaybackAdapter:
         try:
             raw = cache.read_bytes() if cache.exists() else None
             if raw is None:
-                response = requests.get(self._snapshot_url(capture, original_url), timeout=self.timeout, headers={"User-Agent": "SoccerPredictionResearch/1.0 PIT-Audit"}); response.raise_for_status(); raw = response.content; cache.write_bytes(raw)
+                response = resilient_get(requests.get, self._snapshot_url(capture, original_url), timeout=self.timeout, retries=6, backoff=2.0, headers={"User-Agent": "SoccerPredictionResearch/1.0 PIT-Audit"}); raw = response.content; cache.write_bytes(raw)
         except requests.RequestException as exc:
             diag = SnapshotDiagnostic("SNAPSHOT_DOWNLOAD_FAILURE", error_type=type(exc).__name__, error=str(exc)); self._snapshot_diag[identity] = diag; return diag
         except OSError as exc:
