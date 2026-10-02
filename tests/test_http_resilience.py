@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import requests
 
 from src.data import http_resilience
@@ -130,3 +132,16 @@ def test_default_http_timeout_clamps_short_environment_overrides(monkeypatch):
     monkeypatch.setenv("SOCCER_HTTP_CONNECT_TIMEOUT", "1")
     monkeypatch.setenv("SOCCER_HTTP_READ_TIMEOUT", "10")
     assert http_resilience.default_timeout() == (30.0, 600.0)
+
+
+def test_9h_watchdog_bounds_all_control_plane_http_calls():
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "soccer-9h-queue-watchdog.yml"
+    )
+    text = workflow.read_text(encoding="utf-8")
+    assert "timeout-minutes: 10" in text
+    assert "CURL_TIMEOUT_ARGS=(--connect-timeout 30 --max-time 120)" in text
+    assert text.count('"${CURL_TIMEOUT_ARGS[@]}"') == 4
