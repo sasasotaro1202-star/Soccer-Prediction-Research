@@ -167,6 +167,7 @@ def calibrate(
                 "production_changed": False,
                 "production_probabilities_changed": False,
                 "locked_holdout_touched": False,
+                "frozen_holdout_touched": False,
                 "outcome_data_used_only_after_maturity": True,
             },
             "oos_blocks": [],
@@ -287,6 +288,7 @@ def calibrate(
             "outcome_data_used_only_after_maturity": True,
             "calibration_training_is_prior_history_only": True,
             "locked_suffix_outcomes_never_train_calibrator": True,
+            "frozen_holdout_touched": False,
         },
     }
 
