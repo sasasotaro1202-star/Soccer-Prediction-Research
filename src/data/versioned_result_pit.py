@@ -182,7 +182,20 @@ def _cache_path(cache_dir: str | Path, prefix: str, *parts: str) -> Path:
     return root / f"{prefix}-{_cache_key(*parts)}{suffix}"
 
 
-def _commits(path: str, *, cache_dir: str | Path, timeout: int = 30) -> list[dict[str, Any]]:
+def _commits(
+    path: str,
+    *,
+    cache_dir: str | Path,
+    timeout: int = 30,
+    max_pages: int | None = None,
+) -> list[dict[str, Any]]:
+    """Load a bounded, paginated commit history for one versioned file.
+
+    GitHub's commits endpoint is newest-first and paginated. A single page can
+    silently omit the older commits needed to establish a conservative PIT
+    publication lower bound. Pagination is explicitly bounded to keep the
+    research adapter deterministic and rate-safe.
+    """
     cache = _cache_path(cache_dir, "commits", REPOSITORY, path)
     if cache.is_file() and cache.stat().st_size > 0:
         try:
@@ -191,12 +204,34 @@ def _commits(path: str, *, cache_dir: str | Path, timeout: int = 30) -> list[dic
                 return payload
         except Exception:
             pass
+
+    if max_pages is None:
+        try:
+            max_pages = int(os.getenv("VERSIONED_PIT_MAX_COMMIT_PAGES", "12"))
+        except ValueError:
+            max_pages = 12
+    max_pages = max(1, int(max_pages))
+
     url = f"{API}/repos/{REPOSITORY}/commits"
-    payload = _request(url, params={"path": path, "per_page": DEFAULT_PER_PAGE}, timeout=timeout).json()
-    if not isinstance(payload, list):
-        return []
-    cache.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    return payload
+    commits: list[dict[str, Any]] = []
+    for page in range(1, max_pages + 1):
+        payload = _request(
+            url,
+            params={
+                "path": path,
+                "per_page": DEFAULT_PER_PAGE,
+                "page": page,
+            },
+            timeout=timeout,
+        ).json()
+        if not isinstance(payload, list) or not payload:
+            break
+        commits.extend(item for item in payload if isinstance(item, dict))
+        if len(payload) < DEFAULT_PER_PAGE:
+            break
+
+    cache.write_text(json.dumps(commits, ensure_ascii=False), encoding="utf-8")
+    return commits
 
 
 def _file_at_commit(path: str, sha: str, *, cache_dir: str | Path, timeout: int = 30) -> dict[str, Any]:
