@@ -40,6 +40,27 @@ COMPETITION_FILES = {
 
 DEFAULT_PER_PAGE = 100
 
+EVIDENCE_FIELDS = {
+    "versioned_result_source": "openfootball/football.json",
+    "versioned_result_available_at_utc": None,
+    "versioned_result_evidence_status": "UNVERIFIABLE",
+    "versioned_result_commit_sha": None,
+    "versioned_result_evidence_url": None,
+    "versioned_result_evidence_reason": "",
+}
+
+REPORT_COLUMNS = (
+    "competition",
+    "season_start",
+    "rows_considered",
+    "verified_rows",
+    "unverifiable_rows",
+    "ambiguous_match_keys",
+    "commit_count",
+    "status",
+    "source",
+)
+
 
 @dataclass(frozen=True)
 class VersionedEvidence:
@@ -230,21 +251,13 @@ def apply_bulk(
     max_groups and rows_per_group are explicit to keep public API use bounded.
     rows_per_group=0 means process all rows within selected groups.
     """
-    if history.empty:
-        return history.copy(), pd.DataFrame()
-
     out = history.copy()
-    fields = {
-        "versioned_result_source": "openfootball/football.json",
-        "versioned_result_available_at_utc": None,
-        "versioned_result_evidence_status": "UNVERIFIABLE",
-        "versioned_result_commit_sha": None,
-        "versioned_result_evidence_url": None,
-        "versioned_result_evidence_reason": "",
-    }
-    for column, default in fields.items():
+    for column, default in EVIDENCE_FIELDS.items():
         if column not in out.columns:
             out[column] = default
+
+    if history.empty:
+        return out, pd.DataFrame(columns=REPORT_COLUMNS)
 
     work = out.copy()
     work["competition"] = work["competition"].astype(str).str.strip().str.upper()
@@ -361,7 +374,7 @@ def apply_bulk(
             "source": "openfootball/football.json",
         })
 
-    report = pd.DataFrame(report_rows)
+    report = pd.DataFrame(report_rows, columns=REPORT_COLUMNS)
     return out, report
 
 
@@ -376,7 +389,10 @@ def main() -> int:
     parser.add_argument("--rows-per-group", type=int, default=0)
     args = parser.parse_args()
 
-    frame = pd.read_csv(args.input)
+    try:
+        frame = pd.read_csv(args.input)
+    except pd.errors.EmptyDataError:
+        frame = pd.DataFrame()
     enriched, report = apply_bulk(
         frame,
         max_groups=args.max_groups,
