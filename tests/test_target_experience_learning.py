@@ -44,3 +44,15 @@ def test_target_experience_deduplicates_multiple_prediction_states_per_fixture()
     state = learn_target_specific_experience(pd.DataFrame(rows))
     assert state["targets"]["O/U"]["rows"] == 121
     assert state["targets"]["BTTS"]["rows"] == 121
+
+
+def test_target_experience_blocks_legacy_ledger_schema(tmp_path):
+    from src.research.target_experience_learning import write_target_specific_experience
+    ledger = tmp_path / "legacy.csv"
+    out = tmp_path / "target_experience"
+    pd.DataFrame([{"match_id": "legacy", "p_home": 0.5}]).to_csv(ledger, index=False)
+    state = write_target_specific_experience(str(ledger), str(out))
+    assert state["status"] == "BLOCKED_LEDGER_SCHEMA"
+    assert state["production_usable"] is False
+    assert "experience_available_at_utc" in state["missing_columns"]
+    assert (out / "target_experience_status.json").is_file()
