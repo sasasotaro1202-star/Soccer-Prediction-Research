@@ -158,3 +158,28 @@ def test_football_data_uses_shared_http_resilience():
     assert "return resilient_get(" in source
     assert "timeout=(30.0, 300.0)" not in source
     assert "session.get(" not in source
+
+
+def test_resilient_get_closes_transient_response_before_retry(monkeypatch):
+    calls = {"n": 0}
+    closed = []
+
+    class Response:
+        def __init__(self, status):
+            self.status_code = status
+            self.headers = {}
+        def close(self):
+            closed.append(self.status_code)
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.HTTPError("transient", response=self)
+
+    def fake_get(*args, **kwargs):
+        calls["n"] += 1
+        return Response(503 if calls["n"] == 1 else 200)
+
+    monkeypatch.setattr(http_resilience.time, "sleep", lambda seconds: None)
+    response = http_resilience.resilient_get(fake_get, "https://example.test/close", retries=2)
+
+    assert response.status_code == 200
+    assert closed == [503]
