@@ -249,3 +249,41 @@ def test_compatibility_adapter_has_no_direct_requests_get_or_legacy_timeout():
     assert "requests.get(" not in source
     assert "max(self.timeout" not in source
     assert "resilient_get(" in source
+
+
+def test_compatibility_adapter_default_timeout_none_reaches_resilience_layer(tmp_path, monkeypatch):
+    csv = b"Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\n01/09/25,Team A,Team B,2,1,H\n"
+    observed = []
+
+    class Response:
+        content = csv
+
+        def raise_for_status(self):
+            return None
+
+    def fake_resilient_get(getter, url, **kwargs):
+        observed.append({"url": url, "timeout": kwargs["timeout"], "retries": kwargs["retries"]})
+        return Response()
+
+    monkeypatch.setattr("src.data.pit_source_adapter.resilient_get", fake_resilient_get)
+    instance = FootballDataWaybackAdapter(
+        cache_dir=str(tmp_path),
+        timeout=None,
+        snapshot_retries=1,
+        snapshot_retry_backoff=0,
+    )
+    capture = {
+        "timestamp": "20250902200000",
+        "digest": "digest-none-timeout",
+        "original": "https://example.invalid/test.csv",
+    }
+
+    diagnostic = instance._load_snapshot_keys(
+        capture,
+        "https://example.invalid/test.csv",
+    )
+
+    assert diagnostic.status == "SNAPSHOT_PARSED"
+    assert observed
+    assert observed[0]["timeout"] is None
+    assert observed[0]["retries"] == 1
