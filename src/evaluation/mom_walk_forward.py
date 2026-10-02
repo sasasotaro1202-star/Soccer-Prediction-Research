@@ -34,8 +34,8 @@ class MOMBlockMetrics:
 
 
 def _validate_history(frame: pd.DataFrame, *, prediction_cutoff_minutes: int = 60) -> pd.DataFrame:
-    if int(prediction_cutoff_minutes) < 0:
-        raise ValueError("prediction_cutoff_minutes must be non-negative")
+    if int(prediction_cutoff_minutes) <= 0:
+        raise ValueError("prediction_cutoff_minutes must be positive")
 
     required = {
         "match_id",
