@@ -87,3 +87,8 @@ def test_calibration_derives_raw_predictability_from_shadow_telemetry():
     assert state["production_usable"] is False
     assert state["oos_blocks"]
     assert state["safety_contract"]["calibration_training_is_prior_history_only"] is True
+
+
+def test_calibration_always_exposes_frozen_holdout_safety_key():
+    state = calibrate(pd.DataFrame())
+    assert state["safety_contract"]["frozen_holdout_touched"] is False
