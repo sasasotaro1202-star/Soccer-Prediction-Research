@@ -23,6 +23,8 @@ from typing import Any
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 API = "https://api.github.com"
 REPOSITORY = "openfootball/football.json"
 
@@ -118,21 +120,19 @@ def _headers() -> dict[str, str]:
     return headers
 
 
-def _request(url: str, *, params: dict[str, Any] | None = None, timeout: int = 30, retries: int = 3) -> requests.Response:
+def _request(url: str, *, params: dict[str, Any] | None = None, timeout: float | tuple[float, float] | None = None, retries: int = 6) -> requests.Response:
     last_error: Exception | None = None
     for attempt in range(1, int(retries) + 1):
         try:
-            response = requests.get(url, params=params, headers=_headers(), timeout=timeout)
-            if response.status_code in {429, 500, 502, 503, 504}:
-                retry_after = response.headers.get("Retry-After")
-                if attempt < retries:
-                    try:
-                        delay = max(1.0, min(30.0, float(retry_after))) if retry_after else float(attempt * 2)
-                    except ValueError:
-                        delay = float(attempt * 2)
-                    time.sleep(delay)
-                    continue
-            response.raise_for_status()
+            response = resilient_get(
+                requests.get,
+                url,
+                params=params,
+                headers=_headers(),
+                timeout=timeout,
+                retries=retries,
+                backoff=2.0,
+            )
             return response
         except (requests.RequestException, OSError) as exc:
             last_error = exc
