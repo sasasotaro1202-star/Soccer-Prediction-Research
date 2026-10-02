@@ -5,7 +5,7 @@ from src.research.target_permutation_adversarial import audit_target_permutation
 
 
 def _fit_predict(X_train, y_train, X_eval, seed):
-    model = LogisticRegression(max_iter=500, multi_class="auto", random_state=seed)
+    model = LogisticRegression(max_iter=500, random_state=seed)
     model.fit(X_train, y_train)
     return model.predict_proba(X_eval)
 
