@@ -158,7 +158,7 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
             for url in urls:
                 for attempt in range(1, self.snapshot_retries + 1):
                     try:
-                        response = requests.get(url, timeout=max(self.timeout,45), headers=headers, allow_redirects=True)
+                        response = resilient_get(requests.get, url, timeout=self.timeout, headers=headers, allow_redirects=True, retries=1, backoff=self.snapshot_retry_backoff)
                         status_code = getattr(response, "status_code", None)
                         if status_code in (429,500,502,503,504): raise requests.HTTPError(f"transient_http_{status_code}", response=response)
                         response.raise_for_status()
@@ -193,11 +193,14 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
                 retry_error = exc
                 for url in urls:
                     try:
-                        response = requests.get(
+                        response = resilient_get(
+                            requests.get,
                             url,
-                            timeout=max(self.timeout, 45),
+                            timeout=self.timeout,
                             headers=headers,
                             allow_redirects=True,
+                            retries=1,
+                            backoff=self.snapshot_retry_backoff,
                         )
                         status_code = getattr(response, "status_code", None)
                         if status_code in (429, 500, 502, 503, 504):
