@@ -21,6 +21,8 @@ from typing import Any
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 from src.data.pit_source_adapter_v2 import _result_lower_bound
 
 GITHUB_API = "https://api.github.com"
@@ -136,22 +138,20 @@ def _headers() -> dict[str, str]:
     return headers
 
 
-def _request_json(url: str, timeout: int = 30) -> Any:
+def _request_json(url: str, timeout: float | tuple[float, float] | None = None) -> Any:
     last_error: Exception | None = None
-    for attempt in range(1, 4):
+    for attempt in range(1, 2):
         try:
-            response = requests.get(url, headers=_headers(), timeout=timeout)
+            response = resilient_get(
+                requests.get,
+                url,
+                headers=_headers(),
+                timeout=timeout,
+                retries=1,
+                backoff=2.0,
+            )
             if response.status_code == 403 and response.headers.get("X-RateLimit-Remaining") == "0":
                 raise RuntimeError("github_api_rate_limit_exhausted")
-            if response.status_code in {429, 500, 502, 503, 504} and attempt < 3:
-                retry_after = response.headers.get("Retry-After")
-                try:
-                    delay = float(retry_after) if retry_after else float(attempt * 2)
-                except ValueError:
-                    delay = float(attempt * 2)
-                time.sleep(min(30.0, max(1.0, delay)))
-                continue
-            response.raise_for_status()
             return response.json()
         except requests.RequestException as exc:
             last_error = exc
@@ -215,12 +215,14 @@ def _snapshot(path: str, sha: str, cache_dir: str, timeout: int) -> str:
     last_error: Exception | None = None
     for attempt in range(1, 4):
         try:
-            response = requests.get(
+            response = resilient_get(
+                requests.get,
                 f"https://raw.githubusercontent.com/{REPOSITORY}/{sha}/{path}",
                 headers={"User-Agent": "SoccerPredictionResearch/footballcsv-weekly-PIT"},
                 timeout=timeout,
+                retries=1,
+                backoff=2.0,
             )
-            response.raise_for_status()
             text = response.content.decode("utf-8", errors="replace")
             if text.lstrip().lower().startswith(("<!doctype html", "<html")):
                 raise ValueError("html_instead_of_snapshot")
