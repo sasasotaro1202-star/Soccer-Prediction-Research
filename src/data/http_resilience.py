@@ -56,6 +56,19 @@ def _env_int(name: str, default: int, *, minimum: int = 1) -> int:
     return value if value >= minimum else int(default)
 
 
+def default_profile() -> str:
+    """Select a safe default by execution context.
+    
+    GitHub Actions remains on the long-running batch profile. Outside CI,
+    interactive execution is the default so chat/local invocations cannot
+    silently inherit multi-minute archive waits.
+    """
+    configured = os.getenv("SOCCER_HTTP_PROFILE", "").strip().lower()
+    if configured in {"interactive", "batch"}:
+        return configured
+    return "batch" if os.getenv("GITHUB_ACTIONS", "").strip().lower() == "true" else "interactive"
+
+
 def default_timeout() -> tuple[float, float]:
     """Return connect/read timeouts, overridable only above the safety floor."""
     return (
@@ -152,7 +165,7 @@ def resilient_get(
     retries: int | None = None,
     backoff: float | None = None,
     max_backoff: float | None = None,
-    profile: str = "batch",
+    profile: str | None = None,
     deadline_seconds: float | None = None,
     **kwargs: Any,
 ) -> requests.Response:
@@ -162,7 +175,7 @@ def resilient_get(
     errors, 429s and common 5xx responses are retried. The final failure is
     raised normally so callers retain fail-closed behaviour.
     """
-    profile_name = str(profile).strip().lower()
+    profile_name = (default_profile() if profile is None else str(profile).strip().lower())
     profile_timeout, profile_retries, profile_max_backoff = profile_defaults(profile_name)
     if timeout is None:
         request_timeout = profile_timeout
