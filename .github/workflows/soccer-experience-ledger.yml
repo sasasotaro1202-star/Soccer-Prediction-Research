@@ -176,6 +176,25 @@ jobs:
                   print(f"- **{target}**: " + ", ".join(metrics))
           else:
               print("- **Target-specific performance**: artifact unavailable")
+          metrics_path = Path("artifacts/experience_metrics.csv")
+          print("")
+          print("## Range breakdown (1X2)")
+          if metrics_path.is_file() and metrics_path.stat().st_size:
+              with metrics_path.open(encoding="utf-8", newline="") as fh:
+                  rows = list(csv.DictReader(fh))
+              for scope in ("competition", "season", "phase", "tier", "competition_type", "region", "regime", "confidence", "uncertainty", "horizon", "data_quality"):
+                  selected = [r for r in rows if r.get("scope") == scope]
+                  if not selected:
+                      continue
+                  print(f"- **{scope}**:")
+                  for r in selected:
+                      print(
+                          f"  - {r.get('segment')}: n={r.get('n')}, "
+                          f"Accuracy={r.get('1x2_accuracy_pct')}%, LogLoss={r.get('logloss')}, "
+                          f"Brier={r.get('brier')}, ECE={r.get('ece')}"
+                      )
+          else:
+              print("- Range breakdown unavailable")
           if not deltas:
               print("- **No 1X2 metric change vs previous durable status detected.**")
           PY
