@@ -551,4 +551,4 @@ def test_compute_metrics_emits_explicit_scope_breakdowns(tmp_path, monkeypatch):
     target_report = pd.read_csv(target_metrics_path)
     assert set(target_report.loc[target_report["scope"] == "competition", "segment"]) == {"EPL", "UCL"}
     assert set(target_report.loc[target_report["scope"] == "phase", "segment"]) == {"REGULAR", "KNOCKOUT"}
-\n
+
