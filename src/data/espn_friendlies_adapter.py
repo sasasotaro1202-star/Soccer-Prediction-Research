@@ -16,6 +16,8 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer/club.friendly/scoreboard"
 HEADERS = {"User-Agent": "python-requests/SoccerPredictionResearch"}
 
@@ -103,8 +105,15 @@ def load_friendlies_history(start_year: int = 2010, end_year: int = 2025, cache_
                 if path.exists():
                     raw = path.read_bytes()
                 else:
-                    r = requests.get(BASE, params={"dates": f"{start}-{end}", "limit": 1000}, timeout=60, headers=HEADERS)
-                    r.raise_for_status()
+                    r = resilient_get(
+                        requests.get,
+                        BASE,
+                        params={"dates": f"{start}-{end}", "limit": 1000},
+                        timeout=None,
+                        retries=6,
+                        backoff=2.0,
+                        headers=HEADERS,
+                    )
                     raw = r.content
                     path.write_bytes(raw)
                 payload = json.loads(raw.decode("utf-8"))
