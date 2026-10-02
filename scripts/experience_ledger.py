@@ -21,6 +21,23 @@ METRICS = Path("artifacts/experience_metrics.csv")
 TARGET_METRICS = Path("artifacts/experience_metrics_by_target.csv")
 STATUS = Path("artifacts/experience_status.json")
 
+# Segmentation dimensions are added only when the canonical ledger actually
+# carries the corresponding field. Missing dimensions are never inferred.
+SEGMENT_COLUMNS = (
+    ("competition", "competition"),
+    ("season_start", "season"),
+    ("season", "season"),
+    ("phase", "phase"),
+    ("tier", "tier"),
+    ("competition_type", "competition_type"),
+    ("region", "region"),
+    ("regime", "regime"),
+    ("confidence_bucket", "confidence"),
+    ("uncertainty_bucket", "uncertainty"),
+    ("horizon_bucket", "horizon"),
+    ("data_quality", "data_quality"),
+)
+
 def _now():
     return pd.Timestamp(datetime.now(timezone.utc))
 
@@ -847,7 +864,28 @@ def compute_metrics(ledger=None):
                         ("30d",now-pd.Timedelta(days=30)),("7d",now-pd.Timedelta(days=7))]:
         emit(scope,d[d["kickoff_utc"]>=start])
     for model,x in d.groupby("model_version",dropna=False): emit("model",x,str(model))
-    for comp,x in d.groupby("competition",dropna=False): emit("competition",x,str(comp))
+    # Preserve the historical competition scope while adding finer-grained
+    # segmentation only for dimensions explicitly present in the ledger.
+    emitted = set()
+    for column, scope in SEGMENT_COLUMNS:
+        if column not in d.columns:
+            continue
+        values = d[column].astype("string").str.strip()
+        valid = values.notna() & values.ne("") & values.ne("<NA>")
+        if not bool(valid.any()):
+            continue
+        for value, x in d.loc[valid].groupby(values[valid], dropna=False):
+            segment = str(value)
+            if scope == "season" and column == "season_start":
+                try:
+                    segment = str(int(float(segment)))
+                except (TypeError, ValueError):
+                    pass
+            key = (scope, segment)
+            if key in emitted:
+                continue
+            emitted.add(key)
+            emit(scope, x, segment)
 
     metrics_frame = pd.DataFrame(rows)
     _write_csv(METRICS, metrics_frame)
@@ -870,12 +908,30 @@ def compute_metrics(ledger=None):
             tm.insert(0, "scope", "model")
             tm.insert(1, "segment", str(model))
             target_rows.append(tm)
-    for comp, x in d.groupby("competition", dropna=False):
-        tm = _target_metrics(x)
-        if not tm.empty:
-            tm.insert(0, "scope", "competition")
-            tm.insert(1, "segment", str(comp))
-            target_rows.append(tm)
+    emitted_targets = set()
+    for column, scope in SEGMENT_COLUMNS:
+        if column not in d.columns:
+            continue
+        values = d[column].astype("string").str.strip()
+        valid = values.notna() & values.ne("") & values.ne("<NA>")
+        if not bool(valid.any()):
+            continue
+        for value, x in d.loc[valid].groupby(values[valid], dropna=False):
+            segment = str(value)
+            if scope == "season" and column == "season_start":
+                try:
+                    segment = str(int(float(segment)))
+                except (TypeError, ValueError):
+                    pass
+            key = (scope, segment)
+            if key in emitted_targets:
+                continue
+            emitted_targets.add(key)
+            tm = _target_metrics(x)
+            if not tm.empty:
+                tm.insert(0, "scope", scope)
+                tm.insert(1, "segment", segment)
+                target_rows.append(tm)
     target_frame = (
         pd.concat(target_rows, ignore_index=True)
         if target_rows
