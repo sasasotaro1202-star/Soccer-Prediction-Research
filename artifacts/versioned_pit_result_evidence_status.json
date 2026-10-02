@@ -1,0 +1,12 @@
+{
+  "status": "AUDIT_ONLY",
+  "rows": 42547,
+  "groups": 0,
+  "verified_rows": 0,
+  "malformed_status_rows": 0,
+  "production_changed": false,
+  "production_probabilities_changed": false,
+  "production_registry_changed": false,
+  "training_enabled": false,
+  "claim": "versioned_dataset_result_publication_evidence_only"
+}
