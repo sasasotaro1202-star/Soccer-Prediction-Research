@@ -10,6 +10,7 @@ from src.evaluation.metrics import classification_metrics
 from src.models.baselines import candidates
 from src.monitoring.dynamic_routing import build_drift_reference, compute_drift_scores, dynamic_route_weights, history_support_risk, routing_risk_bucket, routing_risk_score
 from src.research.oos_window_signature import exact_oos_window_signature
+from src.research.row_pit_lineage import build_row_pit_lineage
 
 TARGET_ACCURACY = 0.80
 
@@ -782,6 +783,18 @@ def run_walk_forward(
                 if np.any(values < 0.0) or np.any(values > 1.0):
                     raise RuntimeError(f'Unbounded OOS case diagnostic: {key}')
             for row_idx, (_, row) in enumerate(oos.reset_index(drop=True).iterrows()):
+                lineage = build_row_pit_lineage(
+                    match_id=row.get("match_id"),
+                    kickoff_utc=row.get("kickoff_utc"),
+                    prediction_cutoff_at_utc=row.get("prediction_cutoff_at_utc"),
+                    feature_source_max_available_at_utc=row.get("feature_source_max_available_at_utc"),
+                    pit_verified=row.get("pit_verified"),
+                    outcome_source_available_at_utc=row.get("source_available_at_utc"),
+                )
+                if lineage["status"] != "PASS":
+                    raise RuntimeError(
+                        f'OOS case PIT lineage failed for {row.get("match_id")}: {lineage["status"]}'
+                    )
                 case_rows.append({
                     'match_id': str(row['match_id']),
                     'oos_fold': int(fold_index),
@@ -806,6 +819,12 @@ def run_walk_forward(
                     'covariate_drift': float(diagnostics['covariate_drift'][row_idx]),
                     'history_support_risk': float(diagnostics['history_support_risk'][row_idx]),
                     'routing_route': str(_oos_routes[row_idx]),
+                    'prediction_cutoff_at_utc': lineage["prediction_cutoff_at_utc"],
+                    'feature_source_max_available_at_utc': lineage["feature_source_max_available_at_utc"],
+                    'pit_verified': bool(lineage["pit_verified"]),
+                    'outcome_source_available_at_utc': lineage["outcome_source_available_at_utc"],
+                    'pit_lineage_status': lineage["status"],
+                    'pit_lineage_hash': lineage["lineage_hash"],
                 })
 
         candidate_metrics = classification_metrics(oos.target.astype(int), probs)
@@ -816,7 +835,6 @@ def run_walk_forward(
         results.append({
             "oos_fold": int(fold_index),
             "oos_start": str(oos.kickoff_utc.min()),
-            "oos_end": str(oos.kickoff_utc.max()),
             "oos_end": str(oos.kickoff_utc.max()),
             "leagues": "|".join(sorted(oos["competition"].astype(str).unique())),
             "seasons": "|".join(sorted(oos["season_start"].astype(str).unique())) if "season_start" in oos.columns else "",
