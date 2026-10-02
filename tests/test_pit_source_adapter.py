@@ -151,7 +151,7 @@ def test_snapshot_retries_exact_capture_original_url_fallback(tmp_path, monkeypa
         return Response()
 
     adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path), snapshot_retries=1)
-    monkeypatch.setattr("src.data.pit_source_adapter.requests.get", fake_get)
+    monkeypatch.setattr("src.data.pit_source_adapter.resilient_get", lambda getter, url, **kwargs: fake_get(url, **kwargs))
     capture = {
         "timestamp": "20250902200000",
         "digest": "digest-a",
@@ -232,10 +232,20 @@ def test_malformed_snapshot_cache_is_invalidated_and_refetched(tmp_path, monkeyp
         calls.append(url)
         return Response()
 
-    monkeypatch.setattr("src.data.pit_source_adapter_fast.requests.get", fake_get)
+    monkeypatch.setattr("src.data.pit_source_adapter.resilient_get", lambda getter, url, **kwargs: fake_get(url, **kwargs))
 
     diag = adapter._load_snapshot_keys(capture, "https://example.invalid/test.csv")
 
     assert diag.status == "SNAPSHOT_PARSED"
     assert len(calls) == 1
     assert cache.read_bytes() == csv
+
+ 
+ 
+def test_compatibility_adapter_has_no_direct_requests_get_or_legacy_timeout():
+    import inspect
+
+    source = inspect.getsource(adapter.FootballDataWaybackAdapter)
+    assert "requests.get(" not in source
+    assert "max(self.timeout" not in source
+    assert "resilient_get(" in source
