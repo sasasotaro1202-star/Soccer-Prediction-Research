@@ -223,3 +223,49 @@ def test_empty_input_schema_is_preserved(tmp_path, monkeypatch):
     assert len(evidence) == 0
     report = pd.read_csv(report_path)
     assert list(report.columns) == list(mod.REPORT_COLUMNS)
+
+def test_versioned_bridge_paginates_commit_history(monkeypatch, tmp_path):
+    pages = {
+        1: [{"sha": "newest", "commit": {"committer": {"date": "2026-01-01T00:00:00Z"}}}],
+        2: [{"sha": "older", "commit": {"committer": {"date": "2025-01-01T00:00:00Z"}}}],
+    }
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    def fake_request(url, *, params=None, timeout=None, retries=6):
+        calls.append(dict(params or {}))
+        return FakeResponse(pages.get(int((params or {}).get("page", 1)), []))
+
+    monkeypatch.setattr(mod, "_request", fake_request)
+
+    commits = mod._commits("2025-26/en.1.json", cache_dir=tmp_path, max_pages=12)
+
+    assert [c["sha"] for c in commits] == ["newest", "older"]
+    assert [c["page"] for c in calls] == [1, 2]
+    assert all(c["per_page"] == mod.DEFAULT_PER_PAGE for c in calls)
+
+
+def test_versioned_bridge_respects_bounded_commit_page_limit(monkeypatch, tmp_path):
+    calls = []
+
+    class FakeResponse:
+        def json(self):
+            return [{"sha": "page", "commit": {"committer": {"date": "2026-01-01T00:00:00Z"}}}] * mod.DEFAULT_PER_PAGE
+
+    def fake_request(url, *, params=None, timeout=None, retries=6):
+        calls.append(int((params or {}).get("page", 0)))
+        return FakeResponse()
+
+    monkeypatch.setattr(mod, "_request", fake_request)
+
+    commits = mod._commits("2025-26/en.1.json", cache_dir=tmp_path, max_pages=3)
+
+    assert len(commits) == mod.DEFAULT_PER_PAGE * 3
+    assert calls == [1, 2, 3]
+\n
