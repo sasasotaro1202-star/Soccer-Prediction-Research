@@ -153,6 +153,9 @@ def resilient_get(
         status_code = int(getattr(response, "status_code", 200))
         if status_code in TRANSIENT_STATUS_CODES:
             if attempt < max_retries:
+                # Release the transient response before sleeping/retrying so repeated
+                # 429/5xx responses cannot accumulate open connection resources.
+                response.close()
                 time.sleep(_retry_delay(attempt, response, backoff=backoff, max_backoff=max_backoff))
                 continue
 
