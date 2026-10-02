@@ -16,6 +16,8 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 from src.data.pit_source_adapter_fast import normalize_team_identity
 from src.data.pit_source_adapter_v2 import _result_lower_bound
 
@@ -76,7 +78,7 @@ def _utc(value: object) -> datetime | None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
 
-def _snapshot_text(snapshot: dict[str, str], cache_dir: str, timeout: int) -> str:
+def _snapshot_text(snapshot: dict[str, str], cache_dir: str, timeout: float | tuple[float, float] | None) -> str:
     commit_sha = str(snapshot["commit_sha"])
     path = str(snapshot["path"])
     path_key = path.replace("/", "_")
@@ -84,12 +86,14 @@ def _snapshot_text(snapshot: dict[str, str], cache_dir: str, timeout: int) -> st
     if cache_path.exists():
         return cache_path.read_text(encoding="utf-8")
     url = f"https://raw.githubusercontent.com/{REPOSITORY}/{commit_sha}/{path}"
-    response = requests.get(
+    response = resilient_get(
+        requests.get,
         url,
         timeout=timeout,
+        retries=6,
+        backoff=2.0,
         headers={"User-Agent": "SoccerPredictionResearch/PIT-Engsoccerdata"},
     )
-    response.raise_for_status()
     raw = response.content
     if raw.lstrip().lower().startswith((b"<!doctype html", b"<html")):
         raise ValueError("immutable snapshot returned HTML instead of CSV")
