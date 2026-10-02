@@ -40,7 +40,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install dependencies
-        run: python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+        run: python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt
       - name: Download matchday prediction artifact when triggered by Matchday
         if: github.event_name == 'workflow_run'
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
