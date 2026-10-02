@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-      - run: python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+      - run: python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt
       - run: python -m pytest -q
       - run: python -m src.research.opta_like_source_probe --output artifacts/opta_like_source_probe.json
       - run: python -m src.research.scope_frontier --days 14 --output artifacts/scope_frontier.json
@@ -114,8 +114,8 @@ jobs:
           cache: pip
       - run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
-          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 pyarrow
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 300 pyarrow
       - name: Global Data Lake research
         run: |
           set -euo pipefail
@@ -216,8 +216,8 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: |
-          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
-          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 pyarrow
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 300 pyarrow
       - name: Build fresh PIT handoff
         run: |
           set -euo pipefail
@@ -290,7 +290,7 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-      - run: python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+      - run: python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt
       - run: python -m pytest -q
       - name: Download Phase 3 research evidence
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
