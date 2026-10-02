@@ -14,6 +14,10 @@ on:
         description: "Detailed refresh horizon around kickoff"
         required: false
         default: "12"
+      prediction_mode:
+        description: "scheduled_1h = automatic one-hour timing; on_demand = manual forecast at current time"
+        required: false
+        default: "on_demand"
   schedule:
     - cron: "7,22,37,52 * * * *"
 
@@ -128,15 +132,31 @@ jobs:
         run: |
           set -euo pipefail
           if [ -s models/current/production_model.pkl ] && [ -s models/current/production_model.json ] && [ -s models/current/model_registry.json ] && [ -s models/current/production_provenance.json ]; then
-            # Production predictions are intentionally generated near the one-hour-before-kickoff state.
-            # The 15-minute workflow cadence provides retry opportunities without duplicate ledger states.
-            python -m src.prediction.runner \
-              --fixtures artifacts/future_fixtures.csv \
-              --output artifacts/predictions.csv \
-              --status artifacts/prediction_status.json \
-              --model-policy production \
-              --prediction-window-minutes-before 60 \
-              --prediction-window-tolerance-minutes 10
+            PREDICTION_MODE="${{ inputs.prediction_mode || 'scheduled_1h' }}"
+            case "$PREDICTION_MODE" in
+              scheduled_1h)
+                echo "Automatic prediction mode: target 60 minutes before kickoff (±10 minutes)."
+                python -m src.prediction.runner \
+                  --fixtures artifacts/future_fixtures.csv \
+                  --output artifacts/predictions.csv \
+                  --status artifacts/prediction_status.json \
+                  --model-policy production \
+                  --prediction-window-minutes-before 60 \
+                  --prediction-window-tolerance-minutes 10
+                ;;
+              on_demand)
+                echo "Manual/on-demand prediction mode: no fixed timing window; kickoff must still be in the future and PIT gates remain mandatory."
+                python -m src.prediction.runner \
+                  --fixtures artifacts/future_fixtures.csv \
+                  --output artifacts/predictions.csv \
+                  --status artifacts/prediction_status.json \
+                  --model-policy production
+                ;;
+              *)
+                echo "Unsupported prediction_mode=$PREDICTION_MODE" >&2
+                exit 1
+                ;;
+            esac
           else
             printf '%s\n' '{"status":"DEFERRED_NO_ADOPTED_PRODUCTION_MODEL","reason":"No complete adopted production model bundle is present; validated candidates remain research-only."}' > artifacts/prediction_status.json
             echo "No adopted production model present; prediction execution deferred."
