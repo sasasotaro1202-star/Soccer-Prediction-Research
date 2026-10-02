@@ -19,7 +19,7 @@ concurrency:
 jobs:
   watchdog:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Reconcile stuck 9H queue
         env:
@@ -30,8 +30,13 @@ jobs:
         run: |
           set -euo pipefail
 
+          # GitHub control-plane calls must never hang indefinitely. These bounds
+          # are intentionally long for a control API and are independent of the
+          # Python data-fetch timeout floor used by research adapters.
+          CURL_TIMEOUT_ARGS=(--connect-timeout 30 --max-time 120)
+
           get_runs() {
-            curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
+            curl "${CURL_TIMEOUT_ARGS[@]}" --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
               -H "Authorization: Bearer ${GH_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
@@ -39,7 +44,7 @@ jobs:
           }
 
           get_runs > /tmp/9h-runs.json
-          MAIN_SHA="$(curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
+          MAIN_SHA="$(curl "${CURL_TIMEOUT_ARGS[@]}" --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
@@ -127,7 +132,7 @@ jobs:
             local run_id="$1"
             local label="$2"
             local code
-            code="$(curl -sS -o /tmp/cancel-${run_id}.json -w "%{http_code}" -X POST \
+            code="$(curl "${CURL_TIMEOUT_ARGS[@]}" -sS -o /tmp/cancel-${run_id}.json -w "%{http_code}" -X POST \
               -H "Authorization: Bearer ${GH_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
@@ -146,7 +151,7 @@ jobs:
 
           dispatch_fresh() {
             for attempt in 1 2 3 4; do
-              code="$(curl -sS -o /tmp/dispatch.json -w "%{http_code}" -X POST \
+              code="$(curl "${CURL_TIMEOUT_ARGS[@]}" -sS -o /tmp/dispatch.json -w "%{http_code}" -X POST \
                 -H "Authorization: Bearer ${GH_TOKEN}" \
                 -H "Accept: application/vnd.github+json" \
                 -H "X-GitHub-Api-Version: 2022-11-28" \
