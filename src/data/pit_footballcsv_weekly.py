@@ -147,7 +147,7 @@ def _request_json(url: str, timeout: float | tuple[float, float] | None = None) 
                 url,
                 headers=_headers(),
                 timeout=timeout,
-                retries=1,
+                retries=6,
                 backoff=2.0,
             )
             if response.status_code == 403 and response.headers.get("X-RateLimit-Remaining") == "0":
