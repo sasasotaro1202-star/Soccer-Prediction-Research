@@ -143,7 +143,7 @@ jobs:
                 ;;
               *)
                 echo "WATCHDOG: failed to cancel ${label} run ${run_id} (HTTP ${code})." >&2
-                cat "/tmp/cancel-${run_id}.json" >&2 || true
+                cat "/tmp/cancel-${run_id}.json" >&2
                 return 1
                 ;;
             esac
