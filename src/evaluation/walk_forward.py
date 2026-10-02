@@ -9,6 +9,7 @@ from scipy.optimize import minimize, minimize_scalar
 from src.evaluation.metrics import classification_metrics
 from src.models.baselines import candidates
 from src.monitoring.dynamic_routing import build_drift_reference, compute_drift_scores, dynamic_route_weights, history_support_risk, routing_risk_bucket, routing_risk_score
+from src.research.oos_window_signature import exact_oos_window_signature
 
 TARGET_ACCURACY = 0.80
 
@@ -624,6 +625,7 @@ def run_walk_forward(
     case_rows = []
     start = _advance_past_same_kickoff(d, min_train)
     while start < len(d):
+        fold_index = len(results)
         oos_end = _advance_past_same_kickoff(d, min(start + oos_block, len(d)))
         train, oos = d.iloc[:start], d.iloc[start:oos_end]
         val_n = min(max(120, int(len(train) * validation_frac)), validation_max, max(120, len(train) - 300))
@@ -708,6 +710,7 @@ def run_walk_forward(
         )
 
         selected.append({
+            "oos_fold": int(fold_index),
             "oos_start": str(oos.kickoff_utc.min()),
             "selected_model": best,
             "blend": "validation_optimized_contextual_ensemble",
@@ -781,7 +784,9 @@ def run_walk_forward(
             for row_idx, (_, row) in enumerate(oos.reset_index(drop=True).iterrows()):
                 case_rows.append({
                     'match_id': str(row['match_id']),
+                    'oos_fold': int(fold_index),
                     'oos_start': str(oos['kickoff_utc'].min()),
+                    'oos_end': str(oos['kickoff_utc'].max()),
                     'competition': str(row.get('competition', '')),
                     'season_start': str(row.get('season_start', '')),
                     'kickoff_utc': str(row['kickoff_utc']),
@@ -809,7 +814,9 @@ def run_walk_forward(
             fitted["logistic"].predict_proba(oos[feature_cols]),
         )
         results.append({
+            "oos_fold": int(fold_index),
             "oos_start": str(oos.kickoff_utc.min()),
+            "oos_end": str(oos.kickoff_utc.max()),
             "oos_end": str(oos.kickoff_utc.max()),
             "leagues": "|".join(sorted(oos["competition"].astype(str).unique())),
             "seasons": "|".join(sorted(oos["season_start"].astype(str).unique())) if "season_start" in oos.columns else "",
@@ -829,9 +836,27 @@ def run_walk_forward(
         })
         start = oos_end
 
+    window_signature = exact_oos_window_signature(
+        [
+            {
+                "fold": row["oos_fold"],
+                "oos_start": row["oos_start"],
+                "oos_end": row["oos_end"],
+            }
+            for row in results
+        ]
+    )
+    if window_signature is None:
+        raise RuntimeError("OOS window signature could not be derived from explicit boundaries")
+    for row in results:
+        row["oos_window_signature"] = window_signature
+    for row in selected:
+        row["oos_window_signature"] = window_signature
+
     if case_output_path:
         case_file = pd.DataFrame(case_rows)
         if case_file.empty:
             raise RuntimeError('case diagnostics requested but no OOS case rows were produced')
+        case_file["oos_window_signature"] = window_signature
         case_file.to_csv(case_output_path, index=False)
     return pd.DataFrame(results), pd.DataFrame(selected)
