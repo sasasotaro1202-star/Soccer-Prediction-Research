@@ -306,3 +306,29 @@ def test_resilient_get_closes_transient_response_before_retry(monkeypatch):
 
     assert response.status_code == 200
     assert closed == [503]
+
+def test_interactive_explicit_timeout_uses_interactive_floor(monkeypatch):
+    monkeypatch.delenv("SOCCER_HTTP_PROFILE", raising=False)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    calls = []
+
+    class Response:
+        status_code = 200
+        headers = {}
+        def raise_for_status(self):
+            return None
+        def close(self):
+            return None
+
+    def fake_get(*args, **kwargs):
+        calls.append(kwargs["timeout"])
+        return Response()
+
+    http_resilience.resilient_get(
+        fake_get,
+        "https://example.test/data",
+        timeout=(5, 10),
+        retries=1,
+        profile="interactive",
+    )
+    assert calls == [(15.0, 30.0)]
