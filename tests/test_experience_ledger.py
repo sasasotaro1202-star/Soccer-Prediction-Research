@@ -499,3 +499,56 @@ def test_settlement_records_single_source_without_marking_consensus():
     assert out["settlement_verification"] == "SINGLE_SOURCE"
     assert out["settlement_sources_count"] == 1
     assert out["settlement_source"] == "espn"
+
+def test_compute_metrics_emits_explicit_scope_breakdowns(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+
+    metrics_path = tmp_path / "metrics.csv"
+    target_metrics_path = tmp_path / "target_metrics.csv"
+    status_path = tmp_path / "status.json"
+    monkeypatch.setattr(mod, "METRICS", metrics_path)
+    monkeypatch.setattr(mod, "TARGET_METRICS", target_metrics_path)
+    monkeypatch.setattr(mod, "STATUS", status_path)
+
+    rows = []
+    for match_id, comp, phase, tier, regime, result in [
+        ("m1", "EPL", "REGULAR", "TIER1", "STABLE", "H"),
+        ("m2", "UCL", "KNOCKOUT", "TIER1", "VOLATILE", "A"),
+        ("m3", "EPL", "REGULAR", "TIER1", "STABLE", "D"),
+    ]:
+        rows.append({
+            "match_id": match_id,
+            "kickoff_utc": "2026-09-01T10:00:00Z",
+            "actual_result": result,
+            "p_home": 0.60,
+            "p_draw": 0.20,
+            "p_away": 0.20,
+            "correct_1x2": int(result == "H"),
+            "score_top1_hit": 0,
+            "score_top3_hit": 1,
+            "over_2_5_correct": 1,
+            "btts_correct": 0,
+            "mom_top1_hit": 0,
+            "mom_top4_hit": 1,
+            "model_version": "v1",
+            "competition": comp,
+            "season_start": 2025,
+            "phase": phase,
+            "tier": tier,
+            "regime": regime,
+        })
+
+    ledger = pd.DataFrame(rows)
+    assert mod.compute_metrics(ledger) > 0
+
+    report = pd.read_csv(metrics_path)
+    assert set(report.loc[report["scope"] == "competition", "segment"]) == {"EPL", "UCL"}
+    assert set(report.loc[report["scope"] == "season", "segment"]) == {"2025"}
+    assert set(report.loc[report["scope"] == "phase", "segment"]) == {"REGULAR", "KNOCKOUT"}
+    assert set(report.loc[report["scope"] == "tier", "segment"]) == {"TIER1"}
+    assert set(report.loc[report["scope"] == "regime", "segment"]) == {"STABLE", "VOLATILE"}
+
+    target_report = pd.read_csv(target_metrics_path)
+    assert set(target_report.loc[target_report["scope"] == "competition", "segment"]) == {"EPL", "UCL"}
+    assert set(target_report.loc[target_report["scope"] == "phase", "segment"]) == {"REGULAR", "KNOCKOUT"}
+\n
