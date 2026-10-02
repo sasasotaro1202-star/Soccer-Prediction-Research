@@ -31,6 +31,12 @@ MIN_TEACHER_ROWS = 5
 MIN_ROWS_PER_BLOCK = 30
 MIN_BLOCKS = 3
 
+LEDGER_REQUIRED_COLUMNS = frozenset({
+    "match_id", "kickoff_utc", "prediction_pit_cutoff_utc",
+    "prediction_pit_gate", "experience_available_at_utc", "competition",
+    "model_version", "p_home", "p_draw", "p_away", "actual_result",
+})
+
 
 def _read(path: Path) -> pd.DataFrame:
     if not path.is_file() or path.stat().st_size == 0:
@@ -369,7 +375,52 @@ def _candidate_status(blocks: pd.DataFrame, replay: pd.DataFrame) -> tuple[str, 
 
 
 def learn(ledger_path: str | Path = LEDGER) -> dict[str, Any]:
-    data = _validate_ledger(_read(Path(ledger_path)))
+    raw = _read(Path(ledger_path))
+    if raw.empty:
+        status = {
+            "status": "INSUFFICIENT_EXPERIENCE",
+            "reason": "No PIT-valid settled prediction experience is available.",
+            "rows": 0,
+            "generated_at_utc": _now(),
+            "fail_closed": True,
+        }
+        STATUS.parent.mkdir(parents=True, exist_ok=True)
+        STATUS.write_text(json.dumps(status, indent=2), encoding="utf-8")
+        pd.DataFrame().to_csv(METRICS, index=False)
+        POLICY.parent.mkdir(parents=True, exist_ok=True)
+        POLICY.write_text(json.dumps({
+            "status": "INSUFFICIENT_EXPERIENCE",
+            "policy_type": "empirical_experience_correction",
+            "usable_for_production": False,
+            "reason": status["reason"],
+        }, indent=2), encoding="utf-8")
+        return status
+
+    missing = sorted(LEDGER_REQUIRED_COLUMNS - set(raw.columns))
+    if missing:
+        status = {
+            "status": "BLOCKED_LEDGER_SCHEMA",
+            "reason": "Experience learning input exists but does not satisfy the matured-ledger schema.",
+            "missing_columns": missing,
+            "rows": 0,
+            "generated_at_utc": _now(),
+            "fail_closed": True,
+            "production_usable": False,
+        }
+        STATUS.parent.mkdir(parents=True, exist_ok=True)
+        STATUS.write_text(json.dumps(status, indent=2, ensure_ascii=False), encoding="utf-8")
+        pd.DataFrame().to_csv(METRICS, index=False)
+        POLICY.parent.mkdir(parents=True, exist_ok=True)
+        POLICY.write_text(json.dumps({
+            "status": "BLOCKED_LEDGER_SCHEMA",
+            "policy_type": "empirical_experience_correction",
+            "usable_for_production": False,
+            "reason": status["reason"],
+            "missing_columns": missing,
+        }, indent=2, ensure_ascii=False), encoding="utf-8")
+        return status
+
+    data = _validate_ledger(raw)
     if data.empty:
         status = {
             "status": "INSUFFICIENT_EXPERIENCE",
