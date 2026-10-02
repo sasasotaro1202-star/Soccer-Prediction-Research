@@ -17,6 +17,12 @@ MIN_TEACHERS = 60
 MIN_BLOCKS = 3
 MIN_ROWS_PER_BLOCK = 30
 
+TARGET_LEDGER_REQUIRED_COLUMNS = frozenset({
+    "match_id", "kickoff_utc", "prediction_pit_cutoff_utc",
+    "prediction_pit_gate", "experience_available_at_utc",
+    "actual_home_goals", "actual_away_goals",
+})
+
 
 def _read(path: Path) -> pd.DataFrame:
     return pd.read_csv(path) if path.is_file() and path.stat().st_size else pd.DataFrame()
@@ -117,7 +123,7 @@ def _blocks(frame: pd.DataFrame):
 
 
 def learn_target_specific_experience(ledger: pd.DataFrame) -> dict:
-    data = _validate(ledger)
+    missing = sorted(TARGET_LEDGER_REQUIRED_COLUMNS - set(ledger.columns))
     result = {
         "schema_version": 1,
         "status": "INSUFFICIENT_EXPERIENCE",
@@ -130,6 +136,16 @@ def learn_target_specific_experience(ledger: pd.DataFrame) -> dict:
         },
         "oos_rows": [],
     }
+    if missing:
+        result.update({
+            "status": "BLOCKED_LEDGER_SCHEMA",
+            "reason": "Target-specific experience input does not satisfy the matured-ledger schema.",
+            "missing_columns": missing,
+            "production_usable": False,
+        })
+        return result
+
+    data = _validate(ledger)
     if data.empty:
         return result
 
