@@ -128,7 +128,15 @@ jobs:
         run: |
           set -euo pipefail
           if [ -s models/current/production_model.pkl ] && [ -s models/current/production_model.json ] && [ -s models/current/model_registry.json ] && [ -s models/current/production_provenance.json ]; then
-            python -m src.prediction.runner               --fixtures artifacts/future_fixtures.csv               --output artifacts/predictions.csv               --status artifacts/prediction_status.json               --model-policy production               --prediction-window-minutes-before 30               --prediction-window-tolerance-minutes 5
+            # Production predictions are intentionally generated near the one-hour-before-kickoff state.
+            # The 15-minute workflow cadence provides retry opportunities without duplicate ledger states.
+            python -m src.prediction.runner \
+              --fixtures artifacts/future_fixtures.csv \
+              --output artifacts/predictions.csv \
+              --status artifacts/prediction_status.json \
+              --model-policy production \
+              --prediction-window-minutes-before 60 \
+              --prediction-window-tolerance-minutes 10
           else
             printf '%s\n' '{"status":"DEFERRED_NO_ADOPTED_PRODUCTION_MODEL","reason":"No complete adopted production model bundle is present; validated candidates remain research-only."}' > artifacts/prediction_status.json
             echo "No adopted production model present; prediction execution deferred."
