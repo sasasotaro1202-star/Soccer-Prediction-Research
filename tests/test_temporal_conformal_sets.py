@@ -67,3 +67,8 @@ def test_duplicate_fixture_without_state_identity_fails_closed():
     df = df.drop(columns=["prediction_state_id"])
     with pytest.raises(RuntimeError, match="duplicate match_id"):
         temporal_prediction_sets(df)
+
+
+def test_conformal_always_exposes_frozen_holdout_safety_key():
+    state = temporal_prediction_sets(pd.DataFrame())
+    assert state["safety_contract"]["frozen_holdout_touched"] is False
