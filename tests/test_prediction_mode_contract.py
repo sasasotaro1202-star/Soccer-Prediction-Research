@@ -13,5 +13,5 @@ def test_matchday_workflow_separates_scheduled_and_manual_modes():
 
 def test_chat_gateway_routes_manual_matchday_requests_on_demand():
     workflow = Path(".github/workflows/soccer-chat-request-gateway.yml").read_text(encoding="utf-8")
-    assert 'operation" = "matchday_intelligence"' in workflow
+    assert 'if [ "${operation}" = "matchday_intelligence" ]' in workflow
     assert '\"prediction_mode\":\"on_demand\"' in workflow
