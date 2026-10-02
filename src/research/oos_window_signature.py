@@ -11,6 +11,7 @@ def exact_oos_window_signature(rows: Iterable[Mapping[str, Any]]) -> str | None:
     boundaries. Missing boundaries fail closed.
     """
     identities: set[tuple[int, str, str]] = set()
+    fold_ids: set[int] = set()
     seen = False
     for row in rows:
         seen = True
@@ -24,7 +25,14 @@ def exact_oos_window_signature(rows: Iterable[Mapping[str, Any]]) -> str | None:
         end = str(row.get("test_end") or row.get("oos_end") or "").strip()
         if not start or not end:
             return None
-        identities.add((int(fold_value), start, end))
+        fold_id = int(fold_value)
+        if fold_id in fold_ids:
+            # One exact OOS window is allowed per fold identity. Silent set-based
+            # canonicalization would hide duplicate/multi-window folds and break
+            # the reproducibility contract.
+            return None
+        fold_ids.add(fold_id)
+        identities.add((fold_id, start, end))
 
     if not seen or not identities:
         return None
