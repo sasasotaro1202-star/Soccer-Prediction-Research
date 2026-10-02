@@ -1210,8 +1210,16 @@ def main() -> int:
     parser.add_argument("--status", default="artifacts/matchday_intelligence_status.json")
     parser.add_argument("--days", type=int, default=2)
     parser.add_argument("--horizon-hours", type=float, default=DETAILED_HORIZON_HOURS)
+    parser.add_argument(
+        "--max-events",
+        type=int,
+        default=MAX_EVENTS,
+        help="Optional hard cap on discovered fixtures for bounded runtime.",
+    )
     parser.add_argument("--cache-dir", default="cache/external")
     args = parser.parse_args()
+    if args.max_events is not None and args.max_events < 1:
+        parser.error("--max-events must be >= 1")
 
     output = Path(args.output)
     status_path = Path(args.status)
@@ -1222,7 +1230,7 @@ def main() -> int:
         frame, status = collect_matchday_snapshots(
             days=max(1, args.days),
             horizon_hours=max(1.0, args.horizon_hours),
-            max_events=MAX_EVENTS,
+            max_events=args.max_events,
             cache_dir=args.cache_dir,
         )
     except Exception as exc:
