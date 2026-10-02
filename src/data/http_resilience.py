@@ -118,6 +118,30 @@ def _retry_delay(
     return max(0.0, delay)
 
 
+
+def interactive_get(
+    url: str,
+    *,
+    params: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
+    timeout: float | tuple[float, float] | None = None,
+    retries: int | None = None,
+    deadline_seconds: float = 45.0,
+    **kwargs: Any,
+) -> requests.Response:
+    """Short-bounded GET intended for interactive/chat-triggered operations."""
+    return resilient_get(
+        requests.get,
+        url,
+        params=params,
+        headers=headers,
+        timeout=timeout,
+        retries=retries,
+        profile="interactive",
+        deadline_seconds=deadline_seconds,
+        **kwargs,
+    )
+
 def resilient_get(
     getter: Callable[..., requests.Response],
     url: str,
