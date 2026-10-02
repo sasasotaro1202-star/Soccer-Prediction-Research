@@ -7,6 +7,24 @@ import requests
 from src.data import http_resilience
 
 
+def test_default_http_profile_is_interactive_outside_actions(monkeypatch):
+    monkeypatch.delenv("SOCCER_HTTP_PROFILE", raising=False)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    assert http_resilience.default_profile() == "interactive"
+
+
+def test_default_http_profile_is_batch_in_actions(monkeypatch):
+    monkeypatch.delenv("SOCCER_HTTP_PROFILE", raising=False)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    assert http_resilience.default_profile() == "batch"
+
+
+def test_explicit_http_profile_overrides_auto_detection(monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "false")
+    monkeypatch.setenv("SOCCER_HTTP_PROFILE", "batch")
+    assert http_resilience.default_profile() == "batch"
+
+
 def test_default_http_timeout_is_long_read_timeout():
     assert http_resilience.default_timeout() == (60.0, 600.0)
     assert http_resilience.default_retries() == 8
