@@ -288,6 +288,7 @@ def run(
     season_start_year: int = DEFAULT_SEASON_START_YEAR,
     tournament_id: int = DEFAULT_TOURNAMENT_ID,
     season_id: int = DEFAULT_SOFASCORE_SEASON_ID,
+    prediction_cutoff_minutes: float = DEFAULT_PREDICTION_CUTOFF_MINUTES,
     output_dir: str = "artifacts/mom_research",
 ) -> int:
     root = Path(output_dir)
@@ -295,6 +296,10 @@ def run(
     report: dict[str, Any] = {
         "status": "STARTING",
         "production_adopted": False,
+        "prediction_policy": {
+            "prediction_cutoff_minutes": float(prediction_cutoff_minutes),
+            "prediction_time_definition": "kickoff_utc - prediction_cutoff_minutes",
+        },
         "dataset": {
             "repository": SOCCER_DATASET_REPOSITORY,
             "commit": SOCCER_DATASET_COMMIT,
@@ -330,6 +335,7 @@ def run(
         match_stats,
         min_history_appearances=3,
         lookback_appearances=10,
+        prediction_cutoff_minutes=float(prediction_cutoff_minutes),
     )
     feature_report = mom_data_contract_report(features)
     report["feature_contract"] = feature_report
@@ -553,6 +559,11 @@ def main() -> int:
     parser.add_argument("--season-start-year", type=int, default=DEFAULT_SEASON_START_YEAR)
     parser.add_argument("--tournament-id", type=int, default=DEFAULT_TOURNAMENT_ID)
     parser.add_argument("--season-id", type=int, default=DEFAULT_SOFASCORE_SEASON_ID)
+    parser.add_argument(
+        "--prediction-cutoff-minutes",
+        type=float,
+        default=DEFAULT_PREDICTION_CUTOFF_MINUTES,
+    )
     parser.add_argument("--output-dir", default="artifacts/mom_research")
     args = parser.parse_args()
     return run(
@@ -561,6 +572,7 @@ def main() -> int:
         season_start_year=args.season_start_year,
         tournament_id=args.tournament_id,
         season_id=args.season_id,
+        prediction_cutoff_minutes=args.prediction_cutoff_minutes,
         output_dir=args.output_dir,
     )
 
