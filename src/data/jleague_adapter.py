@@ -14,6 +14,8 @@ from urllib.parse import urlencode
 import pandas as pd
 import requests
 
+from src.data.http_resilience import resilient_get
+
 URL = "https://football-data.co.uk/new/JPN.csv"
 OFFICIAL_URL = "https://data.j-league.or.jp/SFMS01/search"
 TARGETS = {"J1": "J1", "J2": "J2", "J3": "J3"}
@@ -88,8 +90,7 @@ def _load_primary(cache_dir: str, start_year: int, end_year: int) -> pd.DataFram
     if cache.exists():
         raw = cache.read_bytes()
     else:
-        r = requests.get(URL, timeout=60, headers=HEADERS)
-        r.raise_for_status()
+        r = resilient_get(requests.get, URL, timeout=None, retries=6, backoff=2.0, headers=HEADERS)
         raw = r.content
         cache.write_bytes(raw)
     df = pd.read_csv(BytesIO(raw))
@@ -144,8 +145,7 @@ def _official_season(comp: str, year: int, cache_dir: str) -> pd.DataFrame:
         if cache.exists():
             candidate = cache.read_bytes()
         else:
-            r = requests.get(url, timeout=60, headers=HEADERS)
-            r.raise_for_status()
+            r = resilient_get(requests.get, url, timeout=None, retries=6, backoff=2.0, headers=HEADERS)
             candidate = r.content
             cache.write_bytes(candidate)
         if b"J2" in candidate or b"J3" in candidate or "Ｊ２" in candidate.decode("utf-8", "ignore") or "Ｊ３" in candidate.decode("utf-8", "ignore") or "Ｊ１" in candidate.decode("utf-8", "ignore"):
