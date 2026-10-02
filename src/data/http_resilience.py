@@ -8,6 +8,7 @@ PIT semantics: callers still provide and validate their own availability timesta
 
 from __future__ import annotations
 
+import math
 import os
 import time
 from collections.abc import Callable
@@ -44,7 +45,9 @@ def _env_float(name: str, default: float, *, minimum: float = 0.0) -> float:
         value = float(raw)
     except ValueError:
         return float(default)
-    return float(value) if value >= minimum else float(default)
+    if not math.isfinite(value):
+        return float(default)
+    return max(float(minimum), float(value))
 
 
 def _env_int(name: str, default: int, *, minimum: int = 1) -> int:
@@ -244,7 +247,9 @@ def resilient_get(
             if attempt < max_retries:
                 # Release the transient response before sleeping/retrying so repeated
                 # 429/5xx responses cannot accumulate open connection resources.
-                response.close()
+                close = getattr(response, "close", None)
+                if callable(close):
+                    close()
                 delay = _retry_delay(attempt, response, backoff=backoff, max_backoff=(profile_max_backoff if max_backoff is None else max_backoff))
                 if deadline_seconds is not None and time.monotonic() - started + delay >= max(0.0, float(deadline_seconds)):
                     raise TimeoutError("resilient_get deadline exhausted before retry")
