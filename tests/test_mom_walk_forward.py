@@ -54,6 +54,13 @@ def test_mom_wfo_is_chronological_and_has_locked_holdout():
     assert np.isfinite(metrics[["top1_hit_rate", "top4_hit_rate", "mrr", "ndcg_at_4", "logloss", "brier", "ece"]].to_numpy()).all()
 
 
+def test_mom_wfo_rejects_late_pre_kickoff_feature_timestamp():
+    d = _rows()
+    d.loc[0, "feature_available_at_utc"] = d.loc[0, "kickoff_utc"] - pd.Timedelta(minutes=30)
+    with pytest.raises(RuntimeError, match="after prediction cutoff"):
+        run_mom_walk_forward(d, n_blocks=6, min_train_matches=5)
+
+
 def test_mom_wfo_rejects_non_pit_feature_timestamp():
     d = _rows()
     d.loc[0, "feature_available_at_utc"] = d.loc[0, "kickoff_utc"] + pd.Timedelta(minutes=1)
