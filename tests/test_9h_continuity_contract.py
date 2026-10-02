@@ -97,3 +97,10 @@ def test_recovery_controller_bounds_all_github_api_requests():
     curl_lines = [line for line in text.splitlines() if "curl " in line]
     assert len(curl_lines) == 11
     assert all('CURL_TIMEOUT_ARGS[@]' in line for line in curl_lines)
+
+
+
+def test_9h_critical_workflows_do_not_suppress_command_failures():
+    for workflow in (AUTONOMOUS, RECOVERY, ROOT / ".github" / "workflows" / "soccer-9h-queue-watchdog.yml"):
+        text = workflow.read_text(encoding="utf-8")
+        assert "|| true" not in text
