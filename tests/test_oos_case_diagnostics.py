@@ -25,6 +25,9 @@ def test_run_walk_forward_writes_per_match_risk_diagnostics(monkeypatch, tmp_pat
         "season_start": [2024] * n,
         "target": target,
         "pit_verified": [True] * n,
+        "prediction_cutoff_at_utc": kickoff - pd.Timedelta(minutes=60),
+        "feature_source_max_available_at_utc": kickoff - pd.Timedelta(minutes=120),
+        "source_available_at_utc": kickoff + pd.Timedelta(hours=3),
         "x": np.linspace(-1.0, 1.0, n),
     })
     output = tmp_path / "oos_case_diagnostics.csv"
@@ -47,6 +50,9 @@ def test_run_walk_forward_writes_per_match_risk_diagnostics(monkeypatch, tmp_pat
         "risk_score", "risk_bucket",
         "model_disagreement", "predictive_entropy", "uncertainty_score",
         "covariate_drift", "history_support_risk", "routing_route",
+        "prediction_cutoff_at_utc", "feature_source_max_available_at_utc",
+        "pit_verified", "outcome_source_available_at_utc",
+        "pit_lineage_status", "pit_lineage_hash",
     }
     assert required.issubset(cases.columns)
     assert len(cases) == int(metrics["n"].sum())
@@ -60,3 +66,11 @@ def test_run_walk_forward_writes_per_match_risk_diagnostics(monkeypatch, tmp_pat
         assert ((cases[column] >= 0.0) & (cases[column] <= 1.0)).all()
     assert cases["routing_route"].notna().all()
     assert np.allclose(cases[["p_home", "p_draw", "p_away"]].sum(axis=1), 1.0)
+
+    assert cases["pit_lineage_status"].eq("PASS").all()
+    assert cases["pit_lineage_hash"].str.startswith("pit:").all()
+    cutoff = pd.to_datetime(cases["prediction_cutoff_at_utc"], utc=True)
+    available = pd.to_datetime(cases["feature_source_max_available_at_utc"], utc=True)
+    kickoff_values = pd.to_datetime(cases["kickoff_utc"], utc=True)
+    assert (available <= cutoff).all()
+    assert (kickoff_values > cutoff).all()
