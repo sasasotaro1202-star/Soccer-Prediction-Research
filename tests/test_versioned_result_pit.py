@@ -70,6 +70,7 @@ def test_versioned_bridge_rejects_unknown_competitions():
 
 def test_versioned_bridge_derives_season_start_from_season_label(monkeypatch, tmp_path):
     history = _history().drop(columns=["season_start"])
+    history["season"] = "2024/25"
     monkeypatch.setattr(
         mod,
         "_commits",
