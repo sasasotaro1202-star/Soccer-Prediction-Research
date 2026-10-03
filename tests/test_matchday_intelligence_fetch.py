@@ -321,13 +321,7 @@ def test_football_data_complements_partial_sofascore_coverage(monkeypatch):
 
     def fake_current_fd(*args, **kwargs):
         captured["current_fd_horizon"] = kwargs["horizon_hours"]
-        return [
-            {
-                **football_data,
-                "match_id": "fdx:current-season",
-                "kickoff_utc": (base_time + pd.Timedelta(hours=18)).isoformat(),
-            }
-        ], [], {}, []
+        return [], [], {}, []
 
     monkeypatch.setattr(m, "_collect_sofascore_day", fake_sofa)
     monkeypatch.setattr(m, "_collect_football_data_fallback", fake_fd)
