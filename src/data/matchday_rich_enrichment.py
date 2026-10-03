@@ -397,7 +397,12 @@ def _apply_known_venue_correction(row: dict[str, Any]) -> dict[str, Any]:
     """Apply only explicit, provenance-tracked corrections for known provider errors."""
     source = _safe_str(row.get("source")).lower()
     if not source:
-        source = _safe_str(row.get("matchday_source")).split("+", 1)[0].lower()
+        source_tokens = {
+            token.strip().lower()
+            for token in _safe_str(row.get("matchday_source")).split("+")
+            if token.strip()
+        }
+        source = "espn" if "espn" in source_tokens else ""
     league = _safe_str(row.get("espn_league"))
     team_id = _safe_str(row.get("home_team_id"))
     venue_name = _safe_str(row.get("venue_name")).lower()
