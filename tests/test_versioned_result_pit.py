@@ -182,6 +182,34 @@ def test_resume_skips_completed_groups_and_advances_to_next_group(monkeypatch, t
 
 
 
+def test_versioned_input_selection_rejects_legacy_resume_schema(tmp_path):
+    primary = tmp_path / "normalized.csv"
+    resume = tmp_path / "resume.csv"
+    primary.write_text("competition,season_start,kickoff_utc,home_team,away_team,home_goals,away_goals\n", encoding="utf-8")
+    resume.write_text("legacy_column\nlegacy\n", encoding="utf-8")
+
+    path, reason = mod.select_input_path(primary, resume)
+
+    assert path == primary
+    assert reason == "RESUME_SCHEMA_INVALID"
+
+
+def test_versioned_input_selection_accepts_usable_resume_schema(tmp_path):
+    primary = tmp_path / "normalized.csv"
+    resume = tmp_path / "resume.csv"
+    primary.write_text("competition,season_start,kickoff_utc,home_team,away_team,home_goals,away_goals\n", encoding="utf-8")
+    resume.write_text(
+        "competition,season_start,kickoff_utc,home_team,away_team,home_goals,away_goals,versioned_result_evidence_status\n"
+        "EPL,2024,2024-08-17T15:00:00Z,Arsenal,Wolves,2,0,UNVERIFIABLE\n",
+        encoding="utf-8",
+    )
+
+    path, reason = mod.select_input_path(primary, resume)
+
+    assert path == resume
+    assert reason == "RESUME_VALID"
+
+
 def test_empty_input_schema_is_preserved(tmp_path, monkeypatch):
     input_path = tmp_path / "empty.csv"
     output_path = tmp_path / "evidence.csv"
