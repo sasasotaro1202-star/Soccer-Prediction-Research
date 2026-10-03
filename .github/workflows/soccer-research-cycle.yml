@@ -74,7 +74,9 @@ jobs:
                 exit 0
               fi
             else
-              git rebase --abort || true
+              if ! git rebase --abort; then
+                echo "Rebase abort could not be completed cleanly."
+              fi
               echo "Rebase conflict detected; refusing to auto-resolve research artifacts."
               exit 1
             fi
