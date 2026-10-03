@@ -1,7 +1,7 @@
 # Soccer-Prediction-Research — Project Source
 
 ## Verified state 2026-10-03
-main latest observed HEAD: 4be2c5f043d9cf1a0bcbb454a2f744ddcabed0ad.
+main latest observed HEAD after re-check: 0643e13d39dd73bb783044c411a0083a5dbd95c9. Latest observed work after the documentation commit hardens OOS PIT lineage boolean/cutoff validation and adds strict OOS PIT guard tests.
 README documents a Data Acquisition → Coverage → QC/PIT → Features → Candidate Models → Walk-forward OOS → Metrics/Calibration → Weakness Research → Candidate Validation → Adoption Gate → Registry → Production Prediction architecture. Current prediction is fail-closed when a valid adopted model/current snapshot is unavailable.
 
 ## Target isolation
