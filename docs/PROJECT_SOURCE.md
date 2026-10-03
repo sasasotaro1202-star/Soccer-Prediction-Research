@@ -15,3 +15,18 @@ Features may use team strength/form, schedule/rest, venue, injuries/lineups, mar
 
 ## Failure frontier
 Prioritize stale-snapshot failures, late lineup information, high-confidence misses, unexplained ranking failures, source conflicts, OOD and competition distribution shift.
+
+## Cross-project governance alignment — 2026-10-03
+
+The five-repository research set is:
+- Baseball-Prediction-System
+- BTC-Prediction-Research
+- 7-Sport-Prediction-Research
+- Soccer-Prediction-Research
+- Stock-Daily-Prediction-3000
+
+Cross-project transfer is mechanism-level only: DISCOVER → ABSTRACT_MECHANISM → COMPATIBILITY → ADAPT → LOCAL_PIT → LOCAL_OOS/WFO → ROBUSTNESS → LOCAL_FROZEN_HOLDOUT → SHADOW → PROMOTE.
+
+Current observed main HEAD for this repository at the audit checkpoint: ec450b2cd6de7ec81458f6d374ed5c0b15ab13cd.
+
+A green workflow, artifact existence, model-file existence or external performance claim is not performance verification. Failures/cancellations/skips remain failures/cancellations/skips unless independently rerun and verified. Historical results and holdouts are not rewritten. Cost-unknown, billing-risk or paid-only sources remain HOLD/UNCONFIRMED.
