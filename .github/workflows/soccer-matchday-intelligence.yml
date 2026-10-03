@@ -134,6 +134,7 @@ jobs:
             --max-matches 48 \
             --workers 8
           python - <<'PY'
+          import csv
           import json
           from pathlib import Path
           import pandas as pd
@@ -159,6 +160,37 @@ jobs:
               raise SystemExit("rich acquisition produced zero provider payloads; data availability is unverified")
           if int(status.get("enriched_rows", 0)) > 0 and coverage.get("acquisition_state") != "PAYLOADS_OBSERVED":
               raise SystemExit("rich acquisition status contradicts observed payload records")
+
+          rows = []
+          for family, item in (coverage.get("source_families") or {}).items():
+              rows.append({
+                  "scope": "source_family",
+                  "key": family,
+                  "payload_records": item.get("payload_records", 0),
+                  "unique_match_ids": item.get("unique_match_ids", 0),
+                  "coverage_pct": item.get("match_coverage_pct", 0),
+                  "endpoints": "|".join(item.get("endpoints") or []),
+              })
+          for channel, item in (coverage.get("feature_channels") or {}).items():
+              rows.append({
+                  "scope": "feature_channel",
+                  "key": channel,
+                  "payload_records": "",
+                  "unique_match_ids": item.get("rows_with_data", 0),
+                  "coverage_pct": item.get("coverage_pct", 0),
+                  "endpoints": "",
+              })
+          with Path("artifacts/rich_source_coverage.csv").open("w", newline="", encoding="utf-8") as handle:
+              writer = csv.DictWriter(
+                  handle,
+                  fieldnames=["scope", "key", "payload_records", "unique_match_ids", "coverage_pct", "endpoints"],
+              )
+              writer.writeheader()
+              writer.writerows(rows)
+
+          if not rows:
+              raise SystemExit("rich source coverage report is empty; acquisition availability could not be measured")
+
           print("## Rich-source acquisition coverage")
           print(f"- Acquisition state: {coverage.get('acquisition_state', 'UNKNOWN')}")
           print(f"- Selected/enriched rows: {coverage.get('selected_rows', 0)}")
@@ -279,6 +311,7 @@ jobs:
             artifacts/matchday_rich_enrichment.csv
             artifacts/matchday_rich_raw.jsonl
             artifacts/matchday_rich_enrichment_status.json
+            artifacts/rich_source_coverage.csv
             artifacts/future_fixtures.csv
             artifacts/predictions.csv
             artifacts/prediction_status.json
