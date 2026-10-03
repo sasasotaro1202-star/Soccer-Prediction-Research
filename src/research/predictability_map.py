@@ -257,6 +257,7 @@ def _oos_evaluate(
         data, MIN_TRAIN_ROWS, block_size
     ):
         target_cutoff = oos["prediction_pit_cutoff_utc"].min()
+        raw_train_rows = len(train)
         train = filter_prior_mature_training(train, target_cutoff)
         if len(train) < MIN_TRAIN_ROWS:
             continue
@@ -292,7 +293,7 @@ def _oos_evaluate(
             "oos_end": oos["prediction_pit_cutoff_utc"].max().isoformat(),
             "n": int(len(oos)),
             "training_rows": int(len(train)),
-            "excluded_immature_training_rows": int(block_size if False else 0),
+            "excluded_immature_training_rows": int(raw_train_rows - len(train)),
             "meta_logloss": meta_m["logloss"],
             "meta_brier": meta_m["brier"],
             "meta_ece": meta_m["ece"],
