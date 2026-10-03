@@ -1500,13 +1500,17 @@ def collect_matchday_snapshots(
                 if _ts(row.get("kickoff_utc")) is not None
                 and _ts(row["kickoff_utc"]).date() == day_date
             ]
-            for row in day_current_fd_rows:
-                fixture_key = _fixture_key(row)
-                if fixture_key and fixture_key in seen_fixture_keys:
-                    continue
-                if fixture_key:
-                    seen_fixture_keys.add(fixture_key)
-                rows.append(row)
+            remaining = None if max_events is None else max(0, int(max_events) - len(rows))
+            if remaining != 0:
+                for row in day_current_fd_rows:
+                    fixture_key = _fixture_key(row)
+                    if fixture_key and fixture_key in seen_fixture_keys:
+                        continue
+                    if fixture_key:
+                        seen_fixture_keys.add(fixture_key)
+                    rows.append(row)
+                    if remaining is not None and len(rows) >= int(max_events):
+                        break
 
         # Reuse the single generic Football-Data fixture snapshot for this day.
         if max_events is None or len(rows) < max_events:
@@ -1523,6 +1527,8 @@ def collect_matchday_snapshots(
                 if fixture_key:
                     seen_fixture_keys.add(fixture_key)
                 new_fd_rows.append(row)
+                if max_events is not None and len(rows) + len(new_fd_rows) >= int(max_events):
+                    break
             if new_fd_rows:
                 rows.extend(new_fd_rows)
 
