@@ -423,6 +423,117 @@ def _parse_weather_payload(payload: dict[str, Any], kickoff: pd.Timestamp) -> di
     return out
 
 
+def _parse_fotmob_detail(payload: dict[str, Any]) -> dict[str, Any]:
+    general = payload.get("general") or {}
+    header = payload.get("header") or {}
+    status = header.get("status") or {}
+    out: dict[str, Any] = {
+        "rich_fotmob_match_id": _safe_str(general.get("matchId")),
+        "rich_fotmob_match_round": _safe_str(general.get("matchRound")),
+        "rich_fotmob_league_name": _safe_str(general.get("leagueName")),
+        "rich_fotmob_country_code": _safe_str(general.get("countryCode")),
+        "rich_fotmob_gender": _safe_str(general.get("gender")),
+        "rich_fotmob_coverage_level": _safe_str(general.get("coverageLevel")),
+        "rich_fotmob_started": bool(general.get("started")),
+        "rich_fotmob_finished": bool(general.get("finished")),
+        "rich_fotmob_cancelled": bool(status.get("cancelled")),
+        "rich_fotmob_status_reason": _safe_str(
+            (status.get("reason") or {}).get("long")
+            or (status.get("reason") or {}).get("short")
+        ),
+    }
+    teams = [
+        item for item in (header.get("teams") or [])
+        if isinstance(item, dict)
+    ]
+    if len(teams) >= 2:
+        out["rich_fotmob_header_home_team"] = _safe_str(teams[0].get("name"))
+        out["rich_fotmob_header_away_team"] = _safe_str(teams[1].get("name"))
+
+    lineup = (payload.get("content") or {}).get("lineup") or {}
+    lineup_teams = []
+    for key in ("homeTeam", "awayTeam"):
+        item = lineup.get(key)
+        if isinstance(item, dict):
+            lineup_teams.append(item)
+    if not lineup_teams and isinstance(lineup.get("lineups"), list):
+        lineup_teams = [
+            item for item in lineup["lineups"]
+            if isinstance(item, dict)
+        ]
+    for item in lineup_teams:
+        team_id = _safe_str(item.get("id") or item.get("teamId"))
+        side = (
+            "home" if team_id == _safe_str((general.get("homeTeam") or {}).get("id"))
+            else "away" if team_id == _safe_str((general.get("awayTeam") or {}).get("id"))
+            else ""
+        )
+        if not side:
+            team_name = _safe_str(item.get("name") or item.get("teamName"))
+            general_home = _safe_str((general.get("homeTeam") or {}).get("name"))
+            general_away = _safe_str((general.get("awayTeam") or {}).get("name"))
+            side = "home" if team_name == general_home else "away" if team_name == general_away else ""
+        if not side:
+            continue
+        prefix = f"rich_fotmob_{side}_"
+        formation = _safe_str(item.get("formation"))
+        if formation:
+            out[prefix + "formation"] = formation
+        for source, target in (
+            ("averageStarterAge", "average_starter_age"),
+            ("totalStarterMarketValue", "total_starter_market_value"),
+        ):
+            value = _number(item.get(source))
+            if value is not None:
+                out[prefix + target] = value
+        starters = item.get("starters") or item.get("players") or []
+        if isinstance(starters, list):
+            valid_starters = [p for p in starters if isinstance(p, dict)]
+            out[prefix + "starter_count"] = int(len(valid_starters))
+            out[prefix + "starter_ids"] = "|".join(
+                dict.fromkeys(
+                    _safe_str(p.get("id") or p.get("playerId"))
+                    for p in valid_starters
+                    if _safe_str(p.get("id") or p.get("playerId"))
+                )
+            )
+            out[prefix + "starter_names"] = "|".join(
+                dict.fromkeys(
+                    _safe_str(p.get("name") or p.get("playerName"))
+                    for p in valid_starters
+                    if _safe_str(p.get("name") or p.get("playerName"))
+                )
+            )
+        unavailable = item.get("unavailable") or item.get("missing") or []
+        if isinstance(unavailable, list):
+            out[prefix + "unavailable_count"] = int(len(unavailable))
+
+    stats = (payload.get("content") or {}).get("stats") or {}
+    periods = stats.get("Periods") or {}
+    all_period = periods.get("All") or {}
+    stat_rows = all_period.get("stats") if isinstance(all_period, dict) else None
+    if isinstance(stat_rows, list) and not bool(general.get("started")):
+        # Only preserve pre-start stats if a provider explicitly exposes them;
+        # never infer that missing values are zero.
+        for group in stat_rows:
+            if not isinstance(group, dict):
+                continue
+            for item in group.get("stats", []) or []:
+                if not isinstance(item, dict):
+                    continue
+                title = _safe_str(item.get("title"))
+                values = item.get("stats")
+                if len(title) < 1 or not isinstance(values, list) or len(values) != 2:
+                    continue
+                if title.lower() in {"expected goals (xg)", "expected goals"}:
+                    out["rich_fotmob_prestats_xg_home"] = _round(values[0], 4)
+                    out["rich_fotmob_prestats_xg_away"] = _round(values[1], 4)
+                elif title.lower() == "ball possession":
+                    out["rich_fotmob_prestats_possession_home"] = _round(values[0], 4)
+                    out["rich_fotmob_prestats_possession_away"] = _round(values[1], 4)
+    return out
+
+
 def _parse_sofa_event(payload: dict[str, Any]) -> dict[str, Any]:
     tournament = payload.get("tournament") or {}
     unique = tournament.get("uniqueTournament") or {}
@@ -904,7 +1015,7 @@ def _source_coverage_report(
         "feature_channels": {},
     }
 
-    for family in ("espn", "sofascore", "open_meteo"):
+    for family in ("espn", "sofascore", "fotmob", "open_meteo"):
         matches = {
             _safe_str(record.get("match_id"))
             for record in raw_records
@@ -1103,6 +1214,20 @@ def _fetch_and_enrich_row(
                 remember("espn", f"team_schedule:{team_id}", schedule, at)
             except Exception as exc:
                 out[f"rich_recent_{side}_error"] = f"{type(exc).__name__}: {exc}"
+
+    fotmob_match_id = _safe_str(out.get("fotmob_match_id"))
+    if fotmob_match_id:
+        try:
+            fotmob_detail, at = _get_json(
+                fetcher,
+                "fotmob_match_detail",
+                "https://www.fotmob.com/api/matchDetails",
+                {"matchId": fotmob_match_id},
+            )
+            out.update(_parse_fotmob_detail(fotmob_detail))
+            remember("fotmob", f"matchDetails:{fotmob_match_id}", fotmob_detail, at)
+        except Exception as exc:
+            out["rich_fotmob_error"] = f"{type(exc).__name__}: {exc}"
 
     sofa_event_id = _safe_str(out.get("sofascore_event_id"))
     sofa_home_id = ""
