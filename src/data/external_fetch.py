@@ -74,7 +74,14 @@ def pit_is_safe(feature_available_at: str | None, prediction_cutoff_at: str | No
 class ExternalFetcher:
     """Retry-bounded HTTP client with content-addressed raw cache."""
 
-    def __init__(self, cache_dir: str | Path = "cache/external", timeout: float | tuple[float, float] | None = None, retries: int = 8, backoff: float = 2.0):
+    def __init__(
+        self,
+        cache_dir: str | Path = "cache/external",
+        timeout: float | tuple[float, float] | None = None,
+        retries: int = 8,
+        backoff: float = 2.0,
+        profile: str | None = None,
+    ):
         self.cache_dir = Path(cache_dir)
         if timeout is None:
             self.timeout = None
@@ -84,6 +91,7 @@ class ExternalFetcher:
             self.timeout = max(1.0, float(timeout))
         self.retries = max(1, int(retries))
         self.backoff = max(0.0, float(backoff))
+        self.profile = profile
 
     def _paths(self, source: str, key: str) -> tuple[Path, Path]:
         root = self.cache_dir / source
@@ -136,6 +144,7 @@ class ExternalFetcher:
             timeout=self.timeout,
             retries=self.retries,
             backoff=self.backoff,
+            profile=self.profile,
         )
         body = response.content
         retrieved_at = iso_utc(utc_now())
