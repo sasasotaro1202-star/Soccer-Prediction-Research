@@ -640,7 +640,7 @@ def parse_fotmob_matches(
     max_events: int | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    upper = now + pd.Timedelta(hours=float(horizon_hours))
+    upper = now + pd.to_timedelta(float(horizon_hours), unit="h")
     for league in payload.get("leagues", []) or []:
         if not isinstance(league, dict):
             continue
@@ -770,7 +770,7 @@ def parse_football_data_fixtures(
         missing = sorted(required - set(frame.columns))
         raise RuntimeError(f"football-data fixtures missing columns: {missing}")
     rows: list[dict[str, Any]] = []
-    upper = now + pd.Timedelta(hours=float(horizon_hours))
+    upper = now + pd.to_timedelta(float(horizon_hours), unit="h")
     temp = frame.copy()
     temp["Div"] = temp["Div"].astype("string").str.strip()
     temp = temp[temp["Div"].isin(FOOTBALL_DATA_DIVISIONS)]
@@ -987,7 +987,7 @@ def _collect_sofascore_day(
         return [], [{"source": "sofascore_scheduled_events", "error": f"{type(exc).__name__}: {exc}"}], None
     errors: list[dict[str, str]] = []
     parsed: list[dict[str, Any]] = []
-    upper = now_ts + pd.Timedelta(hours=float(horizon_hours))
+    upper = now_ts + pd.to_timedelta(float(horizon_hours), unit="h")
     detail_upper = now_ts + pd.Timedelta(
         hours=float(horizon_hours if detail_horizon_hours is None else detail_horizon_hours)
     )
@@ -1169,7 +1169,7 @@ def _required_calendar_days(
     now is not near midnight.
     """
     safe_requested = max(1, int(requested_days))
-    upper = now + pd.Timedelta(hours=float(discovery_horizon_hours))
+    upper = now + pd.to_timedelta(float(discovery_horizon_hours), unit="h")
     calendar_days = max(1, (upper.date() - now.date()).days + 1)
     return max(safe_requested, calendar_days)
 
@@ -1234,7 +1234,7 @@ def collect_matchday_snapshots(
         requested_days=days,
     )
     for day_offset in range(scan_days):
-        day_start = now + pd.Timedelta(days=day_offset)
+        day_start = now + pd.to_timedelta(day_offset, unit="D")
         date = day_start.strftime("%Y%m%d")
         before_day_rows = len(rows)
         for competition, league in ESPN_LEAGUES.items():
