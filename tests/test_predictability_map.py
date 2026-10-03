@@ -85,7 +85,7 @@ def test_chronological_failure_risk_candidate_is_research_only():
     )
     state = analyze(frame)
     assert state["rows"] == 420
-    assert len(state["oos_blocks"]) >= 3
+    assert len(state["oos_blocks"]) >= 5
     assert state["production_usable"] is False
     assert state["safety_contract"]["production_probabilities_changed"] is False
     assert state["safety_contract"]["frozen_holdout_touched"] is False
@@ -133,3 +133,19 @@ def test_duplicate_fixture_without_state_identity_fails_closed():
         assert any(token in str(exc) for token in ("duplicate match_id without prediction_state_id", "invalid prediction_state_id"))
     else:
         raise AssertionError("duplicate fixture without state identity must fail closed")
+
+
+def test_predictability_gate_requires_meaningful_stable_development():
+    from src.research import predictability_map as mod
+
+    development = pd.DataFrame({
+        "meta_logloss": [0.4, 0.5, 0.7],
+        "confidence_logloss": [0.5, 0.6, 0.65],
+    })
+    assert mod._development_improvement_rate(development) == 1 / 3
+
+    stronger = pd.DataFrame({
+        "meta_logloss": [0.485, 0.582, 0.63],
+        "confidence_logloss": [0.5, 0.6, 0.65],
+    })
+    assert mod._development_improvement_rate(stronger) == 1.0
