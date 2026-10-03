@@ -18,7 +18,7 @@ permissions:
 
 concurrency:
   group: soccer-rich-data-availability
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   live-smoke:
