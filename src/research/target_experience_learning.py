@@ -34,10 +34,10 @@ def _validate(ledger: pd.DataFrame) -> pd.DataFrame:
         "prediction_pit_gate", "experience_available_at_utc",
         "actual_home_goals", "actual_away_goals",
     }
-    missing = sorted(required - set(ledger.columns))
     if ledger.empty:
-        return result
+        return pd.DataFrame()
 
+    missing = sorted(required - set(ledger.columns))
     if missing:
         raise RuntimeError(f"target experience ledger missing columns: {missing}")
     d = ledger.copy()
@@ -126,7 +126,6 @@ def _blocks(frame: pd.DataFrame):
 
 
 def learn_target_specific_experience(ledger: pd.DataFrame) -> dict:
-    missing = sorted(TARGET_LEDGER_REQUIRED_COLUMNS - set(ledger.columns))
     result = {
         "schema_version": 1,
         "status": "INSUFFICIENT_EXPERIENCE",
@@ -139,6 +138,10 @@ def learn_target_specific_experience(ledger: pd.DataFrame) -> dict:
         },
         "oos_rows": [],
     }
+    if ledger.empty:
+        return result
+
+    missing = sorted(TARGET_LEDGER_REQUIRED_COLUMNS - set(ledger.columns))
     if missing:
         result.update({
             "status": "BLOCKED_LEDGER_SCHEMA",
