@@ -208,9 +208,24 @@ def _market_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         probs = inv / overround
         provider = _safe_str((item.get("provider") or {}).get("name")) or "UNKNOWN"
+        priority = _safe_int((item.get("provider") or {}).get("priority"))
+        last_updated = _safe_str(
+            item.get("lastUpdated")
+            or item.get("lastUpdate")
+            or item.get("updateTimestamp")
+            or item.get("asOf")
+        )
+        spread = _number(item.get("spread") or item.get("pointSpread"))
+        total = _number(item.get("overUnder") or item.get("total"))
+        if total is None:
+            total = _number((item.get("total") or {}).get("value")) if isinstance(item.get("total"), dict) else None
         rows.append(
             {
                 "provider": provider,
+                "provider_priority": priority,
+                "last_updated": last_updated,
+                "spread": spread,
+                "total": total,
                 "home_odds": float(odds[0]),
                 "draw_odds": float(odds[1]),
                 "away_odds": float(odds[2]),
@@ -241,6 +256,9 @@ def _market_summary(payloads: list[dict[str, Any]]) -> dict[str, Any]:
         ),
     }
     for field in (
+        "provider_priority",
+        "spread",
+        "total",
         "home_odds",
         "draw_odds",
         "away_odds",
@@ -260,6 +278,11 @@ def _market_summary(payloads: list[dict[str, Any]]) -> dict[str, Any]:
             out[f"rich_market_{field}_std"] = float(series.std(ddof=0))
             out[f"rich_market_{field}_min"] = float(series.min())
             out[f"rich_market_{field}_max"] = float(series.max())
+    timestamps = pd.to_datetime(frame["last_updated"], utc=True, errors="coerce").dropna()
+    out["rich_market_latest_observation_at_utc"] = (
+        timestamps.max().isoformat() if not timestamps.empty else ""
+    )
+    out["rich_market_observation_timestamp_count"] = int(len(timestamps))
     return out
 
 
@@ -359,41 +382,151 @@ def _parse_lineups(payload: dict[str, Any]) -> dict[str, Any]:
         group = payload.get(side) or {}
         players = group.get("players") or []
         starters: list[str] = []
+        starter_names: list[str] = []
         substitutes: list[str] = []
+        starter_positions: list[str] = []
+        starter_values: list[float] = []
+        starter_ages: list[float] = []
+        starter_heights: list[float] = []
+        starter_rating_values: list[float] = []
+        position_counts = {"G": 0, "D": 0, "M": 0, "F": 0, "UNK": 0}
+        foot_counts = {"left": 0, "right": 0, "both": 0, "unknown": 0}
         captain = ""
+
+        def scalar_number(value: Any, *keys: str) -> float | None:
+            number = _number(value)
+            if number is not None:
+                return number
+            if isinstance(value, dict):
+                for key in keys:
+                    number = _number(value.get(key))
+                    if number is not None:
+                        return number
+            return None
+
         for player in players:
             if not isinstance(player, dict):
                 continue
             athlete = player.get("player") or {}
             player_id = athlete.get("id") or player.get("playerId")
-            if player.get("captain") is True:
-                captain = _safe_str(player_id)
-            starter = player.get("starter") is True or player.get("substitute") is False
             token = _safe_str(player_id)
-            if starter and token:
-                starters.append(token)
+            name = _safe_str(
+                athlete.get("name")
+                or athlete.get("shortName")
+                or athlete.get("displayName")
+                or athlete.get("slug")
+            )
+            if player.get("captain") is True:
+                captain = token
+            starter = player.get("starter") is True or player.get("substitute") is False
+            if starter:
+                if token:
+                    starters.append(token)
+                if name:
+                    starter_names.append(name)
+                position_obj = athlete.get("position") or player.get("position") or ""
+                position = _safe_str(
+                    (position_obj.get("shortName") if isinstance(position_obj, dict) else None)
+                    or (position_obj.get("name") if isinstance(position_obj, dict) else None)
+                    or (position_obj.get("slug") if isinstance(position_obj, dict) else None)
+                    or position_obj
+                ).upper()
+                if position:
+                    starter_positions.append(position)
+                bucket = "UNK"
+                if position.startswith("G") or "KEEPER" in position:
+                    bucket = "G"
+                elif position.startswith("D") or "DEF" in position:
+                    bucket = "D"
+                elif position.startswith("M") or "MID" in position:
+                    bucket = "M"
+                elif position.startswith("F") or "FORWARD" in position or "ATTACK" in position:
+                    bucket = "F"
+                position_counts[bucket] += 1
+                age = scalar_number(athlete.get("age"), "value")
+                height = scalar_number(athlete.get("height"), "value", "cm")
+                rating = scalar_number(
+                    player.get("rating") or athlete.get("rating"), "value"
+                )
+                market_value = scalar_number(
+                    athlete.get("marketValue")
+                    or athlete.get("proposedMarketValue")
+                    or athlete.get("value"),
+                    "value",
+                    "amount",
+                )
+                if age is not None and 12 <= age <= 60:
+                    starter_ages.append(age)
+                if height is not None and 130 <= height <= 230:
+                    starter_heights.append(height)
+                if rating is not None and 0 <= rating <= 10:
+                    starter_rating_values.append(rating)
+                if market_value is not None and market_value >= 0:
+                    starter_values.append(market_value)
+                foot = _safe_str(
+                    athlete.get("preferredFoot")
+                    or athlete.get("preferredFootSide")
+                    or (athlete.get("foot") or {}).get("name")
+                    if isinstance(athlete.get("foot"), dict)
+                    else athlete.get("preferredFoot") or athlete.get("preferredFootSide")
+                ).lower()
+                if foot in foot_counts:
+                    foot_counts[foot] += 1
+                elif foot == "both feet" or foot == "both":
+                    foot_counts["both"] += 1
+                else:
+                    foot_counts["unknown"] += 1
             elif token:
                 substitutes.append(token)
+
         missing = group.get("missingPlayers")
         missing_count = len(missing) if isinstance(missing, list) else None
+        missing_ids: list[str] = []
+        missing_names: list[str] = []
         reasons = []
         if isinstance(missing, list):
             for item in missing:
                 if not isinstance(item, dict):
                     continue
+                missing_player = item.get("player") or item.get("athlete") or {}
+                missing_id = _safe_str(
+                    item.get("playerId") or missing_player.get("id")
+                )
+                missing_name = _safe_str(
+                    item.get("name")
+                    or missing_player.get("name")
+                    or missing_player.get("shortName")
+                )
+                if missing_id:
+                    missing_ids.append(missing_id)
+                if missing_name:
+                    missing_names.append(missing_name)
                 reason = _safe_str(item.get("reason") or item.get("status"))
                 if reason:
                     reasons.append(reason)
         formation = group.get("formation")
         if isinstance(formation, dict):
             formation = formation.get("formation") or formation.get("name")
-        out[f"rich_sofa_{side}_formation"] = _safe_str(formation)
-        out[f"rich_sofa_{side}_starter_count"] = len(starters) if players else np.nan
-        out[f"rich_sofa_{side}_substitute_count"] = len(substitutes) if players else np.nan
-        out[f"rich_sofa_{side}_starter_ids"] = "|".join(starters)
-        out[f"rich_sofa_{side}_captain_id"] = captain
-        out[f"rich_sofa_{side}_missing_count"] = missing_count
-        out[f"rich_sofa_{side}_missing_reasons"] = " | ".join(dict.fromkeys(reasons))
+        prefix = f"rich_sofa_{side}_"
+        out[f"{prefix}formation"] = _safe_str(formation)
+        out[f"{prefix}starter_count"] = len(starters) if players else np.nan
+        out[f"{prefix}substitute_count"] = len(substitutes) if players else np.nan
+        out[f"{prefix}starter_ids"] = "|".join(starters)
+        out[f"{prefix}starter_names"] = "|".join(starter_names)
+        out[f"{prefix}starter_positions"] = "|".join(starter_positions)
+        out[f"{prefix}captain_id"] = captain
+        out[f"{prefix}missing_count"] = missing_count
+        out[f"{prefix}missing_ids"] = "|".join(dict.fromkeys(missing_ids))
+        out[f"{prefix}missing_names"] = "|".join(dict.fromkeys(missing_names))
+        out[f"{prefix}missing_reasons"] = " | ".join(dict.fromkeys(reasons))
+        out[f"{prefix}starter_avg_age"] = float(np.mean(starter_ages)) if starter_ages else np.nan
+        out[f"{prefix}starter_avg_height_cm"] = float(np.mean(starter_heights)) if starter_heights else np.nan
+        out[f"{prefix}starter_avg_rating"] = float(np.mean(starter_rating_values)) if starter_rating_values else np.nan
+        out[f"{prefix}starter_market_value_sum"] = float(np.sum(starter_values)) if starter_values else np.nan
+        for pos in ("G", "D", "M", "F", "UNK"):
+            out[f"{prefix}starter_position_count_{pos.lower()}"] = int(position_counts[pos]) if players else np.nan
+        for foot in ("left", "right", "both", "unknown"):
+            out[f"{prefix}starter_preferred_foot_{foot}_count"] = int(foot_counts[foot]) if players else np.nan
     confirmed = payload.get("confirmed")
     if isinstance(confirmed, bool):
         out["rich_sofa_lineup_confirmed"] = confirmed
