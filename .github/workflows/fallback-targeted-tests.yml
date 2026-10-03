@@ -1,0 +1,42 @@
+name: Soccer Forecast Fallback Fast Tests
+
+on:
+  pull_request:
+    paths:
+      - "src/prediction/fallback_forecast.py"
+      - "src/prediction/research_forecast.py"
+      - "src/research/forecast_health.py"
+      - "tests/test_fallback_forecast.py"
+      - "tests/test_matchday_refresh_contract.py"
+      - ".github/workflows/soccer-matchday-intelligence.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soccer-forecast-fallback-fast-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fallback_fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check --retries 6 --timeout 120 -r requirements.txt
+      - name: Compile changed forecast code
+        env:
+          PYTHONHASHSEED: "0"
+        run: python -m compileall -q src/prediction/fallback_forecast.py src/prediction/research_forecast.py src/research/forecast_health.py
+      - name: Run focused deterministic tests
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: python -m pytest -q tests/test_fallback_forecast.py tests/test_matchday_refresh_contract.py

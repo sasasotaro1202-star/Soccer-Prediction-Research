@@ -40,3 +40,6 @@ MONITOR → DETECT → TRIAGE → RESEARCH → IMPLEMENT → TEST → PIT → OO
 
 ## Research runner handoff
 Research execution must receive explicit TESTS_PASSED and AUDIT_PASSED boolean states. Missing/invalid handoff is BLOCKED. Retry only bounded transient failures; deterministic implementation/schema failures fail fast and remain non-OOS.
+
+## Fallback routing contract
+Research forecast coverage is total for structurally valid future fixtures. When adopted production models or specialist routes are unavailable, the router must use the PIT-safe fallback rather than returning an empty forecast. The fallback may use explicit historical result availability, versioned result-publication evidence, a weak Elo prior, and an explicitly PIT-verified current matchday market prior. Every fallback output must remain labeled RESEARCH_ONLY and expose data-support/uncertainty diagnostics. Production promotion requires the normal chronological OOS, calibration, robustness and frozen-holdout gates; fallback existence alone is never sufficient.

@@ -68,6 +68,25 @@ def test_versioned_bridge_rejects_unknown_competitions():
         mod.season_path("UCL", 2024)
 
 
+def test_versioned_bridge_derives_season_start_from_season_label(monkeypatch, tmp_path):
+    history = _history().drop(columns=["season_start"])
+    history["season"] = "2024/25"
+    monkeypatch.setattr(
+        mod,
+        "_commits",
+        lambda path, **kwargs: [],
+    )
+
+    _, report = mod.apply_bulk(
+        history,
+        max_groups=1,
+        cache_dir=tmp_path,
+    )
+
+    assert len(report) == 1
+    assert int(report.iloc[0]["season_start"]) == 2024
+
+
 def test_versioned_bridge_verifies_exact_result_once(monkeypatch, tmp_path):
     history = _history()
     commits = [
@@ -192,6 +211,25 @@ def test_versioned_input_selection_rejects_legacy_resume_schema(tmp_path):
 
     assert path == primary
     assert reason == "RESUME_SCHEMA_INVALID"
+
+
+def test_versioned_input_selection_accepts_season_label_resume_schema(tmp_path):
+    primary = tmp_path / "normalized.csv"
+    resume = tmp_path / "resume.csv"
+    primary.write_text(
+        "competition,season_start,kickoff_utc,home_team,away_team,home_goals,away_goals\n",
+        encoding="utf-8",
+    )
+    resume.write_text(
+        "competition,season,kickoff_utc,home_team,away_team,home_goals,away_goals,versioned_result_evidence_status\n"
+        "EPL,2024/25,2024-08-17T15:00:00Z,Arsenal,Wolves,2,0,UNVERIFIABLE\n",
+        encoding="utf-8",
+    )
+
+    path, reason = mod.select_input_path(primary, resume)
+
+    assert path == resume
+    assert reason == "RESUME_VALID"
 
 
 def test_versioned_input_selection_accepts_usable_resume_schema(tmp_path):

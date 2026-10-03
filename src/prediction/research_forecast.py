@@ -13,6 +13,7 @@ from src.data.competition_sources import TARGET_COMPETITIONS
 from src.prediction.prepare_fixtures import prepare_from_files
 from src.prediction.runner import run as run_production_prediction
 from src.data.matchday_intelligence_fetch import ESPN_LEAGUES
+from src.prediction.fallback_forecast import build_fallback_forecast
 
 
 FORECAST_COLUMNS = (
@@ -194,11 +195,19 @@ def run(
 
     fixtures["kickoff_utc"] = pd.to_datetime(fixtures["kickoff_utc"], utc=True, errors="coerce")
     fixtures["competition"] = fixtures["competition"].astype(str).str.strip().str.upper()
-    target = fixtures[
-        fixtures["competition"].isin(TARGET_COMPETITIONS)
+    future_fixtures = fixtures[
+        fixtures["competition"].astype(str).str.strip().ne("")
         & fixtures["kickoff_utc"].notna()
         & (fixtures["kickoff_utc"] > now)
     ].copy()
+
+    ready, reason = _adopted_production_ready()
+    # Production stays constrained to the validated active target universe.
+    # Research fallback is intentionally broader: every structurally valid future
+    # fixture in the acquired snapshot can receive a labeled research-only prior.
+    target = future_fixtures[
+        future_fixtures["competition"].isin(TARGET_COMPETITIONS)
+    ].copy() if ready else future_fixtures.copy()
     target = target.sort_values(["kickoff_utc", "match_id"], kind="mergesort").reset_index(drop=True)
 
     if target.empty:
@@ -213,19 +222,31 @@ def run(
         Path(status_path).write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
         return status
 
-    ready, reason = _adopted_production_ready()
     if not ready:
-        _empty_forecast(output_path)
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(status_path).parent.mkdir(parents=True, exist_ok=True)
+        fallback, fallback_meta = build_fallback_forecast(
+            target,
+            now,
+            history_path="artifacts/normalized_history.csv",
+        )
+        fallback = fallback.reindex(columns=list(FORECAST_COLUMNS) + [
+            c for c in fallback.columns if c not in FORECAST_COLUMNS
+        ])
+        fallback.to_csv(output_path, index=False)
         status = {
-            "status": "DEFERRED_NO_ADOPTED_MODEL",
+            "status": "PREDICTED_FALLBACK_BASELINE",
             "prediction_time_utc": now.isoformat(),
             "rows": int(len(target)),
-            "prediction_rows": 0,
+            "prediction_rows": int(len(fallback)),
             "production_model_used": False,
-            "research_heuristic_disabled": True,
-            "reason": reason,
+            "research_heuristic_disabled": False,
+            "fallback_used": True,
+            "fallback_reason": reason,
+            "fallback_meta": fallback_meta,
+            "production_status": "NOT_READY",
+            "research_only": True,
         }
-        Path(status_path).parent.mkdir(parents=True, exist_ok=True)
         Path(status_path).write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
         return status
 
@@ -248,14 +269,29 @@ def run(
     )
 
     if not production_output.is_file() or production_output.stat().st_size <= 0:
-        _empty_forecast(output_path)
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(status_path).parent.mkdir(parents=True, exist_ok=True)
+        fallback, fallback_meta = build_fallback_forecast(
+            target,
+            now,
+            history_path="artifacts/normalized_history.csv",
+        )
+        fallback = fallback.reindex(columns=list(FORECAST_COLUMNS) + [
+            c for c in fallback.columns if c not in FORECAST_COLUMNS
+        ])
+        fallback.to_csv(output_path, index=False)
         status = {
-            "status": "DEFERRED_NO_PIT_ELIGIBLE_FIXTURES",
+            "status": "PREDICTED_FALLBACK_BASELINE_AFTER_PRODUCTION_DEFER",
             "prediction_time_utc": now.isoformat(),
             "rows": int(len(target)),
-            "prediction_rows": 0,
-            "production_model_used": True,
+            "prediction_rows": int(len(fallback)),
+            "production_model_used": False,
+            "research_heuristic_disabled": False,
+            "fallback_used": True,
+            "fallback_reason": "production_runner_returned_no_prediction_rows",
+            "fallback_meta": fallback_meta,
             "runner_status": runner_status,
+            "research_only": True,
         }
         Path(status_path).write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
         for path in (prepared_path, production_output, production_status, target_snapshot):
