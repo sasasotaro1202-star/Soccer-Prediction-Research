@@ -56,6 +56,72 @@ jobs:
           # rich enrichment; production collection keeps its uncapped discovery.
           python -m src.data.matchday_intelligence_fetch             --days 7             --horizon-hours 168             --max-events 12             --output artifacts/live_smoke_fixtures.csv             --status artifacts/live_smoke_fixture_status.json
 
+      - name: Audit FotMob league identity catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          from src.data.external_fetch import ExternalFetcher
+          from src.data.matchday_intelligence_fetch import (
+              FOTMOB_ALL_LEAGUES_URL,
+              _get_json,
+              parse_fotmob_league_catalog,
+          )
+
+          fetcher = ExternalFetcher(
+              cache_dir="cache/external",
+              timeout=None,
+              retries=8,
+              backoff=2.0,
+          )
+          output = {
+              "source": "fotmob",
+              "endpoint": FOTMOB_ALL_LEAGUES_URL,
+          }
+          try:
+              payload, retrieved_at = _get_json(
+                  fetcher,
+                  "fotmob_all_leagues",
+                  FOTMOB_ALL_LEAGUES_URL,
+              )
+              canonical = json.dumps(
+                  payload,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+                  default=str,
+              )
+              report = parse_fotmob_league_catalog(payload)
+              output.update(
+                  {
+                      "retrieved_at_utc": retrieved_at,
+                      "snapshot_sha256": hashlib.sha256(
+                          canonical.encode("utf-8")
+                      ).hexdigest(),
+                      "report": report,
+                  }
+              )
+          except Exception as exc:
+              output.update(
+                  {
+                      "retrieved_at_utc": None,
+                      "status": "UNAVAILABLE",
+                      "error": f"{type(exc).__name__}: {exc}",
+                  }
+              )
+
+          Path("artifacts").mkdir(parents=True, exist_ok=True)
+          Path("artifacts/fotmob_league_catalog.json").write_text(
+              json.dumps(output, ensure_ascii=False, indent=2),
+              encoding="utf-8",
+          )
+          print(json.dumps(output, ensure_ascii=False, indent=2))
+          PY
+
       - name: Run real rich-data acquisition smoke test
         env:
           PYTHONPATH: .
@@ -144,4 +210,5 @@ jobs:
             artifacts/live_smoke_rich.csv
             artifacts/live_smoke_rich_raw.jsonl
             artifacts/live_smoke_rich_status.json
+            artifacts/fotmob_league_catalog.json
           retention-days: 7
