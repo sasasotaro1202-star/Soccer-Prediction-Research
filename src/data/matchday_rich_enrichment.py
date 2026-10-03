@@ -43,6 +43,20 @@ MAX_RECENT_EVENTS = 10
 # smoke test exercises more than the first few chronological fixtures.
 RICH_SELECTION_PRIORITY = ("EPL", "LL", "BL1", "SA", "FL1", "ERE", "UCL", "UEL", "UECL", "MLS")
 
+# Known upstream venue correction. ESPN has historically exposed Borussia Dortmund's
+# SIGNAL IDUNA PARK with city "Aue"; this must not contaminate weather coordinates.
+# Keep the correction explicit and auditable rather than silently overwriting source data.
+KNOWN_VENUE_CORRECTIONS = {
+    ("espn", "ger.1", "124", "signal iduna park"): {
+        "venue_city": "Dortmund",
+        "venue_country": "Germany",
+        "venue_lat": 51.492668,
+        "venue_lon": 7.451767,
+        "reason": "known ESPN venue-city/coordinate error for Borussia Dortmund home venue",
+        "registry_key": "ESPN:ger.1:124:signal-iduna-park",
+    },
+}
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -377,6 +391,30 @@ def _market_summary(payloads: list[dict[str, Any]]) -> dict[str, Any]:
     )
     out["rich_market_observation_timestamp_count"] = int(len(timestamps))
     return out
+
+
+def _apply_known_venue_correction(row: dict[str, Any]) -> dict[str, Any]:
+    """Apply only explicit, provenance-tracked corrections for known provider errors."""
+    source = _safe_str(row.get("source")).lower()
+    league = _safe_str(row.get("espn_league"))
+    team_id = _safe_str(row.get("home_team_id"))
+    venue_name = _safe_str(row.get("venue_name")).lower()
+    key = (source, league, team_id, venue_name)
+    correction = KNOWN_VENUE_CORRECTIONS.get(key)
+    if correction is None:
+        row.setdefault("venue_integrity_status", "UNVERIFIED")
+        return row
+
+    row["venue_original_city"] = _safe_str(row.get("venue_city"))
+    row["venue_original_country"] = _safe_str(row.get("venue_country"))
+    row["venue_original_lat"] = row.get("venue_lat")
+    row["venue_original_lon"] = row.get("venue_lon")
+    for field in ("venue_city", "venue_country", "venue_lat", "venue_lon"):
+        row[field] = correction[field]
+    row["venue_integrity_status"] = "CORRECTED_KNOWN_PROVIDER_ERROR"
+    row["venue_integrity_reason"] = correction["reason"]
+    row["venue_correction_registry_key"] = correction["registry_key"]
+    return row
 
 
 def _parse_weather_payload(payload: dict[str, Any], kickoff: pd.Timestamp) -> dict[str, Any]:
@@ -1453,6 +1491,8 @@ def _fetch_and_enrich_row(
                     out[f"rich_sofa_recent_{side}_error"] = (
                         f"{type(exc).__name__}: {exc}"
                     )
+
+    out = _apply_known_venue_correction(out)
 
     lat = _number(out.get("venue_lat"))
     lon = _number(out.get("venue_lon"))
