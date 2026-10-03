@@ -155,6 +155,14 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _safe_str(value: Any) -> str:
+    """Normalize optional identifiers/text without converting missing values into a value."""
+    if value is None:
+        return ""
+    text = str(value).strip()
+    return "" if text.lower() in {"nan", "none"} else text
+
+
 def _ts(value: Any) -> pd.Timestamp | None:
     if value is None or value == "":
         return None
