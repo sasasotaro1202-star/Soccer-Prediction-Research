@@ -153,9 +153,9 @@ def test_calibration_oos_excludes_immature_prior_outcomes_from_training():
     state = calibrate(frame, history_rows=120, block_size=60)
     assert state["oos_blocks"]
     assert state["oos_blocks"][0]["block"] == 1
-    assert state["oos_blocks"][0]["training_rows"] == 180
+    assert state["oos_blocks"][0]["training_rows"] == 179
     assert state["oos_blocks"][0]["raw_training_rows"] == 180
-    assert state["oos_blocks"][0]["excluded_immature_training_rows"] == 0
+    assert state["oos_blocks"][0]["excluded_immature_training_rows"] == 1
 
 
 def test_maturity_training_helper_excludes_future_outcomes_and_fails_closed():
