@@ -393,8 +393,8 @@ def analyze(
 
     status = "WARMUP"
     reason = (
-        "At least 120 training rows and 3 chronological OOS blocks are required "
-        "for a failure-risk challenger."
+        "At least 120 training rows and five chronological OOS blocks "
+        "(three development plus two locked) are required for a failure-risk challenger."
     )
     gate: dict[str, Any] = {"status": "HOLD", "blocks": int(len(oos))}
 
@@ -429,6 +429,7 @@ def analyze(
             "promotion remains blocked unless development improvement is stable."
         )
     elif len(oos) > 0:
+        status = "INSUFFICIENT_OOS"
         reason = (
             "Matured data exists but does not yet yield five chronological "
             "OOS blocks (three development plus two locked)."
