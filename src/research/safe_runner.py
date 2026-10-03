@@ -34,6 +34,20 @@ def _load_audit_gate(out: Path) -> dict | None:
     return _load_json(out / "audit_gate.json")
 
 
+def _read_required_bool_env(name: str) -> tuple[bool | None, str | None]:
+    """Read a safety-critical boolean environment variable strictly.
+
+    Missing or non-boolean values are not treated as passing defaults.
+    """
+    raw = os.getenv(name)
+    if raw is None:
+        return None, f"{name} is missing or invalid"
+    normalized = raw.strip().lower()
+    if normalized not in {"true", "false"}:
+        return None, f"{name} is missing or invalid"
+    return normalized == "true", None
+
+
 def run_with_retries() -> int:
     """Run research only when every mandatory safety gate agrees.
 
@@ -47,15 +61,19 @@ def run_with_retries() -> int:
     out = Path(os.getenv("RESEARCH_OUTPUT_DIR", "artifacts"))
     out.mkdir(parents=True, exist_ok=True)
 
-    tests_passed = os.getenv("TESTS_PASSED", "true").lower() == "true"
-    audit_passed = os.getenv("AUDIT_PASSED", "true").lower() == "true"
+    tests_passed, tests_env_error = _read_required_bool_env("TESTS_PASSED")
+    audit_passed, audit_env_error = _read_required_bool_env("AUDIT_PASSED")
     gate = _load_gate(out)
     audit_gate = _load_audit_gate(out)
 
     blockers: list[str] = []
-    if not tests_passed:
+    if tests_env_error:
+        blockers.append(tests_env_error)
+    elif tests_passed is False:
         blockers.append("preflight tests failed")
-    if not audit_passed:
+    if audit_env_error:
+        blockers.append(audit_env_error)
+    elif audit_passed is False:
         blockers.append("data audit execution failed")
     if gate is None:
         blockers.append("completion gate artifact is missing")
