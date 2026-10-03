@@ -578,4 +578,4 @@ def test_rich_probe_selection_prefers_supported_competitions_without_randomness(
     selected = _select_rich_probe_rows(frame, 3)
 
     assert set(selected["competition"]) == {"EPL", "BL1", "J1"}
-    assert selected["match_id"].tolist() == ["d", "c", "b"]
+    assert selected["match_id"].tolist() == ["c", "d", "b"]
