@@ -51,14 +51,37 @@ jobs:
           retention-days: 3
       - name: Commit research artifacts
         if: success()
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           set -euo pipefail
           git add artifacts/
-          if ! git diff --cached --quiet; then
-            git commit -m "Update soccer research artifacts"
-            git push
-          else
+          if git diff --cached --quiet; then
             echo "No research artifact changes to commit."
+            exit 0
           fi
+
+          git commit -m "Update soccer research artifacts"
+
+          # Artifact persistence is a control-plane write. Reconcile with the
+          # current main tip before pushing so another safe workflow update does
+          # not turn a valid research result into a lost-artifact failure.
+          for attempt in 1 2 3; do
+            git fetch --prune origin main
+            if git rebase origin/main; then
+              if git push origin HEAD:main; then
+                exit 0
+              fi
+            else
+              git rebase --abort || true
+              echo "Rebase conflict detected; refusing to auto-resolve research artifacts."
+              exit 1
+            fi
+            echo "Artifact push attempt ${attempt} failed; retrying after refresh..."
+            if [ "${attempt}" -lt 3 ]; then
+              sleep $((attempt * 5))
+            fi
+          done
+          echo "Failed to persist research artifacts after bounded retries."
+          exit 1
