@@ -160,8 +160,8 @@ jobs:
                 ;;
             esac
           else
-            printf '%s\n' '{"status":"DEFERRED_NO_ADOPTED_PRODUCTION_MODEL","reason":"No complete adopted production model bundle is present; validated candidates remain research-only."}' > artifacts/prediction_status.json
-            echo "No adopted production model present; prediction execution deferred."
+            echo "No adopted production model present; routing to research-only total fallback."
+            python -m src.prediction.research_forecast               --fixtures artifacts/future_matchday_fixtures.csv               --output artifacts/predictions.csv               --status artifacts/prediction_status.json               --verify
           fi
       - name: Generate outcome-free uncertainty shadow telemetry
         if: success()
