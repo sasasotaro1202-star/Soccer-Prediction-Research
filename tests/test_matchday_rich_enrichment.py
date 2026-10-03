@@ -155,3 +155,74 @@ def test_rich_workflow_outputs_are_research_only():
     assert "matchday_rich_enrichment.csv" in workflow
     assert "matchday_rich_raw.jsonl" in workflow
     assert "production_changed" in workflow
+
+
+def test_market_summary_keeps_optional_total_spread_and_timestamp():
+    payload = {
+        "odds": [
+            {
+                "provider": {"name": "A", "priority": 1},
+                "homeTeamOdds": {"decimalValue": 2.0},
+                "drawOdds": {"decimalValue": 3.5},
+                "awayTeamOdds": {"decimalValue": 4.0},
+                "spread": -0.5,
+                "overUnder": 2.75,
+                "lastUpdated": "2026-10-04T10:00:00Z",
+            }
+        ]
+    }
+    out = _market_summary([payload])
+    assert out["rich_market_spread_mean"] == -0.5
+    assert out["rich_market_total_mean"] == 2.75
+    assert out["rich_market_latest_observation_at_utc"] == "2026-10-04T10:00:00+00:00"
+    assert out["rich_market_observation_timestamp_count"] == 1
+
+
+def test_lineup_parser_keeps_player_composition_without_turning_missing_into_zero():
+    from src.data.matchday_rich_enrichment import _parse_lineups
+
+    payload = {
+        "confirmed": True,
+        "home": {
+            "formation": "4-3-3",
+            "players": [
+                {
+                    "starter": True,
+                    "captain": True,
+                    "player": {
+                        "id": 10,
+                        "name": "A",
+                        "position": {"shortName": "D"},
+                        "age": 28,
+                        "height": 190,
+                        "preferredFoot": "Right",
+                        "marketValue": 25,
+                    },
+                },
+                {
+                    "substitute": True,
+                    "player": {
+                        "id": 11,
+                        "name": "B",
+                        "position": {"shortName": "F"},
+                    },
+                },
+            ],
+            "missingPlayers": [
+                {"player": {"id": 12, "name": "C"}, "reason": "Injury"}
+            ],
+        },
+        "away": {},
+    }
+    out = _parse_lineups(payload)
+    assert out["rich_sofa_home_starter_names"] == "A"
+    assert out["rich_sofa_home_starter_positions"] == "D"
+    assert out["rich_sofa_home_starter_position_count_d"] == 1
+    assert out["rich_sofa_home_starter_avg_age"] == 28.0
+    assert out["rich_sofa_home_starter_avg_height_cm"] == 190.0
+    assert out["rich_sofa_home_starter_market_value_sum"] == 25.0
+    assert out["rich_sofa_home_missing_ids"] == "12"
+    assert out["rich_sofa_home_missing_names"] == "C"
+    assert out["rich_sofa_home_missing_reasons"] == "Injury"
+    assert out["rich_sofa_lineup_confirmed"] is True
+    assert pd.isna(out["rich_sofa_away_starter_count"])
