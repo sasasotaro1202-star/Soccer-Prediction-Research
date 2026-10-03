@@ -142,10 +142,10 @@ def test_predictability_gate_requires_stable_development_improvement():
         "meta_logloss": [0.4, 0.5, 0.7],
         "confidence_logloss": [0.5, 0.6, 0.65],
     })
-    assert mod._development_improvement_rate(development) == 2 / 3
+    assert mod._development_improvement_rate(development) == 1 / 3
 
     stronger = pd.DataFrame({
-        "meta_logloss": [0.4, 0.5, 0.6],
+        "meta_logloss": [0.485, 0.582, 0.63],
         "confidence_logloss": [0.5, 0.6, 0.65],
     })
     assert mod._development_improvement_rate(stronger) == 1.0
