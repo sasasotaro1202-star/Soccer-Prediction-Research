@@ -58,6 +58,14 @@ def _safe_int(value: Any) -> int | None:
     return int(number)
 
 
+def _safe_provider_id(value: Any) -> str:
+    """Preserve provider IDs when CSV parsing has rendered integer IDs as floats."""
+    text = _safe_str(value)
+    if text.endswith(".0") and text[:-2].isdigit():
+        return text[:-2]
+    return text
+
+
 def _round(value: Any, digits: int = 6) -> float | None:
     number = _number(value)
     return None if number is None else round(float(number), digits)
@@ -421,6 +429,28 @@ def _parse_weather_payload(payload: dict[str, Any], kickoff: pd.Timestamp) -> di
             out[key] = _round(value, 4)
     out["rich_weather_nearest_valid_time_utc"] = times.iloc[index].isoformat()
     return out
+
+
+def _validate_fotmob_detail_payload(
+    payload: Any,
+    expected_match_id: str,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise RuntimeError("FotMob matchDetails payload is not an object")
+    if payload.get("error") is True:
+        message = _safe_str(payload.get("message")) or "provider returned error=true"
+        raise RuntimeError(f"FotMob matchDetails invalid payload: {message}")
+    general = payload.get("general")
+    if not isinstance(general, dict):
+        raise RuntimeError("FotMob matchDetails missing general identity block")
+    actual_match_id = _safe_provider_id(general.get("matchId"))
+    if not actual_match_id:
+        raise RuntimeError("FotMob matchDetails missing matchId")
+    if expected_match_id and actual_match_id != expected_match_id:
+        raise RuntimeError(
+            f"FotMob matchDetails matchId mismatch: expected={expected_match_id}, actual={actual_match_id}"
+        )
+    return payload
 
 
 def _parse_fotmob_detail(payload: dict[str, Any]) -> dict[str, Any]:
@@ -1117,7 +1147,15 @@ def _fetch_and_enrich_row(
     observed_sources: set[str] = set()
     retrieval_times: list[pd.Timestamp] = []
 
-    def remember(source: str, endpoint: str, payload: Any, retrieved_at: str) -> None:
+    def remember(
+        source: str,
+        endpoint: str,
+        payload: Any,
+        retrieved_at: str,
+        *,
+        payload_valid: bool = True,
+        payload_status: str = "OK",
+    ) -> None:
         observed_sources.add(source)
         stamp = _ts(retrieved_at)
         if stamp is not None:
@@ -1131,6 +1169,8 @@ def _fetch_and_enrich_row(
                 "retrieval_before_kickoff": bool(
                     stamp is not None and stamp <= kickoff
                 ),
+                "payload_valid": bool(payload_valid),
+                "payload_status": payload_status,
                 "payload_sha256": _json_hash(payload),
                 "payload": payload,
             }
@@ -1215,7 +1255,7 @@ def _fetch_and_enrich_row(
             except Exception as exc:
                 out[f"rich_recent_{side}_error"] = f"{type(exc).__name__}: {exc}"
 
-    fotmob_match_id = _safe_str(out.get("fotmob_match_id"))
+    fotmob_match_id = _safe_provider_id(out.get("fotmob_match_id"))
     if fotmob_match_id:
         try:
             fotmob_detail, at = _get_json(
@@ -1224,8 +1264,23 @@ def _fetch_and_enrich_row(
                 "https://www.fotmob.com/api/matchDetails",
                 {"matchId": fotmob_match_id},
             )
-            out.update(_parse_fotmob_detail(fotmob_detail))
-            remember("fotmob", f"matchDetails:{fotmob_match_id}", fotmob_detail, at)
+            try:
+                validated = _validate_fotmob_detail_payload(
+                    fotmob_detail,
+                    fotmob_match_id,
+                )
+            except Exception as exc:
+                remember(
+                    "fotmob",
+                    f"matchDetails:{fotmob_match_id}",
+                    fotmob_detail,
+                    at,
+                    payload_valid=False,
+                    payload_status="INVALID",
+                )
+                raise exc
+            out.update(_parse_fotmob_detail(validated))
+            remember("fotmob", f"matchDetails:{fotmob_match_id}", validated, at)
         except Exception as exc:
             out["rich_fotmob_error"] = f"{type(exc).__name__}: {exc}"
 
@@ -1471,9 +1526,20 @@ def _fetch_and_enrich_row(
         out["rich_last_retrieved_at_utc"] = ""
         out["rich_live_observable_before_kickoff"] = False
 
+    successful_raw_records = [
+        record for record in raw_records
+        if bool(record.get("payload_valid", True))
+    ]
     diagnostics["rich_sources_observed"] = "|".join(sorted(observed_sources))
-    diagnostics["rich_payload_count"] = int(len(raw_records))
-    diagnostics["rich_detail_status"] = "ENRICHED" if raw_records else "NO_DETAIL"
+    diagnostics["rich_payload_count"] = int(len(successful_raw_records))
+    diagnostics["rich_raw_payload_record_count"] = int(len(raw_records))
+    diagnostics["rich_detail_status"] = (
+        "ENRICHED"
+        if successful_raw_records
+        else "SOURCE_PAYLOAD_ERROR"
+        if raw_records
+        else "NO_DETAIL"
+    )
     diagnostics["rich_snapshot_generated_at_utc"] = iso_utc(_now())
 
     error_fields = [
@@ -1503,8 +1569,14 @@ def _fetch_and_enrich_row(
             continue
         populated += 1
     total = len(core_rich_values)
-    diagnostics["rich_successful_endpoint_count"] = int(len(raw_records))
-    diagnostics["rich_error_endpoint_count"] = int(len(error_fields))
+    diagnostics["rich_successful_endpoint_count"] = int(len(successful_raw_records))
+    diagnostics["rich_error_endpoint_count"] = int(
+        len(error_fields)
+        + sum(
+            not bool(record.get("payload_valid", True))
+            for record in raw_records
+        )
+    )
     diagnostics["rich_source_family_count"] = int(len(observed_sources))
     diagnostics["rich_feature_field_count"] = int(populated)
     diagnostics["rich_feature_field_total"] = int(total)
