@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 import src.evaluation.walk_forward as wf
 
@@ -63,3 +64,36 @@ def test_run_walk_forward_writes_per_match_risk_diagnostics(monkeypatch, tmp_pat
         assert ((cases[column] >= 0.0) & (cases[column] <= 1.0)).all()
     assert cases["routing_route"].notna().all()
     assert np.allclose(cases[["p_home", "p_draw", "p_away"]].sum(axis=1), 1.0)
+
+
+def _pit_case_row():
+    kickoff = pd.Timestamp("2025-01-01T12:00:00Z")
+    return {
+        "match_id": "pit-case-1",
+        "kickoff_utc": kickoff,
+        "prediction_cutoff_at_utc": kickoff - pd.Timedelta(minutes=60),
+        "feature_source_max_available_at_utc": kickoff - pd.Timedelta(minutes=120),
+        "source_available_at_utc": kickoff + pd.Timedelta(minutes=180),
+        "pit_verified": True,
+    }
+
+
+def test_oos_pit_lineage_parses_pit_verified_without_truthy_string_coercion():
+    row = _pit_case_row()
+    accepted = wf._pit_lineage_for_case({**row, "pit_verified": "true"})
+    assert accepted["pit_lineage_status"] == "PASS"
+
+    with pytest.raises(RuntimeError, match="pit_verified"):
+        wf._pit_lineage_for_case({**row, "pit_verified": "false"})
+
+    with pytest.raises(RuntimeError, match="invalid pit_verified"):
+        wf._pit_lineage_for_case({**row, "pit_verified": "maybe"})
+
+
+def test_oos_pit_lineage_rejects_cutoff_after_kickoff():
+    row = _pit_case_row()
+    with pytest.raises(RuntimeError, match="cutoff after kickoff"):
+        wf._pit_lineage_for_case({
+            **row,
+            "prediction_cutoff_at_utc": row["kickoff_utc"] + pd.Timedelta(minutes=1),
+        })
