@@ -63,6 +63,34 @@ FOTMOB_COMPETITION_MAP: dict[str, str] = {
     "UEFA Europa League": "UEL",
     "UEFA Conference League": "UECL",
 }
+# Competition identity is keyed by provider league ID, not display name alone.
+# A provider can have multiple competitions named "Premier League"/"Ligue 1".
+# Only the verified league IDs are admitted; an explicit country-code mismatch
+# fails closed instead of silently relabeling the fixture.
+FOTMOB_COMPETITION_ID_MAP: dict[int, str] = {
+    47: "EPL",
+    57: "ERE",
+    87: "LL",
+    55: "SA",
+    54: "BL1",
+    53: "FL1",
+    42: "UCL",
+    73: "UEL",
+    10007: "UECL",
+    130: "MLS",
+}
+FOTMOB_EXPECTED_CCODE: dict[int, str] = {
+    47: "ENG",
+    57: "NED",
+    87: "ESP",
+    55: "ITA",
+    54: "GER",
+    53: "FRA",
+    42: "INT",
+    73: "INT",
+    10007: "INT",
+    130: "USA",
+}
 
 SOFASCORE_COMPETITIONS: dict[str, str] = {
     "Premier League": "EPL",
@@ -570,11 +598,18 @@ def parse_sofascore_event(event: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def _fotmob_competition(name: Any) -> str | None:
-    text = " ".join(str(name or "").strip().split())
-    if not text:
+def _fotmob_competition(league: dict[str, Any]) -> str | None:
+    league_id = _safe_int(league.get("id") or league.get("primaryId"))
+    if league_id is None:
         return None
-    return FOTMOB_COMPETITION_MAP.get(text)
+    competition = FOTMOB_COMPETITION_ID_MAP.get(league_id)
+    if competition is None:
+        return None
+    ccode = _safe_str(league.get("ccode") or league.get("countryCode")).upper()
+    expected_ccode = FOTMOB_EXPECTED_CCODE.get(league_id, "")
+    if ccode and expected_ccode and ccode != expected_ccode:
+        return None
+    return competition
 
 
 def _fotmob_match_kickoff(match: dict[str, Any]) -> pd.Timestamp | None:
@@ -604,7 +639,7 @@ def parse_fotmob_matches(
         if not isinstance(league, dict):
             continue
         league_name = str(league.get("name") or "").strip()
-        competition = _fotmob_competition(league_name)
+        competition = _fotmob_competition(league)
         if competition is None:
             continue
         league_id = _safe_str(league.get("id") or league.get("primaryId"))
