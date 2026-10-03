@@ -39,6 +39,10 @@ DEFAULT_WORKERS = 8
 MAX_H2H_EVENTS = 10
 MAX_RECENT_EVENTS = 10
 
+# Prefer supported FotMob competitions when the live probe is capped so the
+# smoke test exercises more than the first few chronological fixtures.
+RICH_SELECTION_PRIORITY = ("EPL", "LL", "BL1", "SA", "FL1", "ERE", "UCL", "UEL", "UECL", "MLS")
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -1603,6 +1607,50 @@ def _fetch_and_enrich_row(
     return out, raw_records
 
 
+def _select_rich_probe_rows(work: pd.DataFrame, max_matches: int) -> pd.DataFrame:
+    """Select a small but diverse live-probe sample without randomization."""
+    if work.empty or max_matches <= 0:
+        return work.iloc[0:0].copy()
+
+    selected_indices: list[int] = []
+    seen_competitions: set[str] = set()
+
+    for competition in RICH_SELECTION_PRIORITY:
+        matches = work.loc[work["competition"].astype(str) == competition]
+        if matches.empty:
+            continue
+        idx = int(matches.index[0])
+        selected_indices.append(idx)
+        seen_competitions.add(competition)
+        if len(selected_indices) >= max_matches:
+            break
+
+    if len(selected_indices) < max_matches:
+        for idx, row in work.iterrows():
+            int_idx = int(idx)
+            if int_idx in selected_indices:
+                continue
+            competition = _safe_str(row.get("competition"))
+            if competition in seen_competitions:
+                continue
+            selected_indices.append(int_idx)
+            seen_competitions.add(competition)
+            if len(selected_indices) >= max_matches:
+                break
+
+    if len(selected_indices) < max_matches:
+        for idx in work.index:
+            int_idx = int(idx)
+            if int_idx not in selected_indices:
+                selected_indices.append(int_idx)
+                if len(selected_indices) >= max_matches:
+                    break
+
+    return work.loc[selected_indices].sort_values(
+        ["kickoff_utc", "match_id"], kind="mergesort"
+    ).reset_index(drop=True)
+
+
 def enrich_matchday_frame(
     frame: pd.DataFrame,
     *,
@@ -1634,7 +1682,7 @@ def enrich_matchday_frame(
         work["kickoff_utc"].notna() & (work["kickoff_utc"] >= now)
     ].copy()
     if max_matches > 0:
-        eligible = eligible.head(int(max_matches))
+        eligible = _select_rich_probe_rows(eligible, int(max_matches))
 
     fetcher = ExternalFetcher(
         cache_dir=cache_dir,
