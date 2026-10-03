@@ -40,3 +40,6 @@ MONITOR → DETECT → TRIAGE → RESEARCH → IMPLEMENT → TEST → PIT → OO
 
 ## Research runner handoff
 Research execution must receive explicit TESTS_PASSED and AUDIT_PASSED boolean states. Missing/invalid handoff is BLOCKED. Retry only bounded transient failures; deterministic implementation/schema failures fail fast and remain non-OOS.
+
+## Total research forecast
+Daily research forecast coverage must not become empty merely because an adopted production model is unavailable. Use the repository's PIT-safe fallback routing for structurally valid future fixtures, label the fallback explicitly as research-only, and preserve the fail-closed production registry gate.
