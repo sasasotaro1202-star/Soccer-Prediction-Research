@@ -216,6 +216,8 @@ def run(
 
     ready, reason = _adopted_production_ready()
     if not ready:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(status_path).parent.mkdir(parents=True, exist_ok=True)
         fallback, fallback_meta = build_fallback_forecast(
             target,
             now,
@@ -261,6 +263,7 @@ def run(
     )
 
     if not production_output.is_file() or production_output.stat().st_size <= 0:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         fallback, fallback_meta = build_fallback_forecast(
             target,
             now,
