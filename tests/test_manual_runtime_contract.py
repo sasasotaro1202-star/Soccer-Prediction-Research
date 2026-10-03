@@ -5,13 +5,13 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 
 def test_manual_user_facing_workflows_use_full_job_budget():
     expected = {
-        "soccer-daily-research-forecast.yml": "timeout-minutes: \${{ github.event_name == 'workflow_dispatch' && 360 || 60 }}",
-        "soccer-matchday-intelligence.yml": "timeout-minutes: \${{ github.event_name == 'workflow_dispatch' && 360 || 20 }}",
-        "soccer-predictability-research.yml": "timeout-minutes: \${{ github.event_name == 'workflow_dispatch' && 360 || 45 }}",
+        "soccer-daily-research-forecast.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 60 }}",
+        "soccer-matchday-intelligence.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 20 }}",
+        "soccer-predictability-research.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 45 }}",
     }
     for name, line in expected.items():
         text = (WORKFLOWS / name).read_text(encoding="utf-8")
-        assert line.replace("\\\${", "\${") in text
+        assert line in text
 
 def test_9h_manual_workflow_already_uses_hosted_job_limit_per_phase():
     text = (WORKFLOWS / "soccer-9h-autonomous.yml").read_text(encoding="utf-8")
