@@ -39,7 +39,7 @@ concurrency:
 jobs:
   pit-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 120 }}
     env:
       PYTHONPATH: .
     steps:
