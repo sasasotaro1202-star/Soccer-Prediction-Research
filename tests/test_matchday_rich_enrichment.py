@@ -444,3 +444,34 @@ def test_fotmob_json_fetch_falls_back_to_current_data_route():
         "https://www.fotmob.com/api/matches",
         "https://www.fotmob.com/api/data/matches",
     ]
+
+
+def test_fotmob_detail_json_fetch_falls_back_to_current_data_route():
+    from src.data.matchday_intelligence_fetch import _get_json
+
+    class FakeFetcher:
+        def __init__(self):
+            self.urls = []
+
+        def get(self, source, url, **kwargs):
+            self.urls.append(url)
+            if url == "https://www.fotmob.com/api/matchDetails":
+                raise RuntimeError("primary detail route unavailable")
+            return SimpleNamespace(
+                body=b'{"general": {"matchId": "12345"}}',
+                metadata=SimpleNamespace(retrieved_at="2026-10-04T00:01:00Z"),
+            )
+
+    fetcher = FakeFetcher()
+    payload, retrieved_at = _get_json(
+        fetcher,
+        "fotmob_match_detail",
+        "https://www.fotmob.com/api/matchDetails",
+        {"matchId": "12345"},
+    )
+    assert payload["general"]["matchId"] == "12345"
+    assert retrieved_at == "2026-10-04T00:01:00Z"
+    assert fetcher.urls == [
+        "https://www.fotmob.com/api/matchDetails",
+        "https://www.fotmob.com/api/data/matchDetails",
+    ]
