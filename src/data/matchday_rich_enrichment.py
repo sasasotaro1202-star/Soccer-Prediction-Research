@@ -1694,16 +1694,32 @@ def enrich_matchday_frame(
             rows.append(untouched)
 
     enriched = pd.DataFrame(rows)
+    source_payload_error_rows = int(
+        sum(
+            str(row.get("rich_detail_status", "")) == "SOURCE_PAYLOAD_ERROR"
+            for row in rows
+        )
+    )
+    valid_payload_records = int(
+        sum(
+            bool(record.get("payload_valid", True))
+            for record in raw_records
+        )
+    )
     status = {
         "status": (
-            "COMPLETED_RESEARCH_ONLY"
-            if not errors
-            else "COMPLETED_WITH_ROW_ERRORS"
+            "COMPLETED_WITH_ROW_ERRORS"
+            if errors
+            else "COMPLETED_WITH_SOURCE_ERRORS"
+            if source_payload_error_rows
+            else "COMPLETED_RESEARCH_ONLY"
         ),
         "input_rows": int(len(work)),
         "selected_rows": int(len(eligible)),
         "enriched_rows": int(len(outputs)),
         "raw_payload_records": int(len(raw_records)),
+        "valid_payload_records": valid_payload_records,
+        "source_payload_error_rows": source_payload_error_rows,
         "row_errors": errors,
         "workers": int(max(1, int(workers))),
         "max_matches": int(max_matches),
