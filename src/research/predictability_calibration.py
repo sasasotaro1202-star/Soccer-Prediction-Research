@@ -17,6 +17,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from src.research.predictability_map import TELEMETRY, WEIGHTS
+from src.research.pit_training import filter_prior_mature_training
 
 MIN_HISTORY = 120
 BLOCK_SIZE = 60
@@ -199,7 +200,8 @@ def calibrate(
         oos = d.iloc[start:end].copy()
         if len(oos) < int(block_size):
             break
-        train = d.iloc[:start].copy()
+        target_cutoff = oos["prediction_pit_cutoff_utc"].min()
+        train = filter_prior_mature_training(d.iloc[:start].copy(), target_cutoff)
         y_train = train["correct"].to_numpy(dtype=int)
         if len(train) < int(history_rows) or np.unique(y_train).size < 2:
             start = end
@@ -222,6 +224,7 @@ def calibrate(
             "oos_end": oos["prediction_pit_cutoff_utc"].max().isoformat(),
             "n": int(len(oos)),
             "training_rows": int(len(train)),
+            "excluded_immature_training_rows": int(start - len(train)),
             "calibrated_logloss": cal_m["logloss"],
             "raw_logloss": raw_m["logloss"],
             "delta_logloss": cal_m["logloss"] - raw_m["logloss"],
