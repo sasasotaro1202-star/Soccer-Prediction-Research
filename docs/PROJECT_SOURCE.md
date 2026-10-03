@@ -1,7 +1,7 @@
 # Soccer-Prediction-Research — Project Source
 
 ## Verified state 2026-10-03
-Current GitHub main is authoritative and is re-checked each run; this section intentionally avoids embedding a self-invalidating commit SHA. Latest observed work hardens OOS PIT lineage boolean/cutoff validation and strengthens research artifact persistence against bounded push/rebase races.
+Current GitHub main is authoritative and is re-checked each run; this section intentionally avoids embedding a self-invalidating commit SHA. Latest observed work hardens OOS PIT lineage boolean/cutoff validation, makes research preflight state strictly fail-closed, strengthens research artifact persistence against bounded push/rebase races, and requires meaningful multi-block evidence before predictability research can become a promotion candidate.
 README documents a Data Acquisition → Coverage → QC/PIT → Features → Candidate Models → Walk-forward OOS → Metrics/Calibration → Weakness Research → Candidate Validation → Adoption Gate → Registry → Production Prediction architecture. Current prediction is fail-closed when a valid adopted model/current snapshot is unavailable.
 
 ## Target isolation
