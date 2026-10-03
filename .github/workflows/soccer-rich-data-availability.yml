@@ -106,10 +106,13 @@ jobs:
 
           if rows == 0:
               print("- RESULT: NO_FIXTURES_TO_PROBE (not a successful data-availability proof)")
+              raise SystemExit(
+                  "LIVE_DATA_UNVERIFIED: fixture discovery returned zero rows; source availability cannot be established"
+              )
           elif payloads > 0:
               print("- RESULT: LIVE_PAYLOADS_OBSERVED")
           else:
-              print("- RESULT: UNVERIFIED")
+              raise SystemExit("LIVE_DATA_UNVERIFIED: no real provider payloads observed")
           PY
 
       - name: Upload live availability evidence
