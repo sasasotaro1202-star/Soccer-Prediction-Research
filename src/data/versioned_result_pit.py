@@ -289,7 +289,6 @@ def _snapshot_index(payload: dict[str, Any]) -> dict[tuple[str, str, str, float,
 INPUT_REQUIRED_COLUMNS = frozenset(
     {
         "competition",
-        "season_start",
         "kickoff_utc",
         "home_team",
         "away_team",
@@ -297,6 +296,7 @@ INPUT_REQUIRED_COLUMNS = frozenset(
         "away_goals",
     }
 )
+SEASON_COLUMNS = frozenset({"season_start", "season"})
 
 
 def select_input_path(primary: str | Path, resume: str | Path) -> tuple[Path, str]:
@@ -309,7 +309,7 @@ def select_input_path(primary: str | Path, resume: str | Path) -> tuple[Path, st
         columns = set(pd.read_csv(resume_path, nrows=0).columns)
     except (OSError, pd.errors.ParserError, pd.errors.EmptyDataError):
         return primary_path, "RESUME_UNREADABLE"
-    if INPUT_REQUIRED_COLUMNS.issubset(columns):
+    if INPUT_REQUIRED_COLUMNS.issubset(columns) and columns.intersection(SEASON_COLUMNS):
         return resume_path, "RESUME_VALID"
     return primary_path, "RESUME_SCHEMA_INVALID"
 
@@ -337,7 +337,16 @@ def apply_bulk(
 
     work = out.copy()
     work["competition"] = work["competition"].astype(str).str.strip().str.upper()
-    work["season_start"] = pd.to_numeric(work.get("season_start"), errors="coerce")
+    if "season_start" in work.columns:
+        work["season_start"] = pd.to_numeric(work["season_start"], errors="coerce")
+    else:
+        work["season_start"] = pd.Series(pd.NA, index=work.index, dtype="Float64")
+    if "season" in work.columns:
+        season_start_from_label = pd.to_numeric(
+            work["season"].astype("string").str.extract(r"^(\d{4})", expand=False),
+            errors="coerce",
+        )
+        work["season_start"] = work["season_start"].fillna(season_start_from_label)
     work["kickoff_utc"] = pd.to_datetime(work["kickoff_utc"], utc=True, errors="coerce")
     supported = work["competition"].isin(COMPETITION_FILES) & work["season_start"].notna()
     work = work.loc[supported].copy()
