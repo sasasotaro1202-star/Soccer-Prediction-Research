@@ -319,8 +319,19 @@ def test_football_data_complements_partial_sofascore_coverage(monkeypatch):
         captured["fd_horizon"] = kwargs["horizon_hours"]
         return [football_data], [], "2026-09-25T00:02:00Z"
 
+    def fake_current_fd(*args, **kwargs):
+        captured["current_fd_horizon"] = kwargs["horizon_hours"]
+        return [
+            {
+                **football_data,
+                "match_id": "fdx:current-season",
+                "kickoff_utc": (base_time + pd.Timedelta(hours=18)).isoformat(),
+            }
+        ], [], {}, []
+
     monkeypatch.setattr(m, "_collect_sofascore_day", fake_sofa)
     monkeypatch.setattr(m, "_collect_football_data_fallback", fake_fd)
+    monkeypatch.setattr(m, "_collect_football_data_current_season", fake_current_fd)
 
     frame, status = m.collect_matchday_snapshots(days=2, horizon_hours=12, max_events=20)
     assert set(frame["match_id"]) == {"sofa:partial", "fdx:complement"}
@@ -329,6 +340,7 @@ def test_football_data_complements_partial_sofascore_coverage(monkeypatch):
     assert captured["sofa_horizon"] == 48.0
     assert captured["sofa_detail_horizon"] == 12.0
     assert captured["fd_horizon"] == 48.0
+    assert captured["current_fd_horizon"] == 48.0
     assert status["discovery_horizon_hours"] == 48.0
     assert status["detail_horizon_hours"] == 12.0
 
