@@ -269,9 +269,11 @@ def predict_fallback_fixture(
     history: pd.DataFrame,
     prediction_time: pd.Timestamp,
     neutral_venue: bool = False,
+    team_rates: dict[str, dict[str, float]] | None = None,
+    comp_means: dict[str, tuple[float, float, float]] | None = None,
 ) -> dict[str, Any]:
-    team_rates = _team_rates(history, prediction_time)
-    comp_means = _competition_means(history, prediction_time)
+    team_rates = team_rates if team_rates is not None else _team_rates(history, prediction_time)
+    comp_means = comp_means if comp_means is not None else _competition_means(history, prediction_time)
     home_lambda, away_lambda, evidence = _resolve_lambdas(
         history,
         team_rates,
@@ -345,6 +347,8 @@ def build_fallback_forecast(
     ].copy()
 
     history, history_meta = _load_pit_history(history_path, prediction_time)
+    team_rates = _team_rates(history, prediction_time)
+    comp_means = _competition_means(history, prediction_time)
     rows: list[dict[str, Any]] = []
     for row in f.itertuples(index=False):
         neutral = bool(getattr(row, "neutral_venue", False)) if hasattr(row, "neutral_venue") else False
@@ -355,6 +359,8 @@ def build_fallback_forecast(
             history=history,
             prediction_time=prediction_time,
             neutral_venue=neutral,
+            team_rates=team_rates,
+            comp_means=comp_means,
         )
         scores = prediction["scores"]
         rows.append({
