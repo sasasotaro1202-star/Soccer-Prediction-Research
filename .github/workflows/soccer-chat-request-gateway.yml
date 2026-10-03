@@ -155,7 +155,7 @@ jobs:
           PY
             )"
             if [ "${operation}" = "matchday_intelligence" ]; then
-              printf "%s\n" "{\"ref\":\"main\",\"inputs\":{\"prediction_mode\":\"on_demand\"}}" > "/tmp/dispatch-${request_id}.json"
+              printf '%s\n' '{"ref":"main","inputs":{"prediction_mode":"on_demand"}}' > "/tmp/dispatch-${request_id}.json"
             else
               printf "%s\n" "{\"ref\":\"main\"}" > "/tmp/dispatch-${request_id}.json"
             fi
