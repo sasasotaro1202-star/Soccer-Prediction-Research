@@ -133,3 +133,22 @@ def test_duplicate_fixture_without_state_identity_fails_closed():
         assert any(token in str(exc) for token in ("duplicate match_id without prediction_state_id", "invalid prediction_state_id"))
     else:
         raise AssertionError("duplicate fixture without state identity must fail closed")
+
+
+def test_predictability_oos_training_respects_maturity_cutoff():
+    from src.research.pit_training import filter_prior_mature_training
+
+    frame = pd.DataFrame({
+        "prediction_pit_cutoff_utc": [
+            "2026-01-01T08:00:00Z",
+            "2026-01-01T09:00:00Z",
+            "2026-01-01T10:00:00Z",
+        ],
+        "experience_available_at_utc": [
+            "2026-01-01T08:30:00Z",
+            "2026-01-01T10:30:00Z",
+            "2026-01-01T09:30:00Z",
+        ],
+    })
+    eligible = filter_prior_mature_training(frame, pd.Timestamp("2026-01-01T10:00:00Z"))
+    assert len(eligible) == 2
