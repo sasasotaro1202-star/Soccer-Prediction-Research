@@ -20,7 +20,9 @@ from src.research.predictability_map import TELEMETRY, WEIGHTS
 
 MIN_HISTORY = 120
 BLOCK_SIZE = 60
-MIN_BLOCKS = 3
+MIN_BLOCKS = 5
+MIN_DEVELOPMENT_BLOCKS = 3
+MIN_DEVELOPMENT_IMPROVEMENT_RATE = 0.70
 
 
 def _metrics(y: np.ndarray, p: np.ndarray) -> dict[str, float | int]:
@@ -142,6 +144,13 @@ def _prepare(frame: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def _development_improvement_rate(development: pd.DataFrame) -> float:
+    if len(development) < MIN_DEVELOPMENT_BLOCKS:
+        return 0.0
+    improved = development["calibrated_logloss"] < development["raw_logloss"]
+    return float(improved.mean())
+
+
 def _calibrator() -> Pipeline:
     return Pipeline([
         ("scale", StandardScaler()),
@@ -249,25 +258,35 @@ def calibrate(
     oos_df = pd.DataFrame(blocks)
     if len(oos_df) < MIN_BLOCKS:
         status = "INSUFFICIENT_OOS"
-        gate = {"status": "HOLD", "blocks": int(len(oos_df))}
+        gate = {
+            "status": "HOLD",
+            "blocks": int(len(oos_df)),
+            "minimum_total_blocks": MIN_BLOCKS,
+            "minimum_development_blocks": MIN_DEVELOPMENT_BLOCKS,
+        }
     else:
         locked = oos_df.tail(2)
         development = oos_df.iloc[:-2]
-        development_improvement = bool(
-            (development["calibrated_logloss"] < development["raw_logloss"]).any()
-            or (development["calibrated_brier"] < development["raw_brier"]).any()
-        )
+        development_improvement_rate = _development_improvement_rate(development)
         locked_non_regression = bool(
             (locked["calibrated_logloss"] <= locked["raw_logloss"]).all()
             and (locked["calibrated_brier"] <= locked["raw_brier"]).all()
             and (locked["calibrated_ece"] <= locked["raw_ece"]).all()
         )
         gate = {
-            "status": "PROMOTION_CANDIDATE" if development_improvement and locked_non_regression else "HOLD",
+            "status": (
+                "PROMOTION_CANDIDATE"
+                if len(development) >= MIN_DEVELOPMENT_BLOCKS
+                and development_improvement_rate >= MIN_DEVELOPMENT_IMPROVEMENT_RATE
+                and locked_non_regression
+                else "HOLD"
+            ),
             "blocks": int(len(oos_df)),
             "development_blocks": int(len(development)),
             "locked_blocks": int(len(locked)),
-            "development_improvement": development_improvement,
+            "minimum_development_blocks": MIN_DEVELOPMENT_BLOCKS,
+            "minimum_development_improvement_rate": MIN_DEVELOPMENT_IMPROVEMENT_RATE,
+            "development_improvement_rate": development_improvement_rate,
             "locked_non_regression": locked_non_regression,
         }
         status = gate["status"]
