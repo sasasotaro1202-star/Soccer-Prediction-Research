@@ -8,7 +8,7 @@ The rich layer can persist, when supplied by the existing public/keyless or alre
 
 - event status, season, round/week, neutral-site metadata and venue
 - referee and broadcast metadata
-- ESPN pre-match form/rank/record metadata
+- ESPN pre-match form/rank/record metadata plus detailed injury counts, player names, statuses, reasons and expected-return fields when supplied
 - multi-provider market observations, implied probabilities, provider dispersion and overround
 - recent team results, goals, points, goal difference, BTTS/Over-2.5 rates, recent opponents and schedule-congestion counts
 - SofaScore lineup formations, starter/substitute IDs, captain IDs and missing-player reasons

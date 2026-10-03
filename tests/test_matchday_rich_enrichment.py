@@ -265,3 +265,27 @@ def test_standings_parser_does_not_fill_missing_team_as_zero():
     out = _parse_sofa_standings(payload, "10", "20", "home")
     assert out["rich_sofa_standing_home_home_position"] == 3
     assert "rich_sofa_standing_home_away_position" not in out
+
+def test_injury_parser_retains_detail_without_coercing_unknowns():
+    from src.data.matchday_rich_enrichment import _parse_injury_details
+
+    out = _parse_injury_details({
+        "injuries": [
+            {
+                "athlete": {"displayName": "Player A"},
+                "status": "Out",
+                "reason": "Hamstring",
+                "returnDate": "2026-10-10",
+            },
+            {
+                "playerName": "Player B",
+                "status": "Questionable",
+            },
+        ]
+    })
+    assert out["count"] == 2
+    assert out["severe_count"] == 1
+    assert out["names"] == "Player A|Player B"
+    assert out["statuses"] == "Out|Questionable"
+    assert out["reasons"] == "Hamstring"
+    assert out["expected_return"] == "2026-10-10"
