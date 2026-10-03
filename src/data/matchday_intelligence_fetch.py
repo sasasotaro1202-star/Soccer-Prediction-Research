@@ -192,6 +192,13 @@ def _safe_str(value: Any) -> str:
     return "" if text.lower() in {"nan", "none"} else text
 
 
+def _safe_int(value: Any) -> int | None:
+    number = _number(value)
+    if number is None or not np.isfinite(number):
+        return None
+    return int(number)
+
+
 def _ts(value: Any) -> pd.Timestamp | None:
     if value is None or value == "":
         return None
