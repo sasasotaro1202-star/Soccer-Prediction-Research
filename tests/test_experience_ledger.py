@@ -23,7 +23,10 @@ def test_record_deduplicates_prediction_state(tmp_path, monkeypatch):
     pd.DataFrame([row]).to_csv(predictions,index=False)
     assert record_prediction_file(str(predictions))["added"] == 1
     assert record_prediction_file(str(predictions))["added"] == 0
-    assert len(pd.read_csv(ledger)) == 1
+    recorded = pd.read_csv(ledger)
+    assert len(recorded) == 1
+    assert "experience_available_at_utc" in recorded.columns
+    assert pd.isna(recorded.iloc[0]["experience_available_at_utc"])
     snapshot_rows = [json.loads(x) for x in snapshots.read_text().splitlines() if x.strip()]
     assert len(snapshot_rows) == 1
     assert snapshot_rows[0]["prediction_pit_gate"] == "PASS"
