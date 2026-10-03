@@ -74,3 +74,43 @@ def test_default_model_policy_is_production_fail_closed():
     from src.prediction.runner import run
 
     assert inspect.signature(run).parameters["model_policy"].default == "production"
+
+
+def test_explicit_best_available_is_an_opt_in_resolution_path(tmp_path, monkeypatch):
+    from src.prediction import runner
+
+    calls = []
+
+    def resolve():
+        calls.append("resolve")
+        return str(tmp_path / "candidate.pkl"), str(tmp_path / "candidate.json"), "VALIDATED_CANDIDATE"
+
+    monkeypatch.setattr(runner, "resolve_best_available_paths", resolve)
+    monkeypatch.setattr(
+        runner,
+        "load_best_available_model",
+        lambda path: calls.append(("registry", path)) or {
+            "adoption_status": "VALIDATED_CANDIDATE",
+            "model_version": "candidate-v1",
+        },
+    )
+    monkeypatch.setattr(
+        runner,
+        "load_bundle",
+        lambda path: {"schema_version": 1, "model_version": "candidate-v1"},
+    )
+
+    status = runner.run(
+        fixtures_path=str(tmp_path / "missing-fixtures.csv"),
+        bundle_path="artifacts/production_model.pkl",
+        registry_path="artifacts/model_registry.json",
+        status_path=str(tmp_path / "status.json"),
+        prediction_time="2026-09-15T12:00:00Z",
+        model_policy="best_available",
+    )
+
+    assert calls == [
+        "resolve",
+        ("registry", str(tmp_path / "candidate.json")),
+    ]
+    assert status["status"] == "NO_FIXTURE_INPUT"
