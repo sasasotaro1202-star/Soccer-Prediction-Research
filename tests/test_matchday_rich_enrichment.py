@@ -331,3 +331,83 @@ def test_source_coverage_report_counts_real_payloads_and_feature_channels():
     assert report["feature_channels"]["injury"]["rows_with_data"] == 2
     assert report["feature_channels"]["weather"]["rows_with_data"] == 1
     assert report["feature_channels"]["h2h"]["rows_with_data"] == 1
+
+def test_parse_fotmob_matches_filters_future_supported_competitions():
+    from src.data.matchday_intelligence_fetch import parse_fotmob_matches
+
+    payload = {
+        "leagues": [
+            {
+                "id": 47,
+                "name": "Premier League",
+                "matches": [{
+                    "id": 12345,
+                    "status": {"utcTime": "2026-10-05T15:00:00.000Z"},
+                    "home": {"id": 1, "name": "Home FC"},
+                    "away": {"id": 2, "name": "Away FC"},
+                }],
+            },
+            {
+                "id": 999,
+                "name": "Unsupported League",
+                "matches": [{
+                    "id": 9,
+                    "status": {"utcTime": "2026-10-05T16:00:00.000Z"},
+                    "home": {"id": 3, "name": "X"},
+                    "away": {"id": 4, "name": "Y"},
+                }],
+            },
+        ]
+    }
+    rows = parse_fotmob_matches(
+        payload,
+        now=pd.Timestamp("2026-10-04T00:00:00Z"),
+        horizon_hours=48,
+        available_at="2026-10-04T00:05:00Z",
+    )
+    assert len(rows) == 1
+    assert rows[0]["competition"] == "EPL"
+    assert rows[0]["fotmob_match_id"] == "12345"
+    assert rows[0]["home_team"] == "Home FC"
+
+
+def test_parse_fotmob_detail_preserves_pre_match_lineup_and_never_requires_missing_values():
+    from src.data.matchday_rich_enrichment import _parse_fotmob_detail
+
+    payload = {
+        "general": {
+            "matchId": "12345",
+            "matchRound": "7",
+            "leagueName": "Premier League",
+            "countryCode": "ENG",
+            "coverageLevel": "xG",
+            "started": False,
+            "finished": False,
+            "homeTeam": {"id": 1, "name": "Home FC"},
+            "awayTeam": {"id": 2, "name": "Away FC"},
+        },
+        "header": {
+            "status": {"finished": False, "started": False, "cancelled": False, "reason": {"long": "Not started"}},
+            "teams": [{"id": 1, "name": "Home FC"}, {"id": 2, "name": "Away FC"}],
+        },
+        "content": {
+            "lineup": {
+                "homeTeam": {
+                    "id": 1,
+                    "name": "Home FC",
+                    "formation": "4-3-3",
+                    "averageStarterAge": 27.5,
+                    "totalStarterMarketValue": 100000000,
+                    "starters": [{"id": 101, "name": "Player A"}],
+                    "unavailable": [{"id": 102}],
+                }
+            }
+        },
+    }
+    out = _parse_fotmob_detail(payload)
+    assert out["rich_fotmob_match_id"] == "12345"
+    assert out["rich_fotmob_started"] is False
+    assert out["rich_fotmob_home_formation"] == "4-3-3"
+    assert out["rich_fotmob_home_starter_count"] == 1
+    assert out["rich_fotmob_home_unavailable_count"] == 1
+    assert "rich_fotmob_prestats_xg_home" not in out

@@ -29,3 +29,8 @@ The raw JSONL is evidence for replay/debugging, not automatic permission to use 
 artifacts/matchday_rich_enrichment.csv is the structured research surface. artifacts/matchday_rich_raw.jsonl is the raw lineage surface. Production predictions continue to use the existing compact fixture path until a target-specific chronological OOS/robustness/holdout gate proves incremental value.
 
 The rich layer does not change production_changed, model registry state, or target semantics.
+
+
+## FotMob live acquisition layer
+
+FotMob is used as an independent public fixture-discovery and rich match-detail candidate source. Date-indexed matches can provide fixture identity and kickoff; matchDetails can expose lineup, xG, match statistics and other match-page sections. These fields remain research-only until local PIT/OOS validation.
