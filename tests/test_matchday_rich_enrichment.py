@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pandas as pd
 
 from src.data.matchday_rich_enrichment import (
@@ -411,3 +413,34 @@ def test_parse_fotmob_detail_preserves_pre_match_lineup_and_never_requires_missi
     assert out["rich_fotmob_home_starter_count"] == 1
     assert out["rich_fotmob_home_unavailable_count"] == 1
     assert "rich_fotmob_prestats_xg_home" not in out
+
+
+def test_fotmob_json_fetch_falls_back_to_current_data_route():
+    from src.data.matchday_intelligence_fetch import _get_json
+
+    class FakeFetcher:
+        def __init__(self):
+            self.urls = []
+
+        def get(self, source, url, **kwargs):
+            self.urls.append(url)
+            if url == "https://www.fotmob.com/api/matches":
+                raise RuntimeError("primary route unavailable")
+            return SimpleNamespace(
+                body=b'{"leagues": []}',
+                metadata=SimpleNamespace(retrieved_at="2026-10-04T00:00:00Z"),
+            )
+
+    fetcher = FakeFetcher()
+    payload, retrieved_at = _get_json(
+        fetcher,
+        "fotmob_matches",
+        "https://www.fotmob.com/api/matches",
+        {"date": "20261004"},
+    )
+    assert payload == {"leagues": []}
+    assert retrieved_at == "2026-10-04T00:00:00Z"
+    assert fetcher.urls == [
+        "https://www.fotmob.com/api/matches",
+        "https://www.fotmob.com/api/data/matches",
+    ]
