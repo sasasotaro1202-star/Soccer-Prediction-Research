@@ -484,3 +484,71 @@ def test_fotmob_detail_json_fetch_falls_back_to_current_data_route():
         "https://www.fotmob.com/api/matchDetails",
         "https://www.fotmob.com/api/data/matchDetails",
     ]
+
+
+def test_fotmob_identity_does_not_alias_other_countries_to_same_competition_name():
+    from src.data.matchday_intelligence_fetch import parse_fotmob_matches
+
+    payload = {
+        "leagues": [
+            {
+                "id": 522,
+                "ccode": "GHA",
+                "name": "Premier League",
+                "matches": [{
+                    "id": 5975044,
+                    "status": {"utcTime": "2026-10-04T15:00:00.000Z"},
+                    "home": {"id": 102019, "name": "Heart of Lions"},
+                    "away": {"id": 102017, "name": "Ashanti Gold"},
+                }],
+            },
+            {
+                "id": 47,
+                "ccode": "ENG",
+                "name": "Premier League",
+                "matches": [{
+                    "id": 5795427,
+                    "status": {"utcTime": "2026-10-05T15:00:00.000Z"},
+                    "home": {"id": 8455, "name": "Chelsea"},
+                    "away": {"id": 10204, "name": "Brighton"},
+                }],
+            },
+        ]
+    }
+    rows = parse_fotmob_matches(
+        payload,
+        now=pd.Timestamp("2026-10-04T00:00:00Z"),
+        horizon_hours=48,
+        available_at="2026-10-04T00:05:00Z",
+    )
+    assert len(rows) == 1
+    assert rows[0]["competition"] == "EPL"
+    assert rows[0]["fotmob_league_id"] == "47"
+    assert rows[0]["home_team"] == "Chelsea"
+
+
+def test_safe_provider_id_removes_csv_float_suffix():
+    from src.data.matchday_rich_enrichment import _safe_provider_id
+
+    assert _safe_provider_id("5975044.0") == "5975044"
+    assert _safe_provider_id(5975044) == "5975044"
+
+
+def test_fotmob_detail_validation_rejects_error_payload_and_mismatch():
+    from src.data.matchday_rich_enrichment import _validate_fotmob_detail_payload
+
+    with_error = {"error": True, "matchId": "5975044", "message": "Data not found"}
+    try:
+        _validate_fotmob_detail_payload(with_error, "5975044")
+    except RuntimeError as exc:
+        assert "Data not found" in str(exc)
+    else:
+        raise AssertionError("error payload must be rejected")
+
+    mismatched = {"general": {"matchId": "999"}}
+    try:
+        _validate_fotmob_detail_payload(mismatched, "5975044")
+    except RuntimeError as exc:
+        assert "matchId mismatch" in str(exc)
+    else:
+        raise AssertionError("mismatched payload must be rejected")
