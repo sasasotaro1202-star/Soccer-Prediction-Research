@@ -121,3 +121,42 @@ def test_verify_preserves_canonical_run_status_and_rows(tmp_path, monkeypatch):
     assert payload["prediction_rows"] == 2
     assert payload["output_contract_verified"] is True
     assert payload["output_contract_verification"]["status"] == "VERIFIED"
+
+
+def test_daily_research_fallback_covers_non_active_competitions():
+    from pathlib import Path
+    import tempfile
+    from src.prediction.research_forecast import run
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        fixtures = root / "fixtures.csv"
+        output = root / "forecast.csv"
+        status = root / "status.json"
+        pd.DataFrame([
+            {
+                "match_id": "active",
+                "kickoff_utc": "2030-01-01T12:00:00Z",
+                "competition": "EPL",
+                "home_team": "Home FC",
+                "away_team": "Away FC",
+            },
+            {
+                "match_id": "research-only",
+                "kickoff_utc": "2030-01-01T15:00:00Z",
+                "competition": "BEL",
+                "home_team": "Research Home",
+                "away_team": "Research Away",
+            },
+        ]).to_csv(fixtures, index=False)
+
+        result = run(
+            str(fixtures),
+            str(output),
+            str(status),
+            "2029-12-31T12:00:00Z",
+        )
+
+        frame = pd.read_csv(output)
+        assert result["status"] == "PREDICTED_FALLBACK_BASELINE"
+        assert set(frame["match_id"].astype(str)) == {"active", "research-only"}
