@@ -1046,17 +1046,22 @@ def _source_coverage_report(
     }
 
     for family in ("espn", "sofascore", "fotmob", "open_meteo"):
+        family_records = [
+            record for record in raw_records
+            if _safe_str(record.get("provider_family")) == family
+        ]
+        valid_family_records = [
+            record for record in family_records
+            if bool(record.get("payload_valid", True))
+        ]
         matches = {
             _safe_str(record.get("match_id"))
-            for record in raw_records
-            if _safe_str(record.get("provider_family")) == family
-            and _safe_str(record.get("match_id"))
+            for record in valid_family_records
+            if _safe_str(record.get("match_id"))
         }
         report["source_families"][family] = {
-            "payload_records": int(sum(
-                _safe_str(record.get("provider_family")) == family
-                for record in raw_records
-            )),
+            "payload_records": int(len(family_records)),
+            "valid_payload_records": int(len(valid_family_records)),
             "unique_match_ids": int(len(matches)),
             "match_coverage_pct": (
                 round(100.0 * len(matches) / selected_rows, 2)
@@ -1101,9 +1106,15 @@ def _source_coverage_report(
             "coverage_pct": round(100.0 * count / selected_rows, 2) if selected_rows else 0.0,
         }
 
+    valid_records = [
+        record for record in raw_records
+        if bool(record.get("payload_valid", True))
+    ]
     report["acquisition_state"] = (
-        "PAYLOADS_OBSERVED"
-        if len(raw_records) > 0
+        "VALID_PAYLOADS_OBSERVED"
+        if valid_records
+        else "ONLY_ERROR_PAYLOADS_OBSERVED"
+        if raw_records
         else "NO_PAYLOADS_OBSERVED"
     )
     return report
