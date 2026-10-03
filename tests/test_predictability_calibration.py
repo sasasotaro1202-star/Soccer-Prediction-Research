@@ -118,3 +118,80 @@ def test_calibration_gate_requires_meaningful_stable_development():
         "raw_logloss": [0.5, 0.6, 0.65],
     })
     assert mod._development_improvement_rate(stronger) == 1.0
+
+
+
+def test_calibration_oos_excludes_immature_prior_outcomes_from_training():
+    from src.research.predictability_calibration import calibrate
+
+    base = pd.Timestamp("2026-01-01T00:00:00Z")
+    rows = []
+    for i in range(360):
+        kickoff = base + pd.to_timedelta(i, unit="6h")
+        correct = i % 2 == 0
+        raw = 0.15 if correct else 0.85
+        rows.append({
+            "match_id": f"pit-m{i}",
+            "prediction_state_id": f"pit-s{i}",
+            "kickoff_utc": kickoff,
+            "prediction_pit_cutoff_utc": kickoff - pd.Timedelta(hours=2),
+            "experience_available_at_utc": kickoff + pd.Timedelta(hours=2),
+            "prediction_pit_gate": "PASS",
+            "p_home": 0.70 if correct else 0.10,
+            "p_draw": 0.20,
+            "p_away": 0.10 if correct else 0.70,
+            "actual_result": "H" if correct else "A",
+            "predictive_entropy": 1.0 - raw,
+            "model_disagreement": 1.0 - raw,
+            "covariate_drift": 1.0 - raw,
+            "history_support_risk": 1.0 - raw,
+            "routing_risk": 1.0 - raw,
+        })
+    frame = pd.DataFrame(rows)
+    frame.loc[119, "experience_available_at_utc"] = (
+        frame.loc[120, "prediction_pit_cutoff_utc"] + pd.Timedelta(hours=1)
+    )
+    state = calibrate(frame, history_rows=120, block_size=60)
+    assert state["oos_blocks"]
+    assert state["oos_blocks"][0]["block"] == 0
+    assert state["oos_blocks"][0]["training_rows"] == 179
+    assert state["oos_blocks"][0]["raw_training_rows"] == 120
+    assert state["oos_blocks"][0]["excluded_immature_training_rows"] == 1
+
+
+def test_maturity_training_helper_excludes_future_outcomes_and_fails_closed():
+    from src.research.pit_training import filter_prior_mature_training
+
+    frame = pd.DataFrame({
+        "prediction_pit_cutoff_utc": [
+            "2026-01-01T08:00:00Z",
+            "2026-01-01T09:00:00Z",
+            "2026-01-01T10:00:00Z",
+        ],
+        "experience_available_at_utc": [
+            "2026-01-01T09:00:00Z",
+            "2026-01-01T11:00:00Z",
+            "2026-01-01T10:00:00Z",
+        ],
+    })
+    eligible = filter_prior_mature_training(
+        frame, pd.Timestamp("2026-01-01T10:00:00Z")
+    )
+    assert len(eligible) == 2
+    assert eligible["prediction_pit_cutoff_utc"].tolist() == [
+        "2026-01-01T08:00:00Z",
+        "2026-01-01T09:00:00Z",
+    ]
+
+
+def test_maturity_training_helper_missing_timestamp_fails_closed():
+    from src.research.pit_training import filter_prior_mature_training
+
+    frame = pd.DataFrame({
+        "prediction_pit_cutoff_utc": ["2026-01-01T08:00:00Z"],
+        "experience_available_at_utc": [pd.NaT],
+    })
+    with pytest.raises(RuntimeError, match="PIT training frame contains"):
+        filter_prior_mature_training(
+            frame, pd.Timestamp("2026-01-01T10:00:00Z")
+        )
