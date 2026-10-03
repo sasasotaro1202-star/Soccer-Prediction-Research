@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import requests
 import time
 from pathlib import Path
 
@@ -46,6 +47,21 @@ def _read_required_bool_env(name: str) -> tuple[bool | None, str | None]:
     if normalized not in {"true", "false"}:
         return None, f"{name} is missing or invalid"
     return normalized == "true", None
+
+
+def _is_retryable_exception(exc: Exception) -> bool:
+    """Retry only failures that may plausibly clear on a bounded retry.
+
+    Deterministic code/schema failures must fail fast to avoid wasting runner
+    time and delaying the newest immutable research snapshot.
+    """
+    transient_types = (
+        requests.exceptions.RequestException,
+        TimeoutError,
+        ConnectionError,
+        BrokenPipeError,
+    )
+    return isinstance(exc, transient_types)
 
 
 def run_with_retries() -> int:
@@ -111,6 +127,7 @@ def run_with_retries() -> int:
         return 1
 
     errors: list[str] = []
+    retry_history: list[dict] = []
 
     # Mark the research attempt as started before any expensive engine work.
     # This prevents stale/missing run_status artifacts from being mistaken for a
@@ -122,6 +139,7 @@ def run_with_retries() -> int:
             "completion_gate_passed": True,
             "audit_gate_passed": True,
         },
+        "retry_policy": "transient_only",
         "runner": {"status": "STARTED"},
         "oos_claimed": False,
     })
@@ -131,18 +149,43 @@ def run_with_retries() -> int:
     for attempt in range(1, attempts + 1):
         try:
             report = run(str(out))
-            report["runner"] = {"attempt": attempt, "max_attempts": attempts, "status": "COMPLETED"}
+            report["retry_policy"] = "transient_only"
+            report["runner"] = {
+                "attempt": attempt,
+                "max_attempts": attempts,
+                "status": "COMPLETED",
+                "retry_history": retry_history,
+            }
             _write_status(out, report)
             return 0
         except Exception as exc:
+            retryable = _is_retryable_exception(exc)
             errors.append(f"attempt={attempt} {type(exc).__name__}: {exc}")
-            if attempt < attempts:
+            retry_history.append(
+                {
+                    "attempt": attempt,
+                    "exception_type": type(exc).__name__,
+                    "error": str(exc),
+                    "retryable": retryable,
+                }
+            )
+            if attempt < attempts and retryable:
                 time.sleep(backoff * attempt)
+                continue
+            break
 
     _write_status(out, {
-        "status": "DEGRADED",
-        "reason": "Research engine failed after bounded retries; no OOS result was claimed.",
-        "runner": {"attempts": attempts, "status": "FAILED_AFTER_RETRIES"},
+        "status": "DEGRADED" if errors else "FAILED",
+        "reason": "Research engine failed after a bounded retry policy; no OOS result was claimed."
+        if errors
+        else "Research engine did not produce a result; no OOS result was claimed.",
+        "retry_policy": "transient_only",
+        "runner": {
+            "attempts": len(retry_history),
+            "max_attempts": attempts,
+            "status": "FAILED_AFTER_RETRIES" if len(retry_history) > 1 else "FAILED_FAST",
+            "retry_history": retry_history,
+        },
         "errors": errors,
         "oos_claimed": False,
     })
