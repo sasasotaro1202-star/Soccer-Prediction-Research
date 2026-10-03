@@ -544,11 +544,13 @@ def test_fotmob_league_catalog_detects_known_ids_without_drift():
     assert report["identity_collisions"] == []
 
 
-def test_fotmob_league_catalog_detects_ccode_drift_and_collision():
+def test_fotmob_league_catalog_detects_ccode_drift_name_drift_and_collision():
     from src.data.matchday_intelligence_fetch import parse_fotmob_league_catalog
 
     payload = {
-        "international": [],
+        "international": [
+            {"id": 10007, "name": "Copa de la Liga Profesional"},
+        ],
         "countries": [
             {"ccode": "GHA", "name": "Ghana", "leagues": [{"id": 47, "name": "Premier League"}]},
             {"ccode": "ENG", "name": "England", "leagues": [
@@ -563,6 +565,7 @@ def test_fotmob_league_catalog_detects_ccode_drift_and_collision():
     assert report["status"] == "DRIFT_DETECTED"
     assert 47 not in report["missing_known_ids"]
     assert any(item["league_id"] == 47 for item in report["ccode_mismatches"])
+    assert any(item["league_id"] == 10007 for item in report["name_mismatches"])
     assert any(item["league_id"] == 47 for item in report["identity_collisions"])
 
 
