@@ -560,3 +560,22 @@ def test_matchday_fetch_has_integer_normalizer_for_provider_ids():
     assert _safe_int("47") == 47
     assert _safe_int("47.0") == 47
     assert _safe_int("not-an-int") is None
+
+
+def test_rich_probe_selection_prefers_supported_competitions_without_randomness():
+    from src.data.matchday_rich_enrichment import _select_rich_probe_rows
+
+    frame = pd.DataFrame(
+        [
+            {"competition": "MLS", "kickoff_utc": "2026-10-07T00:00:00Z", "match_id": "a"},
+            {"competition": "EPL", "kickoff_utc": "2026-10-10T12:00:00Z", "match_id": "b"},
+            {"competition": "J1", "kickoff_utc": "2026-10-09T10:00:00Z", "match_id": "c"},
+            {"competition": "BL1", "kickoff_utc": "2026-10-09T18:00:00Z", "match_id": "d"},
+            {"competition": "EPL", "kickoff_utc": "2026-10-11T12:00:00Z", "match_id": "e"},
+        ]
+    )
+
+    selected = _select_rich_probe_rows(frame, 3)
+
+    assert set(selected["competition"]) == {"EPL", "BL1", "J1"}
+    assert selected["match_id"].tolist() == ["d", "c", "b"]
