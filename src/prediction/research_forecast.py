@@ -195,11 +195,19 @@ def run(
 
     fixtures["kickoff_utc"] = pd.to_datetime(fixtures["kickoff_utc"], utc=True, errors="coerce")
     fixtures["competition"] = fixtures["competition"].astype(str).str.strip().str.upper()
-    target = fixtures[
-        fixtures["competition"].isin(TARGET_COMPETITIONS)
+    future_fixtures = fixtures[
+        fixtures["competition"].astype(str).str.strip().ne("")
         & fixtures["kickoff_utc"].notna()
         & (fixtures["kickoff_utc"] > now)
     ].copy()
+
+    ready, reason = _adopted_production_ready()
+    # Production stays constrained to the validated active target universe.
+    # Research fallback is intentionally broader: every structurally valid future
+    # fixture in the acquired snapshot can receive a labeled research-only prior.
+    target = future_fixtures[
+        future_fixtures["competition"].isin(TARGET_COMPETITIONS)
+    ].copy() if ready else future_fixtures.copy()
     target = target.sort_values(["kickoff_utc", "match_id"], kind="mergesort").reset_index(drop=True)
 
     if target.empty:
@@ -214,7 +222,6 @@ def run(
         Path(status_path).write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
         return status
 
-    ready, reason = _adopted_production_ready()
     if not ready:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         Path(status_path).parent.mkdir(parents=True, exist_ok=True)
