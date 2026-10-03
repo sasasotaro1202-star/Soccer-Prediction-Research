@@ -178,3 +178,37 @@ def test_fallback_uses_only_explicitly_pit_verified_market_prior():
     assert abs(
         market["p_home"] + market["p_draw"] + market["p_away"] - 1.0
     ) < 1e-12
+
+
+def test_fallback_accepts_verified_versioned_result_availability(tmp_path):
+    history_path = tmp_path / "history.csv"
+    pd.DataFrame([{
+        "match_id": "m1",
+        "kickoff_utc": "2025-08-01T12:00:00Z",
+        "home_team": "Alpha",
+        "away_team": "Beta",
+        "competition": "EPL",
+        "home_goals": 2,
+        "away_goals": 1,
+        "pit_verified": False,
+        "versioned_result_evidence_status": "VERIFIED",
+        "versioned_result_available_at_utc": "2025-08-01T15:00:00Z",
+    }]).to_csv(history_path, index=False)
+
+    fixtures = pd.DataFrame([{
+        "match_id": "future",
+        "kickoff_utc": "2026-10-10T12:00:00Z",
+        "competition": "EPL",
+        "home_team": "Alpha",
+        "away_team": "Beta",
+    }])
+    output, meta = build_fallback_forecast(
+        fixtures,
+        pd.Timestamp("2026-10-03T10:00:00Z"),
+        history_path=str(history_path),
+    )
+
+    assert len(output) == 1
+    assert meta["versioned_result_verified_rows"] == 1
+    assert meta["availability_source_counts"]["versioned_result_available_at_utc"] == 1
+    assert output.loc[0, "fallback_history_rows"] == 1
