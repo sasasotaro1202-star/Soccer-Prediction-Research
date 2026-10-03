@@ -319,8 +319,13 @@ def test_football_data_complements_partial_sofascore_coverage(monkeypatch):
         captured["fd_horizon"] = kwargs["horizon_hours"]
         return [football_data], [], "2026-09-25T00:02:00Z"
 
+    def fake_current_fd(*args, **kwargs):
+        captured["current_fd_horizon"] = kwargs["horizon_hours"]
+        return [], [], {}, []
+
     monkeypatch.setattr(m, "_collect_sofascore_day", fake_sofa)
     monkeypatch.setattr(m, "_collect_football_data_fallback", fake_fd)
+    monkeypatch.setattr(m, "_collect_football_data_current_season", fake_current_fd)
 
     frame, status = m.collect_matchday_snapshots(days=2, horizon_hours=12, max_events=20)
     assert set(frame["match_id"]) == {"sofa:partial", "fdx:complement"}
@@ -329,6 +334,7 @@ def test_football_data_complements_partial_sofascore_coverage(monkeypatch):
     assert captured["sofa_horizon"] == 48.0
     assert captured["sofa_detail_horizon"] == 12.0
     assert captured["fd_horizon"] == 48.0
+    assert captured["current_fd_horizon"] == 48.0
     assert status["discovery_horizon_hours"] == 48.0
     assert status["detail_horizon_hours"] == 12.0
 
@@ -477,3 +483,84 @@ def test_daily_forecast_workflow_max_events_matches_fetch_cli_contract():
     assert "--max-events 200" in workflow
     assert 'parser.add_argument(\n        "--max-events",' in source
     assert "max_events=args.max_events" in source
+
+def test_football_data_current_season_code_follows_august_july_cycle():
+    from src.data.matchday_intelligence_fetch import football_data_current_season_code
+
+    assert football_data_current_season_code(pd.Timestamp("2026-10-04T00:00:00Z")) == "2627"
+    assert football_data_current_season_code(pd.Timestamp("2027-06-30T00:00:00Z")) == "2627"
+    assert football_data_current_season_code(pd.Timestamp("2027-08-01T00:00:00Z")) == "2728"
+
+
+def test_parse_football_data_current_season_rows_preserves_future_fixture_times():
+    from src.data.matchday_intelligence_fetch import parse_football_data_current_season_rows
+
+    frames = {
+        "E0": pd.DataFrame([{
+            "Div": "E0",
+            "Date": "05/10/2026",
+            "Time": "15:00",
+            "HomeTeam": "Home FC",
+            "AwayTeam": "Away FC",
+        }])
+    }
+    rows = parse_football_data_current_season_rows(
+        frames,
+        now=pd.Timestamp("2026-10-04T00:00:00Z"),
+        horizon_hours=48,
+        retrieved_at_by_division={"E0": "2026-10-04T01:00:00Z"},
+    )
+    assert len(rows) == 1
+    assert rows[0]["competition"] == "EPL"
+    assert rows[0]["matchday_source"] == "football-data.co.uk-current-season"
+    assert rows[0]["kickoff_utc"].startswith("2026-10-05T14:00:00")
+
+
+def test_fotmob_league_catalog_detects_known_ids_without_drift():
+    from src.data.matchday_intelligence_fetch import parse_fotmob_league_catalog
+
+    payload = {
+        "international": [
+            {"id": 42, "name": "Champions League"},
+            {"id": 73, "name": "Europa League"},
+            {"id": 10007, "name": "Conference League"},
+        ],
+        "countries": [
+            {"ccode": "ENG", "name": "England", "leagues": [{"id": 47, "name": "Premier League"}]},
+            {"ccode": "NED", "name": "Netherlands", "leagues": [{"id": 57, "name": "Eredivisie"}]},
+            {"ccode": "ESP", "name": "Spain", "leagues": [{"id": 87, "name": "LaLiga"}]},
+            {"ccode": "ITA", "name": "Italy", "leagues": [{"id": 55, "name": "Serie A"}]},
+            {"ccode": "GER", "name": "Germany", "leagues": [{"id": 54, "name": "Bundesliga"}]},
+            {"ccode": "FRA", "name": "France", "leagues": [{"id": 53, "name": "Ligue 1"}]},
+            {"ccode": "USA", "name": "United States", "leagues": [{"id": 130, "name": "MLS"}]},
+        ],
+    }
+
+    report = parse_fotmob_league_catalog(payload)
+
+    assert report["status"] == "NO_KNOWN_DRIFT"
+    assert report["missing_known_ids"] == []
+    assert report["ccode_mismatches"] == []
+    assert report["identity_collisions"] == []
+
+
+def test_fotmob_league_catalog_detects_ccode_drift_and_collision():
+    from src.data.matchday_intelligence_fetch import parse_fotmob_league_catalog
+
+    payload = {
+        "international": [],
+        "countries": [
+            {"ccode": "GHA", "name": "Ghana", "leagues": [{"id": 47, "name": "Premier League"}]},
+            {"ccode": "ENG", "name": "England", "leagues": [
+                {"id": 47, "name": "Premier League"},
+                {"id": 47, "name": "Premier League (copy)"},
+            ]},
+        ],
+    }
+
+    report = parse_fotmob_league_catalog(payload)
+
+    assert report["status"] == "DRIFT_DETECTED"
+    assert 47 not in report["missing_known_ids"]
+    assert any(item["league_id"] == 47 for item in report["ccode_mismatches"])
+    assert any(item["league_id"] == 47 for item in report["identity_collisions"])

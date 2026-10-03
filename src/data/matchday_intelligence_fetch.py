@@ -35,6 +35,63 @@ DETAILED_HORIZON_HOURS = 12.0
 MAX_EVENTS: int | None = None
 SOFASCORE_LINEUP_ENRICH_LIMIT = 16
 FOOTBALL_DATA_FIXTURES_URL = "https://www.football-data.co.uk/fixtures.csv"
+FOOTBALL_DATA_CURRENT_SEASON_TEMPLATE = "https://www.football-data.co.uk/mmz4281/{season}/{division}.csv"
+FOOTBALL_DATA_CURRENT_SEASON_DIVISIONS: dict[str, str] = {
+    "E0": "EPL",
+    "N1": "ERE",
+    "SP1": "LL",
+    "I1": "SA",
+    "D1": "BL1",
+    "F1": "FL1",
+}
+FOTMOB_ALL_LEAGUES_URL = "https://www.fotmob.com/api/allLeagues"
+FOTMOB_ALL_LEAGUES_DATA_URL = "https://www.fotmob.com/api/data/allLeagues"
+FOTMOB_MATCHES_URL = "https://www.fotmob.com/api/matches"
+FOTMOB_MATCHES_DATA_URL = "https://www.fotmob.com/api/data/matches"
+FOTMOB_MATCH_DETAIL_URL = "https://www.fotmob.com/api/matchDetails"
+FOTMOB_MATCH_DETAIL_DATA_URL = "https://www.fotmob.com/api/data/matchDetails"
+FOTMOB_COMPETITION_MAP: dict[str, str] = {
+    "Premier League": "EPL",
+    "Eredivisie": "ERE",
+    "LaLiga": "LL",
+    "La Liga": "LL",
+    "Serie A": "SA",
+    "Bundesliga": "BL1",
+    "Ligue 1": "FL1",
+    "J1 League": "J1",
+    "J2 League": "J2",
+    "MLS": "MLS",
+    "UEFA Champions League": "UCL",
+    "UEFA Europa League": "UEL",
+    "UEFA Conference League": "UECL",
+}
+# Competition identity is keyed by provider league ID, not display name alone.
+# A provider can have multiple competitions named "Premier League"/"Ligue 1".
+# Only the verified league IDs are admitted; an explicit country-code mismatch
+# fails closed instead of silently relabeling the fixture.
+FOTMOB_COMPETITION_ID_MAP: dict[int, str] = {
+    47: "EPL",
+    57: "ERE",
+    87: "LL",
+    55: "SA",
+    54: "BL1",
+    53: "FL1",
+    42: "UCL",
+    73: "UEL",
+    10007: "UECL",
+    130: "MLS",
+}
+FOTMOB_EXPECTED_CCODE: dict[int, str] = {
+    # Domestic competitions have stable country codes that provide an
+    # independent identity check in addition to the provider league ID.
+    47: "ENG",
+    57: "NED",
+    87: "ESP",
+    55: "ITA",
+    54: "GER",
+    53: "FRA",
+    130: "USA",
+}
 
 SOFASCORE_COMPETITIONS: dict[str, str] = {
     "Premier League": "EPL",
@@ -129,6 +186,21 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _safe_str(value: Any) -> str:
+    """Normalize optional identifiers/text without converting missing values into a value."""
+    if value is None:
+        return ""
+    text = str(value).strip()
+    return "" if text.lower() in {"nan", "none"} else text
+
+
+def _safe_int(value: Any) -> int | None:
+    number = _number(value)
+    if number is None or not np.isfinite(number):
+        return None
+    return int(number)
+
+
 def _ts(value: Any) -> pd.Timestamp | None:
     if value is None or value == "":
         return None
@@ -209,6 +281,13 @@ def _get_json(
         candidate_urls.append(
             url.replace("://site.api.espn.com/", "://site.web.api.espn.com/")
         )
+    elif str(source).startswith("fotmob"):
+        if url == FOTMOB_ALL_LEAGUES_URL:
+            candidate_urls.append(FOTMOB_ALL_LEAGUES_DATA_URL)
+        elif url == FOTMOB_MATCHES_URL:
+            candidate_urls.append(FOTMOB_MATCHES_DATA_URL)
+        elif url == FOTMOB_MATCH_DETAIL_URL:
+            candidate_urls.append(FOTMOB_MATCH_DETAIL_DATA_URL)
 
     parse_error: Exception | None = None
     fetch_error: Exception | None = None
@@ -529,6 +608,239 @@ def parse_sofascore_event(event: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _fotmob_competition(league: dict[str, Any]) -> str | None:
+    league_id = _safe_int(league.get("id") or league.get("primaryId"))
+    if league_id is None:
+        return None
+    competition = FOTMOB_COMPETITION_ID_MAP.get(league_id)
+    if competition is None:
+        return None
+    ccode = _safe_str(league.get("ccode") or league.get("countryCode")).upper()
+    expected_ccode = FOTMOB_EXPECTED_CCODE.get(league_id, "")
+    if ccode and expected_ccode and ccode != expected_ccode:
+        return None
+    return competition
+
+
+def _fotmob_match_kickoff(match: dict[str, Any]) -> pd.Timestamp | None:
+    status = match.get("status") or {}
+    for value in (
+        status.get("utcTime"),
+        match.get("utcTime"),
+        match.get("startTime"),
+    ):
+        stamp = _ts(value)
+        if stamp is not None:
+            return stamp
+    return None
+
+
+def parse_fotmob_matches(
+    payload: dict[str, Any],
+    *,
+    now: pd.Timestamp,
+    horizon_hours: float,
+    available_at: str,
+    max_events: int | None = None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    upper = now + pd.to_timedelta(float(horizon_hours), unit="h")
+    for league in payload.get("leagues", []) or []:
+        if not isinstance(league, dict):
+            continue
+        league_name = str(league.get("name") or "").strip()
+        competition = _fotmob_competition(league)
+        if competition is None:
+            continue
+        league_id = _safe_str(league.get("id") or league.get("primaryId"))
+        for match in league.get("matches", []) or []:
+            if not isinstance(match, dict):
+                continue
+            kickoff = _fotmob_match_kickoff(match)
+            if kickoff is None or kickoff <= now or kickoff > upper:
+                continue
+            home = match.get("home") or {}
+            away = match.get("away") or {}
+            home_name = _safe_str(home.get("name") or home.get("longName"))
+            away_name = _safe_str(away.get("name") or away.get("longName"))
+            match_id = _safe_str(match.get("id"))
+            if not match_id or not home_name or not away_name:
+                continue
+            canonical = f"fotmob|{match_id}|{competition}|{home_name}|{away_name}"
+            row = _matchday_base_row(
+                match_id="fot:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:20],
+                kickoff=kickoff,
+                home_team=home_name,
+                away_team=away_name,
+                competition=competition,
+                source="fotmob",
+                available_at=available_at,
+                home_team_id=_safe_str(home.get("id")),
+                away_team_id=_safe_str(away.get("id")),
+            )
+            row["fotmob_match_id"] = match_id
+            row["fotmob_league_id"] = league_id
+            row["fotmob_league_name"] = league_name
+            row["fotmob_status"] = _safe_str(
+                (match.get("status") or {}).get("reason")
+                or (match.get("status") or {}).get("name")
+            )
+            rows.append(row)
+            if max_events is not None and len(rows) >= int(max_events):
+                return rows
+    rows.sort(key=lambda x: (str(x.get("kickoff_utc", "")), str(x.get("match_id", ""))))
+    return rows
+
+
+def _collect_fotmob_day(
+    fetcher: ExternalFetcher,
+    *,
+    day: datetime,
+    now_ts: pd.Timestamp,
+    horizon_hours: float,
+    max_events: int | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, str]], str | None]:
+    date_key = day.strftime("%Y%m%d")
+    try:
+        payload, retrieved_at = _get_json(
+            fetcher,
+            "fotmob_matches",
+            FOTMOB_MATCHES_URL,
+            {"date": date_key},
+        )
+    except Exception as exc:
+        return [], [{
+            "source": "fotmob_matches",
+            "error": f"{type(exc).__name__}: {exc}",
+        }], None
+    rows = parse_fotmob_matches(
+        payload,
+        now=now_ts,
+        horizon_hours=horizon_hours,
+        available_at=retrieved_at,
+        max_events=max_events,
+    )
+    return rows, [], retrieved_at
+
+
+def parse_fotmob_league_catalog(payload: dict[str, Any]) -> dict[str, Any]:
+    """Parse the live FotMob league directory for identity-drift auditing only."""
+    by_id: dict[int, set[tuple[str, str, str]]] = {}
+
+    def add(item: Any, inherited_ccode: str = "", scope: str = "") -> None:
+        if not isinstance(item, dict):
+            return
+        league_id = _safe_int(item.get("id") or item.get("primaryId"))
+        name = _safe_str(item.get("name") or item.get("localizedName"))
+        if league_id is None or not name:
+            return
+        ccode = _safe_str(
+            item.get("ccode")
+            or item.get("countryCode")
+            or inherited_ccode
+        ).upper()
+        by_id.setdefault(league_id, set()).add((name, ccode, scope))
+
+    for item in payload.get("international", []) or []:
+        add(item, scope="international")
+
+    for country in payload.get("countries", []) or []:
+        if not isinstance(country, dict):
+            continue
+        country_ccode = _safe_str(country.get("ccode")).upper()
+        for league in country.get("leagues", []) or []:
+            add(league, inherited_ccode=country_ccode, scope="country")
+
+    missing_ids: list[int] = []
+    ccode_mismatches: list[dict[str, Any]] = []
+    collisions: list[dict[str, Any]] = []
+    supported_records: dict[str, Any] = {}
+
+    for league_id, expected_competition in FOTMOB_COMPETITION_ID_MAP.items():
+        records = sorted(by_id.get(league_id, set()))
+        supported_records[str(league_id)] = {
+            "competition": expected_competition,
+            "records": [
+                {"name": name, "ccode": ccode, "scope": scope}
+                for name, ccode, scope in records
+            ],
+        }
+        if not records:
+            missing_ids.append(int(league_id))
+            continue
+        expected_ccode = FOTMOB_EXPECTED_CCODE.get(league_id)
+        if expected_ccode and all(ccode and ccode != expected_ccode for _, ccode, _ in records):
+            ccode_mismatches.append(
+                {
+                    "league_id": int(league_id),
+                    "expected_ccode": expected_ccode,
+                    "observed_ccodes": sorted({ccode for _, ccode, _ in records}),
+                }
+            )
+        if len(records) > 1:
+            collisions.append(
+                {
+                    "league_id": int(league_id),
+                    "records": [
+                        {"name": name, "ccode": ccode, "scope": scope}
+                        for name, ccode, scope in records
+                    ],
+                }
+            )
+
+    return {
+        "status": (
+            "DRIFT_DETECTED"
+            if missing_ids or ccode_mismatches or collisions
+            else "NO_KNOWN_DRIFT"
+        ),
+        "record_count": int(sum(len(records) for records in by_id.values())),
+        "known_supported_ids": sorted(int(x) for x in FOTMOB_COMPETITION_ID_MAP),
+        "supported_records": supported_records,
+        "missing_known_ids": missing_ids,
+        "ccode_mismatches": ccode_mismatches,
+        "identity_collisions": collisions,
+    }
+
+
+def football_data_current_season_code(now: pd.Timestamp) -> str:
+    """Return the current August-July football-data season code for major leagues."""
+    local = now.tz_convert("UTC") if getattr(now, "tzinfo", None) else now.tz_localize("UTC")
+    year = int(local.year)
+    if int(local.month) < 7:
+        year -= 1
+    return f"{year % 100:02d}{(year + 1) % 100:02d}"
+
+
+def parse_football_data_current_season_rows(
+    frames: dict[str, pd.DataFrame],
+    *,
+    now: pd.Timestamp,
+    horizon_hours: float,
+    retrieved_at_by_division: dict[str, str],
+    max_events: int | None = None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for division, frame in frames.items():
+        competition = FOOTBALL_DATA_CURRENT_SEASON_DIVISIONS.get(division)
+        if not competition:
+            continue
+        parsed = parse_football_data_fixtures(
+            frame,
+            now=now,
+            horizon_hours=horizon_hours,
+            available_at=retrieved_at_by_division.get(division),
+            max_events=None,
+        )
+        for row in parsed:
+            row["matchday_source"] = "football-data.co.uk-current-season"
+            rows.append(row)
+    rows.sort(key=lambda x: (str(x.get("kickoff_utc", "")), str(x.get("match_id", ""))))
+    if max_events is not None:
+        rows = rows[: int(max_events)]
+    return rows
+
+
 def parse_football_data_fixtures(
     frame: pd.DataFrame,
     *,
@@ -542,7 +854,7 @@ def parse_football_data_fixtures(
         missing = sorted(required - set(frame.columns))
         raise RuntimeError(f"football-data fixtures missing columns: {missing}")
     rows: list[dict[str, Any]] = []
-    upper = now + pd.Timedelta(hours=float(horizon_hours))
+    upper = now + pd.to_timedelta(float(horizon_hours), unit="h")
     temp = frame.copy()
     temp["Div"] = temp["Div"].astype("string").str.strip()
     temp = temp[temp["Div"].isin(FOOTBALL_DATA_DIVISIONS)]
@@ -759,7 +1071,7 @@ def _collect_sofascore_day(
         return [], [{"source": "sofascore_scheduled_events", "error": f"{type(exc).__name__}: {exc}"}], None
     errors: list[dict[str, str]] = []
     parsed: list[dict[str, Any]] = []
-    upper = now_ts + pd.Timedelta(hours=float(horizon_hours))
+    upper = now_ts + pd.to_timedelta(float(horizon_hours), unit="h")
     detail_upper = now_ts + pd.Timedelta(
         hours=float(horizon_hours if detail_horizon_hours is None else detail_horizon_hours)
     )
@@ -833,6 +1145,75 @@ def _collect_sofascore_day(
     return limited, errors, scheduled_at
 
 
+def _collect_football_data_current_season(
+    fetcher: ExternalFetcher,
+    *,
+    now_ts: pd.Timestamp,
+    horizon_hours: float,
+    max_events: int | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, str]], dict[str, str], list[dict[str, Any]]]:
+    season = football_data_current_season_code(now_ts)
+    frames: dict[str, pd.DataFrame] = {}
+    retrieved_at_by_division: dict[str, str] = {}
+    errors: list[dict[str, str]] = []
+    probe: list[dict[str, Any]] = []
+
+    for division in FOOTBALL_DATA_CURRENT_SEASON_DIVISIONS:
+        url = FOOTBALL_DATA_CURRENT_SEASON_TEMPLATE.format(
+            season=season,
+            division=division,
+        )
+        try:
+            frame, retrieved_at = _get_csv(
+                fetcher,
+                f"football_data_current_{division.lower()}",
+                url,
+            )
+            frames[division] = frame
+            retrieved_at_by_division[division] = retrieved_at
+            probe.append({
+                "provider": "football-data.co.uk",
+                "access_path": "current-season-csv",
+                "season": season,
+                "division": division,
+                "endpoint": url,
+                "retrieved_at_utc": retrieved_at,
+                "status": "CSV_RETRIEVED",
+                "raw_rows": int(len(frame)),
+            })
+        except Exception as exc:
+            probe.append({
+                "provider": "football-data.co.uk",
+                "access_path": "current-season-csv",
+                "season": season,
+                "division": division,
+                "endpoint": url,
+                "status": "ERROR",
+                "error": f"{type(exc).__name__}: {exc}",
+            })
+            errors.append({
+                "source": "football_data_current_season",
+                "division": division,
+                "season": season,
+                "error": f"{type(exc).__name__}: {exc}",
+            })
+
+    rows = parse_football_data_current_season_rows(
+        frames,
+        now=now_ts,
+        horizon_hours=horizon_hours,
+        retrieved_at_by_division=retrieved_at_by_division,
+        max_events=max_events,
+    )
+    for item in probe:
+        division = str(item.get("division", ""))
+        competition = FOOTBALL_DATA_CURRENT_SEASON_DIVISIONS.get(division, "")
+        item["future_rows_in_window"] = int(
+            sum(str(r.get("competition")) == competition for r in rows)
+        )
+    return rows, errors, retrieved_at_by_division, probe
+
+
 def _collect_football_data_fallback(
     fetcher: ExternalFetcher,
     *,
@@ -872,7 +1253,7 @@ def _required_calendar_days(
     now is not near midnight.
     """
     safe_requested = max(1, int(requested_days))
-    upper = now + pd.Timedelta(hours=float(discovery_horizon_hours))
+    upper = now + pd.to_timedelta(float(discovery_horizon_hours), unit="h")
     calendar_days = max(1, (upper.date() - now.date()).days + 1)
     return max(safe_requested, calendar_days)
 
@@ -898,13 +1279,46 @@ def collect_matchday_snapshots(
     seen_fixture_keys: set[str] = set()
 
     fallback_usage: list[dict[str, Any]] = []
+
+    # Fetch non-date-indexed Football-Data sources once per snapshot and reuse
+    # their parsed rows across every scanned calendar day. This preserves the
+    # source snapshot/retrieval timestamp while avoiding repeated HTTP/parsing
+    # work as the discovery horizon grows.
+    current_fd_rows, current_fd_errors, _, current_fd_probe = _collect_football_data_current_season(
+        fetcher,
+        now_ts=now_ts,
+        horizon_hours=discovery_horizon_hours,
+        max_events=None,
+    )
+    fallback_usage.append({
+        "provider": "football-data.co.uk-current-season",
+        "season": football_data_current_season_code(now_ts),
+        "rows": len(current_fd_rows),
+        "probe": current_fd_probe,
+        "reused_across_days": True,
+    })
+    errors.extend(current_fd_errors)
+    fd_fixture_rows, fd_fixture_errors, fd_fixture_retrieved = _collect_football_data_fallback(
+        fetcher,
+        now_ts=now_ts,
+        horizon_hours=discovery_horizon_hours,
+        max_events=None,
+    )
+    errors.extend(fd_fixture_errors)
+    fallback_usage.append({
+        "provider": "football-data.co.uk",
+        "rows": len(fd_fixture_rows),
+        "retrieved_at_utc": fd_fixture_retrieved,
+        "reused_across_days": True,
+    })
+
     scan_days = _required_calendar_days(
         now=now_ts,
         discovery_horizon_hours=discovery_horizon_hours,
         requested_days=days,
     )
     for day_offset in range(scan_days):
-        day_start = now + pd.Timedelta(days=day_offset)
+        day_start = now + pd.to_timedelta(day_offset, unit="D")
         date = day_start.strftime("%Y%m%d")
         before_day_rows = len(rows)
         for competition, league in ESPN_LEAGUES.items():
@@ -1135,33 +1549,72 @@ def collect_matchday_snapshots(
                 rows.extend(new_day_rows)
                 fallback_usage.append({"provider": "sofascore", "date": date, "rows": len(new_day_rows)})
             errors.extend(day_errors)
-        # Football-Data is a complementary free/keyless coverage source.
-        # Do not suppress it merely because SofaScore returned one or more rows;
-        # a partial SofaScore snapshot can still miss another supported league.
+        # FotMob provides a third independent public fixture-discovery path.
         if max_events is None or len(rows) < max_events:
-            fd_rows, fd_errors, _ = _collect_football_data_fallback(
+            fot_rows, fot_errors, fot_retrieved = _collect_fotmob_day(
                 fetcher,
+                day=day_start,
                 now_ts=now_ts,
                 horizon_hours=discovery_horizon_hours,
                 max_events=None if max_events is None else max_events - len(rows),
             )
+            new_fot_rows: list[dict[str, Any]] = []
+            for row in fot_rows:
+                fixture_key = _fixture_key(row)
+                if fixture_key and fixture_key in seen_fixture_keys:
+                    continue
+                if fixture_key:
+                    seen_fixture_keys.add(fixture_key)
+                new_fot_rows.append(row)
+            if new_fot_rows:
+                rows.extend(new_fot_rows)
+                fallback_usage.append({
+                    "provider": "fotmob",
+                    "date": date,
+                    "rows": len(new_fot_rows),
+                    "retrieved_at_utc": fot_retrieved,
+                })
+            errors.extend(fot_errors)
+
+        # Reuse the single current-season CSV snapshot for this day's fixtures.
+        if max_events is None or len(rows) < max_events:
             day_date = day_start.date()
-            fd_rows = [
-                row for row in fd_rows
-                if _ts(row["kickoff_utc"]) is not None and _ts(row["kickoff_utc"]).date() == day_date
+            day_current_fd_rows = [
+                row for row in current_fd_rows
+                if _ts(row.get("kickoff_utc")) is not None
+                and _ts(row["kickoff_utc"]).date() == day_date
+            ]
+            remaining = None if max_events is None else max(0, int(max_events) - len(rows))
+            if remaining != 0:
+                for row in day_current_fd_rows:
+                    fixture_key = _fixture_key(row)
+                    if fixture_key and fixture_key in seen_fixture_keys:
+                        continue
+                    if fixture_key:
+                        seen_fixture_keys.add(fixture_key)
+                    rows.append(row)
+                    if remaining is not None and len(rows) >= int(max_events):
+                        break
+
+        # Reuse the single generic Football-Data fixture snapshot for this day.
+        if max_events is None or len(rows) < max_events:
+            day_fd_rows = [
+                row for row in fd_fixture_rows
+                if _ts(row.get("kickoff_utc")) is not None
+                and _ts(row["kickoff_utc"]).date() == day_date
             ]
             new_fd_rows: list[dict[str, Any]] = []
-            for row in fd_rows:
+            for row in day_fd_rows:
                 fixture_key = _fixture_key(row)
                 if fixture_key and fixture_key in seen_fixture_keys:
                     continue
                 if fixture_key:
                     seen_fixture_keys.add(fixture_key)
                 new_fd_rows.append(row)
+                if max_events is not None and len(rows) + len(new_fd_rows) >= int(max_events):
+                    break
             if new_fd_rows:
                 rows.extend(new_fd_rows)
-                fallback_usage.append({"provider": "football-data.co.uk", "date": date, "rows": len(new_fd_rows)})
-            errors.extend(fd_errors)
 
     frame = pd.DataFrame(rows)
     if not frame.empty:

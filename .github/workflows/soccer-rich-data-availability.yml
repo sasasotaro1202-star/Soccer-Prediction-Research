@@ -1,0 +1,214 @@
+name: Soccer Rich Data Availability
+
+# Live evidence is intentionally tested from the same PR HEAD that carries the data-source changes.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/data/matchday_intelligence_fetch.py"
+      - "src/data/matchday_rich_enrichment.py"
+      - "src/data/external_fetch.py"
+      - ".github/workflows/soccer-rich-data-availability.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "15 3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soccer-rich-data-availability
+  cancel-in-progress: false
+
+jobs:
+  live-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies with bounded retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+
+      - name: Collect real future fixtures
+        env:
+          PYTHONPATH: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Availability smoke only needs enough future fixtures to exercise
+          # rich enrichment; production collection keeps its uncapped discovery.
+          python -m src.data.matchday_intelligence_fetch             --days 7             --horizon-hours 168             --max-events 12             --output artifacts/live_smoke_fixtures.csv             --status artifacts/live_smoke_fixture_status.json
+
+      - name: Audit FotMob league identity catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          from src.data.external_fetch import ExternalFetcher
+          from src.data.matchday_intelligence_fetch import (
+              FOTMOB_ALL_LEAGUES_URL,
+              _get_json,
+              parse_fotmob_league_catalog,
+          )
+
+          fetcher = ExternalFetcher(
+              cache_dir="cache/external",
+              timeout=None,
+              retries=8,
+              backoff=2.0,
+          )
+          output = {
+              "source": "fotmob",
+              "endpoint": FOTMOB_ALL_LEAGUES_URL,
+          }
+          try:
+              payload, retrieved_at = _get_json(
+                  fetcher,
+                  "fotmob_all_leagues",
+                  FOTMOB_ALL_LEAGUES_URL,
+              )
+              canonical = json.dumps(
+                  payload,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+                  default=str,
+              )
+              report = parse_fotmob_league_catalog(payload)
+              output.update(
+                  {
+                      "retrieved_at_utc": retrieved_at,
+                      "snapshot_sha256": hashlib.sha256(
+                          canonical.encode("utf-8")
+                      ).hexdigest(),
+                      "report": report,
+                  }
+              )
+          except Exception as exc:
+              output.update(
+                  {
+                      "retrieved_at_utc": None,
+                      "status": "UNAVAILABLE",
+                      "error": f"{type(exc).__name__}: {exc}",
+                  }
+              )
+
+          Path("artifacts").mkdir(parents=True, exist_ok=True)
+          Path("artifacts/fotmob_league_catalog.json").write_text(
+              json.dumps(output, ensure_ascii=False, indent=2),
+              encoding="utf-8",
+          )
+          print(json.dumps(output, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Run real rich-data acquisition smoke test
+        env:
+          PYTHONPATH: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m src.data.matchday_rich_enrichment             --fixtures artifacts/live_smoke_fixtures.csv             --output artifacts/live_smoke_rich.csv             --raw-output artifacts/live_smoke_rich_raw.jsonl             --status artifacts/live_smoke_rich_status.json             --max-matches 3             --workers 3
+
+      - name: Validate and publish actual availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+
+          fixture_status = json.loads(Path("artifacts/live_smoke_fixture_status.json").read_text(encoding="utf-8"))
+          rich_status = json.loads(Path("artifacts/live_smoke_rich_status.json").read_text(encoding="utf-8"))
+          fixtures = pd.read_csv("artifacts/live_smoke_fixtures.csv")
+          rich = pd.read_csv("artifacts/live_smoke_rich.csv")
+
+          rows = int(len(fixtures))
+          enriched_rows = int(rich_status.get("enriched_rows", 0))
+          payloads = int(rich_status.get("valid_payload_records", rich_status.get("raw_payload_records", 0)))
+          raw_payloads = int(rich_status.get("raw_payload_records", 0))
+          coverage = rich_status.get("source_coverage") or {}
+          feature_channels = coverage.get("feature_channels") or {}
+          feature_rows_with_data = int(
+              sum(int(item.get("rows_with_data", 0)) for item in feature_channels.values())
+          )
+          acquisition_state = str(coverage.get("acquisition_state", "UNKNOWN"))
+
+          print("## Live rich-data availability")
+          print(f"- Fixture retrieval status: {fixture_status.get('status', 'UNKNOWN')}")
+          print(f"- Fixture rows observed: {rows}")
+          print(f"- Enriched rows: {enriched_rows}")
+          print(f"- Real provider payloads observed: {payloads}")
+          print(f"- Raw provider responses observed: {raw_payloads}")
+
+          if rows > 0 and payloads == 0:
+              raise SystemExit(
+                  "LIVE_DATA_UNAVAILABLE: future fixtures were retrieved but no valid provider payload was obtained"
+              )
+
+          for family, item in (coverage.get("source_families") or {}).items():
+              print(
+                  f"- {family}: payloads={item.get('payload_records', 0)}, "
+                  f"matches={item.get('unique_match_ids', 0)}, "
+                  f"coverage={item.get('match_coverage_pct', 0)}%"
+              )
+
+          for channel, item in (coverage.get("feature_channels") or {}).items():
+              print(
+                  f"- {channel}: rows_with_data={item.get('rows_with_data', 0)}, "
+                  f"coverage={item.get('coverage_pct', 0)}%"
+              )
+
+          if rows == 0:
+              print("- RESULT: NO_FIXTURES_TO_PROBE (not a successful data-availability proof)")
+              raise SystemExit(
+                  "LIVE_DATA_UNVERIFIED: fixture discovery returned zero rows; source availability cannot be established"
+              )
+          if payloads > 0 and feature_rows_with_data == 0:
+              raise SystemExit(
+                  "LIVE_DATA_UNAVAILABLE: valid provider payloads were observed but no rich feature channel was populated"
+              )
+          if payloads > 0 and acquisition_state != "VALID_PAYLOADS_OBSERVED":
+              raise SystemExit(
+                  f"LIVE_DATA_UNVERIFIED: unexpected acquisition state {acquisition_state}"
+              )
+          if payloads > 0:
+              print("- RESULT: LIVE_PAYLOADS_OBSERVED_WITH_FEATURES")
+          else:
+              raise SystemExit("LIVE_DATA_UNVERIFIED: no real provider payloads observed")
+          PY
+
+      - name: Upload live availability evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-rich-data-availability-${{ github.run_id }}
+          path: |
+            artifacts/live_smoke_fixtures.csv
+            artifacts/live_smoke_fixture_status.json
+            artifacts/live_smoke_rich.csv
+            artifacts/live_smoke_rich_raw.jsonl
+            artifacts/live_smoke_rich_status.json
+            artifacts/fotmob_league_catalog.json
+          retention-days: 7

@@ -36,7 +36,7 @@ SOCCER_SOURCES: Final[tuple[SourceSpec, ...]] = (
         live_capable=False,
         auth_required=False,
         primary_for=("historical_baseline",),
-        notes="Static season CSVs; archive evidence required for strict PIT.",
+        notes="Static and current-season CSVs; current-season fixture files are a live discovery fallback, while archive evidence is required for strict historical PIT.",
     ),
     SourceSpec(
         name="API-Football",
@@ -54,7 +54,7 @@ SOCCER_SOURCES: Final[tuple[SourceSpec, ...]] = (
         name="Sofascore",
         kind="public_api",
         role="events_lineups_stats_incidents_players_ratings",
-        fields=("fixtures", "events", "lineups", "statistics", "player_stats", "ratings", "incidents"),
+        fields=("fixtures", "events", "lineups", "statistics", "player_stats", "ratings", "incidents", "h2h", "pregame_form", "managers", "referees", "venue", "standings"),
         historical=True,
         pit_capable=False,
         live_capable=True,
@@ -72,7 +72,7 @@ SOCCER_SOURCES: Final[tuple[SourceSpec, ...]] = (
         live_capable=True,
         auth_required=False,
         primary_for=("xg", "player_context"),
-        notes="Treat endpoint/schema stability as a QC dimension; archive raw snapshots.",
+        notes="Public allLeagues, matches and matchDetails routes (including /api/data/... fallbacks) are useful for league identity auditing, live fixture discovery and rich pre-match context. Competition identity uses provider league ID plus country code when available; raw responses are retained and invalid provider error payloads are excluded from valid coverage. Venue fields require integrity checks because provider geography can be wrong; known corrections are explicit and provenance-tracked. Endpoint/schema stability, robots/usage constraints and row-level coverage must be re-verified before repeated use.",
     ),
     SourceSpec(
         name="Understat",
