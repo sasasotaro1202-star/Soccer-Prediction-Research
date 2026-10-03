@@ -44,6 +44,23 @@ FOOTBALL_DATA_CURRENT_SEASON_DIVISIONS: dict[str, str] = {
     "D1": "BL1",
     "F1": "FL1",
 }
+FOTMOB_MATCHES_URL = "https://www.fotmob.com/api/matches"
+FOTMOB_MATCH_DETAIL_URL = "https://www.fotmob.com/api/matchDetails"
+FOTMOB_COMPETITION_MAP: dict[str, str] = {
+    "Premier League": "EPL",
+    "Eredivisie": "ERE",
+    "LaLiga": "LL",
+    "La Liga": "LL",
+    "Serie A": "SA",
+    "Bundesliga": "BL1",
+    "Ligue 1": "FL1",
+    "J1 League": "J1",
+    "J2 League": "J2",
+    "MLS": "MLS",
+    "UEFA Champions League": "UCL",
+    "UEFA Europa League": "UEL",
+    "UEFA Conference League": "UECL",
+}
 
 SOFASCORE_COMPETITIONS: dict[str, str] = {
     "Premier League": "EPL",
@@ -536,6 +553,114 @@ def parse_sofascore_event(event: dict[str, Any]) -> dict[str, Any] | None:
         "venue_lat": _number(coords.get("latitude")),
         "venue_lon": _number(coords.get("longitude")),
     }
+
+
+def _fotmob_competition(name: Any) -> str | None:
+    text = " ".join(str(name or "").strip().split())
+    if not text:
+        return None
+    return FOTMOB_COMPETITION_MAP.get(text)
+
+
+def _fotmob_match_kickoff(match: dict[str, Any]) -> pd.Timestamp | None:
+    status = match.get("status") or {}
+    for value in (
+        status.get("utcTime"),
+        match.get("utcTime"),
+        match.get("startTime"),
+    ):
+        stamp = _ts(value)
+        if stamp is not None:
+            return stamp
+    return None
+
+
+def parse_fotmob_matches(
+    payload: dict[str, Any],
+    *,
+    now: pd.Timestamp,
+    horizon_hours: float,
+    available_at: str,
+    max_events: int | None = None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    upper = now + pd.Timedelta(hours=float(horizon_hours))
+    for league in payload.get("leagues", []) or []:
+        if not isinstance(league, dict):
+            continue
+        league_name = str(league.get("name") or "").strip()
+        competition = _fotmob_competition(league_name)
+        if competition is None:
+            continue
+        league_id = _safe_str(league.get("id") or league.get("primaryId"))
+        for match in league.get("matches", []) or []:
+            if not isinstance(match, dict):
+                continue
+            kickoff = _fotmob_match_kickoff(match)
+            if kickoff is None or kickoff <= now or kickoff > upper:
+                continue
+            home = match.get("home") or {}
+            away = match.get("away") or {}
+            home_name = _safe_str(home.get("name") or home.get("longName"))
+            away_name = _safe_str(away.get("name") or away.get("longName"))
+            match_id = _safe_str(match.get("id"))
+            if not match_id or not home_name or not away_name:
+                continue
+            canonical = f"fotmob|{match_id}|{competition}|{home_name}|{away_name}"
+            row = _matchday_base_row(
+                match_id="fot:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:20],
+                kickoff=kickoff,
+                home_team=home_name,
+                away_team=away_name,
+                competition=competition,
+                source="fotmob",
+                available_at=available_at,
+                home_team_id=_safe_str(home.get("id")),
+                away_team_id=_safe_str(away.get("id")),
+            )
+            row["fotmob_match_id"] = match_id
+            row["fotmob_league_id"] = league_id
+            row["fotmob_league_name"] = league_name
+            row["fotmob_status"] = _safe_str(
+                (match.get("status") or {}).get("reason")
+                or (match.get("status") or {}).get("name")
+            )
+            rows.append(row)
+            if max_events is not None and len(rows) >= int(max_events):
+                return rows
+    rows.sort(key=lambda x: (str(x.get("kickoff_utc", "")), str(x.get("match_id", ""))))
+    return rows
+
+
+def _collect_fotmob_day(
+    fetcher: ExternalFetcher,
+    *,
+    day: datetime,
+    now_ts: pd.Timestamp,
+    horizon_hours: float,
+    max_events: int | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, str]], str | None]:
+    date_key = day.strftime("%Y%m%d")
+    try:
+        payload, retrieved_at = _get_json(
+            fetcher,
+            "fotmob_matches",
+            FOTMOB_MATCHES_URL,
+            {"date": date_key},
+        )
+    except Exception as exc:
+        return [], [{
+            "source": "fotmob_matches",
+            "error": f"{type(exc).__name__}: {exc}",
+        }], None
+    rows = parse_fotmob_matches(
+        payload,
+        now=now_ts,
+        horizon_hours=horizon_hours,
+        available_at=retrieved_at,
+        max_events=max_events,
+    )
+    return rows, [], retrieved_at
 
 
 def football_data_current_season_code(now: pd.Timestamp) -> str:
@@ -1251,6 +1376,33 @@ def collect_matchday_snapshots(
                 rows.extend(new_day_rows)
                 fallback_usage.append({"provider": "sofascore", "date": date, "rows": len(new_day_rows)})
             errors.extend(day_errors)
+        # FotMob provides a third independent public fixture-discovery path.
+        if max_events is None or len(rows) < max_events:
+            fot_rows, fot_errors, fot_retrieved = _collect_fotmob_day(
+                fetcher,
+                day=day_start,
+                now_ts=now_ts,
+                horizon_hours=discovery_horizon_hours,
+                max_events=None if max_events is None else max_events - len(rows),
+            )
+            new_fot_rows: list[dict[str, Any]] = []
+            for row in fot_rows:
+                fixture_key = _fixture_key(row)
+                if fixture_key and fixture_key in seen_fixture_keys:
+                    continue
+                if fixture_key:
+                    seen_fixture_keys.add(fixture_key)
+                new_fot_rows.append(row)
+            if new_fot_rows:
+                rows.extend(new_fot_rows)
+                fallback_usage.append({
+                    "provider": "fotmob",
+                    "date": date,
+                    "rows": len(new_fot_rows),
+                    "retrieved_at_utc": fot_retrieved,
+                })
+            errors.extend(fot_errors)
+
         # Football-Data current-season league CSVs provide a second fixture
         # discovery path with precise kickoff times for supported major leagues.
         if max_events is None or len(rows) < max_events:
