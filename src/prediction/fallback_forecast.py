@@ -72,6 +72,7 @@ def _load_pit_history(history_path: str, prediction_time: pd.Timestamp) -> tuple
             "source_available_at_utc": 0,
             "versioned_result_available_at_utc": 0,
         },
+        "versioned_result_verified_rows": 0,
     }
     if not path.is_file() or path.stat().st_size <= 0:
         meta["reason"] = "history_file_missing_or_empty"
@@ -93,9 +94,16 @@ def _load_pit_history(history_path: str, prediction_time: pd.Timestamp) -> tuple
     d["pit_verified"] = d["pit_verified"].astype("string").str.strip().str.lower().isin(
         {"true", "1", "yes"}
     )
+    versioned_verified = (
+        d["versioned_result_evidence_status"].astype("string").str.strip().str.upper().eq("VERIFIED")
+        if "versioned_result_evidence_status" in d.columns
+        else pd.Series(False, index=d.index)
+    )
+    d["fallback_result_pit_verified"] = d["pit_verified"] | versioned_verified
     d = d.dropna(subset=["kickoff_utc", "home_goals", "away_goals", "home_team", "away_team"])
-    d = d[d["pit_verified"]].copy()
+    d = d[d["fallback_result_pit_verified"]].copy()
     d = d[d["kickoff_utc"] < prediction_time].copy()
+    meta["versioned_result_verified_rows"] = int(versioned_verified.sum())
 
     # Prefer explicit source availability. For this fallback, the only
     # historical signal consumed is completed match outcome, so a versioned
