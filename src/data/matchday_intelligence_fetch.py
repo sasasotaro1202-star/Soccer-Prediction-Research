@@ -92,6 +92,14 @@ FOTMOB_EXPECTED_CCODE: dict[int, str] = {
     53: "FRA",
     130: "USA",
 }
+# International competitions do not have a dependable country-code guard.
+# Require a positive canonical-name signal as well as the provider ID so a
+# reassigned provider ID cannot silently turn another competition into UEFA.
+FOTMOB_EXPECTED_NAME_TOKENS: dict[int, tuple[str, ...]] = {
+    42: ("champions league",),
+    73: ("europa league",),
+    10007: ("conference league",),
+}
 
 SOFASCORE_COMPETITIONS: dict[str, str] = {
     "Premier League": "EPL",
@@ -619,6 +627,13 @@ def _fotmob_competition(league: dict[str, Any]) -> str | None:
     expected_ccode = FOTMOB_EXPECTED_CCODE.get(league_id, "")
     if ccode and expected_ccode and ccode != expected_ccode:
         return None
+
+    expected_tokens = FOTMOB_EXPECTED_NAME_TOKENS.get(league_id)
+    if expected_tokens:
+        name = _safe_str(league.get("name") or league.get("localizedName")).casefold()
+        if not name or not any(token in name for token in expected_tokens):
+            return None
+
     return competition
 
 
