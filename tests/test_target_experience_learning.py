@@ -56,3 +56,9 @@ def test_target_experience_blocks_legacy_ledger_schema(tmp_path):
     assert state["production_usable"] is False
     assert "experience_available_at_utc" in state["missing_columns"]
     assert (out / "target_experience_status.json").is_file()
+
+def test_target_experience_empty_ledger_stays_in_warmup():
+    state = learn_target_specific_experience(pd.DataFrame())
+    assert state["status"] == "INSUFFICIENT_EXPERIENCE"
+    assert state["production_usable"] is False
+    assert "missing_columns" not in state

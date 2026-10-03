@@ -11,5 +11,6 @@ def test_historical_learning_workflow_is_parallel_and_research_only():
     assert "production_changed" in text
     assert "production_model_path_touched" in text
     assert "permissions:\n  contents: read" in text
+    assert "GITHUB_TOKEN: ${{ github.token }}" in text
     assert "git push" not in text
     assert "models/current" not in text

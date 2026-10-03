@@ -35,6 +35,9 @@ def _validate(ledger: pd.DataFrame) -> pd.DataFrame:
         "actual_home_goals", "actual_away_goals",
     }
     missing = sorted(required - set(ledger.columns))
+    if ledger.empty:
+        return result
+
     if missing:
         raise RuntimeError(f"target experience ledger missing columns: {missing}")
     d = ledger.copy()

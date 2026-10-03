@@ -15,6 +15,7 @@ concurrency:
 env:
   PYTHONPATH: .
   PYTHONHASHSEED: "0"
+  GITHUB_TOKEN: ${{ github.token }}
   HISTORICAL_OUT: artifacts/historical-learning
 
 jobs:
