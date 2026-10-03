@@ -80,7 +80,8 @@ jobs:
 
           rows = int(len(fixtures))
           enriched_rows = int(rich_status.get("enriched_rows", 0))
-          payloads = int(rich_status.get("raw_payload_records", 0))
+          payloads = int(rich_status.get("valid_payload_records", rich_status.get("raw_payload_records", 0)))
+          raw_payloads = int(rich_status.get("raw_payload_records", 0))
           coverage = rich_status.get("source_coverage") or {}
 
           print("## Live rich-data availability")
@@ -88,10 +89,11 @@ jobs:
           print(f"- Fixture rows observed: {rows}")
           print(f"- Enriched rows: {enriched_rows}")
           print(f"- Real provider payloads observed: {payloads}")
+          print(f"- Raw provider responses observed: {raw_payloads}")
 
           if rows > 0 and payloads == 0:
               raise SystemExit(
-                  "LIVE_DATA_UNAVAILABLE: future fixtures were retrieved but no provider payload was obtained"
+                  "LIVE_DATA_UNAVAILABLE: future fixtures were retrieved but no valid provider payload was obtained"
               )
 
           for family, item in (coverage.get("source_families") or {}).items():
