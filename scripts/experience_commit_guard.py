@@ -24,7 +24,10 @@ def _run_git(*args: str) -> bytes | None:
     )
     if proc.returncode == 0:
         return proc.stdout
-    if proc.returncode == 128 and b"does not exist in" in proc.stderr:
+    if proc.returncode == 128 and (
+        b"does not exist in" in proc.stderr
+        or (b"pathspec" in proc.stderr and b"did not match any file" in proc.stderr)
+    ):
         return None
     raise RuntimeError(proc.stderr.decode("utf-8", errors="replace").strip() or "git command failed")
 
@@ -53,7 +56,9 @@ def semantic_json_equal(left: str, right: str) -> bool:
 def staged_semantic_change(path: str) -> bool:
     staged = _run_git("show", f":{path}")
     if staged is None:
-        raise RuntimeError(f"staged file is missing: {path}")
+        # The workflow stages only files that actually exist. An absent optional
+        # output therefore represents no change, not a guard failure.
+        return False
     head = _run_git("show", f"HEAD:{path}")
     if head is None:
         return True
