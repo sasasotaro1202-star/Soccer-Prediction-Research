@@ -24,8 +24,6 @@ retrieved_at_utc is retained separately from source publication/availability. Cu
 
 The raw JSONL is evidence for replay/debugging, not automatic permission to use the values in historical OOS.
 
-Each enriched match also records evidence-coverage diagnostics: successful endpoint/payload count, source-family count, error count, populated rich-field count/total, an information-completeness ratio, and a coarse evidence-quality state. These are diagnostic signals only; they are not treated as performance proof or PIT proof.
-
 ## Integration
 
 artifacts/matchday_rich_enrichment.csv is the structured research surface. artifacts/matchday_rich_raw.jsonl is the raw lineage surface. Production predictions continue to use the existing compact fixture path until a target-specific chronological OOS/robustness/holdout gate proves incremental value.

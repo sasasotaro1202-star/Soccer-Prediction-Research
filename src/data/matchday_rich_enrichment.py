@@ -63,6 +63,21 @@ def _round(value: Any, digits: int = 6) -> float | None:
     return None if number is None else round(float(number), digits)
 
 
+def _event_start_timestamp(value: Any) -> pd.Timestamp | None:
+    """Parse provider event timestamps without mistaking Unix seconds for nanoseconds."""
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        if math.isfinite(number) and abs(number) >= 1_000_000_000:
+            try:
+                return pd.Timestamp.fromtimestamp(number, tz="UTC")
+            except (OverflowError, OSError, ValueError):
+                return None
+    return _ts(value)
+
+
 def _json_hash(payload: Any) -> str:
     canonical = json.dumps(
         payload,
@@ -578,7 +593,7 @@ def _summarize_recent_events(
 ) -> dict[str, Any]:
     usable = []
     for event in events:
-        stamp = _ts(event.get("startTimestamp"))
+        stamp = _event_start_timestamp(event.get("startTimestamp"))
         if stamp is None or stamp >= kickoff:
             continue
         result = _event_result(event, team_id)
@@ -834,7 +849,7 @@ def _fetch_and_enrich_row(
                 if recent:
                     usable = []
                     for event in recent:
-                        stamp = _ts(event.get("startTimestamp") or event.get("date"))
+                        stamp = _event_start_timestamp(event.get("startTimestamp") or event.get("date"))
                         if stamp is None or stamp >= kickoff:
                             continue
                         competitors = (event.get("competitions") or [{}])[0]
