@@ -36,6 +36,3 @@ Use IMPLEMENTED / EXECUTED / VERIFIED / PERFORMANCE_VERIFIED / PROMOTION_CANDIDA
 
 ## Loop
 MONITOR → DETECT → TRIAGE → RESEARCH → IMPLEMENT → TEST → PIT → OOS/WFO → CALIBRATION → ROBUSTNESS → HOLDOUT → ADOPT/HOLD/REJECT → RELEASE → PRODUCTION → RECONCILE → FAILURE ANALYSIS → MEMORY → NEXT RESEARCH.
-
-## Preflight contract
-Research runtime preflight handoff variables are safety-critical: TESTS_PASSED and AUDIT_PASSED must be explicit valid boolean values. Missing or invalid values are BLOCKED/fail-closed and must never default to pass.
