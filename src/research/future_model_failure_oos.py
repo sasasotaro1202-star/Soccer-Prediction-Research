@@ -185,7 +185,11 @@ def evaluate_future_model_failure_oos(
         ys = np.asarray(labels_by_name[name], dtype=int)
         p_out = np.full(len(ys), np.nan, dtype=float)
         for i in range(len(ys)):
-            if i >= int(min_training_transitions) and len(np.unique(ys[:i])) >= 2:
+            # Label j is about block j+1. When predicting transition i, the
+            # current block i outcome is not yet available, so label i-1
+            # must not enter training. Only labels through i-2 are mature.
+            mature_count = max(0, i - 1)
+            if mature_count >= int(min_training_transitions) and len(np.unique(ys[:mature_count])) >= 2:
                 model = Pipeline([
                     ("impute", SimpleImputer(strategy="median", add_indicator=True)),
                     ("scale", StandardScaler()),
@@ -196,12 +200,12 @@ def evaluate_future_model_failure_oos(
                         random_state=2407,
                     )),
                 ])
-                model.fit(xs[:i], ys[:i])
+                model.fit(xs[:mature_count], ys[:mature_count])
                 p_out[i] = float(np.clip(model.predict_proba(xs[i:i+1])[0, 1], 0.0, 1.0))
-            elif i > 0:
-                p_out[i] = float(np.mean(ys[:i]))
+            elif mature_count > 0:
+                p_out[i] = float(np.mean(ys[:mature_count]))
             else:
-                p_out[i] = 0.0
+                p_out[i] = np.nan
         predictions_by_name[name] = p_out.tolist()
 
     metrics = {}
@@ -212,6 +216,8 @@ def evaluate_future_model_failure_oos(
         auc = _safe_auc(ys[usable], pp[usable])
         metrics[name] = {
             "transitions": int(len(ys)),
+            "training_transitions_max_at_prediction": int(max(0, len(ys) - 2)),
+            "first_predictable_transition_index": int(min_training_transitions + 1),
             "failure_rate": float(np.mean(ys)) if len(ys) else None,
             "failure_auc": auc,
             "predicted_failure_mean": float(np.mean(pp[usable])) if usable.any() else None,
