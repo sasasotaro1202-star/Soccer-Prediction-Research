@@ -340,3 +340,47 @@ def test_interactive_explicit_timeout_uses_interactive_floor(monkeypatch):
         profile="interactive",
     )
     assert calls == [(15.0, 30.0)]
+
+def test_live_http_profile_is_tightly_bounded():
+    timeout, retries, max_backoff = http_resilience.profile_defaults("live")
+    assert timeout == (20.0, 45.0)
+    assert retries == 3
+    assert max_backoff == 4.0
+
+
+def test_live_profile_uses_live_timeout_floor():
+    observed = {}
+
+    class Response:
+        status_code = 200
+        headers = {}
+
+        def raise_for_status(self):
+            return None
+
+    def fake_get(*args, **kwargs):
+        observed["timeout"] = kwargs["timeout"]
+        return Response()
+
+    http_resilience.resilient_get(
+        fake_get,
+        "https://example.test/live",
+        profile="live",
+        timeout=(1, 1),
+        retries=1,
+    )
+    assert observed["timeout"] == (15.0, 45.0)
+
+
+def test_matchday_fetcher_selects_live_http_profile():
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "data"
+        / "matchday_intelligence_fetch.py"
+    ).read_text(encoding="utf-8")
+    assert 'profile="live"' in source
+    assert "retries=3" in source
+    assert "backoff=1.0" in source
