@@ -52,7 +52,7 @@ def _tree_paths() -> list[str]:
 
 def _cached_tree_paths(cache_dir: str = "data/raw/openfootball-internationals") -> list[str]:
     """Recover a previously observed source tree without inventing new paths.
-    
+
     Cached paths are only used as a transport fallback when live GitHub tree
     discovery is temporarily unavailable. The cached files themselves remain
     subject to the normal parser/PIT checks.
@@ -146,7 +146,13 @@ def load_openfootball_international_history(
     try:
         paths = _tree_paths()
         discovery_mode = "LIVE"
-    except Exception:
+    except (requests.Timeout, requests.ConnectionError):
+        paths = _cached_tree_paths(cache_dir)
+        discovery_mode = "CACHE_FALLBACK" if paths else "UNAVAILABLE"
+    except requests.HTTPError as exc:
+        status_code = getattr(getattr(exc, "response", None), "status_code", None)
+        if int(status_code or 0) not in {403, 429, 500, 502, 503, 504}:
+            raise
         paths = _cached_tree_paths(cache_dir)
         discovery_mode = "CACHE_FALLBACK" if paths else "UNAVAILABLE"
     tasks: list[tuple[str, str, int, int, str]] = []
