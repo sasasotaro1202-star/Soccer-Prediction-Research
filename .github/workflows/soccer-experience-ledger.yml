@@ -265,5 +265,28 @@ jobs:
             echo "No experience changes to commit."
             exit 0
           fi
+
+          SEMANTIC_CHANGE="$(
+            python -m scripts.experience_commit_guard \
+              data/experience/prediction_ledger.csv \
+              data/experience/prediction_snapshots.jsonl \
+              artifacts/experience_metrics.csv \
+              artifacts/experience_metrics_by_target.csv \
+              artifacts/experience_status.json \
+              artifacts/experience_learning_status.json \
+              artifacts/experience_learning_oos.csv \
+              artifacts/experience_learning_replay.csv \
+              artifacts/experience_policy_candidate.json \
+              artifacts/target_experience/target_experience_status.json \
+              artifacts/target_experience/target_experience_oos.csv \
+              artifacts/experience_candidate_plan.json \
+              artifacts/experience_candidate_status.json
+          )"
+          if [ "$SEMANTIC_CHANGE" != "true" ]; then
+            git reset --               data/experience/prediction_ledger.csv               data/experience/prediction_snapshots.jsonl               artifacts/experience_metrics.csv               artifacts/experience_metrics_by_target.csv               artifacts/experience_status.json               artifacts/experience_learning_status.json               artifacts/experience_learning_oos.csv               artifacts/experience_learning_replay.csv               artifacts/experience_policy_candidate.json               artifacts/target_experience/target_experience_status.json               artifacts/target_experience/target_experience_oos.csv               artifacts/experience_candidate_plan.json               artifacts/experience_candidate_status.json
+            echo "Only volatile generated_at_utc metadata changed; skipping empty experience commit."
+            exit 0
+          fi
+
           git commit -m "ops: learn from matured prediction experience"
           git push origin HEAD:main
