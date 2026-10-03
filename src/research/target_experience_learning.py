@@ -25,7 +25,12 @@ TARGET_LEDGER_REQUIRED_COLUMNS = frozenset({
 
 
 def _read(path: Path) -> pd.DataFrame:
-    return pd.read_csv(path) if path.is_file() and path.stat().st_size else pd.DataFrame()
+    if not path.is_file() or path.stat().st_size == 0:
+        return pd.DataFrame()
+    try:
+        return pd.read_csv(path)
+    except pd.errors.EmptyDataError:
+        return pd.DataFrame()
 
 
 def _validate(ledger: pd.DataFrame) -> pd.DataFrame:
