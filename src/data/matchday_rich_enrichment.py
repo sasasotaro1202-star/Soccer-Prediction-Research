@@ -120,6 +120,72 @@ def _record_summary(competitor: dict[str, Any]) -> str:
     return " | ".join(dict.fromkeys(summaries))
 
 
+def _parse_injury_details(payload: dict[str, Any]) -> dict[str, Any]:
+    entries = payload.get("injuries") or payload.get("entries") or []
+    if not isinstance(entries, list):
+        return {}
+    names: list[str] = []
+    statuses: list[str] = []
+    reasons: list[str] = []
+    returns: list[str] = []
+    severe = 0
+    status_weights = {
+        "out": 1.0,
+        "doubtful": 0.7,
+        "questionable": 0.35,
+        "day-to-day": 0.35,
+        "probable": 0.1,
+    }
+
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        athlete = item.get("athlete") or item.get("player") or {}
+        name = _safe_str(
+            item.get("name")
+            or item.get("playerName")
+            or athlete.get("displayName")
+            or athlete.get("name")
+            or athlete.get("shortName")
+        )
+        status = _safe_str(
+            item.get("status")
+            or (item.get("fantasy") or {}).get("status")
+        )
+        reason = _safe_str(
+            item.get("reason")
+            or item.get("details")
+            or item.get("description")
+            or item.get("type")
+        )
+        expected = _safe_str(
+            item.get("returnDate")
+            or item.get("expectedReturn")
+            or item.get("estimatedReturn")
+            or (item.get("fantasy") or {}).get("returnDate")
+        )
+        if name:
+            names.append(name)
+        if status:
+            statuses.append(status)
+            status_lower = status.lower()
+            if any(token in status_lower for token in status_weights if status_weights[token] >= 0.7):
+                severe += 1
+        if reason:
+            reasons.append(reason)
+        if expected:
+            returns.append(expected)
+
+    return {
+        "count": int(len(entries)),
+        "severe_count": int(severe),
+        "names": "|".join(dict.fromkeys(names)),
+        "statuses": "|".join(dict.fromkeys(statuses)),
+        "reasons": " | ".join(dict.fromkeys(reasons)),
+        "expected_return": " | ".join(dict.fromkeys(returns)),
+    }
+
+
 def _parse_espn_summary(payload: dict[str, Any]) -> dict[str, Any]:
     competitions = payload.get("competitions") or []
     competition = competitions[0] if competitions and isinstance(competitions[0], dict) else {}
@@ -891,6 +957,20 @@ def _fetch_and_enrich_row(
             team_id = _safe_str(out.get(team_key))
             if not team_id:
                 continue
+            try:
+                injuries, at = _get_json(
+                    fetcher,
+                    "espn_injuries_rich",
+                    f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/teams/{team_id}/injuries",
+                )
+                detail = _parse_injury_details(injuries)
+                prefix = f"rich_espn_{side}_injury_"
+                for key, value in detail.items():
+                    out[prefix + key] = value
+                remember("espn", f"team_injuries:{team_id}", injuries, at)
+            except Exception as exc:
+                out[f"rich_espn_{side}_injury_error"] = f"{type(exc).__name__}: {exc}"
+
             try:
                 schedule, at = _get_json(
                     fetcher,
