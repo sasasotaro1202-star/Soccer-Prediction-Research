@@ -56,7 +56,7 @@ def test_research_forecast_verification_accepts_empty_target_set(tmp_path):
 
 
 
-def test_daily_research_forecast_defers_without_adopted_model(tmp_path, monkeypatch):
+def test_daily_research_forecast_uses_fallback_without_adopted_model(tmp_path, monkeypatch):
     from src.prediction.research_forecast import FORECAST_COLUMNS, run
 
     fixtures = tmp_path / "fixtures.csv"
@@ -78,11 +78,12 @@ def test_daily_research_forecast_defers_without_adopted_model(tmp_path, monkeypa
         "2029-12-31T12:00:00Z",
     )
 
-    assert result["status"] == "DEFERRED_NO_ADOPTED_MODEL"
-    assert result["prediction_rows"] == 0
+    assert result["status"] == "PREDICTED_FALLBACK_BASELINE"
+    assert result["prediction_rows"] == 1
     frame = pd.read_csv(output)
-    assert list(frame.columns) == list(FORECAST_COLUMNS)
-    assert frame.empty
+    assert set(FORECAST_COLUMNS).issubset(frame.columns)
+    assert len(frame) == 1
+    assert frame.loc[0, "forecast_mode"] == "FALLBACK_BASELINE"
 
 
 def test_verify_preserves_canonical_run_status_and_rows(tmp_path, monkeypatch):
