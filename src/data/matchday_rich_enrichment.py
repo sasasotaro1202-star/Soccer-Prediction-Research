@@ -424,6 +424,68 @@ def _apply_known_venue_correction(row: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
+def _location_distance_km(
+    lat1: Any,
+    lon1: Any,
+    lat2: Any,
+    lon2: Any,
+) -> float | None:
+    values = [_number(x) for x in (lat1, lon1, lat2, lon2)]
+    if any(x is None for x in values):
+        return None
+    lat1_f, lon1_f, lat2_f, lon2_f = [float(x) for x in values]
+    r = 6371.0088
+    phi1, phi2 = np.radians([lat1_f, lat2_f])
+    dphi = np.radians(lat2_f - lat1_f)
+    dlambda = np.radians(lon2_f - lon1_f)
+    a = (
+        np.sin(dphi / 2.0) ** 2
+        + np.cos(phi1) * np.cos(phi2) * np.sin(dlambda / 2.0) ** 2
+    )
+    return float(2.0 * r * np.arcsin(np.sqrt(np.clip(a, 0.0, 1.0))))
+
+
+def _reconcile_venue_integrity(row: dict[str, Any]) -> dict[str, Any]:
+    """Cross-check venue geography when an independent event provider is available."""
+    source_city = _safe_str(row.get("venue_city"))
+    sofa_city = _safe_str(row.get("rich_sofa_venue_city"))
+    city_mismatch = bool(
+        source_city
+        and sofa_city
+        and " ".join(source_city.lower().split()) != " ".join(sofa_city.lower().split())
+    )
+
+    distance_km = _location_distance_km(
+        row.get("venue_lat"),
+        row.get("venue_lon"),
+        row.get("rich_sofa_venue_lat"),
+        row.get("rich_sofa_venue_lon"),
+    )
+    coordinate_mismatch = bool(distance_km is not None and distance_km > 50.0)
+
+    if city_mismatch or coordinate_mismatch:
+        row["venue_integrity_status"] = "SOURCE_DISAGREEMENT"
+        row["venue_integrity_disagreement_city"] = city_mismatch
+        row["venue_integrity_disagreement_distance_km"] = (
+            round(distance_km, 3) if distance_km is not None else np.nan
+        )
+        row["rich_weather_geometry_status"] = "BLOCKED_SOURCE_DISAGREEMENT"
+        return row
+
+    existing = _safe_str(row.get("venue_integrity_status"))
+    if existing == "CORRECTED_KNOWN_PROVIDER_ERROR":
+        row["venue_cross_source_status"] = (
+            "CROSS_SOURCE_AGREE" if (sofa_city or distance_km is not None) else "NO_SECOND_SOURCE"
+        )
+    elif sofa_city or distance_km is not None:
+        row["venue_integrity_status"] = "CROSS_SOURCE_AGREE"
+        row["venue_cross_source_status"] = "CROSS_SOURCE_AGREE"
+    else:
+        row.setdefault("venue_integrity_status", "UNVERIFIED")
+        row["venue_cross_source_status"] = "NO_SECOND_SOURCE"
+    return row
+
+
 def _parse_weather_payload(payload: dict[str, Any], kickoff: pd.Timestamp) -> dict[str, Any]:
     hourly = payload.get("hourly") or {}
     times = pd.to_datetime(
@@ -639,6 +701,18 @@ def _parse_sofa_event(payload: dict[str, Any]) -> dict[str, Any]:
         "rich_sofa_status_type": _safe_str(status.get("type")),
         "rich_sofa_referees": " | ".join(dict.fromkeys(referee_names)),
         "rich_sofa_venue": _safe_str(venue.get("name")),
+        "rich_sofa_venue_city": _safe_str(venue.get("city")),
+        "rich_sofa_venue_country": _safe_str(
+            (venue.get("country") or {}).get("name")
+            if isinstance(venue.get("country"), dict)
+            else venue.get("country")
+        ),
+        "rich_sofa_venue_lat": _number(
+            (venue.get("coordinates") or {}).get("latitude")
+        ),
+        "rich_sofa_venue_lon": _number(
+            (venue.get("coordinates") or {}).get("longitude")
+        ),
         "rich_sofa_neutral_ground": bool(
             payload.get("neutralGround") or payload.get("isNeutral")
         ),
@@ -1500,6 +1574,7 @@ def _fetch_and_enrich_row(
                     )
 
     out = _apply_known_venue_correction(out)
+    out = _reconcile_venue_integrity(out)
 
     lat = _number(out.get("venue_lat"))
     lon = _number(out.get("venue_lon"))
@@ -1533,7 +1608,18 @@ def _fetch_and_enrich_row(
                     f"{type(exc).__name__}: {exc}"
                 )
 
-    if lat is not None and lon is not None:
+    if out.get("venue_integrity_status") == "SOURCE_DISAGREEMENT":
+        out.setdefault(
+            "rich_weather_error",
+            "weather geometry blocked because venue sources disagree",
+        )
+    elif lat is not None and lon is not None:
+        out.setdefault(
+            "rich_weather_geometry_status",
+            "CORRECTED_KNOWN_PROVIDER_ERROR"
+            if out.get("venue_integrity_status") == "CORRECTED_KNOWN_PROVIDER_ERROR"
+            else "SOURCE_COORDINATES",
+        )
         out["rich_weather_latitude"] = lat
         out["rich_weather_longitude"] = lon
         try:
