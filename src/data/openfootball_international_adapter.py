@@ -50,6 +50,30 @@ def _tree_paths() -> list[str]:
     ]
 
 
+def _cached_tree_paths(cache_dir: str = "data/raw/openfootball-internationals") -> list[str]:
+    """Recover a previously observed source tree without inventing new paths.
+
+    Cached paths are only used as a transport fallback when live GitHub tree
+    discovery is temporarily unavailable. The cached files themselves remain
+    subject to the normal parser/PIT checks.
+    """
+    root = Path(cache_dir)
+    if not root.is_dir():
+        return []
+    prefix = root.resolve()
+    paths: list[str] = []
+    for file_path in root.rglob("*.txt"):
+        if not file_path.is_file() or file_path.stat().st_size <= 0:
+            continue
+        try:
+            relative = file_path.resolve().relative_to(prefix).as_posix()
+        except ValueError:
+            continue
+        if relative:
+            paths.append(relative)
+    return sorted(set(paths))
+
+
 def _cache_path(cache_dir: str, relative_path: str) -> Path:
     path = Path(cache_dir) / relative_path
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -71,12 +95,12 @@ def _season_ok(season_start: int, start_year: int, end_year: int) -> bool:
     return int(start_year) <= int(season_start) <= int(end_year)
 
 
-def _one(item: tuple[str, str, int, int, str]) -> tuple[pd.DataFrame, dict]:
-    competition, relative_path, season_start, start_year, end_year = item
+def _one(item: tuple[str, str, int, int, str, str]) -> tuple[pd.DataFrame, dict]:
+    competition, relative_path, season_start, start_year, end_year, cache_dir = item
     if not _season_ok(season_start, start_year, end_year):
         return pd.DataFrame(), {}
     try:
-        text, raw, url = _fetch_text(relative_path, "data/raw/openfootball-internationals")
+        text, raw, url = _fetch_text(relative_path, cache_dir)
         frame = parse_football_txt(
             text,
             competition,
@@ -113,9 +137,25 @@ def load_openfootball_international_history(
     start_year: int = 2000,
     end_year: int = 2026,
     max_workers: int = 8,
+    cache_dir: str = "data/raw/openfootball-internationals",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    paths = _tree_paths()
-    tasks: list[tuple[str, str, int, int, str]] = []
+    # GitHub API rate limits/temporary 403 responses must not suppress unrelated
+    # historical sources. Prefer a previously observed path index when the live
+    # tree cannot be read; without a cache, degrade to empty output and let the
+    # downstream coverage/PIT gates record the resulting scope deficit.
+    try:
+        paths = _tree_paths()
+        discovery_mode = "LIVE"
+    except (requests.Timeout, requests.ConnectionError):
+        paths = _cached_tree_paths(cache_dir)
+        discovery_mode = "CACHE_FALLBACK" if paths else "UNAVAILABLE"
+    except requests.HTTPError as exc:
+        status_code = getattr(getattr(exc, "response", None), "status_code", None)
+        if int(status_code or 0) not in {403, 429, 500, 502, 503, 504}:
+            raise
+        paths = _cached_tree_paths(cache_dir)
+        discovery_mode = "CACHE_FALLBACK" if paths else "UNAVAILABLE"
+    tasks: list[tuple[str, str, int, int, str, str]] = []
     for competition, pattern in PATH_PATTERNS.items():
         for relative_path in paths:
             match = pattern.match(relative_path)
@@ -123,7 +163,7 @@ def load_openfootball_international_history(
                 continue
             season_start = int(match.group(1))
             if _season_ok(season_start, start_year, end_year):
-                tasks.append((competition, relative_path, season_start, start_year, end_year))
+                tasks.append((competition, relative_path, season_start, start_year, end_year, cache_dir))
 
     tasks.sort(key=lambda x: (x[0], x[2], x[1]))
     frames: list[pd.DataFrame] = []
@@ -138,6 +178,7 @@ def load_openfootball_international_history(
             if not frame.empty:
                 frames.append(frame)
             if row:
+                row["discovery_mode"] = discovery_mode
                 coverage.append(row)
 
     history = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()

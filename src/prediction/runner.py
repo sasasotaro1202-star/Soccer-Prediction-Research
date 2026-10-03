@@ -458,7 +458,10 @@ def run(
 
     fixtures = pd.read_csv(p)
     freshness = None
-    if model_policy == "production":
+    # Only the canonical production artifact path invokes the live matchday
+    # freshness gate. Explicit caller-supplied paths are isolated validation
+    # runs and must remain testable without depending on the live artifact.
+    if model_policy == "production" and standard_paths:
         freshness = _require_fresh_matchday_snapshot(
             "artifacts/matchday_intelligence_status.json", now, max_age_minutes=15.0
         )

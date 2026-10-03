@@ -155,7 +155,7 @@ jobs:
           PY
             )"
             if [ "${operation}" = "matchday_intelligence" ]; then
-              printf "%s\n" "{\"ref\":\"main\",\"inputs\":{\"prediction_mode\":\"on_demand\"}}" > "/tmp/dispatch-${request_id}.json"
+              printf '%s\n' '{"ref":"main","inputs":{"prediction_mode":"on_demand"}}' > "/tmp/dispatch-${request_id}.json"
             else
               printf "%s\n" "{\"ref\":\"main\"}" > "/tmp/dispatch-${request_id}.json"
             fi
@@ -169,7 +169,7 @@ jobs:
             dispatch_workflow "${workflow_file}" "${request_id}" "/tmp/dispatch-${request_id}.json"
             final_payload="$(python - <<PY
           import json, os
-          print(json.dumps({"request_id":os.environ["REQUEST_ID"],"operation":os.environ["OPERATION"],"workflow":os.environ["WORKFLOW_FILE"],"requested_at":os.environ["REQUESTED_AT"],"accepted_commit":os.environ["ACCEPTED_COMMIT"],"status":"DISPATCHED","note":"Long-running work continues asynchronously; the chat request does not poll for completion."}, ensure_ascii=False))
+          print(json.dumps({"request_id":os.environ["REQUEST_ID"],"operation":os.environ["OPERATION"],"workflow":os.environ["WORKFLOW_FILE"],"requested_at":os.environ["REQUESTED_AT"],"accepted_commit":os.environ["ACCEPTED_COMMIT"],"status":"DISPATCHED","note":"Long-running work continues asynchronously; the chat request is acknowledged without polling for completion."}, ensure_ascii=False))
           PY
             )"
             state_code="$(get_state "${state_path}" "${state_file}")"

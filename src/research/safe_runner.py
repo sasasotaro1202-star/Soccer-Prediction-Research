@@ -180,6 +180,7 @@ def run_with_retries() -> int:
         if errors
         else "Research engine did not produce a result; no OOS result was claimed.",
         "retry_policy": "transient_only",
+        "retry_history": retry_history,
         "runner": {
             "attempts": len(retry_history),
             "max_attempts": attempts,
