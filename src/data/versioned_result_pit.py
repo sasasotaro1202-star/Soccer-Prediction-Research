@@ -289,7 +289,6 @@ def _snapshot_index(payload: dict[str, Any]) -> dict[tuple[str, str, str, float,
 INPUT_REQUIRED_COLUMNS = frozenset(
     {
         "competition",
-        "season_start",
         "kickoff_utc",
         "home_team",
         "away_team",
@@ -297,6 +296,7 @@ INPUT_REQUIRED_COLUMNS = frozenset(
         "away_goals",
     }
 )
+SEASON_COLUMNS = frozenset({"season_start", "season"})
 
 
 def select_input_path(primary: str | Path, resume: str | Path) -> tuple[Path, str]:
@@ -309,7 +309,7 @@ def select_input_path(primary: str | Path, resume: str | Path) -> tuple[Path, st
         columns = set(pd.read_csv(resume_path, nrows=0).columns)
     except (OSError, pd.errors.ParserError, pd.errors.EmptyDataError):
         return primary_path, "RESUME_UNREADABLE"
-    if INPUT_REQUIRED_COLUMNS.issubset(columns):
+    if INPUT_REQUIRED_COLUMNS.issubset(columns) and columns.intersection(SEASON_COLUMNS):
         return resume_path, "RESUME_VALID"
     return primary_path, "RESUME_SCHEMA_INVALID"
 
