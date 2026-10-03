@@ -477,3 +477,34 @@ def test_daily_forecast_workflow_max_events_matches_fetch_cli_contract():
     assert "--max-events 200" in workflow
     assert 'parser.add_argument(\n        "--max-events",' in source
     assert "max_events=args.max_events" in source
+
+def test_football_data_current_season_code_follows_august_july_cycle():
+    from src.data.matchday_intelligence_fetch import football_data_current_season_code
+
+    assert football_data_current_season_code(pd.Timestamp("2026-10-04T00:00:00Z")) == "2627"
+    assert football_data_current_season_code(pd.Timestamp("2027-06-30T00:00:00Z")) == "2627"
+    assert football_data_current_season_code(pd.Timestamp("2027-08-01T00:00:00Z")) == "2728"
+
+
+def test_parse_football_data_current_season_rows_preserves_future_fixture_times():
+    from src.data.matchday_intelligence_fetch import parse_football_data_current_season_rows
+
+    frames = {
+        "E0": pd.DataFrame([{
+            "Div": "E0",
+            "Date": "05/10/2026",
+            "Time": "15:00",
+            "HomeTeam": "Home FC",
+            "AwayTeam": "Away FC",
+        }])
+    }
+    rows = parse_football_data_current_season_rows(
+        frames,
+        now=pd.Timestamp("2026-10-04T00:00:00Z"),
+        horizon_hours=48,
+        retrieved_at_by_division={"E0": "2026-10-04T01:00:00Z"},
+    )
+    assert len(rows) == 1
+    assert rows[0]["competition"] == "EPL"
+    assert rows[0]["matchday_source"] == "football-data.co.uk-current-season"
+    assert rows[0]["kickoff_utc"].startswith("2026-10-05T14:00:00")

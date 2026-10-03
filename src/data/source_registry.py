@@ -36,7 +36,7 @@ SOCCER_SOURCES: Final[tuple[SourceSpec, ...]] = (
         live_capable=False,
         auth_required=False,
         primary_for=("historical_baseline",),
-        notes="Static season CSVs; archive evidence required for strict PIT.",
+        notes="Static and current-season CSVs; current-season fixture files are a live discovery fallback, while archive evidence is required for strict historical PIT.",
     ),
     SourceSpec(
         name="API-Football",
