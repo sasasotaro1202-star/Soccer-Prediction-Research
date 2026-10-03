@@ -36,6 +36,13 @@ INTERACTIVE_MAX_BACKOFF_SECONDS = 4.0
 INTERACTIVE_MIN_CONNECT_TIMEOUT = 15.0
 INTERACTIVE_MIN_READ_TIMEOUT = 30.0
 
+LIVE_CONNECT_TIMEOUT = 20.0
+LIVE_READ_TIMEOUT = 45.0
+LIVE_RETRIES = 3
+LIVE_MAX_BACKOFF_SECONDS = 4.0
+LIVE_MIN_CONNECT_TIMEOUT = 15.0
+LIVE_MIN_READ_TIMEOUT = 45.0
+
 
 def _env_float(name: str, default: float, *, minimum: float = 0.0) -> float:
     raw = os.getenv(name)
@@ -97,12 +104,19 @@ def default_retries(*, profile: str = "batch") -> int:
 
 
 def profile_defaults(profile: str = "batch") -> tuple[tuple[float, float], int, float]:
-    """Return timeout/retry/backoff defaults for batch or interactive callers."""
-    if str(profile).strip().lower() == "interactive":
+    """Return timeout/retry/backoff defaults for batch, live, or interactive callers."""
+    normalized = str(profile).strip().lower()
+    if normalized == "interactive":
         return (
             (INTERACTIVE_CONNECT_TIMEOUT, INTERACTIVE_READ_TIMEOUT),
             default_retries(profile="interactive"),
             INTERACTIVE_MAX_BACKOFF_SECONDS,
+        )
+    if normalized == "live":
+        return (
+            (LIVE_CONNECT_TIMEOUT, LIVE_READ_TIMEOUT),
+            LIVE_RETRIES,
+            LIVE_MAX_BACKOFF_SECONDS,
         )
     return (default_timeout(), default_retries(profile="batch"), DEFAULT_MAX_BACKOFF_SECONDS)
 
@@ -185,6 +199,9 @@ def resilient_get(
     if profile_name == "interactive":
         min_connect_timeout = INTERACTIVE_MIN_CONNECT_TIMEOUT
         min_read_timeout = INTERACTIVE_MIN_READ_TIMEOUT
+    elif profile_name == "live":
+        min_connect_timeout = LIVE_MIN_CONNECT_TIMEOUT
+        min_read_timeout = LIVE_MIN_READ_TIMEOUT
     else:
         min_connect_timeout = MIN_CONNECT_TIMEOUT
         min_read_timeout = MIN_READ_TIMEOUT
