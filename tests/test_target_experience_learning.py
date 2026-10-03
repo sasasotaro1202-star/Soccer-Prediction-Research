@@ -62,3 +62,16 @@ def test_target_experience_empty_ledger_stays_in_warmup():
     assert state["status"] == "INSUFFICIENT_EXPERIENCE"
     assert state["production_usable"] is False
     assert "missing_columns" not in state
+
+
+def test_write_target_experience_empty_headerless_ledger_stays_in_warmup(tmp_path):
+    from src.research.target_experience_learning import write_target_specific_experience
+
+    ledger = tmp_path / "empty.csv"
+    out = tmp_path / "target_experience"
+    ledger.write_text("\n", encoding="utf-8")
+    state = write_target_specific_experience(str(ledger), str(out))
+
+    assert state["status"] == "INSUFFICIENT_EXPERIENCE"
+    assert state["production_usable"] is False
+    assert (out / "target_experience_status.json").is_file()
