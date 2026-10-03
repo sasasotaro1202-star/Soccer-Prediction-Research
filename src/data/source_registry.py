@@ -72,7 +72,7 @@ SOCCER_SOURCES: Final[tuple[SourceSpec, ...]] = (
         live_capable=True,
         auth_required=False,
         primary_for=("xg", "player_context"),
-        notes="Treat endpoint/schema stability as a QC dimension; archive raw snapshots.",
+        notes="Public date/matchDetails endpoints are useful for live fixture discovery and rich pre-match context; endpoint/schema stability, robots/usage constraints and row-level coverage must be re-verified before repeated use.",
     ),
     SourceSpec(
         name="Understat",
