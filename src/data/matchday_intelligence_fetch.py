@@ -1475,7 +1475,7 @@ def collect_matchday_snapshots(
                 and _ts(row["kickoff_utc"]).date() == day_date
             ]
             new_fd_rows: list[dict[str, Any]] = []
-            for row in fd_rows:
+            for row in day_fd_rows:
                 fixture_key = _fixture_key(row)
                 if fixture_key and fixture_key in seen_fixture_keys:
                     continue
@@ -1484,7 +1484,6 @@ def collect_matchday_snapshots(
                 new_fd_rows.append(row)
             if new_fd_rows:
                 rows.extend(new_fd_rows)
-                fallback_usage.append({"provider": "football-data.co.uk", "date": date, "rows": len(new_fd_rows)})
 
     frame = pd.DataFrame(rows)
     if not frame.empty:
