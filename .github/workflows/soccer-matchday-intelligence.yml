@@ -120,13 +120,18 @@ jobs:
               sources = ", ".join(item.get("sources") or []) or "none"
               print(f"- **{competition}**: rows={item.get('upcoming_rows', 0)}, sources={sources}")
           PY
-      - name: Prepare PIT-safe future fixture features
+      - name: Prepare PIT-safe future fixture features when adopted production model exists
         if: success()
         env:
           PYTHONPATH: .
         run: |
           set -euo pipefail
-          python -m src.prediction.prepare_fixtures             --fixtures artifacts/future_matchday_fixtures.csv             --output artifacts/future_fixtures.csv
+          if [ -s models/current/production_model.pkl ] && [ -s models/current/production_model.json ] && [ -s models/current/model_registry.json ] && [ -s models/current/production_provenance.json ]; then
+            python -m src.prediction.prepare_fixtures               --fixtures artifacts/future_matchday_fixtures.csv               --output artifacts/future_fixtures.csv
+          else
+            printf '%s\n' '{"status":"PREPARE_SKIPPED_FOR_FALLBACK","reason":"No adopted production bundle; research-only total fallback consumes the validated fixture snapshot directly."}' > artifacts/future_fixture_prepare_status.json
+            echo "Production bundle absent; skipping model-only PIT feature preparation because fallback has its own PIT gates."
+          fi
       - name: Run current predictions when an adopted production model exists
         if: success()
         env:
