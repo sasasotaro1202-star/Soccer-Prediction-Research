@@ -1,0 +1,14 @@
+{
+  "candidates": [],
+  "safety_contract": {
+    "frozen_holdout_allowed": false,
+    "outcome_data_used_only_after_maturity": true,
+    "production_changed": false,
+    "promotion_requires_chronological_oos": true,
+    "research_only": true
+  },
+  "schema_version": 1,
+  "settled_rows": 0,
+  "source": "matured_experience_ledger",
+  "status": "WARMUP"
+}

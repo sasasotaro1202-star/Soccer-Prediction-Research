@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "status": "INSUFFICIENT_EXPERIENCE",
+  "production_usable": false,
+  "targets": {},
+  "mom": {
+    "status": "UPSTREAM_PLAYER_MODEL_REQUIRED",
+    "rows": 0,
+    "production_usable": false
+  },
+  "oos_rows": []
+}

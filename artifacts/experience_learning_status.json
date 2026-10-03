@@ -1,0 +1,7 @@
+{
+  "status": "INSUFFICIENT_EXPERIENCE",
+  "reason": "No PIT-valid settled prediction experience is available.",
+  "rows": 0,
+  "generated_at_utc": "2026-10-03T04:56:00.557631+00:00",
+  "fail_closed": true
+}

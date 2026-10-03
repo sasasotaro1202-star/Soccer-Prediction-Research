@@ -2,7 +2,9 @@
   "status": "NO_SETTLED_PREDICTIONS",
   "settled_predictions": 0,
   "ledger_rows": 0,
-  "generated_at_utc": "2026-09-26T04:36:00.293338+00:00",
+  "dual_source_agree_predictions": 0,
+  "source_disagreement_predictions": 0,
+  "generated_at_utc": "2026-10-03T04:55:59.182747+00:00",
   "metrics_file": "artifacts/experience_metrics.csv",
   "summary": {
     "all": {
