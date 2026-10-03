@@ -496,6 +496,8 @@ def test_matchday_workflow_does_not_pass_a_legacy_global_event_cap():
     workflow = Path(".github/workflows/soccer-matchday-intelligence.yml").read_text(encoding="utf-8")
     assert "--max-events" not in workflow
     assert "global_event_cap_enabled" in workflow
+    assert 'status_name == "DEFERRED_EXTERNAL_SOURCE"' in workflow
+    assert 'status_name == "NO_UPCOMING_FIXTURES" and errors' in workflow
 
 
 def test_matchday_workflow_allows_confirmed_lineups():
