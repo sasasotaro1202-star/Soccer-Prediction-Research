@@ -286,6 +286,34 @@ def _snapshot_index(payload: dict[str, Any]) -> dict[tuple[str, str, str, float,
     return index
 
 
+INPUT_REQUIRED_COLUMNS = frozenset(
+    {
+        "competition",
+        "season_start",
+        "kickoff_utc",
+        "home_team",
+        "away_team",
+        "home_goals",
+        "away_goals",
+    }
+)
+
+
+def select_input_path(primary: str | Path, resume: str | Path) -> tuple[Path, str]:
+    """Choose a resumable evidence file only when its schema is usable."""
+    primary_path = Path(primary)
+    resume_path = Path(resume)
+    if not resume_path.is_file() or resume_path.stat().st_size == 0:
+        return primary_path, "PRIMARY"
+    try:
+        columns = set(pd.read_csv(resume_path, nrows=0).columns)
+    except (OSError, pd.errors.ParserError, pd.errors.EmptyDataError):
+        return primary_path, "RESUME_UNREADABLE"
+    if INPUT_REQUIRED_COLUMNS.issubset(columns):
+        return resume_path, "RESUME_VALID"
+    return primary_path, "RESUME_SCHEMA_INVALID"
+
+
 def apply_bulk(
     history: pd.DataFrame,
     *,
