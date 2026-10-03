@@ -1259,6 +1259,8 @@ def main() -> int:
         frame.to_csv(output, index=False)
     status_path.write_text(json.dumps(status, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     print(json.dumps(status, ensure_ascii=False))
+    if str(status.get("status", "")).upper() == "DEFERRED_EXTERNAL_SOURCE":
+        return 1
     return 0
 
 
