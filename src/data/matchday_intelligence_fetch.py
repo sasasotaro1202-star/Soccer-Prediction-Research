@@ -768,6 +768,7 @@ def parse_fotmob_league_catalog(payload: dict[str, Any]) -> dict[str, Any]:
 
     missing_ids: list[int] = []
     ccode_mismatches: list[dict[str, Any]] = []
+    name_mismatches: list[dict[str, Any]] = []
     collisions: list[dict[str, Any]] = []
     supported_records: dict[str, Any] = {}
 
@@ -792,6 +793,18 @@ def parse_fotmob_league_catalog(payload: dict[str, Any]) -> dict[str, Any]:
                     "observed_ccodes": sorted({ccode for _, ccode, _ in records}),
                 }
             )
+        expected_tokens = FOTMOB_EXPECTED_NAME_TOKENS.get(league_id)
+        if expected_tokens and all(
+            not any(token in name.casefold() for token in expected_tokens)
+            for name, _, _ in records
+        ):
+            name_mismatches.append(
+                {
+                    "league_id": int(league_id),
+                    "expected_name_tokens": list(expected_tokens),
+                    "observed_names": sorted({name for name, _, _ in records}),
+                }
+            )
         if len(records) > 1:
             collisions.append(
                 {
@@ -806,7 +819,7 @@ def parse_fotmob_league_catalog(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": (
             "DRIFT_DETECTED"
-            if missing_ids or ccode_mismatches or collisions
+            if missing_ids or ccode_mismatches or name_mismatches or collisions
             else "NO_KNOWN_DRIFT"
         ),
         "record_count": int(sum(len(records) for records in by_id.values())),
@@ -814,6 +827,7 @@ def parse_fotmob_league_catalog(payload: dict[str, Any]) -> dict[str, Any]:
         "supported_records": supported_records,
         "missing_known_ids": missing_ids,
         "ccode_mismatches": ccode_mismatches,
+        "name_mismatches": name_mismatches,
         "identity_collisions": collisions,
     }
 
