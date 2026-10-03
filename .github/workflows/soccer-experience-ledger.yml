@@ -131,9 +131,8 @@ jobs:
           status = json.loads(Path("artifacts/target_experience/target_experience_status.json").read_text(encoding="utf-8"))
           target_status = status.get("status")
           if target_status == "BLOCKED_LEDGER_SCHEMA":
-              print("target experience learning status=BLOCKED_LEDGER_SCHEMA; production_usable=false")
-          else:
-              print(f"target experience learning status={target_status}")
+              raise SystemExit("target-specific experience learning is blocked by invalid ledger schema")
+          print(f"target experience learning status={target_status}")
           PY
       - name: Generate matured-experience research candidates
         env:
