@@ -153,9 +153,9 @@ def test_calibration_oos_excludes_immature_prior_outcomes_from_training():
     )
     state = calibrate(frame, history_rows=120, block_size=60)
     assert state["oos_blocks"]
-    assert state["oos_blocks"][0]["block"] == 0
+    assert state["oos_blocks"][0]["block"] == 1
     assert state["oos_blocks"][0]["training_rows"] == 179
-    assert state["oos_blocks"][0]["raw_training_rows"] == 120
+    assert state["oos_blocks"][0]["raw_training_rows"] == 180
     assert state["oos_blocks"][0]["excluded_immature_training_rows"] == 1
 
 
@@ -177,10 +177,9 @@ def test_maturity_training_helper_excludes_future_outcomes_and_fails_closed():
     eligible = filter_prior_mature_training(
         frame, pd.Timestamp("2026-01-01T10:00:00Z")
     )
-    assert len(eligible) == 2
+    assert len(eligible) == 1
     assert eligible["prediction_pit_cutoff_utc"].tolist() == [
         "2026-01-01T08:00:00Z",
-        "2026-01-01T09:00:00Z",
     ]
 
 
