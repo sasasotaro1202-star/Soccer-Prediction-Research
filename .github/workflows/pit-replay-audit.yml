@@ -34,7 +34,9 @@ permissions:
 
 concurrency:
   group: soccer-pit-replay-audit-${{ github.ref }}
-  cancel-in-progress: true
+  # Preserve an in-flight PIT replay; cancellation can discard evidence without
+  # producing a deterministic audit result for the requested snapshot.
+  cancel-in-progress: false
 
 jobs:
   pit-audit:
