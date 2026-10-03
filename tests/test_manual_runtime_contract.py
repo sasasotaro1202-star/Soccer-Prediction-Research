@@ -63,7 +63,7 @@ def test_research_cycle_artifact_persistence_is_bounded_and_explicit():
     assert "git fetch --prune origin main" in text
     assert "git push origin HEAD:main" in text
     assert "git rebase origin/main" in text
-    assert "sleep \$((attempt * 5))" in text
+    assert "sleep $((attempt * 5))" in text
     assert "|| true" not in text
 
 def test_chat_gateway_stays_short_only_for_acknowledgement():
