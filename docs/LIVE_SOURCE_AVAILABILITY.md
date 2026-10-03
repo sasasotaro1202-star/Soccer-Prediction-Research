@@ -38,3 +38,9 @@ Relevant forensic evidence from the run artifact:
 - retrieval timestamps were before kickoff, but this is observation evidence only and does not prove historical publication availability
 
 The branch must pass a fresh live smoke run after these fixes before FotMob match-detail acquisition is marked VERIFIED.
+
+## Known ESPN venue-data defect — 2026-10-04
+
+A live rich-data artifact showed Signal Iduna Park for Borussia Dortmund with provider venue city Aue and coordinates near Aue. This is not accepted as valid venue geography. Independent current sources identify the 2026-10-09 Bundesliga fixture Borussia Dortmund vs Werder Bremen as being played at SIGNAL IDUNA PARK in Dortmund. A public ESPN API discussion also records the same upstream defect: Borussia Dortmund was exposed with city Aue.
+
+The rich layer now applies an explicit, provenance-tracked correction for the known ESPN key (ger.1, team 124, Signal Iduna Park), preserves the original provider values, and labels the row CORRECTED_KNOWN_PROVIDER_ERROR. Unknown venue mismatches remain UNVERIFIED and are never silently overwritten. Weather features use the corrected coordinates only for this registered defect.
