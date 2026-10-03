@@ -214,15 +214,16 @@ def _team_rates(frame: pd.DataFrame, prediction_time: pd.Timestamp) -> dict[str,
     return rows
 
 
-def _elo_probabilities(
+def _elo_state(
     frame: pd.DataFrame,
-    home_team: str,
-    away_team: str,
-    competition: str,
-    neutral_venue: bool,
-) -> tuple[np.ndarray, dict[str, Any]]:
+) -> tuple[dict[str, float], dict[str, int]]:
     ratings: dict[str, float] = {}
-    for row in frame.sort_values(["kickoff_utc", "match_id" if "match_id" in frame.columns else "home_team"], kind="mergesort").itertuples(index=False):
+    games: dict[str, int] = {}
+    if frame.empty:
+        return ratings, games
+    sort_col = "match_id" if "match_id" in frame.columns else "home_team"
+    ordered = frame.sort_values(["kickoff_utc", sort_col], kind="mergesort")
+    for row in ordered.itertuples(index=False):
         home = str(row.home_team)
         away = str(row.away_team)
         comp = str(row.competition)
@@ -237,18 +238,34 @@ def _elo_probabilities(
         delta = ELO_K * (actual - expected)
         ratings[home] = he + delta
         ratings[away] = ae - delta
+        games[home] = int(games.get(home, 0) + 1)
+        games[away] = int(games.get(away, 0) + 1)
+    return ratings, games
 
+
+def _elo_probabilities(
+    frame: pd.DataFrame,
+    home_team: str,
+    away_team: str,
+    competition: str,
+    neutral_venue: bool,
+    *,
+    elo_ratings: dict[str, float] | None = None,
+    elo_games: dict[str, int] | None = None,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    ratings, games = (
+        (elo_ratings, elo_games)
+        if elo_ratings is not None and elo_games is not None
+        else _elo_state(frame)
+    )
     home_rating = float(ratings.get(str(home_team), 1500.0))
     away_rating = float(ratings.get(str(away_team), 1500.0))
     adv = 0.0 if neutral_venue else ELO_HOME_ADV
     p_home = 1.0 / (1.0 + 10.0 ** (-((home_rating + adv) - away_rating) / 400.0))
-    # ELO draw probability is constructed conservatively from proximity to
-    # parity rather than pretending the binary ELO model estimates draws.
     proximity = float(np.exp(-abs((home_rating + adv) - away_rating) / 220.0))
     p_draw = float(np.clip(0.18 + 0.18 * proximity, 0.18, 0.36))
     remaining = max(1.0 - p_draw, 1e-12)
     p_home = float(np.clip(p_home, 0.02, 0.98))
-    # Renormalize the win split after reserving a draw mass.
     p_home = float(np.clip(p_home * remaining, 0.01, remaining - 0.01))
     p_away = remaining - p_home
     probs = np.asarray([p_home, p_draw, p_away], dtype=float)
@@ -256,14 +273,8 @@ def _elo_probabilities(
     support = {
         "home_rating": home_rating,
         "away_rating": away_rating,
-        "home_rating_games": int(
-            sum(1 for x in frame["home_team"].astype(str).tolist() if x == str(home_team))
-            + sum(1 for x in frame["away_team"].astype(str).tolist() if x == str(home_team))
-        ),
-        "away_rating_games": int(
-            sum(1 for x in frame["home_team"].astype(str).tolist() if x == str(away_team))
-            + sum(1 for x in frame["away_team"].astype(str).tolist() if x == str(away_team))
-        ),
+        "home_rating_games": int(games.get(str(home_team), 0)),
+        "away_rating_games": int(games.get(str(away_team), 0)),
     }
     return probs, support
 
@@ -480,6 +491,7 @@ def build_fallback_forecast(
     history, history_meta = _load_pit_history(history_path, prediction_time)
     team_rates = _team_rates(history, prediction_time)
     comp_means = _competition_means(history, prediction_time)
+    elo_ratings, elo_games = _elo_state(history)
     elo_cache: dict[tuple[str, str, str, bool], tuple[np.ndarray, dict[str, Any]]] = {}
     rows: list[dict[str, Any]] = []
     for row in f.itertuples(index=False):
@@ -501,6 +513,8 @@ def build_fallback_forecast(
                 str(row.away_team),
                 str(row.competition),
                 bool(neutral),
+                elo_ratings=elo_ratings,
+                elo_games=elo_games,
             )
         elo_probabilities, elo_support = elo_cache[elo_key]
 
