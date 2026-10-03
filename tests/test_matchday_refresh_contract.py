@@ -30,3 +30,11 @@ def test_matchday_prediction_execution_requires_adopted_bundle_or_total_fallback
     assert "python -m src.prediction.research_forecast" in content
     assert '--output artifacts/predictions.csv' in content
     assert '--status artifacts/prediction_status.json' in content
+
+
+def test_matchday_fallback_does_not_depend_on_model_only_feature_preparation():
+    content = Path(".github/workflows/soccer-matchday-intelligence.yml").read_text(encoding="utf-8")
+    assert "Prepare PIT-safe future fixture features when adopted production model exists" in content
+    assert "PREPARE_SKIPPED_FOR_FALLBACK" in content
+    assert "research-only total fallback consumes the validated fixture snapshot directly." in content
+    assert '--fixtures artifacts/future_matchday_fixtures.csv' in content
