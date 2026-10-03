@@ -17,7 +17,9 @@ from sklearn.preprocessing import StandardScaler
 LABELS = {"H": 0, "D": 1, "A": 2}
 MIN_TRAIN_ROWS = 120
 MIN_OOS_ROWS = 60
-MIN_OOS_BLOCKS = 3
+MIN_OOS_BLOCKS = 5
+MIN_DEVELOPMENT_BLOCKS = 3
+MIN_DEVELOPMENT_IMPROVEMENT_RATE = 0.70
 
 TELEMETRY = (
     "predictive_entropy",
@@ -320,6 +322,13 @@ def _oos_evaluate(
     return pd.DataFrame(rows), pd.DataFrame(case_rows)
 
 
+def _development_improvement_rate(development: pd.DataFrame) -> float:
+    if len(development) < MIN_DEVELOPMENT_BLOCKS:
+        return 0.0
+    improved = development["meta_logloss"] < development["confidence_logloss"]
+    return float(improved.mean())
+
+
 def _band_map(data: pd.DataFrame) -> pd.DataFrame:
     d = data[data["predictability_score"].notna()].copy()
     columns = [
@@ -392,10 +401,7 @@ def analyze(
     if len(oos) >= MIN_OOS_BLOCKS:
         locked = oos.tail(2)
         development = oos.iloc[:-2]
-        dev_improvement = bool(
-            (development["meta_logloss"] < development["confidence_logloss"]).any()
-            or (development["meta_brier"] < development["confidence_brier"]).any()
-        )
+        development_improvement_rate = _development_improvement_rate(development)
         locked_non_regression = bool(
             (locked["meta_logloss"] <= locked["confidence_logloss"]).all()
             and (locked["meta_brier"] <= locked["confidence_brier"]).all()
@@ -404,19 +410,28 @@ def analyze(
         gate = {
             "status": (
                 "PROMOTION_CANDIDATE"
-                if dev_improvement and locked_non_regression
+                if len(development) >= MIN_DEVELOPMENT_BLOCKS
+                and development_improvement_rate >= MIN_DEVELOPMENT_IMPROVEMENT_RATE
+                and locked_non_regression
                 else "HOLD"
             ),
             "blocks": int(len(oos)),
             "development_blocks": int(len(development)),
             "locked_blocks": int(len(locked)),
-            "development_improvement": dev_improvement,
+            "minimum_development_blocks": MIN_DEVELOPMENT_BLOCKS,
+            "minimum_development_improvement_rate": MIN_DEVELOPMENT_IMPROVEMENT_RATE,
+            "development_improvement_rate": development_improvement_rate,
             "locked_non_regression": locked_non_regression,
         }
         status = gate["status"]
         reason = (
             "Chronological meta-label OOS evidence available; "
-            "production use remains prohibited."
+            "promotion remains blocked unless development improvement is stable."
+        )
+    elif len(oos) > 0:
+        reason = (
+            "Matured data exists but does not yet yield five chronological "
+            "OOS blocks (three development plus two locked)."
         )
     elif len(data) >= MIN_TRAIN_ROWS + MIN_OOS_ROWS:
         status = "INSUFFICIENT_OOS"
