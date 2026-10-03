@@ -34,3 +34,5 @@ The rich layer does not change production_changed, model registry state, or targ
 ## FotMob live acquisition layer
 
 FotMob is used as an independent public fixture-discovery and rich match-detail candidate source. Date-indexed matches can provide fixture identity and kickoff; matchDetails can expose lineup, xG, match statistics and other match-page sections. These fields remain research-only until local PIT/OOS validation.
+## Venue geography integrity
+Venue geography is treated as a separate data-quality gate. The rich layer preserves provider venue values, applies only explicit provenance-tracked known corrections, and cross-checks venue city/coordinates against a secondary event provider when available. A city mismatch or coordinate distance over 50 km yields `SOURCE_DISAGREEMENT` and blocks weather geometry. Unknown cases are retained as `UNVERIFIED` rather than silently rewritten.
