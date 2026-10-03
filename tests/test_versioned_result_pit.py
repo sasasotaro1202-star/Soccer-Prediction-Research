@@ -68,6 +68,24 @@ def test_versioned_bridge_rejects_unknown_competitions():
         mod.season_path("UCL", 2024)
 
 
+def test_versioned_bridge_derives_season_start_from_season_label(monkeypatch, tmp_path):
+    history = _history().drop(columns=["season_start"])
+    monkeypatch.setattr(
+        mod,
+        "_commits",
+        lambda path, **kwargs: [],
+    )
+
+    _, report = mod.apply_bulk(
+        history,
+        max_groups=1,
+        cache_dir=tmp_path,
+    )
+
+    assert len(report) == 1
+    assert int(report.iloc[0]["season_start"]) == 2024
+
+
 def test_versioned_bridge_verifies_exact_result_once(monkeypatch, tmp_path):
     history = _history()
     commits = [
