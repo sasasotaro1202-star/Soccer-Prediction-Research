@@ -191,7 +191,7 @@ def record_prediction_file(
     batch_duplicates_dropped = int(new_rows["prediction_state_id"].astype(str).duplicated(keep="first").sum()) if not new_rows.empty else 0
     if batch_duplicates_dropped:
         new_rows = new_rows.drop_duplicates("prediction_state_id", keep="first").copy()
-    for c in ["actual_home_goals","actual_away_goals","actual_result","actual_score","settled_at_utc","settlement_source",
+    for c in ["actual_home_goals","actual_away_goals","actual_result","actual_score","settled_at_utc","experience_available_at_utc","settlement_source",
               "correct_1x2","predicted_1x2","confidence","score_top1_hit","score_top3_hit",
               "over_2_5_correct","btts_correct","mom_actual_player_id","mom_top1_hit","mom_top4_hit","mom_settlement_status"]:
         if c not in new_rows:
