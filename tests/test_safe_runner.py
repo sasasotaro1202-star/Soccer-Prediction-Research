@@ -12,10 +12,6 @@ def test_engine_failure_after_retries_is_nonzero_and_degraded(tmp_path, monkeypa
     monkeypatch.setenv("AUDIT_PASSED", "true")
     monkeypatch.setattr(safe_runner, "_load_gate", lambda *_args, **_kwargs: {"full_gate_passed": True})
     monkeypatch.setattr(safe_runner, "_load_audit_gate", lambda *_args, **_kwargs: {"full_gate_passed": True})
-    monkeypatch.setattr(safe_runner, "_load_gate", lambda *_args, **_kwargs: {"full_gate_passed": True})
-    monkeypatch.setattr(safe_runner, "_load_audit_gate", lambda *_args, **_kwargs: {"full_gate_passed": True})
-    monkeypatch.setattr(safe_runner, "_load_gate", lambda *_args, **_kwargs: {"full_gate_passed": True})
-    monkeypatch.setattr(safe_runner, "_load_audit_gate", lambda *_args, **_kwargs: {"full_gate_passed": True})
 
     monkeypatch.setattr(
         "src.research.engine.run",
@@ -42,3 +38,16 @@ def test_preflight_block_is_nonzero_and_not_oos_claimed(tmp_path, monkeypatch):
     assert payload["status"] == "BLOCKED"
     assert payload["oos_claimed"] is False
     assert payload["runner"]["exit_code"] == 1
+
+
+def test_required_bool_env_accepts_only_explicit_booleans(monkeypatch):
+    monkeypatch.setenv("TESTS_PASSED", "TRUE")
+    assert safe_runner._read_required_bool_env("TESTS_PASSED") == (True, None)
+
+    monkeypatch.setenv("TESTS_PASSED", "false")
+    assert safe_runner._read_required_bool_env("TESTS_PASSED") == (False, None)
+
+    monkeypatch.setenv("TESTS_PASSED", "1")
+    value, error = safe_runner._read_required_bool_env("TESTS_PASSED")
+    assert value is None
+    assert error == "TESTS_PASSED is missing or invalid"
