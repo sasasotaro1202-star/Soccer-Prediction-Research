@@ -1069,6 +1069,47 @@ def _fetch_and_enrich_row(
     diagnostics["rich_payload_count"] = int(len(raw_records))
     diagnostics["rich_detail_status"] = "ENRICHED" if raw_records else "NO_DETAIL"
     diagnostics["rich_snapshot_generated_at_utc"] = iso_utc(_now())
+
+    error_fields = [
+        key for key, value in out.items()
+        if key.startswith("rich_") and key.endswith("_error") and _safe_str(value)
+    ]
+    core_rich_values = {
+        key: value
+        for key, value in out.items()
+        if key.startswith("rich_")
+        and not key.endswith("_error")
+        and key not in {
+            "rich_detail_status",
+            "rich_sources_observed",
+            "rich_payload_count",
+            "rich_pit_status",
+            "rich_pit_basis",
+        }
+    }
+    populated = 0
+    for value in core_rich_values.values():
+        if value is None:
+            continue
+        if isinstance(value, float) and np.isnan(value):
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        populated += 1
+    total = len(core_rich_values)
+    diagnostics["rich_successful_endpoint_count"] = int(len(raw_records))
+    diagnostics["rich_error_endpoint_count"] = int(len(error_fields))
+    diagnostics["rich_source_family_count"] = int(len(observed_sources))
+    diagnostics["rich_feature_field_count"] = int(populated)
+    diagnostics["rich_feature_field_total"] = int(total)
+    diagnostics["rich_information_completeness_ratio"] = (
+        float(populated / total) if total else 0.0
+    )
+    diagnostics["rich_evidence_quality_state"] = (
+        "HIGH" if len(raw_records) >= 8 and not error_fields
+        else "MEDIUM" if raw_records
+        else "LOW"
+    )
     out.update(diagnostics)
     return out, raw_records
 
