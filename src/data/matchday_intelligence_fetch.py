@@ -1154,6 +1154,39 @@ def collect_matchday_snapshots(
     seen_fixture_keys: set[str] = set()
 
     fallback_usage: list[dict[str, Any]] = []
+
+    # Fetch non-date-indexed Football-Data sources once per snapshot and reuse
+    # their parsed rows across every scanned calendar day. This preserves the
+    # source snapshot/retrieval timestamp while avoiding repeated HTTP/parsing
+    # work as the discovery horizon grows.
+    current_fd_rows, current_fd_errors, _, current_fd_probe = _collect_football_data_current_season(
+        fetcher,
+        now_ts=now_ts,
+        horizon_hours=discovery_horizon_hours,
+        max_events=None,
+    )
+    fallback_usage.append({
+        "provider": "football-data.co.uk-current-season",
+        "season": football_data_current_season_code(now_ts),
+        "rows": len(current_fd_rows),
+        "probe": current_fd_probe,
+        "reused_across_days": True,
+    })
+    errors.extend(current_fd_errors)
+    fd_fixture_rows, fd_fixture_errors, fd_fixture_retrieved = _collect_football_data_fallback(
+        fetcher,
+        now_ts=now_ts,
+        horizon_hours=discovery_horizon_hours,
+        max_events=None,
+    )
+    errors.extend(fd_fixture_errors)
+    fallback_usage.append({
+        "provider": "football-data.co.uk",
+        "rows": len(fd_fixture_rows),
+        "retrieved_at_utc": fd_fixture_retrieved,
+        "reused_across_days": True,
+    })
+
     scan_days = _required_calendar_days(
         now=now_ts,
         discovery_horizon_hours=discovery_horizon_hours,
@@ -1418,44 +1451,28 @@ def collect_matchday_snapshots(
                 })
             errors.extend(fot_errors)
 
-        # Football-Data current-season league CSVs provide a second fixture
-        # discovery path with precise kickoff times for supported major leagues.
+        # Reuse the single current-season CSV snapshot for this day's fixtures.
         if max_events is None or len(rows) < max_events:
-            current_fd_rows, current_fd_errors, current_fd_retrieved, current_fd_probe = _collect_football_data_current_season(
-                fetcher,
-                now_ts=now_ts,
-                horizon_hours=discovery_horizon_hours,
-                max_events=None if max_events is None else max_events - len(rows),
-            )
-            for row in current_fd_rows:
+            day_date = day_start.date()
+            day_current_fd_rows = [
+                row for row in current_fd_rows
+                if _ts(row.get("kickoff_utc")) is not None
+                and _ts(row["kickoff_utc"]).date() == day_date
+            ]
+            for row in day_current_fd_rows:
                 fixture_key = _fixture_key(row)
                 if fixture_key and fixture_key in seen_fixture_keys:
                     continue
                 if fixture_key:
                     seen_fixture_keys.add(fixture_key)
                 rows.append(row)
-            fallback_usage.append({
-                "provider": "football-data.co.uk-current-season",
-                "season": football_data_current_season_code(now_ts),
-                "rows": len(current_fd_rows),
-                "probe": current_fd_probe,
-            })
-            errors.extend(current_fd_errors)
 
-        # Football-Data is a complementary free/keyless coverage source.
-        # Do not suppress it merely because SofaScore returned one or more rows;
-        # a partial snapshot can still miss another supported league.
+        # Reuse the single generic Football-Data fixture snapshot for this day.
         if max_events is None or len(rows) < max_events:
-            fd_rows, fd_errors, _ = _collect_football_data_fallback(
-                fetcher,
-                now_ts=now_ts,
-                horizon_hours=discovery_horizon_hours,
-                max_events=None if max_events is None else max_events - len(rows),
-            )
-            day_date = day_start.date()
-            fd_rows = [
-                row for row in fd_rows
-                if _ts(row["kickoff_utc"]) is not None and _ts(row["kickoff_utc"]).date() == day_date
+            day_fd_rows = [
+                row for row in fd_fixture_rows
+                if _ts(row.get("kickoff_utc")) is not None
+                and _ts(row["kickoff_utc"]).date() == day_date
             ]
             new_fd_rows: list[dict[str, Any]] = []
             for row in fd_rows:
@@ -1468,7 +1485,6 @@ def collect_matchday_snapshots(
             if new_fd_rows:
                 rows.extend(new_fd_rows)
                 fallback_usage.append({"provider": "football-data.co.uk", "date": date, "rows": len(new_fd_rows)})
-            errors.extend(fd_errors)
 
     frame = pd.DataFrame(rows)
     if not frame.empty:
