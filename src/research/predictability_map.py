@@ -20,6 +20,7 @@ MIN_OOS_ROWS = 60
 MIN_OOS_BLOCKS = 5
 MIN_DEVELOPMENT_BLOCKS = 3
 MIN_DEVELOPMENT_IMPROVEMENT_RATE = 0.70
+MIN_DEVELOPMENT_RELATIVE_LOGLOSS_IMPROVEMENT = 0.03
 
 TELEMETRY = (
     "predictive_entropy",
@@ -325,8 +326,13 @@ def _oos_evaluate(
 def _development_improvement_rate(development: pd.DataFrame) -> float:
     if len(development) < MIN_DEVELOPMENT_BLOCKS:
         return 0.0
-    improved = development["meta_logloss"] < development["confidence_logloss"]
-    return float(improved.mean())
+    baseline = pd.to_numeric(development["confidence_logloss"], errors="coerce")
+    candidate = pd.to_numeric(development["meta_logloss"], errors="coerce")
+    valid = baseline.notna() & candidate.notna() & (baseline > 0.0)
+    if not valid.all():
+        return 0.0
+    relative_improvement = (baseline - candidate) / baseline
+    return float((relative_improvement >= MIN_DEVELOPMENT_RELATIVE_LOGLOSS_IMPROVEMENT).mean())
 
 
 def _band_map(data: pd.DataFrame) -> pd.DataFrame:
@@ -420,6 +426,7 @@ def analyze(
             "locked_blocks": int(len(locked)),
             "minimum_development_blocks": MIN_DEVELOPMENT_BLOCKS,
             "minimum_development_improvement_rate": MIN_DEVELOPMENT_IMPROVEMENT_RATE,
+            "minimum_development_relative_logloss_improvement": MIN_DEVELOPMENT_RELATIVE_LOGLOSS_IMPROVEMENT,
             "development_improvement_rate": development_improvement_rate,
             "locked_non_regression": locked_non_regression,
         }
