@@ -1391,12 +1391,6 @@ def _fetch_and_enrich_row(
         else "MEDIUM" if raw_records
         else "LOW"
     )
-    diagnostics["rich_source_coverage_report"] = json.dumps(
-        _source_coverage_report(pd.DataFrame([out]), raw_records),
-        ensure_ascii=False,
-        sort_keys=True,
-        default=str,
-    )
     out.update(diagnostics)
     return out, raw_records
 

@@ -154,6 +154,25 @@ jobs:
               raise SystemExit("rich matchday layer made a historical PIT claim")
           if frame["match_id"].duplicated().any():
               raise SystemExit("duplicate match_id in rich matchday artifact")
+          coverage = status.get("source_coverage") or {}
+          if len(frame) > 0 and int(status.get("raw_payload_records", 0)) <= 0:
+              raise SystemExit("rich acquisition produced zero provider payloads; data availability is unverified")
+          if int(status.get("enriched_rows", 0)) > 0 and coverage.get("acquisition_state") != "PAYLOADS_OBSERVED":
+              raise SystemExit("rich acquisition status contradicts observed payload records")
+          print("## Rich-source acquisition coverage")
+          print(f"- Acquisition state: {coverage.get('acquisition_state', 'UNKNOWN')}")
+          print(f"- Selected/enriched rows: {coverage.get('selected_rows', 0)}")
+          for family, item in (coverage.get("source_families") or {}).items():
+              print(
+                  f"- **{family}**: payloads={item.get('payload_records', 0)}, "
+                  f"unique matches={item.get('unique_match_ids', 0)}, "
+                  f"match coverage={item.get('match_coverage_pct', 0)}%"
+              )
+          for channel, item in (coverage.get("feature_channels") or {}).items():
+              print(
+                  f"- **{channel}** fields present: {item.get('rows_with_data', 0)} "
+                  f"({item.get('coverage_pct', 0)}%)"
+              )
           print({
               "status": status.get("status"),
               "rows": len(frame),
