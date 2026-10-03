@@ -752,6 +752,67 @@ def _extract_team_ids_from_sofa_event(payload: dict[str, Any]) -> tuple[str, str
     return home, away
 
 
+def _parse_sofa_standings(
+    payload: dict[str, Any],
+    home_team_id: str,
+    away_team_id: str,
+    kind: str,
+) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    for standing in payload.get("standings", []) or []:
+        if not isinstance(standing, dict):
+            continue
+        for row in standing.get("rows", []) or []:
+            if isinstance(row, dict):
+                rows.append(row)
+
+    out: dict[str, Any] = {}
+    wanted = {_safe_str(home_team_id): "home", _safe_str(away_team_id): "away"}
+    for row in rows:
+        team_id = _safe_str((row.get("team") or {}).get("id"))
+        side = wanted.get(team_id)
+        if not side:
+            continue
+        prefix = f"rich_sofa_standing_{kind}_{side}_"
+        for source, target in (
+            ("position", "position"),
+            ("matches", "matches"),
+            ("wins", "wins"),
+            ("draws", "draws"),
+            ("losses", "losses"),
+            ("scoresFor", "goals_for"),
+            ("scoresAgainst", "goals_against"),
+            ("points", "points"),
+        ):
+            value = _safe_int(row.get(source))
+            if value is not None:
+                out[prefix + target] = value
+        score_diff = _safe_str(
+            row.get("scoreDiffFormatted") or row.get("goalDifferenceFormatted")
+        )
+        if score_diff:
+            out[prefix + "score_diff_formatted"] = score_diff
+        promotion = row.get("promotion") or {}
+        if isinstance(promotion, dict):
+            text = _safe_str(promotion.get("text") or promotion.get("name"))
+            if text:
+                out[prefix + "promotion"] = text
+        form = row.get("form")
+        if isinstance(form, list):
+            tokens = []
+            for item in form:
+                token = item if isinstance(item, str) else _safe_str(
+                    (item or {}).get("result") or (item or {}).get("form")
+                ) if isinstance(item, dict) else ""
+                if token:
+                    tokens.append(token)
+            if tokens:
+                out[prefix + "form"] = "|".join(tokens)
+        elif isinstance(form, str) and form.strip():
+            out[prefix + "form"] = form.strip()
+    return out
+
+
 def _blank_result() -> dict[str, Any]:
     return {
         "rich_detail_status": "NO_DETAIL",
@@ -923,6 +984,41 @@ def _fetch_and_enrich_row(
             remember("sofascore", "managers", managers, at)
         except Exception as exc:
             out["rich_sofa_managers_error"] = f"{type(exc).__name__}: {exc}"
+
+        sofa_tournament_id = _safe_str(
+            (event_payload.get("tournament") or {}).get("uniqueTournament", {}).get("id")
+            or (event_payload.get("uniqueTournament") or {}).get("id")
+        )
+        sofa_season_id = _safe_str((event_payload.get("season") or {}).get("id"))
+        out["rich_sofa_unique_tournament_id"] = sofa_tournament_id
+        out["rich_sofa_season_id"] = sofa_season_id
+
+        if sofa_tournament_id and sofa_season_id and sofa_home_id and sofa_away_id:
+            for kind in ("total", "home", "away"):
+                try:
+                    standings, at = _get_json(
+                        fetcher,
+                        f"sofascore_standings_{kind}",
+                        f"https://api.sofascore.com/api/v1/unique-tournament/{sofa_tournament_id}/season/{sofa_season_id}/standings/{kind}",
+                    )
+                    out.update(
+                        _parse_sofa_standings(
+                            standings,
+                            sofa_home_id,
+                            sofa_away_id,
+                            kind,
+                        )
+                    )
+                    remember(
+                        "sofascore",
+                        f"standings/{kind}:{sofa_tournament_id}:{sofa_season_id}",
+                        standings,
+                        at,
+                    )
+                except Exception as exc:
+                    out[f"rich_sofascore_standings_{kind}_error"] = (
+                        f"{type(exc).__name__}: {exc}"
+                    )
 
         try:
             pregame, at = _get_json(
