@@ -1,7 +1,7 @@
 # Soccer-Prediction-Research — Project Source
 
 ## Verified state 2026-10-03
-audit reference HEAD: 779f5881899780a57578fdd89216a878059a7fdc (2026-10-03T04:26:18Z). This is an audit baseline, not a promise that main remains unchanged after the audit.
+main latest observed HEAD after re-check: 0643e13d39dd73bb783044c411a0083a5dbd95c9. Latest observed work after the documentation commit hardens OOS PIT lineage boolean/cutoff validation and adds strict OOS PIT guard tests.
 README documents a Data Acquisition → Coverage → QC/PIT → Features → Candidate Models → Walk-forward OOS → Metrics/Calibration → Weakness Research → Candidate Validation → Adoption Gate → Registry → Production Prediction architecture. Current prediction is fail-closed when a valid adopted model/current snapshot is unavailable.
 
 ## Target isolation
@@ -15,6 +15,3 @@ Features may use team strength/form, schedule/rest, venue, injuries/lineups, mar
 
 ## Failure frontier
 Prioritize stale-snapshot failures, late lineup information, high-confidence misses, unexplained ranking failures, source conflicts, OOD and competition distribution shift.
-
-## Runtime safety
-The research runner must fail closed when the preflight handoff environment is missing or invalid. TESTS_PASSED and AUDIT_PASSED are required explicit boolean inputs; absence or invalid values block research execution.
