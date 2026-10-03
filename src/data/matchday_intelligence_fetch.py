@@ -45,7 +45,9 @@ FOOTBALL_DATA_CURRENT_SEASON_DIVISIONS: dict[str, str] = {
     "F1": "FL1",
 }
 FOTMOB_MATCHES_URL = "https://www.fotmob.com/api/matches"
+FOTMOB_MATCHES_DATA_URL = "https://www.fotmob.com/api/data/matches"
 FOTMOB_MATCH_DETAIL_URL = "https://www.fotmob.com/api/matchDetails"
+FOTMOB_MATCH_DETAIL_DATA_URL = "https://www.fotmob.com/api/data/matchDetails"
 FOTMOB_COMPETITION_MAP: dict[str, str] = {
     "Premier League": "EPL",
     "Eredivisie": "ERE",
@@ -243,6 +245,11 @@ def _get_json(
         candidate_urls.append(
             url.replace("://site.api.espn.com/", "://site.web.api.espn.com/")
         )
+    elif str(source).startswith("fotmob"):
+        if url == FOTMOB_MATCHES_URL:
+            candidate_urls.append(FOTMOB_MATCHES_DATA_URL)
+        elif url == FOTMOB_MATCH_DETAIL_URL:
+            candidate_urls.append(FOTMOB_MATCH_DETAIL_DATA_URL)
 
     parse_error: Exception | None = None
     fetch_error: Exception | None = None
