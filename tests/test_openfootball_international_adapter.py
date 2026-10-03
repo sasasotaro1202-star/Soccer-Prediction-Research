@@ -68,3 +68,53 @@ Germany v Scotland 5-1
     assert int(history["away_goals"].iloc[0]) == 1
     assert coverage["status"].tolist() == ["AVAILABLE"]
     assert coverage["competition"].tolist() == ["UEFA_EURO_M"]
+
+
+def test_cached_tree_paths_returns_only_nonempty_txt_files(tmp_path):
+    import src.data.openfootball_international_adapter as adapter
+
+    good = tmp_path / "friendly" / "2025_friendly.txt"
+    good.parent.mkdir(parents=True)
+    good.write_text("sample", encoding="utf-8")
+    empty = tmp_path / "empty.txt"
+    empty.write_text("", encoding="utf-8")
+    ignored = tmp_path / "notes.md"
+    ignored.write_text("sample", encoding="utf-8")
+
+    assert adapter._cached_tree_paths(str(tmp_path)) == ["friendly/2025_friendly.txt"]
+
+
+def test_international_history_degrades_when_tree_discovery_is_unavailable(tmp_path, monkeypatch):
+    import src.data.openfootball_international_adapter as adapter
+
+    monkeypatch.setattr(adapter, "_tree_paths", lambda: (_ for _ in ()).throw(RuntimeError("GitHub 403")))
+    history, coverage = adapter.load_openfootball_international_history(
+        start_year=2025,
+        end_year=2025,
+        max_workers=1,
+        cache_dir=str(tmp_path),
+    )
+
+    assert history.empty
+    assert coverage.empty
+
+
+def test_international_history_uses_cached_paths_when_tree_discovery_fails(tmp_path, monkeypatch):
+    import src.data.openfootball_international_adapter as adapter
+
+    cached = tmp_path / "friendly" / "2025_friendly.txt"
+    cached.parent.mkdir(parents=True)
+    cached.write_text(
+        "Sat Jan 4 2025\n15:00 Alpha v Beta 1-0\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(adapter, "_tree_paths", lambda: (_ for _ in ()).throw(RuntimeError("GitHub 403")))
+    history, coverage = adapter.load_openfootball_international_history(
+        start_year=2025,
+        end_year=2025,
+        max_workers=1,
+        cache_dir=str(tmp_path),
+    )
+
+    assert not history.empty
+    assert coverage["discovery_mode"].eq("CACHE_FALLBACK").all()
