@@ -80,15 +80,14 @@ FOTMOB_COMPETITION_ID_MAP: dict[int, str] = {
     130: "MLS",
 }
 FOTMOB_EXPECTED_CCODE: dict[int, str] = {
+    # Domestic competitions have stable country codes that provide an
+    # independent identity check in addition to the provider league ID.
     47: "ENG",
     57: "NED",
     87: "ESP",
     55: "ITA",
     54: "GER",
     53: "FRA",
-    42: "INT",
-    73: "INT",
-    10007: "INT",
     130: "USA",
 }
 
