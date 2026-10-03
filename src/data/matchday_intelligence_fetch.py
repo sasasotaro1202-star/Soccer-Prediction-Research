@@ -940,7 +940,6 @@ def _collect_football_data_current_season(
         retrieved_at_by_division=retrieved_at_by_division,
         max_events=max_events,
     )
-    row_key = {(str(r.get("competition")), str(r.get("home_team")), str(r.get("away_team")), str(r.get("kickoff_utc"))) for r in rows}
     for item in probe:
         division = str(item.get("division", ""))
         competition = FOOTBALL_DATA_CURRENT_SEASON_DIVISIONS.get(division, "")
