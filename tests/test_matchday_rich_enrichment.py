@@ -552,3 +552,11 @@ def test_fotmob_detail_validation_rejects_error_payload_and_mismatch():
         assert "matchId mismatch" in str(exc)
     else:
         raise AssertionError("mismatched payload must be rejected")
+
+
+def test_matchday_fetch_has_integer_normalizer_for_provider_ids():
+    from src.data.matchday_intelligence_fetch import _safe_int
+
+    assert _safe_int("47") == 47
+    assert _safe_int("47.0") == 47
+    assert _safe_int("not-an-int") is None
