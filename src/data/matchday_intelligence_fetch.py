@@ -886,11 +886,12 @@ def _collect_football_data_current_season(
     now_ts: pd.Timestamp,
     horizon_hours: float,
     max_events: int | None = None,
-) -> tuple[list[dict[str, Any]], list[dict[str, str]], dict[str, str]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, str]], dict[str, str], list[dict[str, Any]]]:
     season = football_data_current_season_code(now_ts)
     frames: dict[str, pd.DataFrame] = {}
     retrieved_at_by_division: dict[str, str] = {}
     errors: list[dict[str, str]] = []
+    probe: list[dict[str, Any]] = []
 
     for division in FOOTBALL_DATA_CURRENT_SEASON_DIVISIONS:
         url = FOOTBALL_DATA_CURRENT_SEASON_TEMPLATE.format(
@@ -905,7 +906,26 @@ def _collect_football_data_current_season(
             )
             frames[division] = frame
             retrieved_at_by_division[division] = retrieved_at
+            probe.append({
+                "provider": "football-data.co.uk",
+                "access_path": "current-season-csv",
+                "season": season,
+                "division": division,
+                "endpoint": url,
+                "retrieved_at_utc": retrieved_at,
+                "status": "CSV_RETRIEVED",
+                "raw_rows": int(len(frame)),
+            })
         except Exception as exc:
+            probe.append({
+                "provider": "football-data.co.uk",
+                "access_path": "current-season-csv",
+                "season": season,
+                "division": division,
+                "endpoint": url,
+                "status": "ERROR",
+                "error": f"{type(exc).__name__}: {exc}",
+            })
             errors.append({
                 "source": "football_data_current_season",
                 "division": division,
@@ -920,7 +940,14 @@ def _collect_football_data_current_season(
         retrieved_at_by_division=retrieved_at_by_division,
         max_events=max_events,
     )
-    return rows, errors, retrieved_at_by_division
+    row_key = {(str(r.get("competition")), str(r.get("home_team")), str(r.get("away_team")), str(r.get("kickoff_utc"))) for r in rows}
+    for item in probe:
+        division = str(item.get("division", ""))
+        competition = FOOTBALL_DATA_CURRENT_SEASON_DIVISIONS.get(division, "")
+        item["future_rows_in_window"] = int(
+            sum(str(r.get("competition")) == competition for r in rows)
+        )
+    return rows, errors, retrieved_at_by_division, probe
 
 
 def _collect_football_data_fallback(
@@ -1228,7 +1255,7 @@ def collect_matchday_snapshots(
         # Football-Data current-season league CSVs provide a second fixture
         # discovery path with precise kickoff times for supported major leagues.
         if max_events is None or len(rows) < max_events:
-            current_fd_rows, current_fd_errors, current_fd_retrieved = _collect_football_data_current_season(
+            current_fd_rows, current_fd_errors, current_fd_retrieved, current_fd_probe = _collect_football_data_current_season(
                 fetcher,
                 now_ts=now_ts,
                 horizon_hours=discovery_horizon_hours,
@@ -1241,12 +1268,12 @@ def collect_matchday_snapshots(
                 if fixture_key:
                     seen_fixture_keys.add(fixture_key)
                 rows.append(row)
-            if current_fd_rows:
-                fallback_usage.append({
-                    "provider": "football-data.co.uk-current-season",
-                    "season": football_data_current_season_code(now_ts),
-                    "rows": len(current_fd_rows),
-                })
+            fallback_usage.append({
+                "provider": "football-data.co.uk-current-season",
+                "season": football_data_current_season_code(now_ts),
+                "rows": len(current_fd_rows),
+                "probe": current_fd_probe,
+            })
             errors.extend(current_fd_errors)
 
         # Football-Data is a complementary free/keyless coverage source.
