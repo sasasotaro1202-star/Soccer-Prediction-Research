@@ -212,3 +212,43 @@ def test_fallback_accepts_verified_versioned_result_availability(tmp_path):
     assert meta["versioned_result_verified_rows"] == 1
     assert meta["availability_source_counts"]["versioned_result_available_at_utc"] == 1
     assert output.loc[0, "fallback_history_rows"] == 1
+
+
+def test_fallback_elo_prior_is_bounded_and_normalized():
+    from src.prediction.fallback_forecast import _elo_probabilities
+
+    history = pd.DataFrame([
+        {
+            "match_id": "1",
+            "kickoff_utc": "2025-01-01T12:00:00Z",
+            "home_team": "Alpha",
+            "away_team": "Beta",
+            "competition": "EPL",
+            "home_goals": 3,
+            "away_goals": 0,
+        },
+        {
+            "match_id": "2",
+            "kickoff_utc": "2025-02-01T12:00:00Z",
+            "home_team": "Beta",
+            "away_team": "Alpha",
+            "competition": "EPL",
+            "home_goals": 0,
+            "away_goals": 1,
+        },
+    ])
+
+    probs, support = _elo_probabilities(
+        history,
+        "Alpha",
+        "Beta",
+        "EPL",
+        False,
+    )
+
+    assert probs.shape == (3,)
+    assert abs(float(probs.sum()) - 1.0) < 1e-12
+    assert np.isfinite(probs).all()
+    assert np.all((probs >= 0.0) & (probs <= 1.0))
+    assert support["home_rating_games"] == 2
+    assert support["away_rating_games"] == 2
