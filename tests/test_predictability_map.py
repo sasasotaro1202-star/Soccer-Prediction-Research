@@ -149,3 +149,24 @@ def test_predictability_gate_requires_meaningful_stable_development():
         "confidence_logloss": [0.5, 0.6, 0.65],
     })
     assert mod._development_improvement_rate(stronger) == 1.0
+
+
+def test_predictability_oos_training_respects_maturity_cutoff():
+    from src.research.pit_training import filter_prior_mature_training
+
+    frame = pd.DataFrame({
+        "prediction_pit_cutoff_utc": [
+            "2026-01-01T08:00:00Z",
+            "2026-01-01T09:00:00Z",
+            "2026-01-01T10:00:00Z",
+        ],
+        "experience_available_at_utc": [
+            "2026-01-01T08:30:00Z",
+            "2026-01-01T10:30:00Z",
+            "2026-01-01T09:30:00Z",
+        ],
+    })
+    eligible = filter_prior_mature_training(
+        frame, pd.Timestamp("2026-01-01T10:00:00Z")
+    )
+    assert len(eligible) == 2
