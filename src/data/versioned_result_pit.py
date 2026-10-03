@@ -343,7 +343,7 @@ def apply_bulk(
         work["season_start"] = pd.Series(pd.NA, index=work.index, dtype="Float64")
     if "season" in work.columns:
         season_start_from_label = pd.to_numeric(
-            work["season"].astype("string").str.extract(r"^(\\d{4})", expand=False),
+            work["season"].astype("string").str.extract(r"^(\d{4})", expand=False),
             errors="coerce",
         )
         work["season_start"] = work["season_start"].fillna(season_start_from_label)
