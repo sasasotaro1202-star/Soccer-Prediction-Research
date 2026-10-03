@@ -564,3 +564,21 @@ def test_fotmob_league_catalog_detects_ccode_drift_and_collision():
     assert 47 not in report["missing_known_ids"]
     assert any(item["league_id"] == 47 for item in report["ccode_mismatches"])
     assert any(item["league_id"] == 47 for item in report["identity_collisions"])
+
+
+def test_fotmob_international_id_reassignment_fails_closed():
+    from src.data.matchday_intelligence_fetch import _fotmob_competition
+
+    # Live league-catalog evidence observed provider ID 10007 as an
+    # Argentinian competition. It must not be admitted as UECL without the
+    # positive canonical-name signal.
+    assert _fotmob_competition({
+        "id": 10007,
+        "ccode": "ARG",
+        "name": "Copa de la Liga Profesional",
+    }) is None
+
+    assert _fotmob_competition({
+        "id": 10007,
+        "name": "UEFA Europa Conference League",
+    }) == "UECL"
