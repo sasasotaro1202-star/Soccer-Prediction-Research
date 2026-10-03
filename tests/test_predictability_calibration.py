@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from src.research.predictability_calibration import calibrate
+from src.research.pit_training import filter_prior_mature_training
 
 
 def _rows(n: int = 300) -> pd.DataFrame:
@@ -102,3 +103,32 @@ def test_predictability_workflow_warmup_uses_frozen_holdout_key():
     text = workflow.read_text(encoding="utf-8")
     assert '"frozen_holdout_touched": False' in text
     assert '"locked_holdout_touched": False' not in text
+
+
+def test_prior_mature_training_excludes_outcomes_not_mature_by_target_cutoff():
+    frame = pd.DataFrame({
+        "prediction_pit_cutoff_utc": [
+            "2026-01-01T08:00:00Z",
+            "2026-01-01T09:00:00Z",
+            "2026-01-01T10:00:00Z",
+        ],
+        "experience_available_at_utc": [
+            "2026-01-01T09:00:00Z",
+            "2026-01-01T11:00:00Z",
+            "2026-01-01T10:00:00Z",
+        ],
+    })
+    eligible = filter_prior_mature_training(frame, pd.Timestamp("2026-01-01T10:00:00Z"))
+    assert len(eligible) == 2
+    assert eligible["prediction_pit_cutoff_utc"].eq(
+        ["2026-01-01T08:00:00Z", "2026-01-01T10:00:00Z"]
+    ).all()
+
+
+def test_prior_mature_training_missing_maturity_fails_closed():
+    frame = pd.DataFrame({
+        "prediction_pit_cutoff_utc": ["2026-01-01T08:00:00Z"],
+        "experience_available_at_utc": [pd.NaT],
+    })
+    with pytest.raises(RuntimeError, match="maturity"):
+        filter_prior_mature_training(frame, pd.Timestamp("2026-01-01T10:00:00Z"))
