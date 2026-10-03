@@ -34,6 +34,9 @@ SHRINKAGE = 20.0
 HALF_LIFE_DAYS = 365.0
 MAX_GOALS = 12
 NEUTRAL_COMPETITIONS = {"AG_M", "AG_W"}
+ELO_K = 20.0
+ELO_HOME_ADV = 55.0
+ELO_SHRINK_WEIGHT_CAP = 0.30
 
 
 def _safe_float(value: Any, default: float) -> float:
@@ -211,6 +214,60 @@ def _team_rates(frame: pd.DataFrame, prediction_time: pd.Timestamp) -> dict[str,
     return rows
 
 
+def _elo_probabilities(
+    frame: pd.DataFrame,
+    home_team: str,
+    away_team: str,
+    competition: str,
+    neutral_venue: bool,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    ratings: dict[str, float] = {}
+    for row in frame.sort_values(["kickoff_utc", "match_id" if "match_id" in frame.columns else "home_team"], kind="mergesort").itertuples(index=False):
+        home = str(row.home_team)
+        away = str(row.away_team)
+        comp = str(row.competition)
+        event_neutral = comp in NEUTRAL_COMPETITIONS
+        he = float(ratings.get(home, 1500.0))
+        ae = float(ratings.get(away, 1500.0))
+        adv = 0.0 if event_neutral else ELO_HOME_ADV
+        expected = 1.0 / (1.0 + 10.0 ** (-((he + adv) - ae) / 400.0))
+        actual = 1.0 if float(row.home_goals) > float(row.away_goals) else (
+            0.5 if float(row.home_goals) == float(row.away_goals) else 0.0
+        )
+        delta = ELO_K * (actual - expected)
+        ratings[home] = he + delta
+        ratings[away] = ae - delta
+
+    home_rating = float(ratings.get(str(home_team), 1500.0))
+    away_rating = float(ratings.get(str(away_team), 1500.0))
+    adv = 0.0 if neutral_venue else ELO_HOME_ADV
+    p_home = 1.0 / (1.0 + 10.0 ** (-((home_rating + adv) - away_rating) / 400.0))
+    # ELO draw probability is constructed conservatively from proximity to
+    # parity rather than pretending the binary ELO model estimates draws.
+    proximity = float(np.exp(-abs((home_rating + adv) - away_rating) / 220.0))
+    p_draw = float(np.clip(0.18 + 0.18 * proximity, 0.18, 0.36))
+    remaining = max(1.0 - p_draw, 1e-12)
+    p_home = float(np.clip(p_home, 0.02, 0.98))
+    # Renormalize the win split after reserving a draw mass.
+    p_home = float(np.clip(p_home * remaining, 0.01, remaining - 0.01))
+    p_away = remaining - p_home
+    probs = np.asarray([p_home, p_draw, p_away], dtype=float)
+    probs /= probs.sum()
+    support = {
+        "home_rating": home_rating,
+        "away_rating": away_rating,
+        "home_rating_games": int(
+            sum(1 for x in frame["home_team"].astype(str).tolist() if x == str(home_team))
+            + sum(1 for x in frame["away_team"].astype(str).tolist() if x == str(home_team))
+        ),
+        "away_rating_games": int(
+            sum(1 for x in frame["home_team"].astype(str).tolist() if x == str(away_team))
+            + sum(1 for x in frame["away_team"].astype(str).tolist() if x == str(away_team))
+        ),
+    }
+    return probs, support
+
+
 def _competition_means(
     frame: pd.DataFrame,
     prediction_time: pd.Timestamp,
@@ -296,6 +353,7 @@ def predict_fallback_fixture(
     team_rates: dict[str, dict[str, float]] | None = None,
     comp_means: dict[str, tuple[float, float, float]] | None = None,
     market_probabilities: tuple[float, float, float] | None = None,
+    elo_probabilities: tuple[float, float, float] | None = None,
 ) -> dict[str, Any]:
     team_rates = team_rates if team_rates is not None else _team_rates(history, prediction_time)
     comp_means = comp_means if comp_means is not None else _competition_means(history, prediction_time)
@@ -316,6 +374,32 @@ def predict_fallback_fixture(
     away_probability = sum(p for h, a, p in distribution if h < a)
     one_x_two = np.asarray([home_probability, draw_probability, away_probability], dtype=float)
     one_x_two /= max(float(one_x_two.sum()), 1e-12)
+    elo_used = False
+    elo_meta: dict[str, Any] = {}
+    if elo_probabilities is not None:
+        elo = np.asarray(elo_probabilities, dtype=float)
+        if (
+            elo.shape == (3,)
+            and np.isfinite(elo).all()
+            and np.all((elo >= 0.0) & (elo <= 1.0))
+            and float(elo.sum()) > 0.0
+        ):
+            elo /= float(elo.sum())
+            support_weight = min(
+                ELO_SHRINK_WEIGHT_CAP,
+                0.05 + 0.01 * min(
+                    20.0,
+                    float(
+                        (team_rates.get(str(home_team), {}).get("matches", 0.0))
+                        + (team_rates.get(str(away_team), {}).get("matches", 0.0))
+                    ),
+                ),
+            )
+            one_x_two = (1.0 - support_weight) * one_x_two + support_weight * elo
+            one_x_two /= max(float(one_x_two.sum()), 1e-12)
+            elo_used = True
+            elo_meta = {"elo_weight": float(support_weight)}
+
     market_used = False
     if market_probabilities is not None:
         market = np.asarray(market_probabilities, dtype=float)
@@ -359,6 +443,8 @@ def predict_fallback_fixture(
         "away_lambda": away_lambda,
         "evidence": {
             **evidence,
+            **elo_meta,
+            "elo_prior_used": elo_used,
             "market_prior_used": market_used,
             "market_weight": 0.35 if market_used else 0.0,
         },
@@ -394,6 +480,7 @@ def build_fallback_forecast(
     history, history_meta = _load_pit_history(history_path, prediction_time)
     team_rates = _team_rates(history, prediction_time)
     comp_means = _competition_means(history, prediction_time)
+    elo_cache: dict[tuple[str, str, str, bool], tuple[np.ndarray, dict[str, Any]]] = {}
     rows: list[dict[str, Any]] = []
     for row in f.itertuples(index=False):
         neutral = (
@@ -401,6 +488,22 @@ def build_fallback_forecast(
             if hasattr(row, "neutral_venue") and not pd.isna(getattr(row, "neutral_venue"))
             else str(row.competition).upper() in NEUTRAL_COMPETITIONS
         )
+        elo_key = (
+            str(row.home_team),
+            str(row.away_team),
+            str(row.competition),
+            bool(neutral),
+        )
+        if elo_key not in elo_cache:
+            elo_cache[elo_key] = _elo_probabilities(
+                history,
+                str(row.home_team),
+                str(row.away_team),
+                str(row.competition),
+                bool(neutral),
+            )
+        elo_probabilities, elo_support = elo_cache[elo_key]
+
         market_probabilities = None
         market_verified = False
         if all(hasattr(row, name) for name in (
@@ -440,6 +543,7 @@ def build_fallback_forecast(
             team_rates=team_rates,
             comp_means=comp_means,
             market_probabilities=market_probabilities,
+            elo_probabilities=tuple(float(v) for v in elo_probabilities),
         )
         scores = prediction["scores"]
         rows.append({
@@ -484,6 +588,19 @@ def build_fallback_forecast(
             "fallback_market_prior_used": bool(prediction["evidence"].get("market_prior_used", False)),
             "fallback_market_prior_weight": float(prediction["evidence"].get("market_weight", 0.0)),
             "fallback_market_pit_verified": bool(market_verified),
+            "fallback_elo_prior_used": bool(prediction["evidence"].get("elo_prior_used", False)),
+            "fallback_elo_weight": float(prediction["evidence"].get("elo_weight", 0.0)),
+            "fallback_home_elo": float(elo_support.get("home_rating", 1500.0)),
+            "fallback_away_elo": float(elo_support.get("away_rating", 1500.0)),
+            "fallback_history_support_min": int(
+                min(prediction["evidence"].get("home_team_history_rows", 0), prediction["evidence"].get("away_team_history_rows", 0))
+            ),
+            "fallback_entropy": float(
+                -sum(
+                    max(float(p), 1e-12) * math.log(max(float(p), 1e-12))
+                    for p in (prediction["p_home"], prediction["p_draw"], prediction["p_away"])
+                ) / math.log(3.0)
+            ),
         })
 
     output = pd.DataFrame(rows)
