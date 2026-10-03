@@ -15,7 +15,9 @@ concurrency:
 jobs:
   forecast:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Manual runs use the full hosted-runner job budget; scheduled refreshes
+    # retain the existing 60-minute operational bound.
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 60 }}
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
