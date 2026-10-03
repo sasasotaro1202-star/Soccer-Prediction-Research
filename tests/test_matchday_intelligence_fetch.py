@@ -514,3 +514,53 @@ def test_parse_football_data_current_season_rows_preserves_future_fixture_times(
     assert rows[0]["competition"] == "EPL"
     assert rows[0]["matchday_source"] == "football-data.co.uk-current-season"
     assert rows[0]["kickoff_utc"].startswith("2026-10-05T14:00:00")
+
+
+def test_fotmob_league_catalog_detects_known_ids_without_drift():
+    from src.data.matchday_intelligence_fetch import parse_fotmob_league_catalog
+
+    payload = {
+        "international": [
+            {"id": 42, "name": "Champions League"},
+            {"id": 73, "name": "Europa League"},
+            {"id": 10007, "name": "Conference League"},
+        ],
+        "countries": [
+            {"ccode": "ENG", "name": "England", "leagues": [{"id": 47, "name": "Premier League"}]},
+            {"ccode": "NED", "name": "Netherlands", "leagues": [{"id": 57, "name": "Eredivisie"}]},
+            {"ccode": "ESP", "name": "Spain", "leagues": [{"id": 87, "name": "LaLiga"}]},
+            {"ccode": "ITA", "name": "Italy", "leagues": [{"id": 55, "name": "Serie A"}]},
+            {"ccode": "GER", "name": "Germany", "leagues": [{"id": 54, "name": "Bundesliga"}]},
+            {"ccode": "FRA", "name": "France", "leagues": [{"id": 53, "name": "Ligue 1"}]},
+            {"ccode": "USA", "name": "United States", "leagues": [{"id": 130, "name": "MLS"}]},
+        ],
+    }
+
+    report = parse_fotmob_league_catalog(payload)
+
+    assert report["status"] == "NO_KNOWN_DRIFT"
+    assert report["missing_known_ids"] == []
+    assert report["ccode_mismatches"] == []
+    assert report["identity_collisions"] == []
+
+
+def test_fotmob_league_catalog_detects_ccode_drift_and_collision():
+    from src.data.matchday_intelligence_fetch import parse_fotmob_league_catalog
+
+    payload = {
+        "international": [],
+        "countries": [
+            {"ccode": "GHA", "name": "Ghana", "leagues": [{"id": 47, "name": "Premier League"}]},
+            {"ccode": "ENG", "name": "England", "leagues": [
+                {"id": 47, "name": "Premier League"},
+                {"id": 47, "name": "Premier League (copy)"},
+            ]},
+        ],
+    }
+
+    report = parse_fotmob_league_catalog(payload)
+
+    assert report["status"] == "DRIFT_DETECTED"
+    assert 47 not in report["missing_known_ids"]
+    assert any(item["league_id"] == 47 for item in report["ccode_mismatches"])
+    assert any(item["league_id"] == 47 for item in report["identity_collisions"])
