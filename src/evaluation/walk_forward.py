@@ -20,6 +20,35 @@ TARGET_ACCURACY = 0.80
 PIT_LINEAGE_SCHEMA_VERSION = 1
 
 
+def _require_pit_verified(value: object, match_id: str) -> None:
+    """Require an unambiguous truthy PIT flag; never coerce arbitrary strings to bool."""
+    verified: bool
+    if isinstance(value, (bool, np.bool_)):
+        verified = bool(value)
+    elif isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes"}:
+            verified = True
+        elif normalized in {"false", "0", "no"}:
+            verified = False
+        else:
+            raise RuntimeError(
+                f"OOS case PIT lineage has invalid pit_verified value: match_id={match_id}, value={value!r}"
+            )
+    elif isinstance(value, (int, np.integer)) and value in (0, 1):
+        verified = bool(value)
+    elif isinstance(value, (float, np.floating)) and np.isfinite(value) and float(value) in (0.0, 1.0):
+        verified = bool(value)
+    else:
+        raise RuntimeError(
+            f"OOS case PIT lineage has ambiguous pit_verified value: match_id={match_id}, value={value!r}"
+        )
+    if not verified:
+        raise RuntimeError(
+            f"OOS case PIT lineage requires pit_verified=True: match_id={match_id}"
+        )
+
+
 def _pit_lineage_for_case(row: Mapping[str, object]) -> dict[str, object]:
     """Build deterministic, audit-only PIT lineage for one OOS case.
 
@@ -45,10 +74,12 @@ def _pit_lineage_for_case(row: Mapping[str, object]) -> dict[str, object]:
         raise RuntimeError(
             f"OOS case PIT lineage missing prediction cutoff: match_id={match_id}"
         )
-    if not bool(row.get("pit_verified", False)):
+    if cutoff > kickoff:
         raise RuntimeError(
-            f"OOS case PIT lineage requires pit_verified=True: match_id={match_id}"
+            "OOS case PIT lineage has prediction cutoff after kickoff: "
+            f"match_id={match_id}"
         )
+    _require_pit_verified(row.get("pit_verified", False), match_id)
     if pd.isna(feature_available):
         raise RuntimeError(
             f"OOS case PIT lineage missing feature availability boundary: match_id={match_id}"
