@@ -36,3 +36,7 @@ See `docs/MIGRATION_STATUS.md` for the legacy `soccer` repository migration clas
 
 ## Total research forecast coverage
 Daily and manual matchday research forecasts use total-coverage routing: when an adopted production model is unavailable or produces no eligible prediction rows, the workflow generates clearly labeled research-only fallback probabilities. Production remains fail-closed, and fallback outputs never alter the production registry.
+
+
+## Fallback routing
+Research and manual matchday forecasts use a total-coverage fallback when an adopted production model is unavailable. It is PIT-aware, labels its evidence level, can use explicit versioned result-publication evidence and a weak Elo prior, and may incorporate only an explicitly PIT-verified current matchday market prior. Fallback outputs remain research-only and cannot modify the production registry.
