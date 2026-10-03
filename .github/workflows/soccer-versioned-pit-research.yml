@@ -59,8 +59,16 @@ jobs:
           ROWS_PER_GROUP: ${{ inputs.rows_per_group || '0' }}
         run: |
           set -euo pipefail
-          INPUT="artifacts/normalized_history.csv"
-          if [ -s artifacts/versioned_pit_result_evidence.csv ]; then INPUT="artifacts/versioned_pit_result_evidence.csv"; fi
+          PRIMARY="artifacts/normalized_history.csv"
+          RESUME="artifacts/versioned_pit_result_evidence.csv"
+          INPUT="$(python - <<'PY'
+          from src.data.versioned_result_pit import select_input_path
+          path, reason = select_input_path("artifacts/normalized_history.csv", "artifacts/versioned_pit_result_evidence.csv")
+          print(path)
+          print(f"input_selection={reason}", file=__import__("sys").stderr)
+          PY
+          )"
+          test -s "$INPUT"
           python -m src.data.versioned_result_pit             --input "$INPUT"             --output artifacts/versioned_pit_result_evidence.csv             --report artifacts/versioned_pit_result_evidence_report.csv             --max-groups "$MAX_GROUPS"             --rows-per-group "$ROWS_PER_GROUP"
           test -s artifacts/versioned_pit_result_evidence.csv
           test -s artifacts/versioned_pit_result_evidence_report.csv
