@@ -579,3 +579,50 @@ def test_rich_probe_selection_prefers_supported_competitions_without_randomness(
 
     assert set(selected["competition"]) == {"EPL", "BL1", "J1"}
     assert selected["match_id"].tolist() == ["c", "d", "b"]
+
+
+def test_known_espn_venue_correction_is_explicit_and_provenance_tracked():
+    from src.data.matchday_rich_enrichment import _apply_known_venue_correction
+
+    row = {
+        "source": "espn",
+        "espn_league": "ger.1",
+        "home_team_id": "124",
+        "venue_name": "Signal Iduna Park",
+        "venue_city": "Aue",
+        "venue_country": "Germany",
+        "venue_lat": 50.59034,
+        "venue_lon": 12.70657,
+    }
+
+    corrected = _apply_known_venue_correction(row)
+
+    assert corrected["venue_city"] == "Dortmund"
+    assert corrected["venue_country"] == "Germany"
+    assert abs(corrected["venue_lat"] - 51.492668) < 1e-6
+    assert abs(corrected["venue_lon"] - 7.451767) < 1e-6
+    assert corrected["venue_original_city"] == "Aue"
+    assert corrected["venue_integrity_status"] == "CORRECTED_KNOWN_PROVIDER_ERROR"
+    assert corrected["venue_correction_registry_key"] == "ESPN:ger.1:124:signal-iduna-park"
+
+
+def test_unknown_venue_does_not_get_silently_overwritten():
+    from src.data.matchday_rich_enrichment import _apply_known_venue_correction
+
+    row = {
+        "source": "espn",
+        "espn_league": "ger.1",
+        "home_team_id": "999",
+        "venue_name": "Unknown Stadium",
+        "venue_city": "Unknown",
+        "venue_country": "Germany",
+        "venue_lat": 50.0,
+        "venue_lon": 10.0,
+    }
+
+    corrected = _apply_known_venue_correction(row)
+
+    assert corrected["venue_city"] == "Unknown"
+    assert corrected["venue_lat"] == 50.0
+    assert corrected["venue_lon"] == 10.0
+    assert corrected["venue_integrity_status"] == "UNVERIFIED"
