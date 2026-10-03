@@ -384,3 +384,31 @@ def test_matchday_fetcher_selects_live_http_profile():
     assert 'profile="live"' in source
     assert "retries=3" in source
     assert "backoff=1.0" in source
+
+
+def test_external_fetcher_passes_selected_http_profile(monkeypatch, tmp_path):
+    from src.data import external_fetch
+
+    observed = {}
+
+    class Response:
+        status_code = 200
+        content = b"{}"
+
+    def fake_resilient_get(*args, **kwargs):
+        observed.update(kwargs)
+        return Response()
+
+    monkeypatch.setattr(external_fetch, "resilient_get", fake_resilient_get)
+    fetcher = external_fetch.ExternalFetcher(
+        cache_dir=tmp_path,
+        retries=3,
+        backoff=1.0,
+        profile="live",
+    )
+    result = fetcher.get("live_source", "https://example.test/live", cache_ttl_seconds=0)
+
+    assert result.body == b"{}"
+    assert observed["profile"] == "live"
+    assert observed["retries"] == 3
+    assert observed["backoff"] == 1.0
