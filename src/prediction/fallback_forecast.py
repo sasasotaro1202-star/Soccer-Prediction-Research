@@ -68,6 +68,10 @@ def _load_pit_history(history_path: str, prediction_time: pd.Timestamp) -> tuple
         "rows_loaded": 0,
         "rows_pit_eligible": 0,
         "pit_source_time_enforced": False,
+        "availability_source_counts": {
+            "source_available_at_utc": 0,
+            "versioned_result_available_at_utc": 0,
+        },
     }
     if not path.is_file() or path.stat().st_size <= 0:
         meta["reason"] = "history_file_missing_or_empty"
@@ -93,21 +97,33 @@ def _load_pit_history(history_path: str, prediction_time: pd.Timestamp) -> tuple
     d = d[d["pit_verified"]].copy()
     d = d[d["kickoff_utc"] < prediction_time].copy()
 
-    # A row with an explicit source availability time is usable only when the
-    # source was available before the prediction cutoff. Rows without provenance
-    # are not allowed into the history-backed fallback.
-    if "source_available_at_utc" in d.columns:
-        d["source_available_at_utc"] = pd.to_datetime(
-            d["source_available_at_utc"], utc=True, errors="coerce"
-        )
-        d = d[
-            d["source_available_at_utc"].notna()
-            & (d["source_available_at_utc"] <= prediction_time)
-        ].copy()
-        meta["pit_source_time_enforced"] = True
-    else:
-        meta["pit_source_time_enforced"] = False
-        meta["reason"] = "source_available_at_utc_missing"
+    # Prefer explicit source availability. For this fallback, the only
+    # historical signal consumed is completed match outcome, so a versioned
+    # result-publication timestamp is also valid provenance when the richer
+    # feature-source timestamp is absent.
+    source_available = (
+        pd.to_datetime(d["source_available_at_utc"], utc=True, errors="coerce")
+        if "source_available_at_utc" in d.columns
+        else pd.Series(pd.NaT, index=d.index, dtype="datetime64[ns, UTC]")
+    )
+    versioned_available = (
+        pd.to_datetime(d["versioned_result_available_at_utc"], utc=True, errors="coerce")
+        if "versioned_result_available_at_utc" in d.columns
+        else pd.Series(pd.NaT, index=d.index, dtype="datetime64[ns, UTC]")
+    )
+    explicit_available = source_available.where(source_available.notna(), versioned_available)
+    eligible = explicit_available.notna() & (explicit_available <= prediction_time)
+    d["fallback_source_available_at_utc"] = explicit_available
+    d = d[eligible].copy()
+    meta["pit_source_time_enforced"] = True
+    meta["availability_source_counts"] = {
+        "source_available_at_utc": int((source_available.notna() & eligible).sum()),
+        "versioned_result_available_at_utc": int(
+            (source_available.isna() & versioned_available.notna() & eligible).sum()
+        ),
+    }
+    if d.empty:
+        meta["reason"] = "no_explicit_pit_availability_before_cutoff"
         return pd.DataFrame(), meta
 
     d["home_team"] = d["home_team"].astype(str).str.strip()
