@@ -95,12 +95,12 @@ def _season_ok(season_start: int, start_year: int, end_year: int) -> bool:
     return int(start_year) <= int(season_start) <= int(end_year)
 
 
-def _one(item: tuple[str, str, int, int, str]) -> tuple[pd.DataFrame, dict]:
-    competition, relative_path, season_start, start_year, end_year = item
+def _one(item: tuple[str, str, int, int, str, str]) -> tuple[pd.DataFrame, dict]:
+    competition, relative_path, season_start, start_year, end_year, cache_dir = item
     if not _season_ok(season_start, start_year, end_year):
         return pd.DataFrame(), {}
     try:
-        text, raw, url = _fetch_text(relative_path, "data/raw/openfootball-internationals")
+        text, raw, url = _fetch_text(relative_path, cache_dir)
         frame = parse_football_txt(
             text,
             competition,
@@ -155,7 +155,7 @@ def load_openfootball_international_history(
             raise
         paths = _cached_tree_paths(cache_dir)
         discovery_mode = "CACHE_FALLBACK" if paths else "UNAVAILABLE"
-    tasks: list[tuple[str, str, int, int, str]] = []
+    tasks: list[tuple[str, str, int, int, str, str]] = []
     for competition, pattern in PATH_PATTERNS.items():
         for relative_path in paths:
             match = pattern.match(relative_path)
@@ -163,7 +163,7 @@ def load_openfootball_international_history(
                 continue
             season_start = int(match.group(1))
             if _season_ok(season_start, start_year, end_year):
-                tasks.append((competition, relative_path, season_start, start_year, end_year))
+                tasks.append((competition, relative_path, season_start, start_year, end_year, cache_dir))
 
     tasks.sort(key=lambda x: (x[0], x[2], x[1]))
     frames: list[pd.DataFrame] = []
