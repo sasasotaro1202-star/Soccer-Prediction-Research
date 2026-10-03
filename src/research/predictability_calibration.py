@@ -201,6 +201,7 @@ def calibrate(
         if len(oos) < int(block_size):
             break
         target_cutoff = oos["prediction_pit_cutoff_utc"].min()
+        raw_train_rows = start
         train = filter_prior_mature_training(d.iloc[:start].copy(), target_cutoff)
         y_train = train["correct"].to_numpy(dtype=int)
         if len(train) < int(history_rows) or np.unique(y_train).size < 2:
@@ -224,7 +225,7 @@ def calibrate(
             "oos_end": oos["prediction_pit_cutoff_utc"].max().isoformat(),
             "n": int(len(oos)),
             "training_rows": int(len(train)),
-            "excluded_immature_training_rows": int(start - len(train)),
+            "excluded_immature_training_rows": int(raw_train_rows - len(train)),
             "calibrated_logloss": cal_m["logloss"],
             "raw_logloss": raw_m["logloss"],
             "delta_logloss": cal_m["logloss"] - raw_m["logloss"],
