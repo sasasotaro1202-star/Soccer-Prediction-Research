@@ -25,3 +25,9 @@ The gateway does not accept an arbitrary workflow filename or shell command.
 Request state is stored at `requests/state/<request_id>.json`. Existing state prevents duplicate dispatch. A request stuck at `DISPATCHING` is fail-closed and requires reconciliation rather than silently dispatching a duplicate job.
 
 This mechanism does not change PIT, OOS, holdout, production, or adoption gates.
+
+## Manual execution runtime
+
+Manual `workflow_dispatch` execution of matchday intelligence uses the maximum 360-minute GitHub-hosted job budget instead of the previous 20-minute application-level cap. Scheduled and `workflow_run` refreshes keep the 20-minute bound.
+
+360 minutes is a GitHub-hosted runner platform limit, not an application promise of unlimited runtime. The chat transport remains decoupled from the workflow, so a disconnected chat stream does not cancel a dispatched run.
