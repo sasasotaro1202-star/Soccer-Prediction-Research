@@ -148,3 +148,33 @@ def test_forecast_health_accepts_total_fallback_status(tmp_path):
     report = audit(str(output_path), str(status_path))
     assert report["ok"] is True
     assert report["status"] == "HEALTHY"
+
+
+def test_fallback_uses_only_explicitly_pit_verified_market_prior():
+    from src.prediction.fallback_forecast import predict_fallback_fixture
+
+    prediction_time = pd.Timestamp("2030-01-01T12:00:00Z")
+    base = predict_fallback_fixture(
+        home_team="Home",
+        away_team="Away",
+        competition="AG_M",
+        history=pd.DataFrame(),
+        prediction_time=prediction_time,
+        neutral_venue=True,
+    )
+    market = predict_fallback_fixture(
+        home_team="Home",
+        away_team="Away",
+        competition="AG_M",
+        history=pd.DataFrame(),
+        prediction_time=prediction_time,
+        neutral_venue=True,
+        market_probabilities=(0.80, 0.10, 0.10),
+    )
+
+    assert market["evidence"]["market_prior_used"] is True
+    assert market["evidence"]["market_weight"] == 0.35
+    assert market["p_home"] > base["p_home"]
+    assert abs(
+        market["p_home"] + market["p_draw"] + market["p_away"] - 1.0
+    ) < 1e-12
