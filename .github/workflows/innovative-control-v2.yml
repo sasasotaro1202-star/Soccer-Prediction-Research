@@ -14,12 +14,12 @@ permissions:
 
 concurrency:
   group: innovative-control-v2-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 180 }}
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
