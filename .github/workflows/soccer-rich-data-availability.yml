@@ -1,5 +1,6 @@
 name: Soccer Rich Data Availability
 
+# Live evidence is intentionally tested from the same PR HEAD that carries the data-source changes.
 on:
   pull_request:
     branches: [main]
