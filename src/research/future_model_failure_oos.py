@@ -214,10 +214,12 @@ def evaluate_future_model_failure_oos(
         pp = np.asarray(predictions_by_name[name], dtype=float)
         usable = np.isfinite(pp)
         auc = _safe_auc(ys[usable], pp[usable])
+        training_counts = [max(0, i - 1) for i in range(len(ys))]
         metrics[name] = {
             "transitions": int(len(ys)),
-            "training_transitions_max_at_prediction": int(max(0, len(ys) - 2)),
+            "training_transitions_max_at_prediction": int(max(training_counts, default=0)),
             "first_predictable_transition_index": int(min_training_transitions + 1),
+            "training_transitions_by_prediction": training_counts,
             "failure_rate": float(np.mean(ys)) if len(ys) else None,
             "failure_auc": auc,
             "predicted_failure_mean": float(np.mean(pp[usable])) if usable.any() else None,
