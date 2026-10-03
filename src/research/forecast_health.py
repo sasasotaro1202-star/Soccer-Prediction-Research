@@ -13,7 +13,11 @@ import pandas as pd
 from src.prediction.research_forecast import FORECAST_COLUMNS
 
 
-PREDICTED_STATUSES = {"PREDICTED_PRODUCTION_ADOPTED"}
+PREDICTED_STATUSES = {
+    "PREDICTED_PRODUCTION_ADOPTED",
+    "PREDICTED_FALLBACK_BASELINE",
+    "PREDICTED_FALLBACK_BASELINE_AFTER_PRODUCTION_DEFER",
+}
 NO_TARGET_STATUSES = {"NO_TARGET_FIXTURES"}
 BLOCKED_STATUSES = {
     "DEFERRED_NO_ADOPTED_MODEL",
@@ -170,20 +174,32 @@ def audit(output_path: str, status_path: str) -> dict[str, Any]:
         failures.append("predicted_status_requires_positive_target_rows")
     if report["prediction_rows"] <= 0:
         failures.append("predicted_status_requires_positive_prediction_rows")
-    if status.get("production_model_used") is not True:
-        failures.append("predicted_status_requires_production_model")
-    if status.get("research_heuristic_disabled") is not True:
-        failures.append("heuristic_prediction_must_remain_disabled")
-
-    runner_status = status.get("runner_status")
-    if not isinstance(runner_status, dict):
-        failures.append("predicted_status_requires_runner_status_evidence")
+    fallback_status = forecast_status.startswith("PREDICTED_FALLBACK_BASELINE")
+    if fallback_status:
+        if status.get("production_model_used") is True:
+            failures.append("fallback_status_cannot_claim_production_model")
+        if status.get("fallback_used") is not True:
+            failures.append("fallback_status_requires_fallback_used")
+        if status.get("research_only") is not True:
+            failures.append("fallback_status_must_be_research_only")
+        if forecast_status == "PREDICTED_FALLBACK_BASELINE_AFTER_PRODUCTION_DEFER":
+            if not isinstance(status.get("runner_status"), dict):
+                failures.append("production_defer_fallback_requires_runner_status")
     else:
-        if str(runner_status.get("status", "")).upper() != "PREDICTED":
-            failures.append("runner_status_must_be_PREDICTED")
-        freshness = runner_status.get("freshness")
-        if not isinstance(freshness, dict) or str(freshness.get("status", "")).upper() != "FRESH":
-            failures.append("prediction_requires_FRESH_matchday_snapshot")
+        if status.get("production_model_used") is not True:
+            failures.append("predicted_production_status_requires_production_model")
+        if status.get("research_heuristic_disabled") is not True:
+            failures.append("heuristic_prediction_must_remain_disabled")
+
+        runner_status = status.get("runner_status")
+        if not isinstance(runner_status, dict):
+            failures.append("predicted_status_requires_runner_status_evidence")
+        else:
+            if str(runner_status.get("status", "")).upper() != "PREDICTED":
+                failures.append("runner_status_must_be_PREDICTED")
+            freshness = runner_status.get("freshness")
+            if not isinstance(freshness, dict) or str(freshness.get("status", "")).upper() != "FRESH":
+                failures.append("prediction_requires_FRESH_matchday_snapshot")
 
     if not df.empty:
         ids = df["match_id"].astype(str).str.strip()
