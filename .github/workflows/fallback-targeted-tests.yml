@@ -1,9 +1,6 @@
 name: Soccer Forecast Fallback Fast Tests
 
 on:
-  push:
-    branches:
-      - "feat/market-aware-total-fallback-20261004"
   pull_request:
     paths:
       - "src/prediction/fallback_forecast.py"
@@ -21,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  fallback_fast:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
