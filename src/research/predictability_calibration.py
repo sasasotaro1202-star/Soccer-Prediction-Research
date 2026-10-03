@@ -23,6 +23,7 @@ BLOCK_SIZE = 60
 MIN_BLOCKS = 5
 MIN_DEVELOPMENT_BLOCKS = 3
 MIN_DEVELOPMENT_IMPROVEMENT_RATE = 0.70
+MIN_DEVELOPMENT_RELATIVE_LOGLOSS_IMPROVEMENT = 0.03
 
 
 def _metrics(y: np.ndarray, p: np.ndarray) -> dict[str, float | int]:
@@ -147,8 +148,13 @@ def _prepare(frame: pd.DataFrame) -> pd.DataFrame:
 def _development_improvement_rate(development: pd.DataFrame) -> float:
     if len(development) < MIN_DEVELOPMENT_BLOCKS:
         return 0.0
-    improved = development["calibrated_logloss"] < development["raw_logloss"]
-    return float(improved.mean())
+    raw = pd.to_numeric(development["raw_logloss"], errors="coerce")
+    calibrated = pd.to_numeric(development["calibrated_logloss"], errors="coerce")
+    valid = raw.notna() & calibrated.notna() & (raw > 0.0)
+    if not valid.all():
+        return 0.0
+    relative_improvement = (raw - calibrated) / raw
+    return float((relative_improvement >= MIN_DEVELOPMENT_RELATIVE_LOGLOSS_IMPROVEMENT).mean())
 
 
 def _calibrator() -> Pipeline:
@@ -286,6 +292,7 @@ def calibrate(
             "locked_blocks": int(len(locked)),
             "minimum_development_blocks": MIN_DEVELOPMENT_BLOCKS,
             "minimum_development_improvement_rate": MIN_DEVELOPMENT_IMPROVEMENT_RATE,
+            "minimum_development_relative_logloss_improvement": MIN_DEVELOPMENT_RELATIVE_LOGLOSS_IMPROVEMENT,
             "development_improvement_rate": development_improvement_rate,
             "locked_non_regression": locked_non_regression,
         }
