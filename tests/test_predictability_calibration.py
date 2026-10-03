@@ -118,3 +118,12 @@ def test_calibration_gate_requires_meaningful_stable_development():
         "raw_logloss": [0.5, 0.6, 0.65],
     })
     assert mod._development_improvement_rate(stronger) == 1.0
+
+
+def test_predictability_workflow_uses_bounded_dependency_retry():
+    workflow = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "soccer-predictability-research.yml"
+    text = workflow.read_text(encoding="utf-8")
+    assert "Install dependencies with bounded retry" in text
+    assert "for attempt in 1 2 3; do" in text
+    assert 'if [ "${attempt}" -eq 3 ]; then' in text
+    assert "set -euo pipefail" in text
