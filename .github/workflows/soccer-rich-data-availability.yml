@@ -83,6 +83,11 @@ jobs:
           payloads = int(rich_status.get("valid_payload_records", rich_status.get("raw_payload_records", 0)))
           raw_payloads = int(rich_status.get("raw_payload_records", 0))
           coverage = rich_status.get("source_coverage") or {}
+          feature_channels = coverage.get("feature_channels") or {}
+          feature_rows_with_data = int(
+              sum(int(item.get("rows_with_data", 0)) for item in feature_channels.values())
+          )
+          acquisition_state = str(coverage.get("acquisition_state", "UNKNOWN"))
 
           print("## Live rich-data availability")
           print(f"- Fixture retrieval status: {fixture_status.get('status', 'UNKNOWN')}")
@@ -114,8 +119,16 @@ jobs:
               raise SystemExit(
                   "LIVE_DATA_UNVERIFIED: fixture discovery returned zero rows; source availability cannot be established"
               )
-          elif payloads > 0:
-              print("- RESULT: LIVE_PAYLOADS_OBSERVED")
+          if payloads > 0 and feature_rows_with_data == 0:
+              raise SystemExit(
+                  "LIVE_DATA_UNAVAILABLE: valid provider payloads were observed but no rich feature channel was populated"
+              )
+          if payloads > 0 and acquisition_state != "VALID_PAYLOADS_OBSERVED":
+              raise SystemExit(
+                  f"LIVE_DATA_UNVERIFIED: unexpected acquisition state {acquisition_state}"
+              )
+          if payloads > 0:
+              print("- RESULT: LIVE_PAYLOADS_OBSERVED_WITH_FEATURES")
           else:
               raise SystemExit("LIVE_DATA_UNVERIFIED: no real provider payloads observed")
           PY
