@@ -33,6 +33,7 @@ DEFAULT_AWAY_GOALS = 1.08
 SHRINKAGE = 20.0
 HALF_LIFE_DAYS = 365.0
 MAX_GOALS = 12
+NEUTRAL_COMPETITIONS = {"AG_M", "AG_W"}
 
 
 def _safe_float(value: Any, default: float) -> float:
@@ -351,7 +352,11 @@ def build_fallback_forecast(
     comp_means = _competition_means(history, prediction_time)
     rows: list[dict[str, Any]] = []
     for row in f.itertuples(index=False):
-        neutral = bool(getattr(row, "neutral_venue", False)) if hasattr(row, "neutral_venue") else False
+        neutral = (
+            bool(getattr(row, "neutral_venue"))
+            if hasattr(row, "neutral_venue") and not pd.isna(getattr(row, "neutral_venue"))
+            else str(row.competition).upper() in NEUTRAL_COMPETITIONS
+        )
         prediction = predict_fallback_fixture(
             home_team=row.home_team,
             away_team=row.away_team,
