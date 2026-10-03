@@ -4,6 +4,12 @@ import pandas as pd
 
 from src.data import openfootball_international_adapter as mod
 
+def _raise_github_403():
+    import requests
+    response = requests.Response()
+    response.status_code = 403
+    raise requests.HTTPError("GitHub 403", response=response)
+
 
 def test_international_path_patterns_cover_major_project_targets():
     samples = {
@@ -87,7 +93,7 @@ def test_cached_tree_paths_returns_only_nonempty_txt_files(tmp_path):
 def test_international_history_degrades_when_tree_discovery_is_unavailable(tmp_path, monkeypatch):
     import src.data.openfootball_international_adapter as adapter
 
-    monkeypatch.setattr(adapter, "_tree_paths", lambda: (_ for _ in ()).throw(RuntimeError("GitHub 403")))
+    monkeypatch.setattr(adapter, "_tree_paths", lambda: _raise_github_403())
     history, coverage = adapter.load_openfootball_international_history(
         start_year=2025,
         end_year=2025,
@@ -118,3 +124,24 @@ def test_international_history_uses_cached_paths_when_tree_discovery_fails(tmp_p
 
     assert not history.empty
     assert coverage["discovery_mode"].eq("CACHE_FALLBACK").all()
+
+def test_international_tree_truncation_does_not_use_cache_fallback(tmp_path, monkeypatch):
+    import src.research.scope_frontier as _unused_scope_frontier  # noqa: F401
+    import src.data.openfootball_international_adapter as adapter
+
+    cached = tmp_path / "friendly" / "2025_friendly.txt"
+    cached.parent.mkdir(parents=True)
+    cached.write_text("Sat Jan 4 2025\n15:00 Alpha v Beta 1-0\n", encoding="utf-8")
+    monkeypatch.setattr(
+        adapter,
+        "_tree_paths",
+        lambda: (_ for _ in ()).throw(RuntimeError(
+            "openfootball international source tree is truncated; refusing incomplete discovery"
+        )),
+    )
+
+    import pytest
+    with pytest.raises(RuntimeError, match="truncated"):
+        adapter.load_openfootball_international_history(
+            start_year=2025, end_year=2025, max_workers=1, cache_dir=str(tmp_path)
+        )
