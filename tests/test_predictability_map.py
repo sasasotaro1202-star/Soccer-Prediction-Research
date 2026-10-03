@@ -85,7 +85,7 @@ def test_chronological_failure_risk_candidate_is_research_only():
     )
     state = analyze(frame)
     assert state["rows"] == 420
-    assert len(state["oos_blocks"]) >= 3
+    assert len(state["oos_blocks"]) >= 5
     assert state["production_usable"] is False
     assert state["safety_contract"]["production_probabilities_changed"] is False
     assert state["safety_contract"]["frozen_holdout_touched"] is False
