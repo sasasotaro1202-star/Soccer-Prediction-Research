@@ -289,3 +289,45 @@ def test_injury_parser_retains_detail_without_coercing_unknowns():
     assert out["statuses"] == "Out|Questionable"
     assert out["reasons"] == "Hamstring"
     assert out["expected_return"] == "2026-10-10"
+
+def test_source_coverage_report_counts_real_payloads_and_feature_channels():
+    from src.data.matchday_rich_enrichment import _source_coverage_report
+
+    frame = pd.DataFrame([
+        {
+            "match_id": "m1",
+            "rich_detail_status": "ENRICHED",
+            "rich_market_provider_count": 2,
+            "rich_sofa_home_formation": "4-3-3",
+            "rich_espn_home_injury_count": 1,
+            "rich_sofa_standing_total_home_position": 2,
+            "rich_weather_nearest_valid_time_utc": "2026-10-04T12:00:00Z",
+            "rich_h2h_matches": 4,
+            "rich_recent_home_matches": 5,
+        },
+        {
+            "match_id": "m2",
+            "rich_detail_status": "ENRICHED",
+            "rich_market_provider_count": 1,
+            "rich_sofa_home_formation": "4-4-2",
+            "rich_espn_home_injury_count": 0,
+            "rich_sofa_standing_total_home_position": 8,
+            "rich_weather_nearest_valid_time_utc": "",
+            "rich_h2h_matches": float("nan"),
+            "rich_recent_home_matches": 5,
+        },
+    ])
+    raw = [
+        {"match_id": "m1", "provider_family": "espn", "endpoint": "summary"},
+        {"match_id": "m1", "provider_family": "sofascore", "endpoint": "event"},
+        {"match_id": "m1", "provider_family": "open_meteo", "endpoint": "forecast"},
+        {"match_id": "m2", "provider_family": "espn", "endpoint": "summary"},
+    ]
+    report = _source_coverage_report(frame, raw)
+    assert report["acquisition_state"] == "PAYLOADS_OBSERVED"
+    assert report["source_families"]["espn"]["unique_match_ids"] == 2
+    assert report["source_families"]["sofascore"]["match_coverage_pct"] == 50.0
+    assert report["feature_channels"]["market"]["rows_with_data"] == 2
+    assert report["feature_channels"]["injury"]["rows_with_data"] == 2
+    assert report["feature_channels"]["weather"]["rows_with_data"] == 1
+    assert report["feature_channels"]["h2h"]["rows_with_data"] == 1
