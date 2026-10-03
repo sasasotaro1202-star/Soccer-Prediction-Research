@@ -18,8 +18,8 @@ Chronological OOS soccer prediction, backtesting, calibration and automated rese
 
 ## GitHub Actions
 
-- `OpenAI API Check`: validates the configured GitHub Actions secret and API connectivity.
 - `Soccer Research Robust`: scheduled/manual acquisition, deterministic tests, structural audits, strict PIT/completion gate, bounded research retries, production-contract evaluation, health artifacts, and cached research evidence.
+- OpenAI remains advisory only; the repository does not require a paid OpenAI API workflow for soccer automation.
 
 ## Important current status
 
