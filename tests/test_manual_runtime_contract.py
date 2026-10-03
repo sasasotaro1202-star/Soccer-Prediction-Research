@@ -12,7 +12,7 @@ def test_manual_user_facing_workflows_use_full_job_budget():
         "pit-replay-audit.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 120 }}",
         "soccer-coverage-pit-audit.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 180 }}",
         "soccer-mom-research.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 240 }}",
-        "soccer-research-robust.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 240 }}"
+        "soccer-research-robust.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 240 }}",
         "innovative-control-v13.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 300 }}",
         "innovative-control-v2.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 180 }}",
         "soccer-global-datalake.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 30 }}",
