@@ -106,10 +106,9 @@ def _load_pit_history(history_path: str, prediction_time: pd.Timestamp) -> tuple
         ].copy()
         meta["pit_source_time_enforced"] = True
     else:
-        # pit_verified is still a repository-level provenance assertion, but
-        # absence of source-time detail is retained as a weaker evidence class.
         meta["pit_source_time_enforced"] = False
-        meta["reason"] = "source_available_at_utc_not_present"
+        meta["reason"] = "source_available_at_utc_missing"
+        return pd.DataFrame(), meta
 
     d["home_team"] = d["home_team"].astype(str).str.strip()
     d["away_team"] = d["away_team"].astype(str).str.strip()
