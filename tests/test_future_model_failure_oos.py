@@ -44,6 +44,11 @@ def test_future_failure_predictor_is_chronological_and_research_only():
     assert state["production_usable"] is False
     assert state["promotion_evidence_eligible"] is False
     assert state["transitions"] == 6
+    # Each failure label refers to the next block, so the immediately previous
+    # transition depends on the current block outcome and is not PIT-mature yet.
+    assert state["models"]["a"]["training_transitions_by_prediction"] == [0, 0, 1, 2, 3, 4]
+    assert state["models"]["a"]["first_predictable_transition_index"] == 4
+    assert state["models"]["a"]["production_usable"] is False
 
 
 def test_future_failure_rejects_missing_model_prediction():
