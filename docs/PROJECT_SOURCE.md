@@ -37,3 +37,6 @@ The research runner requires explicit TESTS_PASSED and AUDIT_PASSED boolean hand
 `src/research/predictability_calibration.py` now revalidates optional provenance timestamps when supplied by the ledger: `available_at_utc` / `source_available_at_utc`, `published_at_utc`, and `retrieved_at_utc` must remain at or before `prediction_pit_cutoff_utc`; retrieval cannot precede explicit source availability, and retrieval cannot precede publication when both are present. This is defense-in-depth against upstream PIT handoff regressions and remains research-only.
 
 A dedicated regression module `tests/test_predictability_calibration_pit_provenance.py` covers post-cutoff source availability, post-cutoff retrieval, and impossible retrieval-before-source ordering. The research workflow now includes this regression module in its explicit test-file allowlist; current-main Actions must still pass before it is marked VERIFIED.
+
+## Maturity-aware research training — 2026-10-03
+Predictability calibration and failure-risk OOS training re-filter prior rows by both prediction cutoff and outcome maturity relative to the target OOS cutoff. Prior rows whose outcomes were not yet mature at the target cutoff are excluded; missing/invalid PIT timestamps fail closed. This prevents later outcome realization from backflowing into an earlier research training window.
