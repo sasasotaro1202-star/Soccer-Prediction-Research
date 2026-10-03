@@ -26,12 +26,12 @@ permissions:
 
 concurrency:
   group: soccer-versioned-pit-research
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   versioned-pit:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 45 }}
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
