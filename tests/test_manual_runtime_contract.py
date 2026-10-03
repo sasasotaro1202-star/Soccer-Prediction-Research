@@ -13,10 +13,27 @@ def test_manual_user_facing_workflows_use_full_job_budget():
         "soccer-coverage-pit-audit.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 180 }}",
         "soccer-mom-research.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 240 }}",
         "soccer-research-robust.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 240 }}"
+        "innovative-control-v13.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 300 }}",
+        "innovative-control-v2.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 180 }}",
+        "soccer-global-datalake.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 30 }}",
+        "soccer-research-cycle.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 120 }}",
+        "soccer-experience-ledger.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 45 }}",
     }
     for name, line in expected.items():
         text = (WORKFLOWS / name).read_text(encoding="utf-8")
         assert line in text
+
+
+def test_core_research_workflows_do_not_cancel_inflight_runs():
+    for name in (
+        "innovative-control-v13.yml",
+        "innovative-control-v2.yml",
+        "soccer-global-datalake.yml",
+        "soccer-research-cycle.yml",
+        "soccer-experience-ledger.yml",
+    ):
+        text = (WORKFLOWS / name).read_text(encoding="utf-8")
+        assert "cancel-in-progress: false" in text
 
 def test_9h_manual_workflow_already_uses_hosted_job_limit_per_phase():
     text = (WORKFLOWS / "soccer-9h-autonomous.yml").read_text(encoding="utf-8")
