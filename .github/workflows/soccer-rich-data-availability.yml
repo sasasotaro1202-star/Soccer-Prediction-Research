@@ -52,7 +52,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m src.data.matchday_intelligence_fetch             --days 7             --horizon-hours 168             --output artifacts/live_smoke_fixtures.csv             --status artifacts/live_smoke_fixture_status.json
+          # Availability smoke only needs enough future fixtures to exercise
+          # rich enrichment; production collection keeps its uncapped discovery.
+          python -m src.data.matchday_intelligence_fetch             --days 7             --horizon-hours 168             --max-events 12             --output artifacts/live_smoke_fixtures.csv             --status artifacts/live_smoke_fixture_status.json
 
       - name: Run real rich-data acquisition smoke test
         env:
