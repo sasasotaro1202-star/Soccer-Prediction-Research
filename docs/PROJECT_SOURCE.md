@@ -37,3 +37,13 @@ The research runner requires explicit TESTS_PASSED and AUDIT_PASSED boolean hand
 `src/research/predictability_calibration.py` now revalidates optional provenance timestamps when supplied by the ledger: `available_at_utc` / `source_available_at_utc`, `published_at_utc`, and `retrieved_at_utc` must remain at or before `prediction_pit_cutoff_utc`; retrieval cannot precede explicit source availability, and retrieval cannot precede publication when both are present. This is defense-in-depth against upstream PIT handoff regressions and remains research-only.
 
 A dedicated regression module `tests/test_predictability_calibration_pit_provenance.py` covers post-cutoff source availability, post-cutoff retrieval, and impossible retrieval-before-source ordering. The research workflow now includes this regression module in its explicit test-file allowlist; current-main Actions must still pass before it is marked VERIFIED.
+
+## Rich matchday evidence layer — 2026-10-04
+
+The existing compact matchday snapshot remains the production input contract. In parallel, `src/data/matchday_rich_enrichment.py` builds a research-only rich evidence surface without changing production model state.
+
+The rich surface can persist, when the registered public/keyless endpoints provide the fields, event status/season/round/week/neutral-site metadata, referee/broadcast/news metadata, ESPN form/rank/record context, multi-provider market dispersion/implied probabilities/overround, recent team results and schedule congestion, SofaScore lineup/manager/pregame-form/H2H/recent cross-competition context, and detailed Open-Meteo weather variables.
+
+Raw provider payloads are retained in `artifacts/matchday_rich_raw.jsonl` with retrieval timestamp and canonical payload hash. Structured fields are retained in `artifacts/matchday_rich_enrichment.csv`. Retrieval time remains distinct from source publication/availability time. The rich layer therefore records `rich_pit_status=UNVERIFIABLE` for historical replay unless independent publication/availability evidence exists.
+
+This layer is acquisition/research evidence, not automatic feature adoption. Candidate use in historical OOS requires the existing PIT → chronological OOS/WFO → calibration → robustness → frozen holdout → adoption gate.
