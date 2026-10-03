@@ -585,7 +585,7 @@ def test_known_espn_venue_correction_is_explicit_and_provenance_tracked():
     from src.data.matchday_rich_enrichment import _apply_known_venue_correction
 
     row = {
-        "matchday_source": "espn+open_meteo",
+        "matchday_source": "open_meteo+espn",
         "espn_league": "ger.1",
         "home_team_id": "124",
         "venue_name": "Signal Iduna Park",
