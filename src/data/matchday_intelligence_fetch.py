@@ -44,6 +44,8 @@ FOOTBALL_DATA_CURRENT_SEASON_DIVISIONS: dict[str, str] = {
     "D1": "BL1",
     "F1": "FL1",
 }
+FOTMOB_ALL_LEAGUES_URL = "https://www.fotmob.com/api/allLeagues"
+FOTMOB_ALL_LEAGUES_DATA_URL = "https://www.fotmob.com/api/data/allLeagues"
 FOTMOB_MATCHES_URL = "https://www.fotmob.com/api/matches"
 FOTMOB_MATCHES_DATA_URL = "https://www.fotmob.com/api/data/matches"
 FOTMOB_MATCH_DETAIL_URL = "https://www.fotmob.com/api/matchDetails"
@@ -280,7 +282,9 @@ def _get_json(
             url.replace("://site.api.espn.com/", "://site.web.api.espn.com/")
         )
     elif str(source).startswith("fotmob"):
-        if url == FOTMOB_MATCHES_URL:
+        if url == FOTMOB_ALL_LEAGUES_URL:
+            candidate_urls.append(FOTMOB_ALL_LEAGUES_DATA_URL)
+        elif url == FOTMOB_MATCHES_URL:
             candidate_urls.append(FOTMOB_MATCHES_DATA_URL)
         elif url == FOTMOB_MATCH_DETAIL_URL:
             candidate_urls.append(FOTMOB_MATCH_DETAIL_DATA_URL)
@@ -717,6 +721,86 @@ def _collect_fotmob_day(
         max_events=max_events,
     )
     return rows, [], retrieved_at
+
+
+def parse_fotmob_league_catalog(payload: dict[str, Any]) -> dict[str, Any]:
+    """Parse the live FotMob league directory for identity-drift auditing only."""
+    by_id: dict[int, set[tuple[str, str, str]]] = {}
+
+    def add(item: Any, inherited_ccode: str = "", scope: str = "") -> None:
+        if not isinstance(item, dict):
+            return
+        league_id = _safe_int(item.get("id") or item.get("primaryId"))
+        name = _safe_str(item.get("name") or item.get("localizedName"))
+        if league_id is None or not name:
+            return
+        ccode = _safe_str(
+            item.get("ccode")
+            or item.get("countryCode")
+            or inherited_ccode
+        ).upper()
+        by_id.setdefault(league_id, set()).add((name, ccode, scope))
+
+    for item in payload.get("international", []) or []:
+        add(item, scope="international")
+
+    for country in payload.get("countries", []) or []:
+        if not isinstance(country, dict):
+            continue
+        country_ccode = _safe_str(country.get("ccode")).upper()
+        for league in country.get("leagues", []) or []:
+            add(league, inherited_ccode=country_ccode, scope="country")
+
+    missing_ids: list[int] = []
+    ccode_mismatches: list[dict[str, Any]] = []
+    collisions: list[dict[str, Any]] = []
+    supported_records: dict[str, Any] = {}
+
+    for league_id, expected_competition in FOTMOB_COMPETITION_ID_MAP.items():
+        records = sorted(by_id.get(league_id, set()))
+        supported_records[str(league_id)] = {
+            "competition": expected_competition,
+            "records": [
+                {"name": name, "ccode": ccode, "scope": scope}
+                for name, ccode, scope in records
+            ],
+        }
+        if not records:
+            missing_ids.append(int(league_id))
+            continue
+        expected_ccode = FOTMOB_EXPECTED_CCODE.get(league_id)
+        if expected_ccode and all(ccode and ccode != expected_ccode for _, ccode, _ in records):
+            ccode_mismatches.append(
+                {
+                    "league_id": int(league_id),
+                    "expected_ccode": expected_ccode,
+                    "observed_ccodes": sorted({ccode for _, ccode, _ in records}),
+                }
+            )
+        if len(records) > 1:
+            collisions.append(
+                {
+                    "league_id": int(league_id),
+                    "records": [
+                        {"name": name, "ccode": ccode, "scope": scope}
+                        for name, ccode, scope in records
+                    ],
+                }
+            )
+
+    return {
+        "status": (
+            "DRIFT_DETECTED"
+            if missing_ids or ccode_mismatches or collisions
+            else "NO_KNOWN_DRIFT"
+        ),
+        "record_count": int(sum(len(records) for records in by_id.values())),
+        "known_supported_ids": sorted(int(x) for x in FOTMOB_COMPETITION_ID_MAP),
+        "supported_records": supported_records,
+        "missing_known_ids": missing_ids,
+        "ccode_mismatches": ccode_mismatches,
+        "identity_collisions": collisions,
+    }
 
 
 def football_data_current_season_code(now: pd.Timestamp) -> str:
