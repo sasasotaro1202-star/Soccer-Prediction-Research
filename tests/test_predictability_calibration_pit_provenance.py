@@ -37,7 +37,7 @@ def test_rejects_post_cutoff_source_availability():
     )
     state = calibrate(df, history_rows=120, block_size=60)
     assert state["rows"] == 0
-    assert state["status"] == "INSUFFICIENT_OOS"
+    assert state["status"] == "WARMUP"
 
 
 def test_rejects_post_cutoff_retrieval():
@@ -47,7 +47,7 @@ def test_rejects_post_cutoff_retrieval():
     )
     state = calibrate(df, history_rows=120, block_size=60)
     assert state["rows"] == 0
-    assert state["status"] == "INSUFFICIENT_OOS"
+    assert state["status"] == "WARMUP"
 
 
 def test_rejects_retrieval_before_source_availability():
@@ -60,4 +60,4 @@ def test_rejects_retrieval_before_source_availability():
     )
     state = calibrate(df, history_rows=120, block_size=60)
     assert state["rows"] == 0
-    assert state["status"] == "INSUFFICIENT_OOS"
+    assert state["status"] == "WARMUP"
