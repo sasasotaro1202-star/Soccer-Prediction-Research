@@ -419,7 +419,7 @@ def run(
     status_path: str = "artifacts/prediction_status.json",
     prediction_time: str | None = None,
     registry_path: str = "artifacts/model_registry.json",
-    model_policy: str = "best_available",
+    model_policy: str = "production",
     prediction_window_minutes_before: float | None = None,
     prediction_window_tolerance_minutes: float = 5.0,
 ) -> dict:
@@ -437,7 +437,7 @@ def run(
         registry = load_best_available_model(registry_path)
     else:
         # Explicit caller paths are preserved. This keeps isolated validation runs
-        # deterministic while the normal production entrypoint still uses best_available.
+        # deterministic while production remains fail-closed on the adopted registry.
         bundle_path, registry_path = resolve_active_production_paths(bundle_path, registry_path)
         registry = load_adopted_model(registry_path)
     bundle = load_bundle(bundle_path)
@@ -719,7 +719,7 @@ def main() -> int:
     parser.add_argument("--status", default="artifacts/prediction_status.json")
     parser.add_argument("--prediction-time", default=None)
     parser.add_argument("--registry", default="artifacts/model_registry.json")
-    parser.add_argument("--model-policy", choices=["production", "best_available"], default="best_available")
+    parser.add_argument("--model-policy", choices=["production", "best_available"], default="production")
     parser.add_argument("--prediction-window-minutes-before", type=float, default=None)
     parser.add_argument("--prediction-window-tolerance-minutes", type=float, default=5.0)
     args = parser.parse_args()
