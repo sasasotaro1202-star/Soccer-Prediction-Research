@@ -9,6 +9,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+
+from src.research.pit_training import filter_prior_mature_training
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
@@ -257,6 +259,11 @@ def _oos_evaluate(
     for block_id, train, oos in _chronological_blocks(
         data, MIN_TRAIN_ROWS, block_size
     ):
+        target_cutoff = oos["prediction_pit_cutoff_utc"].min()
+        raw_train_rows = len(train)
+        train = filter_prior_mature_training(train, target_cutoff)
+        if len(train) < MIN_TRAIN_ROWS:
+            continue
         y_train = train["error_label"].to_numpy(dtype=int)
         y_oos = oos["error_label"].to_numpy(dtype=int)
         if np.unique(y_train).size < 2:
@@ -288,6 +295,8 @@ def _oos_evaluate(
             "oos_start": oos["prediction_pit_cutoff_utc"].min().isoformat(),
             "oos_end": oos["prediction_pit_cutoff_utc"].max().isoformat(),
             "n": int(len(oos)),
+            "training_rows": int(len(train)),
+            "excluded_immature_training_rows": int(raw_train_rows - len(train)),
             "meta_logloss": meta_m["logloss"],
             "meta_brier": meta_m["brier"],
             "meta_ece": meta_m["ece"],
