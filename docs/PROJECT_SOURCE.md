@@ -1,7 +1,7 @@
 # Soccer-Prediction-Research — Project Source
 
 ## Verified state 2026-10-03
-main latest observed HEAD after re-check: 0643e13d39dd73bb783044c411a0083a5dbd95c9. Latest observed work after the documentation commit hardens OOS PIT lineage boolean/cutoff validation and adds strict OOS PIT guard tests.
+main latest observed HEAD during this audit: 4f051bb3997e8a5c6b646ad09eaf2664fc95aa12. Latest main work hardens research artifact persistence against concurrent update conflicts; OOS PIT lineage boolean/cutoff hardening remains part of the current validated codebase.
 README documents a Data Acquisition → Coverage → QC/PIT → Features → Candidate Models → Walk-forward OOS → Metrics/Calibration → Weakness Research → Candidate Validation → Adoption Gate → Registry → Production Prediction architecture. Current prediction is fail-closed when a valid adopted model/current snapshot is unavailable.
 
 ## Target isolation
@@ -29,3 +29,6 @@ Cross-project transfer is mechanism-level only: DISCOVER → ABSTRACT_MECHANISM 
 
 
 A green workflow, artifact existence, model-file existence or external performance claim is not performance verification. Failures/cancellations/skips remain failures/cancellations/skips unless independently rerun and verified. Historical results and holdouts are not rewritten. Cost-unknown, billing-risk or paid-only sources remain HOLD/UNCONFIRMED.
+
+## Runtime safety
+Research preflight handoff variables TESTS_PASSED and AUDIT_PASSED are required explicit boolean values. Missing or invalid values block research execution and must never default to pass.
