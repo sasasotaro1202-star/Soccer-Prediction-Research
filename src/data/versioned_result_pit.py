@@ -337,7 +337,16 @@ def apply_bulk(
 
     work = out.copy()
     work["competition"] = work["competition"].astype(str).str.strip().str.upper()
-    work["season_start"] = pd.to_numeric(work.get("season_start"), errors="coerce")
+    if "season_start" in work.columns:
+        work["season_start"] = pd.to_numeric(work["season_start"], errors="coerce")
+    else:
+        work["season_start"] = pd.Series(pd.NA, index=work.index, dtype="Float64")
+    if "season" in work.columns:
+        season_start_from_label = pd.to_numeric(
+            work["season"].astype("string").str.extract(r"^(\\d{4})", expand=False),
+            errors="coerce",
+        )
+        work["season_start"] = work["season_start"].fillna(season_start_from_label)
     work["kickoff_utc"] = pd.to_datetime(work["kickoff_utc"], utc=True, errors="coerce")
     supported = work["competition"].isin(COMPETITION_FILES) & work["season_start"].notna()
     work = work.loc[supported].copy()
