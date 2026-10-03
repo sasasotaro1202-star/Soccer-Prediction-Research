@@ -626,3 +626,53 @@ def test_unknown_venue_does_not_get_silently_overwritten():
     assert corrected["venue_lat"] == 50.0
     assert corrected["venue_lon"] == 10.0
     assert corrected["venue_integrity_status"] == "UNVERIFIED"
+
+
+def test_venue_sources_are_cross_checked_and_weather_is_blocked_on_disagreement():
+    from src.data.matchday_rich_enrichment import _apply_known_venue_correction, _reconcile_venue_integrity
+
+    row = {
+        "source": "espn",
+        "matchday_source": "espn+sofascore",
+        "espn_league": "ger.1",
+        "home_team_id": "999",
+        "venue_name": "Example Stadium",
+        "venue_city": "Berlin",
+        "venue_country": "Germany",
+        "venue_lat": 52.5200,
+        "venue_lon": 13.4050,
+        "rich_sofa_venue_city": "Munich",
+        "rich_sofa_venue_lat": 48.1351,
+        "rich_sofa_venue_lon": 11.5820,
+    }
+
+    row = _apply_known_venue_correction(row)
+    row = _reconcile_venue_integrity(row)
+
+    assert row["venue_integrity_status"] == "SOURCE_DISAGREEMENT"
+    assert row["rich_weather_geometry_status"] == "BLOCKED_SOURCE_DISAGREEMENT"
+    assert row["venue_city"] == "Berlin"
+
+
+def test_known_venue_correction_can_agree_with_secondary_source():
+    from src.data.matchday_rich_enrichment import _apply_known_venue_correction, _reconcile_venue_integrity
+
+    row = {
+        "source": "espn",
+        "espn_league": "ger.1",
+        "home_team_id": "124",
+        "venue_name": "Signal Iduna Park",
+        "venue_city": "Aue",
+        "venue_country": "Germany",
+        "venue_lat": 50.5903,
+        "venue_lon": 12.7066,
+        "rich_sofa_venue_city": "Dortmund",
+        "rich_sofa_venue_lat": 51.4926,
+        "rich_sofa_venue_lon": 7.4518,
+    }
+
+    row = _apply_known_venue_correction(row)
+    row = _reconcile_venue_integrity(row)
+
+    assert row["venue_integrity_status"] == "CORRECTED_KNOWN_PROVIDER_ERROR"
+    assert row["venue_cross_source_status"] == "CROSS_SOURCE_AGREE"
