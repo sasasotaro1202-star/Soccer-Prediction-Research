@@ -57,6 +57,15 @@ def test_predictability_never_cancels_inflight_manual_work():
     text = (WORKFLOWS / "soccer-predictability-research.yml").read_text(encoding="utf-8")
     assert "cancel-in-progress: false" in text
 
+def test_research_cycle_artifact_persistence_is_bounded_and_explicit():
+    text = (WORKFLOWS / "soccer-research-cycle.yml").read_text(encoding="utf-8")
+    assert "for attempt in 1 2 3; do" in text
+    assert "git fetch --prune origin main" in text
+    assert "git push origin HEAD:main" in text
+    assert "git rebase origin/main" in text
+    assert "sleep \$((attempt * 5))" in text
+    assert "|| true" not in text
+
 def test_chat_gateway_stays_short_only_for_acknowledgement():
     text = (WORKFLOWS / "soccer-chat-request-gateway.yml").read_text(encoding="utf-8")
     assert "timeout-minutes: 3" in text
