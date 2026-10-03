@@ -47,15 +47,21 @@ def run_with_retries() -> int:
     out = Path(os.getenv("RESEARCH_OUTPUT_DIR", "artifacts"))
     out.mkdir(parents=True, exist_ok=True)
 
-    tests_passed = os.getenv("TESTS_PASSED", "true").lower() == "true"
-    audit_passed = os.getenv("AUDIT_PASSED", "true").lower() == "true"
+    tests_raw = os.getenv("TESTS_PASSED")
+    audit_raw = os.getenv("AUDIT_PASSED")
+    tests_passed = tests_raw is not None and tests_raw.strip().lower() == "true"
+    audit_passed = audit_raw is not None and audit_raw.strip().lower() == "true"
     gate = _load_gate(out)
     audit_gate = _load_audit_gate(out)
 
     blockers: list[str] = []
-    if not tests_passed:
+    if tests_raw is None or tests_raw.strip().lower() not in {"true", "false"}:
+        blockers.append("TESTS_PASSED is missing or invalid")
+    elif not tests_passed:
         blockers.append("preflight tests failed")
-    if not audit_passed:
+    if audit_raw is None or audit_raw.strip().lower() not in {"true", "false"}:
+        blockers.append("AUDIT_PASSED is missing or invalid")
+    elif not audit_passed:
         blockers.append("data audit execution failed")
     if gate is None:
         blockers.append("completion gate artifact is missing")
