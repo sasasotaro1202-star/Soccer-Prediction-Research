@@ -75,6 +75,20 @@ def _prepare(frame: pd.DataFrame) -> pd.DataFrame:
     d["actual_result"] = d["actual_result"].astype("string").str.strip().str.upper()
     for c in ("p_home", "p_draw", "p_away"):
         d[c] = pd.to_numeric(d[c], errors="coerce")
+
+    # Defense in depth: when upstream ledgers expose explicit provenance
+    # timestamps, validate them here rather than trusting only the upstream
+    # prediction_pit_gate. Unknown/malformed present timestamps invalidate rows.
+    optional_time_columns = (
+        "available_at_utc",
+        "source_available_at_utc",
+        "published_at_utc",
+        "retrieved_at_utc",
+    )
+    for name in optional_time_columns:
+        if name in d.columns:
+            d[name] = pd.to_datetime(d[name], utc=True, errors="coerce")
+
     if "prediction_state_id" in d.columns:
         ids = d["prediction_state_id"].astype("string").str.strip()
         if ids.isna().any() or ids.eq("").any():
@@ -96,6 +110,23 @@ def _prepare(frame: pd.DataFrame) -> pd.DataFrame:
     valid &= d["prediction_pit_cutoff_utc"] < d["kickoff_utc"]
     valid &= d["experience_available_at_utc"] > d["kickoff_utc"]
     valid &= d["experience_available_at_utc"] > d["prediction_pit_cutoff_utc"]
+
+    for name in optional_time_columns:
+        if name not in d.columns:
+            continue
+        series = d[name]
+        valid &= series.notna()
+        valid &= series <= d["prediction_pit_cutoff_utc"]
+        if name == "retrieved_at_utc":
+            available_candidates = [
+                d[col]
+                for col in ("source_available_at_utc", "available_at_utc")
+                if col in d.columns
+            ]
+            for available_series in available_candidates:
+                valid &= series >= available_series
+        if name == "published_at_utc" and "retrieved_at_utc" in d.columns:
+            valid &= d["retrieved_at_utc"] >= series
     valid &= d["actual_result"].isin({"H", "D", "A"})
     p = d[["p_home", "p_draw", "p_away"]].to_numpy(dtype=float)
     valid &= np.isfinite(p).all(axis=1) & (p >= 0.0).all(axis=1)
