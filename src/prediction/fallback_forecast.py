@@ -609,6 +609,11 @@ def build_fallback_forecast(
         "forecast_mode": "FALLBACK_BASELINE",
         "fixtures_considered": int(len(f)),
         "prediction_rows": int(len(output)),
+        "pit_result_history_rows": int(history_meta.get("rows_pit_eligible", 0)),
+        "pit_result_history_available_rate": (
+            float(history_meta.get("rows_pit_eligible", 0) / history_meta.get("rows_loaded", 1))
+            if int(history_meta.get("rows_loaded", 0)) > 0 else 0.0
+        ),
         "research_only": True,
         "production_registry_changed": False,
         "production_probabilities_changed": False,
