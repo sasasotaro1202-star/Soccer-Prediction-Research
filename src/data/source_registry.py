@@ -72,7 +72,7 @@ SOCCER_SOURCES: Final[tuple[SourceSpec, ...]] = (
         live_capable=True,
         auth_required=False,
         primary_for=("xg", "player_context"),
-        notes="Public matches/matchDetails routes (including /api/data/... fallbacks) are useful for live fixture discovery and rich pre-match context. Competition identity uses provider league ID plus country code when available; raw responses are retained and invalid provider error payloads are excluded from valid coverage. Venue fields require integrity checks because provider geography can be wrong; known corrections are explicit and provenance-tracked. Endpoint/schema stability, robots/usage constraints and row-level coverage must be re-verified before repeated use.",
+        notes="Public allLeagues, matches and matchDetails routes (including /api/data/... fallbacks) are useful for league identity auditing, live fixture discovery and rich pre-match context. Competition identity uses provider league ID plus country code when available; raw responses are retained and invalid provider error payloads are excluded from valid coverage. Venue fields require integrity checks because provider geography can be wrong; known corrections are explicit and provenance-tracked. Endpoint/schema stability, robots/usage constraints and row-level coverage must be re-verified before repeated use.",
     ),
     SourceSpec(
         name="Understat",
