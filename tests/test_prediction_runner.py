@@ -74,10 +74,3 @@ def test_default_model_policy_is_production_fail_closed():
     from src.prediction.runner import run
 
     assert inspect.signature(run).parameters["model_policy"].default == "production"
-
-
-def test_explicit_best_available_remains_an_opt_in_path():
-    import inspect
-    from src.prediction.runner import run
-
-    assert "best_available" in inspect.signature(run).parameters["model_policy"].annotation if False else True
