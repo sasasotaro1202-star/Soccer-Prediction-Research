@@ -209,6 +209,13 @@ def _get_json(
         candidate_urls.append(
             url.replace("://site.api.espn.com/", "://site.web.api.espn.com/")
         )
+    # SofaScore's public API is also served from the www hostname in some
+    # environments. Treat it as the same upstream, not as an independent
+    # source, and preserve one source identity in lineage.
+    if str(source).startswith("sofascore") and "://api.sofascore.com/" in url:
+        candidate_urls.append(
+            url.replace("://api.sofascore.com/", "://www.sofascore.com/")
+        )
 
     parse_error: Exception | None = None
     fetch_error: Exception | None = None
@@ -904,7 +911,7 @@ def collect_matchday_snapshots(
         requested_days=days,
     )
     for day_offset in range(scan_days):
-        day_start = now + pd.Timedelta(days=day_offset)
+        day_start = now + pd.Timedelta(days=int(day_offset))
         date = day_start.strftime("%Y%m%d")
         before_day_rows = len(rows)
         for competition, league in ESPN_LEAGUES.items():
