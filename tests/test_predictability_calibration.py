@@ -102,3 +102,19 @@ def test_predictability_workflow_warmup_uses_frozen_holdout_key():
     text = workflow.read_text(encoding="utf-8")
     assert '"frozen_holdout_touched": False' in text
     assert '"locked_holdout_touched": False' not in text
+
+
+def test_calibration_gate_requires_three_development_blocks_and_70_percent_improvement():
+    from src.research import predictability_calibration as mod
+
+    development = pd.DataFrame({
+        "calibrated_logloss": [0.4, 0.5, 0.7],
+        "raw_logloss": [0.5, 0.6, 0.65],
+    })
+    assert mod._development_improvement_rate(development) == 2 / 3
+
+    stronger = pd.DataFrame({
+        "calibrated_logloss": [0.4, 0.5, 0.6],
+        "raw_logloss": [0.5, 0.6, 0.65],
+    })
+    assert mod._development_improvement_rate(stronger) == 1.0
