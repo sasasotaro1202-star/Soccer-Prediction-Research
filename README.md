@@ -32,3 +32,7 @@ On-demand/production predictions must use the freshest available matchday snapsh
 Performance monitoring is target-specific. Durable experience metrics are stored separately for 1X2, Score Top1/Top3, O/U, BTTS, and MOM Top1/Top4, with probability-quality metrics retained where the required probabilities are available.
 
 See `docs/MIGRATION_STATUS.md` for the legacy `soccer` repository migration classification.
+
+
+## Total research forecast coverage
+Daily and manual matchday research forecasts use total-coverage routing: when an adopted production model is unavailable or produces no eligible prediction rows, the workflow generates clearly labeled research-only fallback probabilities. Production remains fail-closed, and fallback outputs never alter the production registry.
