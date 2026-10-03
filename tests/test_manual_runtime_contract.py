@@ -63,8 +63,15 @@ def test_research_cycle_artifact_persistence_is_bounded_and_explicit():
     assert "git fetch --prune origin main" in text
     assert "git push origin HEAD:main" in text
     assert "git rebase origin/main" in text
-    assert "sleep $((attempt * 5))" in text
+    assert "sleep \$((attempt * 5))" in text
     assert "|| true" not in text
+
+def test_versioned_pit_workflow_rejects_nonempty_zero_group_evidence_runs():
+    text = (WORKFLOWS / "soccer-versioned-pit-research.yml").read_text(encoding="utf-8")
+    assert 'if len(evidence) > 0 and len(report) == 0:' in text
+    assert '"status"] = "BLOCKED"' in text
+    assert "refusing to classify an unprocessed evidence run as successful" in text
+
 
 def test_chat_gateway_stays_short_only_for_acknowledgement():
     text = (WORKFLOWS / "soccer-chat-request-gateway.yml").read_text(encoding="utf-8")
