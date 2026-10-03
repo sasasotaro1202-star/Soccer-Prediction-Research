@@ -132,3 +132,44 @@ def auxiliary_source_plans() -> tuple[CompetitionSourcePlan, ...]:
         )
         for c in AUXILIARY_COMPETITIONS
     )
+
+
+GENERIC_TYPE_SOURCES = {
+    "league": ("SofaScore", "ESPN", "Football-Data.co.uk", "OpenFootball"),
+    "cup": ("SofaScore", "ESPN", "OpenFootball"),
+    "league_cup": ("SofaScore", "ESPN", "OpenFootball"),
+    "super_cup": ("SofaScore", "ESPN", "OpenFootball"),
+    "international": ("FIFA", "UEFA", "AFC", "CONMEBOL", "CAF", "CONCACAF", "SofaScore", "ESPN"),
+    "friendly": ("SofaScore", "ESPN"),
+    "multi_sport": ("Olympics", "Asian Games", "SofaScore", "ESPN"),
+    "youth": ("FIFA", "UEFA", "AFC", "JFA", "SofaScore", "ESPN"),
+    "school": ("JFA", "school federation", "SofaScore"),
+    "europe": ("UEFA", "SofaScore", "ESPN"),
+    "asia": ("AFC", "SofaScore", "ESPN"),
+    "south_america": ("CONMEBOL", "SofaScore", "ESPN"),
+    "africa": ("CAF", "SofaScore", "ESPN"),
+    "concacaf": ("CONCACAF", "SofaScore", "ESPN"),
+    "other": ("SofaScore", "ESPN"),
+}
+
+
+def catalog_source_plans() -> tuple[CompetitionSourcePlan, ...]:
+    """Create a research source plan for every catalogued competition.
+
+    The plan is intentionally generic: actual data availability and PIT timing
+    still require source-level verification before a competition can advance.
+    """
+    from src.data.competition_catalog import COMPETITION_CATALOG
+    plans = []
+    for spec in COMPETITION_CATALOG:
+        candidates = GENERIC_TYPE_SOURCES.get(spec.competition_type, GENERIC_TYPE_SOURCES["other"])
+        plans.append(
+            CompetitionSourcePlan(
+                competition=spec.code,
+                canonical_candidates=tuple(candidates),
+                discovery_only=("Tavily", "Parallel Search", "Firecrawl"),
+                pit_status=spec.pit_status,
+                notes="Catalog-derived candidate sources; verify fixture coverage, entity mapping and publication timing before OOS.",
+            )
+        )
+    return tuple(plans)
