@@ -114,7 +114,7 @@ def test_international_history_uses_cached_paths_when_tree_discovery_fails(tmp_p
         "Sat Jan 4 2025\n15:00 Alpha v Beta 1-0\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(adapter, "_tree_paths", lambda: (_ for _ in ()).throw(RuntimeError("GitHub 403")))
+    monkeypatch.setattr(adapter, "_tree_paths", lambda: _raise_github_403())
     history, coverage = adapter.load_openfootball_international_history(
         start_year=2025,
         end_year=2025,
@@ -126,7 +126,6 @@ def test_international_history_uses_cached_paths_when_tree_discovery_fails(tmp_p
     assert coverage["discovery_mode"].eq("CACHE_FALLBACK").all()
 
 def test_international_tree_truncation_does_not_use_cache_fallback(tmp_path, monkeypatch):
-    import src.research.scope_frontier as _unused_scope_frontier  # noqa: F401
     import src.data.openfootball_international_adapter as adapter
 
     cached = tmp_path / "friendly" / "2025_friendly.txt"
