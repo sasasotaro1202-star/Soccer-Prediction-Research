@@ -47,3 +47,9 @@ The rich surface can persist, when the registered public/keyless endpoints provi
 Raw provider payloads are retained in `artifacts/matchday_rich_raw.jsonl` with retrieval timestamp and canonical payload hash. Structured fields are retained in `artifacts/matchday_rich_enrichment.csv`. Retrieval time remains distinct from source publication/availability time. The rich layer therefore records `rich_pit_status=UNVERIFIABLE` for historical replay unless independent publication/availability evidence exists.
 
 This layer is acquisition/research evidence, not automatic feature adoption. Candidate use in historical OOS requires the existing PIT → chronological OOS/WFO → calibration → robustness → frozen holdout → adoption gate.
+
+
+## Rich-source identity hardening — 2026-10-04
+FotMob discovery now keys supported domestic competitions by provider league ID and checks the provider country code when available. Display names such as `Premier League` or `Ligue 1` are not sufficient identifiers because the provider can expose same-name competitions in different countries. Unrecognized or mismatched league identities fail closed rather than being silently mapped.
+
+FotMob match-detail retrieval also normalizes numeric IDs that CSV parsing may render as `123.0`, rejects provider `error=true` responses, and verifies the returned `general.matchId` against the requested fixture. Raw error responses remain preserved for forensic lineage but are excluded from valid-payload coverage and enrichment success counts.
