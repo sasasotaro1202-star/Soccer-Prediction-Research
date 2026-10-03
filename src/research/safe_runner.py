@@ -190,5 +190,8 @@ def run_with_retries() -> int:
         "errors": errors,
         "oos_claimed": False,
     })
+    return 1
+
+
 if __name__ == "__main__":
     raise SystemExit(run_with_retries())
