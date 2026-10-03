@@ -5,6 +5,12 @@ on:
     branches: [main]
     paths-ignore:
       - "requests/**"
+      # Research/production workflows persist machine-generated evidence separately.
+      # Artifact/data-only pushes do not require a full source/test CI cycle.
+      - "artifacts/**"
+      - "models/current/**"
+      - "data/experience/**"
+      - "data/raw/**"
   pull_request:
     branches: [main]
   workflow_dispatch:
