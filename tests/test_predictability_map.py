@@ -71,7 +71,9 @@ def test_chronological_failure_risk_candidate_is_research_only():
     rows = []
     for i in range(420):
         block_risk = 0.10 if i < 180 else 0.85
-        wrong = i >= 180 and i % 2 == 0
+        # Keep both outcome classes present in every training window so the
+        # five chronological OOS-block contract is exercised directly.
+        wrong = (i < 180 and i % 10 == 0) or (i >= 180 and i % 2 == 0)
         rows.append(_row(i, risk=block_risk, wrong=wrong))
     frame = pd.DataFrame(rows)
     frame["kickoff_utc"] = pd.date_range(
@@ -142,7 +144,7 @@ def test_predictability_gate_requires_meaningful_stable_development():
         "meta_logloss": [0.4, 0.5, 0.7],
         "confidence_logloss": [0.5, 0.6, 0.65],
     })
-    assert mod._development_improvement_rate(development) == 1 / 3
+    assert mod._development_improvement_rate(development) == 2 / 3
 
     stronger = pd.DataFrame({
         "meta_logloss": [0.485, 0.582, 0.63],

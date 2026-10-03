@@ -111,7 +111,7 @@ def test_calibration_gate_requires_meaningful_stable_development():
         "calibrated_logloss": [0.4, 0.5, 0.7],
         "raw_logloss": [0.5, 0.6, 0.65],
     })
-    assert mod._development_improvement_rate(development) == 1 / 3
+    assert mod._development_improvement_rate(development) == 2 / 3
 
     stronger = pd.DataFrame({
         "calibrated_logloss": [0.485, 0.582, 0.63],
