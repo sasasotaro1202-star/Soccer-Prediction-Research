@@ -25,6 +25,8 @@ Chronological OOS soccer prediction, backtesting, calibration and automated rese
 
 The current system uses a fail-closed PIT replay layer with archived evidence recovery, bounded retries, exact completed-result identity matching, and persisted PIT evidence caching between robust runs. Valid publication evidence is required before a row can be PIT-verified; unavailable evidence remains unknown rather than being imputed. Production adoption remains blocked unless the chronological OOS, stability, calibration, provenance, and PIT gates all pass.
 
+Daily research forecasting uses total-coverage routing: when an adopted production model is unavailable or produces no eligible prediction rows, a clearly labeled PIT-safe fallback baseline produces research-only probabilities instead of an empty forecast. Production remains fail-closed and the fallback cannot self-promote.
+
 ## Latest prediction contract
 
 On-demand/production predictions must use the freshest available matchday snapshot. The production runner requires a successful current matchday refresh and rejects snapshots older than 15 minutes, so previously generated prediction artifacts are not treated as current predictions.
