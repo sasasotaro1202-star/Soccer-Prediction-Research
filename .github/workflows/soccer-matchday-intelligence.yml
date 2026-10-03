@@ -80,6 +80,18 @@ jobs:
 
           status = json.loads(Path("artifacts/matchday_intelligence_status.json").read_text())
           frame = pd.read_csv("artifacts/future_matchday_fixtures.csv")
+          status_name = str(status.get("status") or "").upper()
+          errors = status.get("errors") or []
+          if status_name == "DEFERRED_EXTERNAL_SOURCE":
+              raise SystemExit(
+                  "matchday snapshot blocked: external fixture sources were unavailable; "
+                  "refusing to treat source outage as NO_UPCOMING_FIXTURES"
+              )
+          if status_name == "NO_UPCOMING_FIXTURES" and errors:
+              raise SystemExit(
+                  "matchday snapshot has no rows but reports source errors; "
+                  "refusing ambiguous empty-schedule success"
+              )
           required = {
               "match_id", "kickoff_utc", "home_team", "away_team",
               "source_available_at_utc", "pit_verified", "starter_status",

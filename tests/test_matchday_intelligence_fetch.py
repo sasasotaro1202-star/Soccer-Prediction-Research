@@ -273,6 +273,43 @@ def test_espn_json_falls_back_to_web_hostname_after_html_response():
     ]
 
 
+def test_sofascore_json_uses_same_source_identity_across_host_fallback(monkeypatch):
+    import src.data.matchday_intelligence_fetch as m
+
+    class Response:
+        def __init__(self, body, retrieved_at):
+            self.body = body
+            self.metadata = type("Meta", (), {"retrieved_at": retrieved_at})()
+
+    class Fetcher:
+        def __init__(self):
+            self.calls = []
+
+        def get(self, source, url, **kwargs):
+            self.calls.append((source, url))
+            if len(self.calls) == 1:
+                raise RuntimeError("primary host unavailable")
+            return Response(
+                b'{"events":[]}',
+                "2026-10-04T00:00:02Z",
+            )
+
+    fetcher = Fetcher()
+    payload, retrieved_at = m._get_json(
+        fetcher,
+        "sofascore_scheduled_events",
+        "https://api.sofascore.com/api/v1/sport/football/scheduled-events/2026-10-04",
+    )
+
+    assert payload == {"events": []}
+    assert retrieved_at == "2026-10-04T00:00:02Z"
+    assert [url for _, url in fetcher.calls] == [
+        "https://api.sofascore.com/api/v1/sport/football/scheduled-events/2026-10-04",
+        "https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-10-04",
+    ]
+    assert all(source == "sofascore_scheduled_events" for source, _ in fetcher.calls)
+
+
 def test_football_data_complements_partial_sofascore_coverage(monkeypatch):
     import src.data.matchday_intelligence_fetch as m
 
@@ -459,6 +496,8 @@ def test_matchday_workflow_does_not_pass_a_legacy_global_event_cap():
     workflow = Path(".github/workflows/soccer-matchday-intelligence.yml").read_text(encoding="utf-8")
     assert "--max-events" not in workflow
     assert "global_event_cap_enabled" in workflow
+    assert 'status_name == "DEFERRED_EXTERNAL_SOURCE"' in workflow
+    assert 'status_name == "NO_UPCOMING_FIXTURES" and errors' in workflow
 
 
 def test_matchday_workflow_allows_confirmed_lineups():
