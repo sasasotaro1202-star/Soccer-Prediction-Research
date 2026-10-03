@@ -159,6 +159,15 @@ def test_rich_workflow_outputs_are_research_only():
     assert "production_changed" in workflow
 
 
+def test_live_availability_smoke_uses_bounded_fixture_scan():
+    from pathlib import Path
+
+    workflow = Path(".github/workflows/soccer-rich-data-availability.yml").read_text(encoding="utf-8")
+    assert "--horizon-hours 168" in workflow
+    assert "--max-events 12" in workflow
+    assert "production collection keeps its uncapped discovery" in workflow
+
+
 def test_market_summary_keeps_optional_total_spread_and_timestamp():
     payload = {
         "odds": [
