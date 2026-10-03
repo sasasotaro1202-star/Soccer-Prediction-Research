@@ -226,3 +226,42 @@ def test_lineup_parser_keeps_player_composition_without_turning_missing_into_zer
     assert out["rich_sofa_home_missing_reasons"] == "Injury"
     assert out["rich_sofa_lineup_confirmed"] is True
     assert pd.isna(out["rich_sofa_away_starter_count"])
+
+def test_standings_parser_extracts_total_home_and_away_context():
+    from src.data.matchday_rich_enrichment import _parse_sofa_standings
+
+    payload = {
+        "standings": [{
+            "rows": [
+                {
+                    "team": {"id": 10, "name": "Home"},
+                    "position": 3, "matches": 8, "wins": 5, "draws": 2, "losses": 1,
+                    "scoresFor": 15, "scoresAgainst": 7, "points": 17,
+                    "scoreDiffFormatted": "+8",
+                    "form": ["W", "W", "D"],
+                },
+                {
+                    "team": {"id": 20, "name": "Away"},
+                    "position": 9, "matches": 8, "wins": 3, "draws": 2, "losses": 3,
+                    "scoresFor": 11, "scoresAgainst": 10, "points": 11,
+                    "scoreDiffFormatted": "+1",
+                },
+            ]
+        }]
+    }
+    out = _parse_sofa_standings(payload, "10", "20", "total")
+    assert out["rich_sofa_standing_total_home_position"] == 3
+    assert out["rich_sofa_standing_total_home_points"] == 17
+    assert out["rich_sofa_standing_total_home_score_diff_formatted"] == "+8"
+    assert out["rich_sofa_standing_total_home_form"] == "W|W|D"
+    assert out["rich_sofa_standing_total_away_position"] == 9
+    assert out["rich_sofa_standing_total_away_goals_for"] == 11
+
+
+def test_standings_parser_does_not_fill_missing_team_as_zero():
+    from src.data.matchday_rich_enrichment import _parse_sofa_standings
+
+    payload = {"standings": [{"rows": [{"team": {"id": 10}, "position": 3, "points": 17}]}]}
+    out = _parse_sofa_standings(payload, "10", "20", "home")
+    assert out["rich_sofa_standing_home_home_position"] == 3
+    assert "rich_sofa_standing_home_away_position" not in out

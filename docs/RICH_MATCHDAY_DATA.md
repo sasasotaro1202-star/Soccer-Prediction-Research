@@ -12,7 +12,7 @@ The rich layer can persist, when supplied by the existing public/keyless or alre
 - multi-provider market observations, implied probabilities, provider dispersion and overround
 - recent team results, goals, points, goal difference, BTTS/Over-2.5 rates, recent opponents and schedule-congestion counts
 - SofaScore lineup formations, starter/substitute IDs, captain IDs and missing-player reasons
-- SofaScore managers, pregame-form payloads, H2H history and cross-competition recent matches
+- SofaScore managers, pregame-form payloads, season total/home/away standings, H2H history and cross-competition recent matches
 - Open-Meteo temperature, humidity, dew point, apparent temperature, precipitation/rain/showers/snowfall, pressure, visibility, cloud layers, wind speed/direction/gusts, daylight, sunshine duration, CAPE and weather code
 - raw provider JSON records with retrieval timestamp and payload hash
 
