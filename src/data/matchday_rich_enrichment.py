@@ -752,7 +752,7 @@ def _summarize_h2h(
     home_wins = draws = away_wins = home_goals = away_goals = 0
     scorelines: list[str] = []
     for event in events:
-        stamp = _ts(event.get("startTimestamp"))
+        stamp = _event_start_timestamp(event.get("startTimestamp"))
         if stamp is None or stamp >= kickoff:
             continue
         home = event.get("homeTeam") or {}
@@ -877,6 +877,95 @@ def _parse_sofa_standings(
         elif isinstance(form, str) and form.strip():
             out[prefix + "form"] = form.strip()
     return out
+
+
+def _has_populated_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, float) and np.isnan(value):
+        return False
+    if isinstance(value, str) and not value.strip():
+        return False
+    return True
+
+
+def _source_coverage_report(
+    frame: pd.DataFrame,
+    raw_records: list[dict[str, Any]],
+) -> dict[str, Any]:
+    selected = frame.loc[
+        frame.get("rich_detail_status", pd.Series(index=frame.index)).astype(str) == "ENRICHED"
+    ].copy()
+    selected_rows = int(len(selected))
+    report: dict[str, Any] = {
+        "selected_rows": selected_rows,
+        "raw_payload_records": int(len(raw_records)),
+        "source_families": {},
+        "feature_channels": {},
+    }
+
+    for family in ("espn", "sofascore", "open_meteo"):
+        matches = {
+            _safe_str(record.get("match_id"))
+            for record in raw_records
+            if _safe_str(record.get("provider_family")) == family
+            and _safe_str(record.get("match_id"))
+        }
+        report["source_families"][family] = {
+            "payload_records": int(sum(
+                _safe_str(record.get("provider_family")) == family
+                for record in raw_records
+            )),
+            "unique_match_ids": int(len(matches)),
+            "match_coverage_pct": (
+                round(100.0 * len(matches) / selected_rows, 2)
+                if selected_rows else 0.0
+            ),
+            "endpoints": sorted({
+                _safe_str(record.get("endpoint"))
+                for record in raw_records
+                if _safe_str(record.get("provider_family")) == family
+                and _safe_str(record.get("endpoint"))
+            }),
+        }
+
+    channels = {
+        "market": lambda row: _has_populated_value(row.get("rich_market_provider_count")),
+        "lineup": lambda row: any(
+            _has_populated_value(row.get(f"rich_sofa_{side}_formation"))
+            or _has_populated_value(row.get(f"rich_sofa_{side}_starter_count"))
+            for side in ("home", "away")
+        ),
+        "injury": lambda row: (
+            _has_populated_value(row.get("rich_espn_home_injury_count"))
+            or _has_populated_value(row.get("rich_espn_away_injury_count"))
+        ),
+        "standings": lambda row: any(
+            _has_populated_value(row.get(f"rich_sofa_standing_total_{side}_position"))
+            for side in ("home", "away")
+        ),
+        "weather": lambda row: _has_populated_value(
+            row.get("rich_weather_nearest_valid_time_utc")
+        ),
+        "h2h": lambda row: _has_populated_value(row.get("rich_h2h_matches")),
+        "recent_form": lambda row: any(
+            _has_populated_value(row.get(f"rich_recent_{side}_matches"))
+            for side in ("home", "away")
+        ),
+    }
+    for name, predicate in channels.items():
+        count = int(sum(bool(predicate(row)) for _, row in selected.iterrows()))
+        report["feature_channels"][name] = {
+            "rows_with_data": count,
+            "coverage_pct": round(100.0 * count / selected_rows, 2) if selected_rows else 0.0,
+        }
+
+    report["acquisition_state"] = (
+        "PAYLOADS_OBSERVED"
+        if len(raw_records) > 0
+        else "NO_PAYLOADS_OBSERVED"
+    )
+    return report
 
 
 def _blank_result() -> dict[str, Any]:
@@ -1019,6 +1108,7 @@ def _fetch_and_enrich_row(
     sofa_home_id = ""
     sofa_away_id = ""
     if sofa_event_id:
+        event_payload: dict[str, Any] = {}
         try:
             detail, at = _get_json(
                 fetcher,
@@ -1301,6 +1391,12 @@ def _fetch_and_enrich_row(
         else "MEDIUM" if raw_records
         else "LOW"
     )
+    diagnostics["rich_source_coverage_report"] = json.dumps(
+        _source_coverage_report(pd.DataFrame([out]), raw_records),
+        ensure_ascii=False,
+        sort_keys=True,
+        default=str,
+    )
     out.update(diagnostics)
     return out, raw_records
 
@@ -1414,6 +1510,7 @@ def enrich_matchday_frame(
             "retrieval_time_is_recorded_but_source_publication_time_is_not_inferred"
         ),
         "production_changed": False,
+        "source_coverage": _source_coverage_report(enriched, raw_records),
     }
     return enriched, status, raw_records
 
