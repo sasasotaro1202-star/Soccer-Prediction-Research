@@ -58,16 +58,42 @@ jobs:
           path: data/raw
           key: soccer-raw-${{ runner.os }}-${{ hashFiles('src/data/football_data.py') }}
           restore-keys: soccer-raw-${{ runner.os }}-
-      - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+      - name: Install dependencies with bounded retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt; then
+              exit 0
+            fi
+            echo "dependency installation attempt ${attempt} failed; retrying..." >&2
+            if [ "${attempt}" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+
       - name: Run tests
         run: python -m pytest -q tests/test_pit_source_adapter.py tests/test_pit_feature_replay.py tests/test_pit_evidence.py tests/test_source_registry.py
-      - name: Run small PIT replay audit (diagnostic; BLOCKED is non-fatal)
-        continue-on-error: true
+      - name: Run small PIT replay audit (BLOCKED is diagnostic; implementation failures are fatal)
         env:
           AUDIT_COMPETITION: ${{ inputs.competition || 'EPL' }}
           AUDIT_ROWS_PER_SEASON: ${{ inputs.rows_per_season || '1' }}
-        run: python -m src.research.pit_replay_audit --competition "$AUDIT_COMPETITION" --rows-per-season "$AUDIT_ROWS_PER_SEASON"
+        run: |
+          set -euo pipefail
+          set +e
+          python -m src.research.pit_replay_audit --competition "$AUDIT_COMPETITION" --rows-per-season "$AUDIT_ROWS_PER_SEASON"
+          code=$?
+          set -e
+          # Exit code 2 is the canonical BLOCKED result for insufficient PIT evidence.
+          # Preserve real implementation/runtime failures as non-zero so they cannot
+          # be mistaken for an expected evidence shortage.
+          if [ "$code" -eq 2 ]; then
+            echo "PIT replay audit is BLOCKED: archived evidence is insufficient; production/OOS remain gated."
+            exit 0
+          fi
+          exit "$code"
+
       - name: Upload PIT audit artifacts
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
