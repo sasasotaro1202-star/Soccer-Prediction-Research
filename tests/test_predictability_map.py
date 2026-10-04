@@ -151,3 +151,33 @@ def test_predictability_gate_requires_meaningful_stable_development():
         "confidence_logloss": [0.5, 0.6, 0.65],
     })
     assert mod._development_improvement_rate(stronger) == 1.0
+
+
+
+def test_pit_invalid_pass_row_fails_closed():
+    row = _row(0, risk=0.2)
+    row["experience_available_at_utc"] = "2026-01-01T09:00:00Z"
+    row["kickoff_utc"] = "2026-01-01T12:00:00Z"
+    row["prediction_pit_cutoff_utc"] = "2026-01-01T10:00:00Z"
+    frame = pd.DataFrame([row])
+    try:
+        analyze(frame)
+    except RuntimeError as exc:
+        assert "PIT-invalid PASS" in str(exc)
+    else:
+        raise AssertionError("PIT-invalid PASS row must fail closed")
+
+
+def test_optional_retrieval_after_cutoff_fails_closed():
+    row = _row(0, risk=0.2)
+    row["available_at_utc"] = "2026-01-01T09:00:00Z"
+    row["source_available_at_utc"] = "2026-01-01T09:00:00Z"
+    row["published_at_utc"] = "2026-01-01T09:00:00Z"
+    row["retrieved_at_utc"] = "2026-01-01T11:00:00Z"
+    frame = pd.DataFrame([row])
+    with_error = False
+    try:
+        analyze(frame)
+    except RuntimeError as exc:
+        with_error = "PIT-invalid PASS" in str(exc)
+    assert with_error
