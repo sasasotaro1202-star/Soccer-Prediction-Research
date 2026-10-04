@@ -712,6 +712,7 @@ def run_walk_forward(
     oos_block: int | None = None,
     random_state: int = 42,
     case_output_path: str | None = None,
+    candidate_names: list[str] | None = None,
 ):
     """Chronological PIT-safe walk-forward with disjoint selection/calibration validation."""
     if oos_block is None:
@@ -741,6 +742,15 @@ def run_walk_forward(
 
         validation_models = {}
         scores = {}
+        available_candidates = candidates(random_state)
+        if candidate_names is not None:
+            requested = [str(name) for name in candidate_names]
+            missing = [name for name in requested if name not in available_candidates]
+            if missing:
+                raise ValueError(f"Requested walk-forward candidates are unavailable: {missing}")
+            available_candidates = {name: available_candidates[name] for name in requested}
+        if len(available_candidates) < 2:
+            raise ValueError("At least two walk-forward candidates are required")
         dynamic_policy = {
             "schema_version": 1,
             "type": "drift_uncertainty_router",
@@ -754,7 +764,7 @@ def run_walk_forward(
             "feature_cols": list(feature_cols),
             "reference": build_drift_reference(fit, feature_cols),
         }
-        for name, model in candidates(random_state).items():
+        for name, model in available_candidates.items():
             validation_models[name] = _fit_predict(model, fit[feature_cols], fit.target.astype(int))
             scores[name] = _validation_score(validation_models[name], val_select, feature_cols)
 
@@ -838,7 +848,7 @@ def run_walk_forward(
         # Refit candidates on all historical data available before this OOS block.
         fitted = {
             name: _fit_predict(model, train[feature_cols], train.target.astype(int))
-            for name, model in candidates(random_state).items()
+            for name, model in available_candidates.items()
         }
         probs, _oos_routes, oos_risk_diag = _routed_ensemble_proba(
             oos,
