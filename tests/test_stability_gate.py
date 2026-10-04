@@ -24,7 +24,11 @@ def _fold(
 
 
 def test_stability_requires_multiple_leagues_and_seasons():
-    folds = [_fold("EPL", 2022, 1, .9), _fold("EPL", 2023, 1, .9), _fold("EPL", 2024, 1, .9)]
+    folds = [
+        _fold("EPL", 2022, 1, .9, start="2024-01-01T00:00:00Z", end="2024-01-31T23:59:59Z"),
+        _fold("EPL", 2023, 1, .9, start="2024-02-01T00:00:00Z", end="2024-02-29T23:59:59Z"),
+        _fold("EPL", 2024, 1, .9, start="2024-03-01T00:00:00Z", end="2024-03-31T23:59:59Z"),
+    ]
     result = evaluate_stability(folds)
     assert result["status"] == "HOLD"
     assert result["reason"] == "too_few_unique_leagues"
