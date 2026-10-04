@@ -96,7 +96,6 @@ def test_calibration_always_exposes_frozen_holdout_safety_key():
     assert state["safety_contract"]["frozen_holdout_touched"] is False
 
 
-
 def test_predictability_workflow_warmup_uses_frozen_holdout_key():
     workflow = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "soccer-predictability-research.yml"
     text = workflow.read_text(encoding="utf-8")
@@ -120,7 +119,6 @@ def test_calibration_gate_requires_meaningful_stable_development():
     assert mod._development_improvement_rate(stronger) == 1.0
 
 
-
 def test_pit_training_filter_excludes_rows_not_available_at_oos_cutoff():
     from src.research.pit_training import filter_prior_mature_training
 
@@ -139,9 +137,11 @@ def test_pit_training_filter_excludes_rows_not_available_at_oos_cutoff():
     result = filter_prior_mature_training(
         frame, pd.Timestamp("2026-01-01T10:00:00Z")
     )
+    # Training states must be strictly prior to the target cutoff. A row
+    # recorded at the exact target cutoff is excluded to prevent same-time
+    # leakage/dependence.
     assert result["prediction_pit_cutoff_utc"].tolist() == [
         pd.Timestamp("2026-01-01T08:00:00Z"),
-        pd.Timestamp("2026-01-01T10:00:00Z"),
     ]
 
 
