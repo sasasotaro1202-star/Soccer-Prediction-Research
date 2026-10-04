@@ -63,30 +63,24 @@ def test_locked_match_ids_are_deterministic_and_suffix_based():
     assert ids == {f"m{i}" for i in range(24, 32)}
 
 
-
 def test_locked_match_ids_keep_shared_kickoff_rows_together():
-    kickoff = pd.date_range(
-        "2026-01-01T00:00:00Z",
-        periods=32,
-        freq="h",
-    ).to_series(index=range(32))
-    kickoff.iloc[29] = kickoff.iloc[28]
-    kickoff = pd.Series(kickoff)
-    n = len(kickoff)
+    n = 34
+    kickoff = pd.date_range("2026-01-01T00:00:00Z", periods=n, freq="h").to_series()
+    kickoff.iloc[26] = kickoff.iloc[25]
     frame = pd.DataFrame(
         {
             "match_id": [f"m{i}" for i in range(n)],
-            "kickoff_utc": kickoff,
-            "target": [0, 1, 2] * 10 + [0, 1],
+            "kickoff_utc": kickoff.to_numpy(),
+            "target": [0, 1, 2] * 11 + [0],
             "pit_verified": [True] * n,
-            "prediction_cutoff_at_utc": kickoff - pd.Timedelta(minutes=60),
-            "feature_source_max_available_at_utc": kickoff - pd.Timedelta(minutes=120),
+            "prediction_cutoff_at_utc": kickoff.to_numpy() - pd.Timedelta(minutes=60),
+            "feature_source_max_available_at_utc": kickoff.to_numpy() - pd.Timedelta(minutes=120),
         }
     )
     ids = _locked_match_ids(frame, min_train=2, oos_block=4)
-    assert {"m29", "m30"}.issubset(ids)
-    assert "m28" in ids
-    assert "m31" in ids
+    assert "m25" not in ids
+    assert "m26" not in ids
+    assert "m27" in ids
 
 
 def test_status_is_research_only_contract(tmp_path):
