@@ -1,6 +1,8 @@
 name: Soccer PIT Replay Audit
 
 on:
+  schedule:
+    - cron: "17 1 * * *"
   workflow_dispatch:
     inputs:
       competition:
@@ -13,6 +15,22 @@ on:
         required: true
         default: "1"
         type: string
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/data/pit_source_adapter.py"
+      - "src/data/pit_source_adapter_v2.py"
+      - "src/data/pit_source_adapter_fast.py"
+      - "src/data/pit_archive_fallback.py"
+      - "src/data/pit_evidence.py"
+      - "src/data/source_registry.py"
+      - "src/data/football_data.py"
+      - "src/research/pit_replay_audit.py"
+      - "tests/test_pit_source_adapter.py"
+      - "tests/test_pit_feature_replay.py"
+      - "tests/test_pit_evidence.py"
+      - "tests/test_source_registry.py"
+      - ".github/workflows/pit-replay-audit.yml"
   push:
     paths:
       - "src/data/pit_source_adapter.py"
@@ -85,9 +103,6 @@ jobs:
           python -m src.research.pit_replay_audit --competition "$AUDIT_COMPETITION" --rows-per-season "$AUDIT_ROWS_PER_SEASON"
           code=$?
           set -e
-          # Exit code 2 is the canonical BLOCKED result for insufficient PIT evidence.
-          # Preserve real implementation/runtime failures as non-zero so they cannot
-          # be mistaken for an expected evidence shortage.
           if [ "$code" -eq 2 ]; then
             echo "PIT replay audit is BLOCKED: archived evidence is insufficient; production/OOS remain gated."
             exit 0
@@ -103,7 +118,4 @@ jobs:
           retention-days: 3
 
 # PIT remains a hard production gate: a BLOCKED audit never authorizes OOS/model adoption.
-# This workflow is diagnostic, so insufficient archived evidence is recorded in artifacts
-# instead of being misclassified as an Actions infrastructure failure.
-# Multi-source registry is metadata only; actual row/field coverage remains evidence-driven.
-# Provider-neutral evidence validation is intentionally separate from archive acquisition.
+# Scheduled replay is diagnostic and does not mutate production or frozen holdout evidence.
