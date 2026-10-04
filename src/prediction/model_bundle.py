@@ -26,6 +26,31 @@ from src.prediction.secondary_outputs import (
 )
 
 
+FEATURE_MANIFEST_VERSION = "soccer-feature-contract-v1"
+FEATURE_POLICY_VERSION = "soccer-feature-policy-v1"
+TARGET_CONTRACT_VERSION = "soccer-target-contract-v1"
+
+
+def _feature_schema_hash(feature_cols: list[str]) -> str:
+    """Hash the ordered model feature list used by the bundle."""
+    import hashlib
+    import json
+
+    payload = json.dumps(list(feature_cols), ensure_ascii=False, separators=(",", ":"), sort_keys=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _build_feature_contract(feature_cols: list[str], data_snapshot_id: str) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "manifest_version": FEATURE_MANIFEST_VERSION,
+        "policy_version": FEATURE_POLICY_VERSION,
+        "schema_hash": _feature_schema_hash(feature_cols),
+        "source_snapshot_id": str(data_snapshot_id),
+        "target_version": TARGET_CONTRACT_VERSION,
+    }
+
+
 def _temperature_transform(proba: np.ndarray, temperature: float) -> np.ndarray:
     p = np.clip(np.asarray(proba, dtype=float), 1e-9, 1.0)
     logits = np.log(p) / float(temperature)
@@ -271,11 +296,13 @@ def train_and_save_bundle(
             **({"dynamic_routing": dynamic_routing} if dynamic_routing is not None else {}),
         }
 
+    feature_contract = _build_feature_contract(feature_cols, data_snapshot_id)
     bundle = {
         "schema_version": 3 if routing_policy is not None else (2 if score_model is not None else 1),
         "model_version": model_version,
         "data_snapshot_id": data_snapshot_id,
         "feature_cols": list(feature_cols),
+        "feature_contract": feature_contract,
         "weights": weights,
         "temperature": temperature,
         "models": fitted,
@@ -313,6 +340,7 @@ def train_and_save_bundle(
         "score_method": selected_score_method,
         "score_method_by_competition": score_method_by_competition,
         "routing_policy": routing_policy,
+        "feature_contract": feature_contract,
     }
 
 
@@ -355,6 +383,21 @@ def load_bundle(path: str = "artifacts/production_model.pkl") -> dict[str, Any]:
         raise RuntimeError("Production model bundle schema 2 requires score_model")
 
     if bundle["schema_version"] >= 3:
+        feature_contract = bundle.get("feature_contract")
+        if not isinstance(feature_contract, dict):
+            raise RuntimeError("Production model bundle schema 3 requires feature_contract")
+        if feature_contract.get("schema_version") != 1:
+            raise RuntimeError("Production feature_contract schema_version must be 1")
+        if str(feature_contract.get("manifest_version")) != FEATURE_MANIFEST_VERSION:
+            raise RuntimeError("Production feature manifest version is unsupported")
+        if str(feature_contract.get("policy_version")) != FEATURE_POLICY_VERSION:
+            raise RuntimeError("Production feature policy version is unsupported")
+        if str(feature_contract.get("target_version")) != TARGET_CONTRACT_VERSION:
+            raise RuntimeError("Production target contract version is unsupported")
+        if str(feature_contract.get("source_snapshot_id")) != str(bundle.get("data_snapshot_id")):
+            raise RuntimeError("Production feature contract source snapshot mismatch")
+        if str(feature_contract.get("schema_hash")) != _feature_schema_hash(feature_cols):
+            raise RuntimeError("Production feature contract schema hash mismatch")
         routing = bundle.get("routing_policy")
         if not isinstance(routing, dict):
             raise RuntimeError("Production model bundle schema 3 requires routing_policy")
