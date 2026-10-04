@@ -2,7 +2,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.prediction.model_bundle import load_bundle, predict_bundle, train_and_save_bundle
+from src.prediction.model_bundle import (
+    FEATURE_MANIFEST_VERSION,
+    FEATURE_POLICY_VERSION,
+    TARGET_CONTRACT_VERSION,
+    _feature_schema_hash,
+    load_bundle,
+    predict_bundle,
+    train_and_save_bundle,
+)
 
 
 def _fixture():
@@ -33,6 +41,11 @@ def test_bundle_roundtrip_and_probability_sums(tmp_path):
     assert probs.shape == (10, 3)
     assert np.all(np.isfinite(probs))
     assert np.allclose(probs.sum(axis=1), 1.0)
+    assert bundle["feature_contract"]["manifest_version"] == FEATURE_MANIFEST_VERSION
+    assert bundle["feature_contract"]["policy_version"] == FEATURE_POLICY_VERSION
+    assert bundle["feature_contract"]["target_version"] == TARGET_CONTRACT_VERSION
+    assert bundle["feature_contract"]["schema_hash"] == _feature_schema_hash(["f1", "f2"])
+    assert bundle["feature_contract"]["source_snapshot_id"] == "snapshot-1"
 
 
 def test_bundle_rejects_missing_features(tmp_path):
@@ -357,3 +370,26 @@ def test_bundle_accepts_matchday_policy_pass_with_locked_oos_evidence(tmp_path):
     )
     bundle = load_bundle(str(path))
     assert bundle["matchday_policy"] == policy
+
+
+
+def test_load_bundle_rejects_tampered_feature_contract(tmp_path):
+    df = _fixture()
+    path = tmp_path / "production_model.pkl"
+    train_and_save_bundle(
+        df,
+        ["f1", "f2"],
+        {"weights": {"logistic": 0.5, "extra_trees": 0.5}, "temperature": 1.0,
+         "context_weights": {"GLOBAL": {"logistic": 0.5, "extra_trees": 0.5}}},
+        str(path),
+        "test-version",
+        "snapshot-1",
+    )
+    with path.open("rb") as fh:
+        bundle = __import__("pickle").load(fh)
+    assert bundle["schema_version"] == 3
+    bundle["feature_contract"]["schema_hash"] = "0" * 64
+    with path.open("wb") as fh:
+        __import__("pickle").dump(bundle, fh)
+    with pytest.raises(RuntimeError, match="feature contract schema hash mismatch"):
+        load_bundle(str(path))
