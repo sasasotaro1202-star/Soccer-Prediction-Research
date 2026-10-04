@@ -29,3 +29,10 @@ def test_real_numeric_change_is_semantic():
 def test_non_json_text_is_exact():
     assert semantic_json_equal("plain", "plain")
     assert not semantic_json_equal("plain", "changed")
+
+
+def test_missing_optional_path_is_not_a_semantic_change(monkeypatch):
+    from scripts import experience_commit_guard as guard
+
+    monkeypatch.setattr(guard, "_run_git", lambda *args: None)
+    assert guard.staged_semantic_change("optional/missing.json") is False
