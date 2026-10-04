@@ -1,0 +1,159 @@
+name: Autonomous GitHub Controller
+
+on:
+  schedule:
+    - cron: "7 */6 * * *"
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Soccer CI
+      - Soccer PIT Replay Audit
+      - Overnight Integrity
+      - Soccer Ultimate Experiment Matrix
+      - Soccer Feature Set Research
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: soccer-autonomous-controller
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Reconcile safe hardening PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          api() {
+            gh api "$@"
+          }
+
+          main_sha="$(api "repos/${GH_REPO}/git/ref/heads/main" --jq '.object.sha')"
+          now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          report="controller-report.json"
+
+          cat > "${report}" <<EOF
+          {
+            "controller": "Autonomous GitHub Controller",
+            "run_id": "${GITHUB_RUN_ID}",
+            "evaluated_at_utc": "${now}",
+            "main_sha": "${main_sha}",
+            "auto_merge_policy": "hardening-safe-v1",
+            "production_change_allowed": false,
+            "frozen_holdout_access_allowed": false,
+            "performance_claim_allowed": false,
+            "decisions": []
+          }
+          EOF
+
+          mapfile -t pr_numbers < <(
+            gh pr list --repo "${GH_REPO}" --state open --base main --limit 50 --json number --jq '.[].number'
+          )
+
+          for number in "${pr_numbers[@]:-}"; do
+            [ -n "${number}" ] || continue
+
+            pr_json="$(gh pr view "${number}" --repo "${GH_REPO}" --json number,title,body,isDraft,baseRefName,baseRefOid,headRefName,headRefOid,headRepository,mergeStateStatus)"
+            body="$(jq -r '.body // ""' <<<"${pr_json}")"
+            base_ref="$(jq -r '.baseRefName' <<<"${pr_json}")"
+            base_oid="$(jq -r '.baseRefOid' <<<"${pr_json}")"
+            head_ref="$(jq -r '.headRefName' <<<"${pr_json}")"
+            head_oid="$(jq -r '.headRefOid' <<<"${pr_json}")"
+            head_repo="$(jq -r '.headRepository.nameWithOwner // ""' <<<"${pr_json}")"
+            title="$(jq -r '.title' <<<"${pr_json}")"
+
+            [ "${base_ref}" = "main" ] || continue
+            [ "${base_oid}" = "${main_sha}" ] || continue
+            [ "${head_repo}" = "${GH_REPO}" ] || continue
+            [[ "${head_ref}" == hardening/* ]] || continue
+            [[ "${title,,}" == hardening:* ]] || continue
+            jq -e '.isDraft == false' <<<"${pr_json}" >/dev/null || continue
+
+            for marker in               "automation_policy: hardening-safe-v1"               "Production changed=False"               "No OOS tuning or holdout access"               "Candidate remains non-production"               "No model, feature, calibration, target, or production bundle change."; do
+              grep -Fq "${marker}" <<<"${body}" || { continue 2; }
+            done
+
+            changed="$(gh pr diff "${number}" --repo "${GH_REPO}" --name-only)"
+            unsafe=0
+            pit_sensitive=0
+            while IFS= read -r path; do
+              [ -n "${path}" ] || continue
+              case "${path}" in
+                src/research/adoption_gate.py|src/research/stability_gate.py|src/data/pit_source_adapter.py|src/data/pit_source_adapter_v2.py|src/data/pit_source_adapter_fast.py|src/data/pit_archive_fallback.py|src/data/pit_evidence.py|.github/workflows/action-failure-recovery.yml|.github/workflows/pit-replay-audit.yml)
+                  case "${path}" in
+                    src/data/pit_*|.github/workflows/pit-replay-audit.yml)
+                      pit_sensitive=1
+                      ;;
+                  esac
+                  ;;
+                tests/*|docs/*)
+                  ;;
+                *)
+                  unsafe=1
+                  ;;
+              esac
+            done <<< "${changed}"
+            [ "${unsafe}" -eq 0 ] || continue
+
+            checks="$(api "repos/${GH_REPO}/commits/${head_oid}/check-runs?per_page=100")"
+            statuses="$(api "repos/${GH_REPO}/commits/${head_oid}/status?per_page=100")"
+
+            pending_or_bad_checks="$(jq '[.check_runs[]? | select(.name != "Autonomous GitHub Controller" and .name != "Safe Hardening Auto-Merge") | select(.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped"))] | length' <<<"${checks}")"
+            check_count="$(jq '[.check_runs[]? | select(.name != "Autonomous GitHub Controller" and .name != "Safe Hardening Auto-Merge")] | length' <<<"${checks}")"
+            # Check workflow-level evidence by workflow file, not by job/check-run display name.
+            # The current Soccer CI job is named `test`, so requiring a check-run named
+            # `Soccer CI` would silently disable the controller. Workflow-name lookup is
+            # more robust to job renames while remaining pinned to the exact PR head SHA.
+            ci_runs="$(gh run list --repo "${GH_REPO}" --workflow "ci.yml" --commit "${head_oid}" --limit 20 --json status,conclusion,databaseId)"
+            pit_runs="$(gh run list --repo "${GH_REPO}" --workflow "pit-replay-audit.yml" --commit "${head_oid}" --limit 20 --json status,conclusion,databaseId)"
+            soccer_ci_ok="$(jq '[.[]? | select(.status == "completed" and .conclusion == "success")] | length' <<<"${ci_runs}")"
+            pit_ok="$(jq '[.[]? | select(.status == "completed" and .conclusion == "success")] | length' <<<"${pit_runs}")"
+            bad_statuses="$(jq '[.statuses[]? | select(.state != "success")] | length' <<<"${statuses}")"
+
+            [ "${check_count}" -gt 0 ] || continue
+            [ "${pending_or_bad_checks}" -eq 0 ] || continue
+            [ "${soccer_ci_ok}" -gt 0 ] || continue
+            [ "${bad_statuses}" -eq 0 ] || continue
+            if [ "${pit_sensitive}" -eq 1 ]; then
+              [ "${pit_ok}" -gt 0 ] || continue
+            fi
+
+            current_main="$(api "repos/${GH_REPO}/git/ref/heads/main" --jq '.object.sha')"
+            final_pr="$(gh pr view "${number}" --repo "${GH_REPO}" --json baseRefOid,headRefOid,mergeStateStatus)"
+            final_base="$(jq -r '.baseRefOid' <<<"${final_pr}")"
+            final_head="$(jq -r '.headRefOid' <<<"${final_pr}")"
+            final_state="$(jq -r '.mergeStateStatus' <<<"${final_pr}")"
+
+            [ "${current_main}" = "${main_sha}" ] || continue
+            [ "${final_base}" = "${main_sha}" ] || continue
+            [ "${final_head}" = "${head_oid}" ] || continue
+            [ "${final_state}" = "CLEAN" ] || continue
+
+            if gh pr merge "${number}" --repo "${GH_REPO}" --squash --delete-branch --match-head-commit "${head_oid}"; then
+              jq --arg n "${number}" --arg sha "${head_oid}"                 '.decisions += [{"pr":($n|tonumber),"decision":"MERGED","head_sha":$sha}]'                 "${report}" > "${report}.tmp"
+              mv "${report}.tmp" "${report}"
+            fi
+          done
+
+      - name: Upload controller evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-autonomous-controller-${{ github.run_id }}
+          path: controller-report.json
+          retention-days: 14
+
+# Automatic merging is restricted to explicitly marked, same-repository hardening PRs.
+# Research-engine/data-pipeline/feature/model/calibration/target/controller changes are not in the auto-merge allowlist.
+# Any missing, pending, failed, stale, or ambiguous evidence results in HOLD.
