@@ -52,3 +52,10 @@ def test_orchestrator_does_not_allow_performance_or_holdout_mutation():
     assert "gh pr merge" not in text
 
 
+
+
+def test_main_sha_export_precedes_report_initialization():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    export_pos = text.index('export MAIN_SHA="${main_sha}"')
+    report_pos = text.index("python - <<'PY' > \"$report\"")
+    assert export_pos < report_pos
