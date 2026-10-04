@@ -111,8 +111,14 @@ jobs:
 
             pending_or_bad_checks="$(jq '[.check_runs[]? | select(.name != "Autonomous GitHub Controller" and .name != "Safe Hardening Auto-Merge") | select(.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped"))] | length' <<<"${checks}")"
             check_count="$(jq '[.check_runs[]? | select(.name != "Autonomous GitHub Controller" and .name != "Safe Hardening Auto-Merge")] | length' <<<"${checks}")"
-            soccer_ci_ok="$(jq '[.check_runs[]? | select(.name == "Soccer CI" and .status == "completed" and .conclusion == "success")] | length' <<<"${checks}")"
-            pit_ok="$(jq '[.check_runs[]? | select(.name == "Soccer PIT Replay Audit" and .status == "completed" and .conclusion == "success")] | length' <<<"${checks}")"
+            # Check workflow-level evidence by workflow file, not by job/check-run display name.
+            # The current Soccer CI job is named `test`, so requiring a check-run named
+            # `Soccer CI` would silently disable the controller. Workflow-name lookup is
+            # more robust to job renames while remaining pinned to the exact PR head SHA.
+            ci_runs="$(gh run list --repo "${GH_REPO}" --workflow "ci.yml" --commit "${head_oid}" --limit 20 --json status,conclusion,databaseId)"
+            pit_runs="$(gh run list --repo "${GH_REPO}" --workflow "pit-replay-audit.yml" --commit "${head_oid}" --limit 20 --json status,conclusion,databaseId)"
+            soccer_ci_ok="$(jq '[.[]? | select(.status == "completed" and .conclusion == "success")] | length' <<<"${ci_runs}")"
+            pit_ok="$(jq '[.[]? | select(.status == "completed" and .conclusion == "success")] | length' <<<"${pit_runs}")"
             bad_statuses="$(jq '[.statuses[]? | select(.state != "success")] | length' <<<"${statuses}")"
 
             [ "${check_count}" -gt 0 ] || continue
