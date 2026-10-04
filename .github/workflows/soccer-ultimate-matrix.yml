@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: soccer-ultimate-matrix
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   ultimate-matrix:
