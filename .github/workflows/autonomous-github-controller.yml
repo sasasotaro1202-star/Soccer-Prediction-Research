@@ -74,15 +74,30 @@ jobs:
             title="$(jq -r '.title' <<<"${pr_json}")"
 
             [ "${base_ref}" = "main" ] || continue
-            [ "${base_oid}" = "${main_sha}" ] || continue
             [ "${head_repo}" = "${GH_REPO}" ] || continue
             [[ "${head_ref}" == hardening/* ]] || continue
             [[ "${title,,}" == hardening:* ]] || continue
             jq -e '.isDraft == false' <<<"${pr_json}" >/dev/null || continue
 
-            for marker in               "automation_policy: hardening-safe-v1"               "Production changed=False"               "No OOS tuning or holdout access"               "Candidate remains non-production"               "No model, feature, calibration, target, or production bundle change."; do
-              grep -Fq "${marker}" <<<"${body}" || { continue 2; }
+            for marker in \
+              "automation_policy: hardening-safe-v1" \
+              "Production changed=False" \
+              "No OOS tuning or holdout access" \
+              "Candidate remains non-production" \
+              "No model, feature, calibration, target, or production bundle change."; do
+              grep -Fq "${marker}" <<<"${body}" || continue 2
             done
+
+            # Only an explicitly marked, non-draft, same-repository hardening PR
+            # may be retargeted from an older main base. Research/performance PRs
+            # are never rewritten by the controller.
+            if [ "${base_oid}" != "${main_sha}" ]; then
+              gh api --method PATCH "repos/${GH_REPO}/pulls/${number}" \
+                -f base=main >/dev/null
+              pr_json="$(gh pr view "${number}" --repo "${GH_REPO}" --json number,title,body,isDraft,baseRefName,baseRefOid,headRefName,headRefOid,headRepository,mergeStateStatus)"
+              base_oid="$(jq -r ".baseRefOid" <<<"${pr_json}")"
+            fi
+            [ "${base_oid}" = "${main_sha}" ] || continue
 
             changed="$(gh pr diff "${number}" --repo "${GH_REPO}" --name-only)"
             unsafe=0
@@ -90,7 +105,7 @@ jobs:
             while IFS= read -r path; do
               [ -n "${path}" ] || continue
               case "${path}" in
-                src/research/adoption_gate.py|src/research/stability_gate.py|src/data/pit_source_adapter.py|src/data/pit_source_adapter_v2.py|src/data/pit_source_adapter_fast.py|src/data/pit_archive_fallback.py|src/data/pit_evidence.py|.github/workflows/action-failure-recovery.yml|.github/workflows/pit-replay-audit.yml)
+                src/research/adoption_gate.py|src/research/stability_gate.py|src/data/pit_source_adapter.py|src/data/pit_source_adapter_v2.py|src/data/pit_source_adapter_fast.py|src/data/pit_archive_fallback.py|src/data/pit_evidence.py|scripts/experience_commit_guard.py|.github/workflows/action-failure-recovery.yml|.github/workflows/pit-replay-audit.yml|.github/workflows/soccer-autonomous-orchestrator.yml)
                   case "${path}" in
                     src/data/pit_*|.github/workflows/pit-replay-audit.yml)
                       pit_sensitive=1
@@ -155,5 +170,6 @@ jobs:
           retention-days: 14
 
 # Automatic merging is restricted to explicitly marked, same-repository hardening PRs.
+# The state-based orchestrator and narrowly scoped experience guard are allowlisted here.
 # Research-engine/data-pipeline/feature/model/calibration/target/controller changes are not in the auto-merge allowlist.
 # Any missing, pending, failed, stale, or ambiguous evidence results in HOLD.

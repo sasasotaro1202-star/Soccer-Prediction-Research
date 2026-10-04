@@ -22,6 +22,6 @@ def test_pit_replay_workflow_treats_exit_2_as_blocked_diagnostic_only():
     text = WORKFLOW.read_text(encoding="utf-8")
     block = text.split("Run small PIT replay audit", 1)[1]
     block = block.split("Upload PIT audit artifacts", 1)[0]
-    assert "canonical BLOCKED result" in block
+    assert "PIT replay audit is BLOCKED" in block
     assert 'exit 0' in block
     assert 'exit "$code"' in block
