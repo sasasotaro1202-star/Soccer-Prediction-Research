@@ -129,7 +129,8 @@ def test_level_only_variant_removes_difference_features_without_emptying_set():
     frame = _frame()
     cols, _ = select_feature_set(frame, "levels_only")
     assert cols
-    assert "home_elo" in cols
+    assert "home_elo" not in cols
+    assert "home_elo_expected" in cols
     assert "away_elo" in cols
     assert "elo_diff" not in cols
     assert "dynamic_elo_diff" not in cols
