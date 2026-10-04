@@ -723,8 +723,9 @@ def run_walk_forward(
         raise ValueError(f"Unsupported calibration_mode: {calibration_mode}")
     if routing_mode not in {"global", "context", "dynamic"}:
         raise ValueError(f"Unsupported routing_mode: {routing_mode}")
-    if prediction_mode not in {"ensemble", "best_single"}:
+    if prediction_mode not in {"ensemble", "best_single"} and not prediction_mode.startswith("fixed:"):
         raise ValueError(f"Unsupported prediction_mode: {prediction_mode}")
+    fixed_model_name = prediction_mode.split(":", 1)[1] if prediction_mode.startswith("fixed:") else None
     if max_train_rows is not None and int(max_train_rows) < 600:
         raise ValueError("max_train_rows must be >= 600 when provided")
     if oos_block is None:
@@ -793,7 +794,9 @@ def run_walk_forward(
             selection_probs,
             anchor_weights,
         )
-        best = min(scores, key=lambda k: scores[k]["logloss"])
+        best = fixed_model_name if fixed_model_name is not None else min(scores, key=lambda k: scores[k]["logloss"])
+        if best not in validation_models:
+            raise ValueError(f"Requested fixed prediction model is unavailable: {best}")
         context_weights, context_reasons = _contextual_blend_weights(
             val_select,
             validation_models,
@@ -836,10 +839,17 @@ def run_walk_forward(
                 _calibration_routes,
                 calibration_temperature,
             )
+        effective_validation_temperatures = (
+            contextual_temperatures
+            if calibration_mode in {"context", "full"}
+            else {"GLOBAL": calibration_temperature}
+            if calibration_mode == "global"
+            else {"GLOBAL": 1.0}
+        )
         context_calibrated = _apply_contextual_temperatures(
             val_probs,
             _calibration_routes,
-            contextual_temperatures if calibration_mode in {"context", "full"} else {"GLOBAL": 1.0},
+            effective_validation_temperatures,
             calibration_temperature if calibration_mode in {"global", "context", "full"} else 1.0,
         )
         if calibration_mode == "full":
@@ -897,10 +907,15 @@ def run_walk_forward(
         probs = np.clip(probs, 1e-9, 1.0)
         probs /= probs.sum(axis=1, keepdims=True)
         if calibration_mode in {"global", "context", "full"}:
+            effective_oos_temperatures = (
+                contextual_temperatures
+                if calibration_mode in {"context", "full"}
+                else {"GLOBAL": calibration_temperature}
+            )
             probs = _apply_contextual_temperatures(
                 probs,
                 _oos_routes,
-                contextual_temperatures if calibration_mode in {"context", "full"} else {"GLOBAL": 1.0},
+                effective_oos_temperatures,
                 calibration_temperature,
             )
         if calibration_mode == "full":
