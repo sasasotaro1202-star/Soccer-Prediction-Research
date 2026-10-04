@@ -217,7 +217,8 @@ class FootballDataWaybackAdapter(_BaseAdapter):
         for capture in captures:
             ts = _utc(capture.get("timestamp"))
             if ts is None or ts < min_search_bound:
-                continue            digest = capture.get("digest") or f"{capture.get('timestamp','')}|{capture.get('original','')}"
+                continue
+            digest = capture.get("digest") or f"{capture.get('timestamp','')}|{capture.get('original','')}"
             previous = unique.get(digest)
             # PIT requires the earliest observation of identical content, not the latest.
             if previous is None or (_utc(previous.get("timestamp")) or ts) > ts:
