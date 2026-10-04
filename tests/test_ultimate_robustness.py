@@ -63,6 +63,38 @@ def test_locked_match_ids_are_deterministic_and_suffix_based():
     assert ids == {f"m{i}" for i in range(12, 16)}
 
 
+
+def test_locked_match_ids_move_boundary_past_shared_kickoff():
+    kickoff = pd.to_datetime(
+        [
+            "2026-01-01T00:00:00Z",
+            "2026-01-01T01:00:00Z",
+            "2026-01-01T02:00:00Z",
+            "2026-01-01T03:00:00Z",
+            "2026-01-01T04:00:00Z",
+            "2026-01-01T05:00:00Z",
+            "2026-01-01T06:00:00Z",
+            "2026-01-01T07:00:00Z",
+            "2026-01-01T08:00:00Z",
+        ],
+        utc=True,
+    )
+    kickoff = pd.Series(kickoff)
+    kickoff.iloc[1] = kickoff.iloc[0]
+    frame = pd.DataFrame(
+        {
+            "match_id": [f"m{i}" for i in range(len(kickoff))],
+            "kickoff_utc": kickoff,
+            "target": [0, 1, 2] * 3,
+            "pit_verified": [True] * len(kickoff),
+            "prediction_cutoff_at_utc": kickoff - pd.Timedelta(minutes=60),
+            "feature_source_max_available_at_utc": kickoff - pd.Timedelta(minutes=120),
+        }
+    )
+    ids = _locked_match_ids(frame, min_train=2, oos_block=2)
+    assert "m8" in ids
+    assert "m7" not in ids
+
 def test_status_is_research_only_contract(tmp_path):
     status = {
         "status": "RESEARCH_EXECUTED",
