@@ -17,7 +17,7 @@ env:
 
 concurrency:
   group: soccer-feature-set-research
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   feature-set-research:
