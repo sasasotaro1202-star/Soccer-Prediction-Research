@@ -8,6 +8,17 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 
+# Models that can consume every declared feature representation without
+# requiring specialist columns (for example Elo differences removed by levels-only variants).
+FEATURE_SCREEN_MODELS = (
+    "logistic",
+    "logistic_select",
+    "extra_trees",
+    "random_forest",
+    "hist_gb",
+)
+
+
 MODEL_META_COLUMNS = {
     "match_id",
     "competition",
@@ -559,13 +570,7 @@ def run_feature_set_research(
     # Keep the feature-set screen model set compatible across every declared
     # representation. Elo-specialist candidates are evaluated later in the
     # dedicated model-ecology stage.
-    models = list(model_names or (
-        "logistic",
-        "logistic_select",
-        "extra_trees",
-        "random_forest",
-        "hist_gb",
-    ))
+    models = list(model_names or FEATURE_SCREEN_MODELS)
     manifest_path = out / "feature_variant_catalog.json"
     manifest_path.write_text(
         json.dumps(
