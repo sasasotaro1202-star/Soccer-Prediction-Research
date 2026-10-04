@@ -90,9 +90,9 @@ jobs:
             while IFS= read -r path; do
               [ -n "${path}" ] || continue
               case "${path}" in
-                src/research/adoption_gate.py|src/research/stability_gate.py|src/research/engine.py|src/data/pit_source_adapter.py|src/data/pit_source_adapter_v2.py|src/data/pit_source_adapter_fast.py|src/data/pit_archive_fallback.py|src/data/pit_evidence.py|src/data/source_registry.py|src/data/football_data.py)
+                src/research/adoption_gate.py|src/research/stability_gate.py|src/data/pit_source_adapter.py|src/data/pit_source_adapter_v2.py|src/data/pit_source_adapter_fast.py|src/data/pit_archive_fallback.py|src/data/pit_evidence.py|.github/workflows/action-failure-recovery.yml|.github/workflows/pit-replay-audit.yml)
                   case "${path}" in
-                    src/data/pit_*|src/data/source_registry.py|src/data/football_data.py)
+                    src/data/pit_*|.github/workflows/pit-replay-audit.yml)
                       pit_sensitive=1
                       ;;
                   esac
@@ -149,5 +149,5 @@ jobs:
           retention-days: 14
 
 # Automatic merging is restricted to explicitly marked, same-repository hardening PRs.
-# Production/model/prediction/feature-selection/registry changes are not in the auto-merge allowlist.
+# Research-engine/data-pipeline/feature/model/calibration/target/controller changes are not in the auto-merge allowlist.
 # Any missing, pending, failed, stale, or ambiguous evidence results in HOLD.
