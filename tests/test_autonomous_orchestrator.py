@@ -66,3 +66,8 @@ def test_orchestrator_supplies_required_pit_replay_inputs():
     assert "pit-replay-audit.yml)" in text
     assert "-f competition=EPL" in text
     assert "-f rows_per_season=1" in text
+
+
+def test_orchestrator_includes_match_state_research_lane():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert 'ensure_lane "soccer-match-state-research.yml" 360 60' in text
