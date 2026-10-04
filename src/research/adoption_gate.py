@@ -63,8 +63,9 @@ def independent_adoption_gate(
 ) -> dict[str, Any]:
     """Fail-closed independent-OOS adoption gate.
 
-    A candidate is adoptable only when the holdout is explicitly locked and
-    selection-independent, PIT violations are explicitly zero, the same-OOS
+    A candidate is adoptable only when the development evidence explicitly
+    identifies a development-OOS evaluation, the holdout is explicitly locked
+    and selection-independent, PIT violations are explicitly zero, the same-OOS
     baseline comparison shows at least the project reference improvement, and
     chronological stability evidence passes across multiple folds/leagues/seasons.
     """
@@ -77,10 +78,10 @@ def independent_adoption_gate(
             "promotion_authority": "deterministic_research_engine",
         }
 
-    if not development:
+    if not isinstance(development, Mapping) or development.get("development_oos") is not True:
         return {
             "status": "HOLD",
-            "reason": "development_evidence_missing",
+            "reason": "development_evidence_missing_or_invalid",
             "oos_claimed": False,
             "promotion_authority": "deterministic_research_engine",
         }
@@ -215,5 +216,3 @@ def independent_adoption_gate(
         "stability": stability_result,
         "promotion_authority": "deterministic_research_engine",
     }
-
-
