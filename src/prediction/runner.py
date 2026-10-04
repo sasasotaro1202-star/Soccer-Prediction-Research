@@ -203,8 +203,28 @@ def _require_fresh_matchday_snapshot(
         raise RuntimeError(f"Latest matchday refresh status is unreadable: {type(exc).__name__}: {exc}") from exc
     if not isinstance(status, dict):
         raise RuntimeError("Latest matchday refresh status must be a JSON object")
-    if str(status.get("status", "")).upper() != "COLLECTED":
-        raise RuntimeError("Latest prediction requires a successful current matchday refresh; status={!r}".format(status.get("status")))
+    status_name = str(status.get("status", "")).upper()
+    errors = status.get("errors") or []
+    if status_name == "COLLECTED":
+        if errors:
+            raise RuntimeError(
+                "Latest matchday refresh is internally inconsistent: "
+                "COLLECTED status contains source errors"
+            )
+    elif status_name == "COLLECTED_WITH_ERRORS":
+        observed_sources = status.get("discovery_sources_observed") or []
+        redundancy_ok = status.get("discovery_source_redundancy_ok") is True
+        if not observed_sources or not redundancy_ok:
+            raise RuntimeError(
+                "Latest matchday refresh has partial source failure without a successful "
+                "discovery source; refusing production prediction"
+            )
+    else:
+        raise RuntimeError(
+            "Latest prediction requires a successful current matchday refresh; status={!r}".format(
+                status.get("status")
+            )
+        )
     finished = pd.to_datetime(status.get("snapshot_finished_at_utc"), utc=True, errors="coerce")
     if pd.isna(finished):
         raise RuntimeError("Latest matchday refresh has no valid snapshot_finished_at_utc")
