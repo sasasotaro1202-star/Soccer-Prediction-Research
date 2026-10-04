@@ -156,3 +156,16 @@ def test_pit_training_filter_fails_closed_on_invalid_timestamp():
         filter_prior_mature_training(
             frame, pd.Timestamp("2026-01-01T10:00:00Z")
         )
+
+
+def test_pit_training_filter_rejects_maturity_before_own_prediction_cutoff():
+    from src.research.pit_training import filter_prior_mature_training
+
+    frame = pd.DataFrame({
+        "prediction_pit_cutoff_utc": ["2026-01-01T10:00:00Z"],
+        "experience_available_at_utc": ["2026-01-01T09:00:00Z"],
+    })
+    with pytest.raises(RuntimeError, match="outcome maturity"):
+        filter_prior_mature_training(
+            frame, pd.Timestamp("2026-01-01T12:00:00Z")
+        )
