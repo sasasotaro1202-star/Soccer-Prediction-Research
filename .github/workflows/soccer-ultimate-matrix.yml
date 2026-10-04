@@ -136,6 +136,54 @@ jobs:
             --min-train 2000 \
             --oos-block 4000
 
+      - name: Run winner robustness and case-level diagnostics
+        id: robustness
+        if: success()
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: |
+          set -euo pipefail
+          test -s artifacts/pit_replay_features.csv
+          test -s artifacts/ultimate_matrix/ultimate_matrix_status.json
+          mkdir -p artifacts/ultimate_robustness
+          python -m src.research.ultimate_robustness \
+            --input artifacts/pit_replay_features.csv \
+            --winner artifacts/ultimate_matrix/ultimate_matrix_status.json \
+            --output-dir artifacts/ultimate_robustness \
+            --min-train 2000 \
+            --oos-block 4000
+
+      - name: Enforce robustness diagnostic contract
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -s artifacts/ultimate_robustness/ultimate_robustness_status.json ]; then
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          state = json.loads(
+              Path("artifacts/ultimate_robustness/ultimate_robustness_status.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          if state.get("selection_authority") != "upstream_ultimate_matrix_only":
+              raise SystemExit("ROBUSTNESS CONTRACT FAILED: selection authority changed")
+          if state.get("robustness_is_diagnostic_not_selection") is not True:
+              raise SystemExit("ROBUSTNESS CONTRACT FAILED: diagnostic-only flag missing")
+          if state.get("frozen_holdout_used_for_selection") is not False:
+              raise SystemExit("ROBUSTNESS CONTRACT FAILED: frozen holdout selection violation")
+          if state.get("locked_oos_used_for_selection") is not False:
+              raise SystemExit("ROBUSTNESS CONTRACT FAILED: locked OOS selection violation")
+          if state.get("production_changed") is not False:
+              raise SystemExit("ROBUSTNESS CONTRACT FAILED: production changed")
+          print("ROBUSTNESS DIAGNOSTIC CONTRACT PASS")
+          PY
+          else
+            echo "No robustness status produced; upstream matrix did not execute."
+          fi
+
       - name: Publish matrix summary
         if: always()
         shell: bash
