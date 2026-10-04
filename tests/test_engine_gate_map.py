@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from src.research.engine import _build_research_gates
+from src.research.engine import _build_research_gates, _build_stability_folds
 
 
 def _write_json(path, payload):
@@ -110,3 +110,30 @@ def test_build_research_gates_blocks_prediction_without_adoption(tmp_path):
     )
     assert gates["oos"] is True
     assert gates["prediction"] is False
+
+
+def test_stability_fold_builder_accepts_development_oos_only():
+    frame = pd.DataFrame(
+        {
+            "leagues": ["EPL", "Bundesliga", "Serie A"],
+            "seasons": ["2022", "2023", "2024"],
+            "oos_start": ["2024-01-01", "2024-02-01", "2024-03-01"],
+            "oos_end": ["2024-01-31", "2024-02-29", "2024-03-31"],
+            "baseline_logistic_logloss": [1.0, 1.0, 1.0],
+            "baseline_logistic_brier": [0.25, 0.25, 0.25],
+            "baseline_logistic_accuracy": [0.50, 0.50, 0.50],
+            "logloss": [0.95, 0.96, 0.97],
+            "brier": [0.24, 0.24, 0.24],
+            "accuracy": [0.51, 0.51, 0.51],
+        }
+    )
+    development = frame.iloc[:2].copy()
+    locked = frame.iloc[2:].copy()
+
+    folds = _build_stability_folds(development)
+
+    assert len(folds) == len(development)
+    assert len(folds) != len(frame)
+    assert folds[-1]["oos_end_utc"] == "2024-02-29"
+    assert all(f["oos_start_utc"] != locked.iloc[0]["oos_start"] for f in folds)
+    assert all(f["oos_end_utc"] != locked.iloc[0]["oos_end"] for f in folds)
