@@ -111,3 +111,7 @@ This control plane cannot authorize production/model/feature/calibration/target 
 
 ## Dynamic match-state research lane
 The in-play research lane is research-only. Its canonical chain is PRE-MATCH PRIOR → CUTOFF STATE → NEXT-EVENT HAZARD → SCENARIO PROPAGATION → FINAL 1X2/SCORE. Each snapshot requires explicit source availability at or before prediction cutoff, plus label maturity after cutoff. The next-event target uses a bounded hazard window. Deterministic scenario propagation is preferred for reproducibility. This lane cannot alter Production, Champion, frozen holdout or registry state and cannot claim performance without identical chronological OOS, calibration, robustness and holdout evidence.
+
+
+## Autonomous dispatch pressure control
+The state-based orchestrator must remain continuously catch-up capable without flooding GitHub Actions. Each controller run is bounded to at most 6 new dispatches and refuses additional dispatch while 10 repository-wide runs are active. Budget/active-cap holds are recorded as HOLD evidence; later controller cycles retry stale lanes. This throttles execution pressure without changing research, PIT, OOS or production authority.
