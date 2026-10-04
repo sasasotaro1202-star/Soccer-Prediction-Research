@@ -142,7 +142,10 @@ def run_robustness(
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     frame = _validate_frame(pd.read_csv(input_path))
-    winner = json.loads(Path(winner_path).read_text(encoding="utf-8"))
+    winner_payload = json.loads(Path(winner_path).read_text(encoding="utf-8"))
+    winner = winner_payload.get("winner", winner_payload)
+    if not isinstance(winner, dict) or "variant" not in winner or "model_name" not in winner:
+        raise RuntimeError("Winner artifact does not contain a valid ultimate-matrix winner")
 
     variant = str(winner["variant"])
     feature_cols, meta = select_feature_set(frame, variant)
