@@ -53,18 +53,18 @@ def test_locked_match_ids_are_deterministic_and_suffix_based():
         {
             "match_id": [f"m{i}" for i in range(n)],
             "kickoff_utc": kickoff,
-            "target": [0, 1, 2] * 5 + [0],
+            "target": [0, 1, 2] * 6,
             "pit_verified": [True] * n,
             "prediction_cutoff_at_utc": kickoff - pd.Timedelta(minutes=60),
             "feature_source_max_available_at_utc": kickoff - pd.Timedelta(minutes=120),
         }
     )
     ids = _locked_match_ids(frame, min_train=4, oos_block=4)
-    assert ids == {f"m{i}" for i in range(12, 16)}
+    assert ids == {f"m{i}" for i in range(12, 18)}
 
 
 
-def test_locked_match_ids_move_boundary_past_shared_kickoff():
+def test_locked_match_ids_keep_shared_kickoff_rows_together():
     kickoff = pd.to_datetime(
         [
             "2026-01-01T00:00:00Z",
@@ -82,24 +82,29 @@ def test_locked_match_ids_move_boundary_past_shared_kickoff():
             "2026-01-01T12:00:00Z",
             "2026-01-01T13:00:00Z",
             "2026-01-01T14:00:00Z",
+            "2026-01-01T14:00:00Z",
+            "2026-01-01T15:00:00Z",
+            "2026-01-01T16:00:00Z",
         ],
         utc=True,
     )
     kickoff = pd.Series(kickoff)
-    kickoff.iloc[1] = kickoff.iloc[0]
+    n = len(kickoff)
     frame = pd.DataFrame(
         {
-            "match_id": [f"m{i}" for i in range(len(kickoff))],
+            "match_id": [f"m{i}" for i in range(n)],
             "kickoff_utc": kickoff,
-            "target": [0, 1, 2] * 5 + [0],
-            "pit_verified": [True] * len(kickoff),
+            "target": [0, 1, 2] * 6,
+            "pit_verified": [True] * n,
             "prediction_cutoff_at_utc": kickoff - pd.Timedelta(minutes=60),
             "feature_source_max_available_at_utc": kickoff - pd.Timedelta(minutes=120),
         }
     )
-    ids = _locked_match_ids(frame, min_train=2, oos_block=2)
-    assert "m8" in ids
-    assert "m7" not in ids
+    ids = _locked_match_ids(frame, min_train=2, oos_block=4)
+    assert {"m14", "m15"}.issubset(ids)
+    assert "m13" not in ids
+    assert "m16" in ids
+
 
 def test_status_is_research_only_contract(tmp_path):
     status = {
