@@ -11,7 +11,7 @@ Maintain independent semantics and experience for 1X2, Score Top1/Top3, O/U, BTT
 retrieved_at_utc is never historical availability evidence. Historical publication evidence is required before PIT verification. Current production requires a successful fresh matchday snapshot; stale prior artifacts are not current prediction evidence.
 
 ## Research
-Features may use team strength/form, schedule/rest, venue, injuries/lineups, market context, event timing and source-quality metadata when PIT-safe. Rolling windows end at cutoff. OOS is chronological and target-specific calibration must be retained.
+Features may use team strength/form, schedule/rest, venue, injuries/lineups, market context, event timing and source-quality metadata when PIT-safe. Rolling windows end at cutoff. OOS is chronological and target-specific calibration must be retained. Future model-failure OOS research also requires outcome labels to be mature before they enter the transition predictor; the immediately previous transition label is excluded at prediction time.
 
 ## Failure frontier
 Prioritize stale-snapshot failures, late lineup information, high-confidence misses, unexplained ranking failures, source conflicts, OOD and competition distribution shift.
