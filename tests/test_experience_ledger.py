@@ -219,7 +219,7 @@ def test_record_normalizes_available_alias_and_validates_ordering(tmp_path, monk
 
     assert mod.record_prediction_file(str(predictions))["added"] == 1
     recorded = pd.read_csv(ledger)
-    assert recorded.loc[0, "source_available_at_utc"] == "2026-09-26T07:30:00+00:00"
+    assert pd.Timestamp(recorded.loc[0, "source_available_at_utc"], tz="UTC") == pd.Timestamp("2026-09-26T07:30:00Z")
     assert recorded.loc[0, "available_at_utc"] == "2026-09-26T07:30:00+00:00"
 
 
