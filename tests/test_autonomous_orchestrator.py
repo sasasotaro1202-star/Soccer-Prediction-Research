@@ -30,6 +30,7 @@ def test_orchestrator_has_pit_and_research_reconciliation_lanes():
         "soccer-scope-frontier.yml",
         "pit-replay-audit.yml",
         "soccer-coverage-pit-audit.yml",
+        "soccer-audit.yml",
         "soccer-versioned-pit-research.yml",
         "soccer-daily-research-forecast.yml",
         "soccer-matchday-intelligence.yml",
