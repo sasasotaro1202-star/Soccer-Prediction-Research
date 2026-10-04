@@ -282,14 +282,7 @@ def run_ultimate_matrix(
 
     model_table = pd.DataFrame(model_rows)
     model_table.to_csv(out / "ultimate_model_screen.csv", index=False)
-    model_best = (
-        model_table.sort_values(
-            ["confirm_logloss", "confirm_brier", "confirm_ece", "variant", "model_name"],
-            kind="mergesort",
-        )
-        .drop_duplicates("model_name", keep="first")
-    )
-    model_best = model_best.sort_values(
+    model_best = model_table.sort_values(
         ["confirm_logloss", "confirm_brier", "confirm_ece", "variant", "model_name"],
         kind="mergesort",
     )
