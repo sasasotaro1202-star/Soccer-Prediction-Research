@@ -94,6 +94,7 @@ jobs:
             PR_JSON="$(api "/${API}/pulls/${PR_NUMBER}")"
             printf '%s' "${PR_JSON}" > "/tmp/hardening/pr-${PR_NUMBER}.json"
 
+            set +e
             python - "/tmp/hardening/pr-${PR_NUMBER}.json" "${MAIN_SHA}" "${PR_NUMBER}" <<'PY'
           import json
           import sys
@@ -136,6 +137,7 @@ jobs:
           print(f"ELIGIBLE PR #{number}")
           PY
             status=$?
+            set -e
             if [ "$status" -eq 20 ]; then
               echo "PR #${PR_NUMBER}: HOLD"
               continue
@@ -145,6 +147,7 @@ jobs:
             fi
 
             api "/${API}/pulls/${PR_NUMBER}/files?per_page=100" > "/tmp/hardening/pr-${PR_NUMBER}-files.json"
+            set +e
             python - "/tmp/hardening/pr-${PR_NUMBER}-files.json" "${PR_NUMBER}" <<'PY'
           import fnmatch
           import json
@@ -186,7 +189,9 @@ jobs:
 
           print(f"CHANGED_FILES_SAFE count={len(files)}")
           PY
-            if [ "$?" -ne 0 ]; then
+            status=$?
+            set -e
+            if [ "$status" -ne 0 ]; then
               continue
             fi
 
@@ -199,6 +204,7 @@ jobs:
 
             api "/${API}/commits/${HEAD_SHA}/check-runs?per_page=100" > "/tmp/hardening/pr-${PR_NUMBER}-checks.json"
 
+            set +e
             python - "/tmp/hardening/pr-${PR_NUMBER}-checks.json" "/tmp/hardening/pr-${PR_NUMBER}-files.json" <<'PY'
           import json
           import sys
@@ -251,7 +257,9 @@ jobs:
           print("CHECK_GATE_PASS")
           print(f"pit_sensitive={pit_sensitive}")
           PY
-            if [ "$?" -ne 0 ]; then
+            status=$?
+            set -e
+            if [ "$status" -ne 0 ]; then
               continue
             fi
 
