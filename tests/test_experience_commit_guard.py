@@ -1,3 +1,7 @@
+from types import SimpleNamespace
+
+import pytest
+
 from src import __path__  # noqa: F401
 from scripts.experience_commit_guard import semantic_json_equal
 
@@ -40,3 +44,32 @@ def test_missing_optional_path_is_not_a_guard_failure(monkeypatch):
         lambda *args: None if args == ("show", ":optional-missing.json") else b"same",
     )
     assert mod.staged_semantic_change("optional-missing.json") is False
+
+
+def test_current_git_missing_path_diagnostic_is_ignored(monkeypatch):
+    from scripts import experience_commit_guard as mod
+
+    def fake_run(*args, **kwargs):
+        return SimpleNamespace(
+            returncode=128,
+            stdout=b"",
+            stderr=b"fatal: path 'optional-missing.json' does not exist (neither on disk nor in the index)\n",
+        )
+
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    assert mod._run_git("show", ":optional-missing.json") is None
+
+
+def test_unrelated_git_error_remains_fatal(monkeypatch):
+    from scripts import experience_commit_guard as mod
+
+    def fake_run(*args, **kwargs):
+        return SimpleNamespace(
+            returncode=128,
+            stdout=b"",
+            stderr=b"fatal: ambiguous argument 'bad': unknown revision or path not in the working tree.\n",
+        )
+
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError, match="ambiguous argument"):
+        mod._run_git("show", ":bad")
