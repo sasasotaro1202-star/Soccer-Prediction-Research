@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import math
 from typing import Any, Mapping, Sequence
 
 from src.research.stability_gate import evaluate_stability
@@ -110,7 +111,15 @@ def independent_adoption_gate(
             "promotion_authority": "deterministic_research_engine",
         }
 
-    if int(holdout.get("n", 0)) < min_holdout_rows:
+    holdout_rows = holdout.get("n")
+    if isinstance(holdout_rows, bool) or not isinstance(holdout_rows, int) or holdout_rows < 0:
+        return {
+            "status": "HOLD",
+            "reason": "holdout_row_count_missing_or_invalid",
+            "oos_claimed": False,
+            "promotion_authority": "deterministic_research_engine",
+        }
+    if holdout_rows < min_holdout_rows:
         return {"status": "HOLD", "reason": "independent_holdout_too_small", "oos_claimed": False}
     if holdout.get("same_oos") is not True:
         return {"status": "HOLD", "reason": "holdout_is_not_same_oos", "oos_claimed": False}
@@ -147,8 +156,21 @@ def independent_adoption_gate(
         candidate_ece = float(cand["ece"])
         baseline_accuracy = float(base["accuracy"])
         candidate_accuracy = float(cand["accuracy"])
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return {"status": "HOLD", "reason": "non_numeric_holdout_metrics", "oos_claimed": False}
+
+    metrics = (
+        baseline_logloss,
+        candidate_logloss,
+        baseline_brier,
+        candidate_brier,
+        baseline_ece,
+        candidate_ece,
+        baseline_accuracy,
+        candidate_accuracy,
+    )
+    if not all(math.isfinite(value) for value in metrics):
+        return {"status": "HOLD", "reason": "non_finite_holdout_metrics", "oos_claimed": False}
 
     primary_relative_improvement = (
         (baseline_logloss - candidate_logloss) / baseline_logloss
@@ -185,7 +207,7 @@ def independent_adoption_gate(
         "calibration_ok": calibration_ok,
         "accuracy_not_worse": accuracy_not_worse,
         "development_evidence_present": True,
-        "holdout_rows": int(holdout["n"]),
+        "holdout_rows": holdout_rows,
         "holdout_integrity_verified": True,
         "pit_status": pit_status,
         "pit_violations": pit_violations,
