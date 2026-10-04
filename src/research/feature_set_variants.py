@@ -556,11 +556,14 @@ def run_feature_set_research(
     if unknown:
         raise RuntimeError(f"Unknown feature-set variants: {unknown}")
 
+    # Keep the feature-set screen model set compatible across every declared
+    # representation. Elo-specialist candidates are evaluated later in the
+    # dedicated model-ecology stage.
     models = list(model_names or (
-        "elo_logistic",
-        "dynamic_elo_logistic",
         "logistic",
         "logistic_select",
+        "extra_trees",
+        "random_forest",
         "hist_gb",
     ))
     manifest_path = out / "feature_variant_catalog.json"
