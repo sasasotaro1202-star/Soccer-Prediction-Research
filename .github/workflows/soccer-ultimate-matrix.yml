@@ -120,6 +120,22 @@ jobs:
             --top-features 6 \
             --top-combos 3
 
+      - name: Run winner robustness and case-level diagnostics
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+          SOCCER_VALIDATION_MAX: "1200"
+        run: |
+          set -euo pipefail
+          test -s artifacts/ultimate_matrix/ultimate_matrix_status.json
+          mkdir -p artifacts/ultimate_robustness
+          python -m src.research.ultimate_robustness \
+            --input artifacts/pit_replay_features.csv \
+            --winner artifacts/ultimate_matrix/ultimate_matrix_status.json \
+            --output-dir artifacts/ultimate_robustness \
+            --min-train 2000 \
+            --oos-block 4000
+
       - name: Publish matrix summary
         if: always()
         shell: bash
