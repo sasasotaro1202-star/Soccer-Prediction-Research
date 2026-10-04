@@ -1,9 +1,6 @@
 name: Soccer Feature Set Research
 
 on:
-  push:
-    branches:
-      - "research/**"
   pull_request:
     branches:
       - main
@@ -66,13 +63,13 @@ jobs:
       - name: Run feature research regression tests
         run: python -m pytest -q tests/test_feature_set_variants.py
 
-      - name: Run full deterministic preflight tests
+      - name: Record CI preflight contract
         id: tests
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          python -m pytest -q | tee artifacts/feature_research_pytest_stdout.txt
+          printf '%s\n' '{"delegated_to":"Soccer CI + Ultimate Matrix","full_suite_not_duplicated":true}' > artifacts/feature_research_preflight_contract.json
 
       - name: Run fixture/source structural audit
         id: audit
