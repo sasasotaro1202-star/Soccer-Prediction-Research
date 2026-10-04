@@ -42,6 +42,8 @@ REQUIRED_COLUMNS = {
     "home_red_cards",
     "away_red_cards",
     "next_event_type",
+    "next_event_time_utc",
+    "hazard_window_minutes",
     "label_available_at_utc",
     "final_home_goals",
     "final_away_goals",
@@ -108,6 +110,7 @@ def validate_snapshot_contract(
         "prediction_cutoff_utc",
         "event_time_utc",
         "source_available_at_utc",
+        "next_event_time_utc",
         "label_available_at_utc",
     ):
         d[col] = _utc(d[col], col)
@@ -128,6 +131,13 @@ def validate_snapshot_contract(
     if (d["prediction_cutoff_utc"] > d["kickoff_utc"] + pd.Timedelta(minutes=120)).any():
         raise ValueError("prediction cutoff exceeds supported 120-minute post-kickoff window")
 
+    d["hazard_window_minutes"] = pd.to_numeric(d["hazard_window_minutes"], errors="coerce")
+    if d["hazard_window_minutes"].isna().any() or not np.isfinite(d["hazard_window_minutes"].to_numpy(float)).all():
+        raise ValueError("hazard_window_minutes contains invalid values")
+    if ((d["hazard_window_minutes"] <= 0) | (d["hazard_window_minutes"] > 15)).any():
+        raise ValueError("hazard_window_minutes must be in (0, 15]")
+    if d["hazard_window_minutes"].nunique(dropna=False) != 1:
+        raise ValueError("hazard_window_minutes must be constant within one dataset")
     if require_future_labels and (
         d["label_available_at_utc"] <= d["prediction_cutoff_utc"]
     ).any():
@@ -137,6 +147,16 @@ def validate_snapshot_contract(
     if (~event_values.isin(_EVENT_SET)).any():
         bad = sorted(event_values[~event_values.isin(_EVENT_SET)].unique().tolist())
         raise ValueError(f"unsupported next_event_type values: {bad}")
+    next_time = d["next_event_time_utc"]
+    cutoff = d["prediction_cutoff_utc"]
+    window = pd.to_timedelta(d["hazard_window_minutes"], unit="m")
+    non_none = event_values != "NO_EVENT"
+    if next_time[non_none].isna().any() or (next_time[non_none] <= cutoff[non_none]).any():
+        raise ValueError("non-NO_EVENT label must have next_event_time_utc after prediction cutoff")
+    if (next_time[non_none] > (cutoff[non_none] + window[non_none])).any():
+        raise ValueError("next event falls outside hazard window")
+    if next_time[~non_none].notna().any():
+        raise ValueError("NO_EVENT label must have missing next_event_time_utc")
 
     numeric = [
         "home_score",
@@ -212,6 +232,8 @@ def fit_hazard_model(
 ) -> dict[str, Any]:
     """Fit a PIT-safe next-event classifier on already-matured historical rows."""
     d = validate_snapshot_contract(training)
+    if not set(BASE_FEATURES).issubset(d.columns):
+        d = build_state_features(d)
     as_of = pd.Timestamp(as_of_cutoff)
     if as_of.tzinfo is None:
         as_of = as_of.tz_localize("UTC")
@@ -287,6 +309,7 @@ def fit_hazard_model(
         "training_rows": int(len(d)),
         "training_matches": int(d["match_id"].nunique()),
         "as_of_cutoff_utc": as_of.isoformat(),
+        "hazard_window_minutes": float(d["hazard_window_minutes"].iloc[0]),
         "model": estimator,
         "research_only": True,
     }
@@ -354,10 +377,12 @@ def propagate_scenarios(
     initial_state: Mapping[str, Any],
     *,
     horizon_minutes: float | None = None,
-    step_minutes: float = 5.0,
+    step_minutes: float | None = None,
     max_states: int = 10000,
 ) -> dict[str, Any]:
     """Propagate a distribution of future score/discipline paths."""
+    if step_minutes is None:
+        step_minutes = float(model.get("hazard_window_minutes", 5.0))
     if step_minutes <= 0 or step_minutes > 15:
         raise ValueError("step_minutes must be in (0, 15]")
     if max_states < 10:
