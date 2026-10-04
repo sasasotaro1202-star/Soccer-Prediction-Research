@@ -22,14 +22,18 @@ def _rows(matches: int = 24) -> pd.DataFrame:
         final_home = 2 if i % 2 else 1
         for minute in (5, 10, 15, 20, 25):
             cutoff = kickoff + pd.Timedelta(minutes=minute)
-            if minute == 10 and i % 2 == 0:
+            if minute == 5 and i % 2 == 0:
                 event = "HOME_GOAL"
-            elif minute == 15 and i % 5 == 0:
+                next_time = cutoff + pd.Timedelta(minutes=5)
+            elif minute == 10 and i % 5 == 0:
                 event = "AWAY_GOAL"
-            elif minute == 20 and i % 7 == 0:
+                next_time = cutoff + pd.Timedelta(minutes=5)
+            elif minute == 15 and i % 7 == 0:
                 event = "HOME_RED"
+                next_time = cutoff + pd.Timedelta(minutes=5)
             else:
                 event = "NO_EVENT"
+                next_time = pd.NaT
             rows.append(
                 {
                     "match_id": f"m{i}",
@@ -43,6 +47,8 @@ def _rows(matches: int = 24) -> pd.DataFrame:
                     "home_red_cards": 1 if minute >= 20 and i % 7 == 0 else 0,
                     "away_red_cards": 0,
                     "next_event_type": event,
+                    "next_event_time_utc": next_time,
+                    "hazard_window_minutes": 5.0,
                     "label_available_at_utc": kickoff + pd.Timedelta(minutes=110),
                     "final_home_goals": final_home,
                     "final_away_goals": final_away,
