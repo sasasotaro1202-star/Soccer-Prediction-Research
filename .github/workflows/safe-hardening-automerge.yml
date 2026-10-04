@@ -1,0 +1,294 @@
+name: Safe Hardening Auto-Merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+  workflow_run:
+    workflows:
+      - Soccer CI
+      - Soccer PIT Replay Audit
+      - Legacy V9/V12 Bridge Check
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: "Optional hardening PR number to evaluate"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: safe-hardening-automerge-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    name: Evaluate and merge safe hardening
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Evaluate current PR and merge only when all gates are green
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          MANUAL_PR_NUMBER: ${{ inputs.pull_request_number }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          API="repos/${REPOSITORY}"
+          mkdir -p /tmp/hardening
+
+          api() {
+            gh api "$@"
+          }
+
+          get_main_sha() {
+            api "/${API}/git/ref/heads/main" --jq '.object.sha'
+          }
+
+          MAIN_SHA="$(get_main_sha)"
+
+          PR_NUMBERS=""
+          if [ -n "${EVENT_PR_NUMBER}" ]; then
+            PR_NUMBERS="${EVENT_PR_NUMBER}"
+          elif [ -n "${MANUAL_PR_NUMBER}" ]; then
+            PR_NUMBERS="${MANUAL_PR_NUMBER}"
+          elif [ "${EVENT_NAME}" = "workflow_run" ] && [ -n "${EVENT_WORKFLOW_HEAD_SHA}" ]; then
+            api "/${API}/pulls?state=open&base=main&per_page=100" > /tmp/hardening/open-prs.json
+            PR_NUMBERS="$(python - /tmp/hardening/open-prs.json "${EVENT_WORKFLOW_HEAD_SHA}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          prs = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          target = sys.argv[2]
+          nums = [
+              str(pr["number"])
+              for pr in prs
+              if pr.get("head", {}).get("sha") == target
+          ]
+          print(" ".join(nums))
+          PY
+            )"
+          else
+            echo "No PR context; nothing to evaluate."
+            exit 0
+          fi
+
+          if [ -z "${PR_NUMBERS}" ]; then
+            echo "No open PR matches the triggering workflow head; nothing to evaluate."
+            exit 0
+          fi
+
+          for PR_NUMBER in ${PR_NUMBERS}; do
+            echo "Evaluating PR #${PR_NUMBER}"
+            PR_JSON="$(api "/${API}/pulls/${PR_NUMBER}")"
+            printf '%s' "${PR_JSON}" > "/tmp/hardening/pr-${PR_NUMBER}.json"
+
+            python - "/tmp/hardening/pr-${PR_NUMBER}.json" "${MAIN_SHA}" "${PR_NUMBER}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          pr = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          main_sha = sys.argv[2]
+          number = sys.argv[3]
+
+          reasons = []
+
+          if pr.get("state") != "open":
+              reasons.append("PR is not open")
+          if pr.get("draft") is True:
+              reasons.append("PR is draft")
+          if pr.get("base", {}).get("ref") != "main":
+              reasons.append("base is not main")
+          if pr.get("base", {}).get("sha") != main_sha:
+              reasons.append("PR base SHA is not current main")
+          if pr.get("head", {}).get("repo", {}).get("full_name") != pr.get("base", {}).get("repo", {}).get("full_name"):
+              reasons.append("cross-repository PR is not eligible")
+          if not str(pr.get("head", {}).get("ref", "")).startswith("hardening/"):
+              reasons.append("head branch is not hardening/*")
+          if not str(pr.get("title", "")).lower().startswith("hardening:"):
+              reasons.append("title does not start with hardening:")
+          body = pr.get("body") or ""
+          required_markers = [
+              "automation_policy: hardening-safe-v1",
+              "Production changed=False",
+              "No OOS tuning or holdout access",
+              "Candidate remains non-production",
+          ]
+          for marker in required_markers:
+              if marker not in body:
+                  reasons.append(f"missing safety marker: {marker}")
+
+          print("\n".join(f"HOLD: {r}" for r in reasons))
+          if reasons:
+              raise SystemExit(20)
+          print(f"ELIGIBLE PR #{number}")
+          PY
+            status=$?
+            if [ "$status" -eq 20 ]; then
+              echo "PR #${PR_NUMBER}: HOLD"
+              continue
+            fi
+            if [ "$status" -ne 0 ]; then
+              exit "$status"
+            fi
+
+            api "/${API}/pulls/${PR_NUMBER}/files?per_page=100" > "/tmp/hardening/pr-${PR_NUMBER}-files.json"
+            python - "/tmp/hardening/pr-${PR_NUMBER}-files.json" "${PR_NUMBER}" <<'PY'
+          import fnmatch
+          import json
+          import sys
+          from pathlib import Path
+
+          files = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          allowed_exact = {
+              ".github/workflows/action-failure-recovery.yml",
+              ".github/workflows/pit-replay-audit.yml",
+              ".github/workflows/overnight-integrity.yml",
+              "src/research/adoption_gate.py",
+              "src/research/stability_gate.py",
+              "src/research/engine.py",
+              "src/data/pit_source_adapter.py",
+              "src/data/pit_source_adapter_v2.py",
+              "src/data/pit_source_adapter_fast.py",
+              "src/data/pit_archive_fallback.py",
+              "src/data/pit_evidence.py",
+              "src/data/source_registry.py",
+              "src/data/football_data.py",
+          }
+
+          def allowed(path: str) -> bool:
+              return (
+                  path in allowed_exact
+                  or path.startswith("tests/")
+                  or path.startswith("docs/")
+              )
+
+          disallowed = [f.get("filename", "") for f in files if not allowed(f.get("filename", ""))]
+          if disallowed:
+              print("HOLD: disallowed changed paths:")
+              print("\n".join(disallowed))
+              raise SystemExit(21)
+
+          if not files:
+              raise SystemExit("HOLD: PR has no changed files")
+
+          print(f"CHANGED_FILES_SAFE count={len(files)}")
+          PY
+            if [ "$?" -ne 0 ]; then
+              continue
+            fi
+
+            HEAD_SHA="$(python - "/tmp/hardening/pr-${PR_NUMBER}.json" <<'PY'
+          import json, sys
+          from pathlib import Path
+          print(json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["head"]["sha"])
+          PY
+            )"
+
+            api "/${API}/commits/${HEAD_SHA}/check-runs?per_page=100" > "/tmp/hardening/pr-${PR_NUMBER}-checks.json"
+
+            python - "/tmp/hardening/pr-${PR_NUMBER}-checks.json" "/tmp/hardening/pr-${PR_NUMBER}-files.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          checks = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8")).get("check_runs", [])
+          files = [f.get("filename", "") for f in json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))]
+          pit_sensitive = any(
+              p.startswith("src/data/pit_")
+              or p in {
+                  ".github/workflows/pit-replay-audit.yml",
+                  ".github/workflows/action-failure-recovery.yml",
+              }
+              for p in files
+          )
+
+          bad_conclusions = {"failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale"}
+          pending_states = {"queued", "in_progress", "waiting", "pending"}
+
+          by_name = {}
+          for check in checks:
+              by_name.setdefault(check.get("name", ""), []).append(check)
+
+          required = {"Soccer CI"}
+          if pit_sensitive:
+              required.add("Soccer PIT Replay Audit")
+
+          reasons = []
+          for check in checks:
+              status = check.get("status")
+              conclusion = check.get("conclusion")
+              if status in pending_states:
+                  reasons.append(f"pending check: {check.get('name')}")
+              elif conclusion in bad_conclusions:
+                  reasons.append(f"failed check: {check.get('name')}={conclusion}")
+
+          for name in sorted(required):
+              candidates = [
+                  c for c in by_name.get(name, [])
+                  if c.get("status") == "completed" and c.get("conclusion") == "success"
+              ]
+              if not candidates:
+                  reasons.append(f"required check not successful: {name}")
+
+          if reasons:
+              print("HOLD: check gate")
+              print("\n".join(reasons))
+              raise SystemExit(22)
+
+          print("CHECK_GATE_PASS")
+          print(f"pit_sensitive={pit_sensitive}")
+          PY
+            if [ "$?" -ne 0 ]; then
+              continue
+            fi
+
+            # Re-read PR immediately before merge to eliminate stale-head races.
+            FINAL_PR="$(api "/${API}/pulls/${PR_NUMBER}")"
+            FINAL_HEAD="$(printf '%s' "${FINAL_PR}" | python -c 'import json,sys; print(json.load(sys.stdin)["head"]["sha"])')"
+            FINAL_BASE="$(printf '%s' "${FINAL_PR}" | python -c 'import json,sys; print(json.load(sys.stdin)["base"]["sha"])')"
+
+            if [ "${FINAL_HEAD}" != "${HEAD_SHA}" ]; then
+              echo "HOLD: PR #${PR_NUMBER} changed while being evaluated."
+              continue
+            fi
+            if [ "${FINAL_BASE}" != "${MAIN_SHA}" ]; then
+              echo "HOLD: main advanced while PR #${PR_NUMBER} was being evaluated."
+              continue
+            fi
+
+            MERGE_RESPONSE="$(api --method PUT "/${API}/pulls/${PR_NUMBER}/merge"               -f merge_method=squash               -f sha="${FINAL_HEAD}")" || {
+                echo "HOLD: GitHub rejected merge for PR #${PR_NUMBER}; no bypass attempted."
+                continue
+              }
+
+            MERGED="$(printf '%s' "${MERGE_RESPONSE}" | python -c 'import json,sys; print(json.load(sys.stdin).get("merged"))')"
+            if [ "${MERGED}" != "True" ]; then
+              echo "HOLD: PR #${PR_NUMBER} was not merged."
+              echo "${MERGE_RESPONSE}"
+              continue
+            fi
+
+            echo "AUTO-MERGED PR #${PR_NUMBER} after strict hardening gates."
+            {
+              echo "## Safe hardening auto-merge"
+              echo "- PR #${PR_NUMBER}: merged"
+              echo "- Base SHA: ${MAIN_SHA}"
+              echo "- Head SHA: ${FINAL_HEAD}"
+              echo "- Production changes: prohibited"
+              echo "- Holdout/OOS tuning access: prohibited"
+              echo "- Research candidates remain non-production"
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
