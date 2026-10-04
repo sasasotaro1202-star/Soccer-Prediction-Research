@@ -33,11 +33,20 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.12"
-      - name: Install minimal test dependency
+      - name: Install minimal test dependency with bounded retry
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 pytest
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 90 pytest; then
+              exit 0
+            fi
+            echo "pytest installation attempt ${attempt} failed; retrying..."
+            if [ "${attempt}" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
       - name: Run source registry and probe tests
         shell: bash
         run: |
