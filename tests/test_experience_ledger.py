@@ -89,6 +89,7 @@ def test_record_rejects_missing_source_availability(tmp_path, monkeypatch):
         "match_id": "espn:no-source",
         "kickoff_utc": "2026-09-26T10:00:00Z",
         "prediction_time_utc": "2026-09-26T08:00:00Z",
+        "pit_verified": True,
         "home_team": "A",
         "away_team": "B",
         "competition": "EPL",
