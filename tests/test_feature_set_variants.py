@@ -9,6 +9,7 @@ from src.research.feature_set_variants import (
     select_feature_set,
     select_development_winner,
     variant_catalog,
+    run_feature_set_research,
 )
 
 
@@ -194,3 +195,30 @@ def test_development_winner_rejects_mismatched_oos_windows():
     )
     with pytest.raises(RuntimeError, match="different OOS window"):
         select_development_winner(frame, "strength_only")
+
+def test_feature_research_requires_explicit_pit_temporal_provenance(tmp_path):
+    frame = _frame()
+    path = tmp_path / "input.csv"
+    frame.to_csv(path, index=False)
+    with pytest.raises(RuntimeError, match="missing required PIT columns"):
+        run_feature_set_research(
+            str(path),
+            str(tmp_path / "out"),
+            variants=["strength_only"],
+            model_names=["logistic"],
+        )
+
+
+def test_feature_research_rejects_late_feature_availability(tmp_path):
+    frame = _frame()
+    frame["prediction_cutoff_at_utc"] = ["2026-01-01T09:00:00Z"] * len(frame)
+    frame.loc[0, "feature_source_max_available_at_utc"] = "2026-01-01T09:30:00Z"
+    path = tmp_path / "input.csv"
+    frame.to_csv(path, index=False)
+    with pytest.raises(RuntimeError, match="PIT provenance validation failed"):
+        run_feature_set_research(
+            str(path),
+            str(tmp_path / "out"),
+            variants=["strength_only"],
+            model_names=["logistic"],
+        )
