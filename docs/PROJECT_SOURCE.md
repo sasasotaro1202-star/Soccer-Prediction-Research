@@ -2,12 +2,12 @@
 
 ## Current run reconciliation — 2026-10-04
 
-- Current authoritative main remains `28e74436f393f7df8691e9846e8017dcc076a938` (`config: add soccer feature policy contract`).
+- The previously recorded `28e74436f393f7df8691e9846e8017dcc076a938` commit is the reconciliation baseline only. The authoritative current `main` is the live GitHub ref and was re-checked at run start; its current HEAD must always be read from GitHub rather than copied into this historical note.
 - The research-only feature/model/configuration matrix remains in PR #200 and is not Production, Champion, or performance-verified evidence.
 - During reconciliation, stale duplicate PRs #192, #193, #197, #198 and #199 were closed as superseded because their substantive PIT/recovery/operational hardening is already represented on current main or by later reconstructed main updates. Historical evidence was not rewritten.
 - PR #200 was strengthened with an additional function-boundary PIT check: feature research and WFO execution now require explicit prediction cutoff and feature-source availability provenance for verified rows and fail closed on missing/late timing evidence. This change remains research-branch-only until the PR is merged and verified.
 - Long-running research workflows in PR #200 were changed to preserve in-flight runs instead of cancelling them when another refresh arrives; this is operational hardening only and does not constitute performance evidence.
-- GitHub Actions for the latest PR state are queued; no completed PASS/FAIL result or research artifact from the strengthened head has been accepted as verified yet. Local network execution is unavailable in this environment, so no local test result is substituted for GitHub Actions evidence.
+- At reconciliation time, GitHub Actions for the latest research PR state were queued; no completed PASS/FAIL result or research artifact from that strengthened head was accepted as verified. This note is historical and must not override current Actions state. Local network execution is unavailable in this environment, so no local test result is substituted for GitHub Actions evidence.
 - Production status remains unchanged: no verifiable committed `models/current` bundle, no new Champion adoption, and no new OOS/holdout performance claim.
 
 
