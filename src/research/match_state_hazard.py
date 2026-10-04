@@ -110,10 +110,16 @@ def validate_snapshot_contract(
         "prediction_cutoff_utc",
         "event_time_utc",
         "source_available_at_utc",
-        "next_event_time_utc",
         "label_available_at_utc",
     ):
         d[col] = _utc(d[col], col)
+    raw_next_time = d["next_event_time_utc"].copy()
+    parsed_next_time = pd.to_datetime(raw_next_time, utc=True, errors="coerce")
+    raw_text = raw_next_time.astype("string").fillna("").str.strip()
+    invalid_next_time = raw_text.ne("") & parsed_next_time.isna()
+    if invalid_next_time.any():
+        raise ValueError("next_event_time_utc contains invalid timestamps")
+    d["next_event_time_utc"] = parsed_next_time
 
     if d["match_id"].isna().any() or d["match_id"].astype(str).str.strip().eq("").any():
         raise ValueError("match_id contains missing/empty values")
