@@ -295,9 +295,38 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                         )
                         del unresolved[key]
 
-        # PIT is fail-closed: a capture before the conservative publication lower
-        # bound cannot be accepted merely because it already contains the final score.
-        # Precise kickoff timing may narrow search, but never relaxes the acceptance bound.
+        # First accept only the conservative result-completion bound.
+        # This is the default for rows without exact kickoff timing and remains
+        # valid for exact-time rows as well.
+        #
+        # When exact kickoff timing is available, however, an archived snapshot
+        # observed after kickoff that contains the exact completed-result identity
+        # is valid publication evidence: the result cannot be a pre-kickoff result
+        # for the same fixture. It is therefore safe to use as the source's
+        # earliest observed availability timestamp, while still failing closed on
+        # any capture before kickoff.
+        for capture, diagnostic in keysets:
+            if not unresolved:
+                break
+            ts = _utc(capture.get("timestamp"))
+            if ts is None or diagnostic.keys is None:
+                continue
+            for key in list(unresolved):
+                i = unresolved[key]
+                kickoff = _utc(rows[i].get("kickoff_utc"))
+                if not bool(rows[i].get("kickoff_time_available", False)) or kickoff is None:
+                    continue
+                if ts >= kickoff and row_keys[i] in diagnostic.keys:
+                    results[i] = SourceEvidence(
+                        ts.isoformat(),
+                        "VERIFIED",
+                        self._snapshot_url(capture, url),
+                        capture.get("digest"),
+                        "archived_completed_result_first_observed_after_kickoff",
+                    )
+                    del unresolved[key]
+
+        # Remaining unresolved rows have no accepted PIT evidence.
         for i, value in enumerate(results):
             if value is not None:
                 continue

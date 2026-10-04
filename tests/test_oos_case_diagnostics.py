@@ -15,7 +15,11 @@ class DummyModel:
 
 
 def test_run_walk_forward_writes_per_match_risk_diagnostics(monkeypatch, tmp_path):
-    monkeypatch.setattr(wf, "candidates", lambda random_state=42: {"logistic": DummyModel()})
+    monkeypatch.setattr(
+        wf,
+        "candidates",
+        lambda random_state=42: {"logistic": DummyModel(), "anchor": DummyModel()},
+    )
     n = 180
     kickoff = pd.date_range("2024-01-01T00:00:00Z", periods=n, freq="6h")
     target = np.resize(np.asarray([0, 1, 2], dtype=int), n)
