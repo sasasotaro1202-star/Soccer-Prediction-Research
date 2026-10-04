@@ -80,7 +80,7 @@ jobs:
             # Every reported check must be completed successfully; an empty check set
             # is not enough evidence for automatic merge.
             check_count="$(jq '[.statusCheckRollup[]?] | length' <<<"${pr_json}")"
-            bad_checks="$(jq '[.statusCheckRollup[]? | select((.status == "COMPLETED" and (.conclusion == "SUCCESS" or .conclusion == "NEUTRAL" or .conclusion == "SKIPPED")) | not)] | length' <<<"${pr_json}")"
+            bad_checks="$(jq '[.statusCheckRollup[]? | select((if .status != null then (.status == "COMPLETED" and (.conclusion == "SUCCESS" or .conclusion == "NEUTRAL" or .conclusion == "SKIPPED")) else (.state == "SUCCESS") end) | not)] | length' <<<"${pr_json}")"
             if [ "${check_count}" -eq 0 ] || [ "${bad_checks}" -ne 0 ]; then
               continue
             fi
