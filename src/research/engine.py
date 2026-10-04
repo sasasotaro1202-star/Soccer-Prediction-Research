@@ -608,8 +608,10 @@ def run(out_dir: str = "artifacts") -> dict:
     (out / "calibration_gate.json").write_text(
         json.dumps(calibration_gate, indent=2, ensure_ascii=False, default=str), encoding="utf-8"
     )
+    # Stability is development evidence only. Locked OOS blocks are reserved for
+    # final verification and must never influence candidate stability/selection.
     stability_folds = []
-    for _, row in wf.iterrows():
+    for _, row in development_oos.iterrows():
         stability_folds.append({
             "league": row.get("leagues", ""),
             "season": row.get("seasons", ""),
@@ -623,8 +625,16 @@ def run(out_dir: str = "artifacts") -> dict:
                 "brier": row.get("brier"),
                 "accuracy": row.get("accuracy"),
             },
+            "oos_start_utc": row.get("oos_start"),
+            "oos_end_utc": row.get("oos_end"),
         })
     stability = evaluate_stability(stability_folds)
+    stability["evidence_scope"] = {
+        "source": "development_oos_only",
+        "development_blocks": int(len(development_oos)),
+        "locked_oos_blocks_excluded": int(len(locked)),
+        "locked_oos_used_for_stability": False,
+    }
     (out / "stability_gate.json").write_text(json.dumps(stability, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     candidate_lock = {"status": "LOCKED", "selection_source": "historical_validation_only", "selection_artifact": "model_selection.csv", "development_oos_blocks": int(len(development_oos)), "locked_oos_blocks": int(len(locked)), "locked_oos_untouched": True, "target_accuracy": TARGET_ACCURACY, "model_family": "validation-selected calibrated ensemble", "feature_policy": "PIT-safe numeric features only", "pit_policy": PIT_POLICY}
     (out / "candidate_lock.json").write_text(json.dumps(candidate_lock, indent=2, ensure_ascii=False), encoding="utf-8")
