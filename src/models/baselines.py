@@ -258,6 +258,28 @@ def candidates(random_state: int = 42):
             ("scale", StandardScaler()),
             ("model", LogisticRegression(max_iter=2200, C=4.0, random_state=random_state)),
         ]),
+        "logistic_c0_05": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scale", StandardScaler()),
+            ("model", LogisticRegression(max_iter=2400, C=0.05, random_state=random_state)),
+        ]),
+        "logistic_c0_5": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scale", StandardScaler()),
+            ("model", LogisticRegression(max_iter=2200, C=0.5, random_state=random_state)),
+        ]),
+        "logistic_c8": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scale", StandardScaler()),
+            ("model", LogisticRegression(max_iter=2400, C=8.0, random_state=random_state)),
+        ]),
+        "logistic_l1": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scale", StandardScaler()),
+            ("model", LogisticRegression(
+                max_iter=3000, C=0.5, penalty="l1", solver="saga", random_state=random_state
+            )),
+        ]),
         "recency_half_life_300": RecencyLogisticClassifier(random_state=random_state, half_life_rows=300.0),
         "recency_half_life_1200": RecencyLogisticClassifier(random_state=random_state, half_life_rows=1200.0),
         "quantile_32": QuantileLogisticClassifier(random_state=random_state, n_quantiles=32),
@@ -277,6 +299,12 @@ def candidates(random_state: int = 42):
             ("imputer", SimpleImputer(strategy="median")),
             ("model", ExtraTreesClassifier(n_estimators=600, min_samples_leaf=5, max_features=0.6, n_jobs=-1, random_state=random_state)),
         ]),
+        "extra_trees_minleaf15": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("model", ExtraTreesClassifier(
+                n_estimators=400, min_samples_leaf=15, max_features="sqrt", n_jobs=-1, random_state=random_state
+            )),
+        ]),
         "random_forest": Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
             ("model", RandomForestClassifier(n_estimators=300, min_samples_leaf=8, max_features="sqrt", n_jobs=-1, random_state=random_state, class_weight="balanced_subsample")),
@@ -284,6 +312,13 @@ def candidates(random_state: int = 42):
         "random_forest_600": Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
             ("model", RandomForestClassifier(n_estimators=600, min_samples_leaf=5, max_features=0.6, n_jobs=-1, random_state=random_state, class_weight="balanced_subsample")),
+        ]),
+        "random_forest_minleaf15": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("model", RandomForestClassifier(
+                n_estimators=400, min_samples_leaf=15, max_features="sqrt", n_jobs=-1,
+                random_state=random_state, class_weight="balanced_subsample"
+            )),
         ]),
         "hist_gb": Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
@@ -324,6 +359,28 @@ def candidates(random_state: int = 42):
                 max_leaf_nodes=15,
                 min_samples_leaf=45,
                 l2_regularization=4.0,
+                random_state=random_state,
+            )),
+        ]),
+        "hist_gb_shallow": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("model", HistGradientBoostingClassifier(
+                max_iter=240,
+                learning_rate=0.05,
+                max_leaf_nodes=7,
+                min_samples_leaf=35,
+                l2_regularization=3.0,
+                random_state=random_state,
+            )),
+        ]),
+        "hist_gb_wide": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("model", HistGradientBoostingClassifier(
+                max_iter=280,
+                learning_rate=0.04,
+                max_leaf_nodes=63,
+                min_samples_leaf=25,
+                l2_regularization=1.5,
                 random_state=random_state,
             )),
         ]),
