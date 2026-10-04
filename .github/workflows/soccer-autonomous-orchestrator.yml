@@ -33,6 +33,7 @@ jobs:
 
           now_epoch="$(date +%s)"
           main_sha="$(api "repos/${GH_REPO}/git/ref/heads/main" --jq '.object.sha')"
+          export MAIN_SHA="${main_sha}"
           report="autonomous-orchestrator-report.json"
 
           python - <<'PY' > "$report"
@@ -130,8 +131,6 @@ jobs:
                 ;;
             esac
           }
-
-          export MAIN_SHA="${main_sha}"
 
           # High-frequency live lanes: these are catch-up guards only; their own schedules remain authoritative.
           ensure_lane "soccer-matchday-intelligence.yml" 30 15
