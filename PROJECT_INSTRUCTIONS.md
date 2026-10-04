@@ -100,3 +100,7 @@ PIT replay remains scheduled and diagnostic; BLOCKED evidence is never promoted 
 Routine repository operation is expected to run from GitHub Actions without requiring a new chat instruction each cycle:
 MONITOR → RECONCILE → RETRY_TRANSIENT_FAILURE_ONCE → PIT_AUDIT → TEST → OOS/WFO → CALIBRATION/ROBUSTNESS → ADOPTION_GATE → SAFE_RELEASE.
 Automatic merge is limited to explicitly marked `automation_policy: hardening-safe-v1` hardening PRs whose base is the current `main`, whose diff stays inside the hardening allowlist, whose checks are complete and successful, and whose final head-SHA race check remains clean. Model, feature, calibration, target, frozen-holdout, production-bundle and performance-affecting research changes remain outside the automatic-merge policy.
+
+
+## Dynamic match-state research lane
+The in-play research lane is research-only. Its canonical chain is PRE-MATCH PRIOR → CUTOFF STATE → NEXT-EVENT HAZARD → SCENARIO PROPAGATION → FINAL 1X2/SCORE. Each snapshot requires explicit source availability at or before prediction cutoff, plus label maturity after cutoff. The next-event target is defined over a bounded hazard window; it must never use post-cutoff state information. Deterministic scenario propagation is preferred for reproducibility. This lane cannot alter Production, Champion, frozen holdout or registry state and cannot claim performance without identical chronological OOS, calibration, robustness and holdout evidence.
