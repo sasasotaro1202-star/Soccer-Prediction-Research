@@ -111,6 +111,24 @@ def test_offset_boundaries_are_compared_in_utc():
 
 
 
+def test_adoption_requires_explicit_development_evidence():
+    result = independent_adoption_gate({}, _valid_holdout(), stability_folds=_stability_folds())
+    assert result["status"] == "HOLD"
+    assert result["reason"] == "development_evidence_missing"
+
+
+def test_adoption_rejects_non_numeric_holdout_metrics():
+    result = independent_adoption_gate(
+        {"development_oos": True},
+        _valid_holdout(
+            baseline={"logloss": "bad", "brier": 0.25, "ece": 0.10, "accuracy": 0.50}
+        ),
+        stability_folds=_stability_folds(),
+    )
+    assert result["status"] == "HOLD"
+    assert result["reason"] == "non_numeric_holdout_metrics"
+
+
 def test_adoption_requires_zero_pit_violations():
     result = independent_adoption_gate(
         {"development_oos": True},
