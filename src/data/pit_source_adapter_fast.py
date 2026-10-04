@@ -267,11 +267,6 @@ class FootballDataWaybackAdapter(_BaseAdapter):
     def _prefetch_url(self, url, rows, workers=None):
         if not rows:
             return []
-        captures = self.captures(url)
-        if not captures:
-            diag = self._capture_diag.get(url, CaptureDiagnostic("CDX_REQUEST_FAILURE"))
-            reason = "no_archive_captures" if diag.status == "CDX_NO_CAPTURE" else f"{diag.status.lower()}: {diag.error or ''}".strip()
-            return [SourceEvidence(None, "UNVERIFIABLE", reason=reason) for _ in rows]
 
         row_keys = [_normalized_row_key(r) for r in rows]
         bounds = [_result_lower_bound(r) for r in rows]
@@ -287,15 +282,45 @@ class FootballDataWaybackAdapter(_BaseAdapter):
             if cached is not None:
                 results[i] = cached
                 del unresolved[row_keys[i]]
-        valid_bounds = [b for b, _ in bounds if b is not None]
-        if not unresolved:
-            return [SourceEvidence(None, "UNVERIFIABLE", reason="missing_record_identity") for _ in rows]
-        if not valid_bounds:
-            return [SourceEvidence(None, "UNVERIFIABLE", reason="missing_event_time") for _ in rows]
 
-        search_bounds = [self._search_floor(r, b) for r, (b, _) in zip(rows, bounds)]
+        # A fully cached batch must resume without touching the archive control plane.
+        if not unresolved:
+            return results
+
+        valid_bounds = [bounds[i][0] for i in unresolved if bounds[i][0] is not None]
+        if not valid_bounds:
+            return [
+                results[i]
+                if results[i] is not None
+                else SourceEvidence(None, "UNVERIFIABLE", reason="missing_event_time")
+                for i in range(len(rows))
+            ]
+
+        captures = self.captures(url)
+        if not captures:
+            diag = self._capture_diag.get(url, CaptureDiagnostic("CDX_REQUEST_FAILURE"))
+            reason = (
+                "no_archive_captures"
+                if diag.status == "CDX_NO_CAPTURE"
+                else f"{diag.status.lower()}: {diag.error or ''}".strip()
+            )
+            return [
+                results[i]
+                if results[i] is not None
+                else SourceEvidence(None, "UNVERIFIABLE", reason=reason)
+                for i in range(len(rows))
+            ]
+
+        search_bounds = [
+            self._search_floor(rows[i], bounds[i][0])
+            for i in unresolved
+        ]
         valid_search_bounds = [b for b in search_bounds if b is not None]
-        min_search_bound = min(valid_search_bounds) if valid_search_bounds else min(valid_bounds)
+        min_search_bound = (
+            min(valid_search_bounds)
+            if valid_search_bounds
+            else min(valid_bounds)
+        )
 
         unique = {}
         for capture in captures:
@@ -309,14 +334,18 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                 unique[digest] = capture
         candidates = sorted(unique.values(), key=lambda c: c.get("timestamp", ""))
         if not candidates:
-            reasons = ";".join(sorted(set(reason for _, reason in bounds)))
+            reasons = ";".join(
+                sorted({bounds[i][1] for i in unresolved if bounds[i][1]})
+            )
             return [
-                SourceEvidence(
+                results[i]
+                if results[i] is not None
+                else SourceEvidence(
                     None,
                     "UNVERIFIABLE",
                     reason=f"captures_exist_but_no_capture_after_result_lower_bound:{reasons}",
                 )
-                for _ in rows
+                for i in range(len(rows))
             ]
 
         # Fetch captures in bounded chronological batches. The previous implementation
@@ -382,7 +411,6 @@ class FootballDataWaybackAdapter(_BaseAdapter):
 
         # PIT is fail-closed: a capture before the conservative publication lower
         # bound cannot be accepted merely because it already contains the final score.
-        # Precise kickoff timing may narrow search, but never relaxes the acceptance bound.
         for i, value in enumerate(results):
             if value is not None:
                 continue
