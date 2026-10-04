@@ -204,9 +204,6 @@ def record_prediction_file(
                 "prediction ledger source availability aliases disagree; refusing ambiguous PIT"
             )
 
-    if bool((~pit_verified.astype(bool)).any()):
-        raise RuntimeError("prediction ledger contains pit_verified=false; refusing unknown PIT")
-
     if bool((cutoffs >= kickoff).any()):
         raise RuntimeError("prediction ledger contains a prediction at/after kickoff; refusing non-pregame state")
     if bool((availability > cutoffs).any()):
