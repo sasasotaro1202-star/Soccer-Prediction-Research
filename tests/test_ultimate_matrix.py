@@ -8,6 +8,9 @@ from src.research.ultimate_matrix import (
     MODEL_ECOLOGY,
     ROUTING_MODES,
     TRAINING_WINDOWS,
+    _experiment_fingerprint,
+    _load_checkpoint,
+    _save_checkpoint,
     summarize_oos,
     _validate_input,
 )
@@ -25,6 +28,37 @@ def test_ultimate_matrix_axes_are_broad_and_explicit():
     assert set(CALIBRATION_MODES) == {"none", "global", "context", "full"}
     assert set(ROUTING_MODES) == {"global", "context", "dynamic"}
 
+
+
+def test_checkpoint_roundtrip_and_fingerprint_invalidates_on_input_change(tmp_path, monkeypatch):
+    input_path = tmp_path / "input.csv"
+    input_path.write_text("match_id,target\nm1,0\n", encoding="utf-8")
+    monkeypatch.setenv("GITHUB_SHA", "abc123")
+    first = _experiment_fingerprint(
+        input_path=input_path,
+        min_train=2000,
+        oos_block=4000,
+        random_state=42,
+        top_features=6,
+        top_combos=3,
+    )
+    checkpoint_path = tmp_path / "checkpoint.json"
+    state = {"fingerprint": first, "feature_rows": [{"variant": "strength_only"}]}
+    _save_checkpoint(checkpoint_path, state)
+    loaded = _load_checkpoint(checkpoint_path, first)
+    assert loaded["feature_rows"][0]["variant"] == "strength_only"
+
+    input_path.write_text("match_id,target\nm1,1\n", encoding="utf-8")
+    second = _experiment_fingerprint(
+        input_path=input_path,
+        min_train=2000,
+        oos_block=4000,
+        random_state=42,
+        top_features=6,
+        top_combos=3,
+    )
+    assert second != first
+    assert _load_checkpoint(checkpoint_path, second) == {"fingerprint": second}
 
 def test_summarize_oos_has_disjoint_screen_model_config_and_locked_layers():
     wf = pd.DataFrame(
