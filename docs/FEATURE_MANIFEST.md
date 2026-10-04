@@ -222,3 +222,14 @@ These are reference gates, not automatic promotion rules.
 - frozen holdout is never used for feature tuning;
 - evidence-affecting feature changes invalidate stale OOS evidence;
 - Production must preserve exact feature order and schema hash.
+
+
+## Dynamic match-state / event-hazard research candidate
+
+The research layer `src/research/match_state_hazard.py` introduces a separate candidate state representation for in-play prediction. It is RESEARCH_CANDIDATE only.
+
+State inputs are cutoff-safe elapsed time, remaining regulation time, current score, tied/leading/trailing regime, red-card state and optional pre-match priors. The candidate next-event target is one of HOME_GOAL, AWAY_GOAL, HOME_RED, AWAY_RED or NO_EVENT.
+
+Future states are propagated as deterministic probability mass rather than random Monte Carlo samples. This produces final 1X2 probabilities and a top-score distribution while reporting state pruning and retained mass.
+
+This feature family must not be fed to Production merely because the module exists. Historical snapshots require explicit source availability at or before the prediction cutoff, and the current main contains no verified historical in-play snapshot dataset for this layer. Adoption requires identical chronological OOS comparison, next-event calibration, final-outcome calibration, case-level slices, robustness and frozen-holdout evidence.
