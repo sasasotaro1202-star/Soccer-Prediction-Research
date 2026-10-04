@@ -207,3 +207,18 @@ Current main remains BLOCKED by recorded preflight test/data-audit failures; the
 ## GitHub-side autonomous operation — active on main after merge
 
 The repository control plane is designed to operate from GitHub Actions without a fresh chat instruction each cycle. The autonomous controller only merges explicitly marked hardening-safe PRs after current-main/base equality, same-repository checks, allowlisted changed paths, completed successful checks, PIT evidence when relevant, and a final head-SHA race check. Production/model/feature/calibration/target/frozen-holdout/performance changes remain outside this automatic merge policy. The controller emits an auditable artifact and never converts missing or ambiguous evidence into PASS.
+
+
+## Match-State / Event-Hazard research — 2026-10-05
+
+A new research-only dynamic match-state layer was added on branch `research/match-state-hazard-20261005` from the current main baseline. It is intentionally disconnected from the Production prediction path.
+
+The mechanism is: pre-match prior -> cutoff state -> discrete next-event hazard -> deterministic scenario propagation -> final 1X2 / score distribution. The initial state contract uses current score, elapsed time, remaining time, lead/trailing/draw regime and red-card state, with optional pre-match Elo/prior probabilities.
+
+The implementation enforces explicit PIT provenance (`source_available_at_utc <= prediction_cutoff_utc`) and rejects unverified snapshots, post-cutoff source evidence, label maturity at/before cutoff, invalid state and current-score/final-score inconsistencies. Retrieval time is never substituted for historical availability.
+
+Two research hazard candidates are registered: stable logistic and nonlinear HistGradientBoosting. Their existence is not selection evidence. The scenario engine uses deterministic probability-mass propagation so repeated evaluations are reproducible; discarded state mass is recorded explicitly.
+
+The GitHub Actions workflow is read-only and scheduled. It compiles, tests and runs the PIT/schema gate, producing WARMUP when the historical in-play dataset is absent. It does not modify Production, Champion, frozen holdout or registry state and it does not claim OOS performance.
+
+Status: IMPLEMENTED / RESEARCH_CANDIDATE. Performance remains UNKNOWN/UNVERIFIED until local chronological OOS, calibration, robustness and frozen-holdout gates are completed.
