@@ -47,7 +47,7 @@ jobs:
         run: python -m compileall -q src tests
 
       - name: Run focused research tests
-        run: python -m pytest -q tests/test_feature_set_variants.py tests/test_ultimate_matrix.py tests/test_ultimate_robustness.py tests/test_ultimate_robustness.py
+        run: python -m pytest -q tests/test_feature_set_variants.py tests/test_ultimate_matrix.py tests/test_ultimate_robustness.py
 
       - name: Run full deterministic preflight tests
         run: python -m pytest -q
