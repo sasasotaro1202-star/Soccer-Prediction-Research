@@ -200,6 +200,9 @@ class FootballDataWaybackAdapter(_BaseAdapter):
             "version": PIT_EVIDENCE_CACHE_VERSION,
             "url": str(url),
             "row_key": _normalized_row_key(row),
+            "match_id": row.get("match_id", ""),
+            "source_name": row.get("source_name", ""),
+            "source_record_id": row.get("source_record_id", ""),
             "lower_bound": lower_bound.isoformat() if lower_bound is not None else None,
         }
         digest = self._cache_key(json.dumps(key, sort_keys=True, default=str))
@@ -226,6 +229,9 @@ class FootballDataWaybackAdapter(_BaseAdapter):
             return None
         if payload.get("url") != str(url):
             return None
+        for field in ("match_id", "source_name", "source_record_id"):
+            if str(payload.get(field, "")) != str(row.get(field, "")):
+                return None
         return SourceEvidence(
             timestamp.isoformat(),
             "VERIFIED",
@@ -248,6 +254,9 @@ class FootballDataWaybackAdapter(_BaseAdapter):
             "status": "VERIFIED",
             "url": str(url),
             "row_key": list(row_key),
+            "match_id": row.get("match_id", ""),
+            "source_name": row.get("source_name", ""),
+            "source_record_id": row.get("source_record_id", ""),
             "lower_bound": lower_bound.isoformat(),
             "source_available_at_utc": timestamp.isoformat(),
             "evidence_url": evidence.evidence_url,
@@ -271,7 +280,7 @@ class FootballDataWaybackAdapter(_BaseAdapter):
         row_keys = [_normalized_row_key(r) for r in rows]
         bounds = [_result_lower_bound(r) for r in rows]
         results = [None] * len(rows)
-        unresolved = {k: i for i, k in enumerate(row_keys) if k is not None}
+        unresolved = {i for i, k in enumerate(row_keys) if k is not None}
 
         # Resume from immutable VERIFIED evidence first. Cached failures are never
         # consulted, so a later archive update can still turn an earlier miss into PASS.
@@ -281,7 +290,7 @@ class FootballDataWaybackAdapter(_BaseAdapter):
             cached = self._load_verified_evidence_cache(url, rows[i], lower_bound)
             if cached is not None:
                 results[i] = cached
-                del unresolved[row_keys[i]]
+                unresolved.remove(i)
 
         # A fully cached batch must resume without touching the archive control plane.
         if not unresolved:
@@ -391,8 +400,8 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                     if getattr(diagnostic, "status", None):
                         snapshot_errors.add(str(diagnostic.status))
                     continue
-                for key in diagnostic.keys.intersection(unresolved.keys()):
-                    i = unresolved[key]
+                matching_indices = [i for i in unresolved if row_keys[i] in diagnostic.keys]
+                for i in matching_indices:
                     conservative_bound, bound_reason = bounds[i]
                     if conservative_bound is None:
                         continue
@@ -407,7 +416,7 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                             f"archived_completed_result_first_observed_after_{accepted_reason}",
                         )
                         self._save_verified_evidence_cache(url, rows[i], conservative_bound, results[i])
-                        del unresolved[key]
+                        unresolved.remove(i)
 
         # PIT is fail-closed: a capture before the conservative publication lower
         # bound cannot be accepted merely because it already contains the final score.
