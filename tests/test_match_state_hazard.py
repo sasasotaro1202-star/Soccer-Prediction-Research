@@ -162,3 +162,10 @@ def test_match_state_workflow_is_autonomous_but_non_production():
     assert "performance_verified_false" in workflow
     assert "promotion_candidate_false" in workflow
     assert "|| true" not in workflow
+
+
+def test_match_state_workflow_can_persist_research_state_but_not_pr_state():
+    workflow = Path(".github/workflows/soccer-match-state-research.yml").read_text(encoding="utf-8")
+    assert "contents: write" in workflow
+    assert "github.event_name != 'pull_request'" in workflow
+    assert "Persist research status on main" in workflow
