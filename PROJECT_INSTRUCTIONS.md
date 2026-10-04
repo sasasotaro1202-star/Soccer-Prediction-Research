@@ -100,3 +100,7 @@ PIT replay remains scheduled and diagnostic; BLOCKED evidence is never promoted 
 Routine repository operation is expected to run from GitHub Actions without requiring a new chat instruction each cycle:
 MONITOR → RECONCILE → RETRY_TRANSIENT_FAILURE_ONCE → PIT_AUDIT → TEST → OOS/WFO → CALIBRATION/ROBUSTNESS → ADOPTION_GATE → SAFE_RELEASE.
 Automatic merge is limited to explicitly marked `automation_policy: hardening-safe-v1` hardening PRs whose base is the current `main`, whose diff stays inside the hardening allowlist, whose checks are complete and successful, and whose final head-SHA race check remains clean. Model, feature, calibration, target, frozen-holdout, production-bundle and performance-affecting research changes remain outside the automatic-merge policy.
+
+
+## GitHub-side state-based orchestrator
+The repository must not depend on exact cron timing for continuity. GitHub Actions runs a central `Soccer Autonomous Orchestrator` every 30 minutes and may catch up missing/stale routine lanes on `main`. It checks for active current-main runs before dispatching, respects per-lane minimum gaps, and records every DISPATCH/HOLD decision as an auditable artifact. It never grants performance claims, frozen-holdout access, or automatic production/model promotion.
