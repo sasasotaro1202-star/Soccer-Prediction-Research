@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from src.research.predictability_map import _predictability_score, analyze
 
@@ -69,13 +70,18 @@ def test_mature_outcomes_are_required_and_duplicate_states_reduce_to_latest_fixt
 
 def test_chronological_failure_risk_candidate_is_research_only():
     rows = []
-    for i in range(420):
+    for i in range(480):
         block_risk = 0.10 if i < 180 else 0.85
         # Keep both outcome classes present in every training window so the
         # five chronological OOS-block contract is exercised directly.
         wrong = (i < 180 and i % 10 == 0) or (i >= 180 and i % 2 == 0)
         rows.append(_row(i, risk=block_risk, wrong=wrong))
     frame = pd.DataFrame(rows)
+    # _validate_and_reduce deliberately collapses repeated fixture identities.
+    # Use unique identities here so the synthetic dataset can exercise five full
+    # chronological OOS blocks without accidentally losing rows to deduplication.
+    frame["match_id"] = [f"m{i}" for i in range(len(frame))]
+    frame["prediction_state_id"] = [f"s{i}" for i in range(len(frame))]
     frame["kickoff_utc"] = pd.date_range(
         "2026-01-01", periods=len(frame), freq="h", tz="UTC"
     )
@@ -86,7 +92,7 @@ def test_chronological_failure_risk_candidate_is_research_only():
         frame["kickoff_utc"] + pd.Timedelta(hours=2)
     )
     state = analyze(frame)
-    assert state["rows"] == 420
+    assert state["rows"] == 480
     assert len(state["oos_blocks"]) >= 5
     assert state["production_usable"] is False
     assert state["safety_contract"]["production_probabilities_changed"] is False
@@ -151,3 +157,23 @@ def test_predictability_gate_requires_meaningful_stable_development():
         "confidence_logloss": [0.5, 0.6, 0.65],
     })
     assert mod._development_improvement_rate(stronger) == 1.0
+
+
+
+def test_pit_invalid_pass_row_fails_closed():
+    row = _row(0, risk=0.2)
+    row["kickoff_utc"] = "2026-01-01T12:00:00Z"
+    row["prediction_pit_cutoff_utc"] = "2026-01-01T10:00:00Z"
+    row["experience_available_at_utc"] = "2026-01-01T09:00:00Z"
+    with pytest.raises(RuntimeError, match="PIT-invalid PASS"):
+        analyze(pd.DataFrame([row]))
+
+
+def test_optional_retrieval_after_cutoff_fails_closed():
+    row = _row(0, risk=0.2)
+    row["available_at_utc"] = "2026-01-01T09:00:00Z"
+    row["source_available_at_utc"] = "2026-01-01T09:00:00Z"
+    row["published_at_utc"] = "2026-01-01T09:00:00Z"
+    row["retrieved_at_utc"] = "2026-01-01T11:00:00Z"
+    with pytest.raises(RuntimeError, match="PIT-invalid PASS"):
+        analyze(pd.DataFrame([row]))
