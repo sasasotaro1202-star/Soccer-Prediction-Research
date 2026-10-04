@@ -86,3 +86,10 @@ From BTC-Prediction-Research, adopt feature/data/source lineage, experiment sche
 From 7-Sport-Prediction-Research, adopt competition/phase-aware scope management, specialist routing with sample/fold sufficiency checks, scheduled experience/reconciliation discipline, and strict separation of active production lanes from research-only scope.
 
 No domain-specific feature, model, metric result, threshold or production claim is transferred directly across projects. Every transferred mechanism follows DISCOVER → ABSTRACT_MECHANISM → COMPATIBILITY → ADAPT → LOCAL_PIT → LOCAL_OOS/WFO → ROBUSTNESS → LOCAL_FROZEN_HOLDOUT → SHADOW → PROMOTE.
+
+
+## GitHub-side autonomous operation contract
+GitHub Actions should perform the routine control loop without requiring a new chat instruction each cycle:
+MONITOR → RECONCILE → RETRY_TRANSIENT_FAILURE_ONCE → PIT_AUDIT → TEST → OOS/WFO → CALIBRATION/ROBUSTNESS → ADOPTION_GATE → SAFE_RELEASE.
+Automatic merge is permitted only for an explicitly marked `automation_policy: hardening-safe-v1` PR whose merge state is CLEAN, every reported check is completed successfully, and the changed-file allowlist contains no production/model/data/artifact mutation paths. Automatic merge must use a final head-SHA recheck. Model, feature, calibration, target, production bundle, frozen holdout and performance-affecting research changes are never auto-merged by the controller unless a future policy explicitly authorizes them after separate evidence.
+PIT replay remains scheduled and diagnostic; BLOCKED evidence is never promoted to PASS. Transient Action failures may receive one bounded failed-job rerun, but deterministic failures remain authoritative and blocking.
