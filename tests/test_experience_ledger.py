@@ -405,6 +405,7 @@ def test_record_normalizes_binary_target_probabilities(tmp_path, monkeypatch):
         "match_id": "espn:3",
         "kickoff_utc": "2026-09-26T10:00:00Z",
         "prediction_time_utc": "2026-09-26T08:00:00Z",
+        "source_available_at_utc": "2026-09-26T07:30:00Z",
         "home_team": "A",
         "away_team": "B",
         "competition": "EPL",
