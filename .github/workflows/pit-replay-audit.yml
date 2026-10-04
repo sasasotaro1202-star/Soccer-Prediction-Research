@@ -15,6 +15,22 @@ on:
         required: true
         default: "1"
         type: string
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/data/pit_source_adapter.py"
+      - "src/data/pit_source_adapter_v2.py"
+      - "src/data/pit_source_adapter_fast.py"
+      - "src/data/pit_archive_fallback.py"
+      - "src/data/pit_evidence.py"
+      - "src/data/source_registry.py"
+      - "src/data/football_data.py"
+      - "src/research/pit_replay_audit.py"
+      - "tests/test_pit_source_adapter.py"
+      - "tests/test_pit_feature_replay.py"
+      - "tests/test_pit_evidence.py"
+      - "tests/test_source_registry.py"
+      - ".github/workflows/pit-replay-audit.yml"
   push:
     paths:
       - "src/data/pit_source_adapter.py"
