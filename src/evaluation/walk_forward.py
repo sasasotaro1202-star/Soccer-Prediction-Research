@@ -713,8 +713,20 @@ def run_walk_forward(
     random_state: int = 42,
     case_output_path: str | None = None,
     candidate_names: list[str] | None = None,
+    max_train_rows: int | None = None,
+    calibration_mode: str = "full",
+    routing_mode: str = "dynamic",
+    prediction_mode: str = "ensemble",
 ):
     """Chronological PIT-safe walk-forward with disjoint selection/calibration validation."""
+    if calibration_mode not in {"none", "global", "context", "full"}:
+        raise ValueError(f"Unsupported calibration_mode: {calibration_mode}")
+    if routing_mode not in {"global", "context", "dynamic"}:
+        raise ValueError(f"Unsupported routing_mode: {routing_mode}")
+    if prediction_mode not in {"ensemble", "best_single"}:
+        raise ValueError(f"Unsupported prediction_mode: {prediction_mode}")
+    if max_train_rows is not None and int(max_train_rows) < 600:
+        raise ValueError("max_train_rows must be >= 600 when provided")
     if oos_block is None:
         oos_block = max(500, int(os.getenv("SOCCER_OOS_BLOCK", "2000")))
     validation_max = max(500, int(os.getenv("SOCCER_VALIDATION_MAX", "2000")))
@@ -729,7 +741,10 @@ def run_walk_forward(
     while start < len(d):
         fold_index = len(results)
         oos_end = _advance_past_same_kickoff(d, min(start + oos_block, len(d)))
-        train, oos = d.iloc[:start], d.iloc[start:oos_end]
+        train_start = max(0, start - int(max_train_rows)) if max_train_rows is not None else 0
+        train, oos = d.iloc[train_start:start], d.iloc[start:oos_end]
+        if len(train) < 600:
+            raise ValueError(f"Training slice became too short: {len(train)}")
         val_n = min(max(120, int(len(train) * validation_frac)), validation_max, max(120, len(train) - 300))
         fit, validation = train.iloc[:-val_n], train.iloc[-val_n:]
 
@@ -754,7 +769,7 @@ def run_walk_forward(
         dynamic_policy = {
             "schema_version": 1,
             "type": "drift_uncertainty_router",
-            "enabled": True,
+            "enabled": routing_mode == "dynamic",
             "drift_strength": 0.85,
             "uncertainty_strength": 0.75,
             "min_specialist_trust": 0.25,
@@ -784,7 +799,7 @@ def run_walk_forward(
             validation_models,
             feature_cols,
             weights,
-        )
+        ) if routing_mode in {"context", "dynamic"} else ({}, {"GLOBAL": "global_only"})
 
         # Probability calibration is fitted only on the second validation half.
         val_probs, _calibration_routes, calibration_risk_diag = _routed_ensemble_proba(
@@ -796,29 +811,43 @@ def run_walk_forward(
             dynamic_policy=dynamic_policy,
             return_diagnostics=True,
         )
+        if prediction_mode == "best_single":
+            val_probs = validation_models[best].predict_proba(val_calib[feature_cols])
         val_probs = np.clip(val_probs, 1e-9, 1.0)
         val_probs /= val_probs.sum(axis=1, keepdims=True)
         calibration_y = val_calib.target.astype(int)
-        calibration_temperature, calibration_used = _fit_temperature(calibration_y, val_probs)
-        contextual_temperatures, contextual_temperature_reasons = _contextual_temperatures(
-            calibration_y,
-            val_probs,
-            _calibration_routes,
-            calibration_temperature,
-        )
-        # Risk calibration is layered on top of the context calibration and is
-        # deliberately low-amplitude so uncertainty never becomes a large ad-hoc shift.
+
+        calibration_temperature = 1.0
+        calibration_used = False
+        contextual_temperatures = {"GLOBAL": 1.0}
+        contextual_temperature_reasons = {"GLOBAL": "calibration_disabled"}
+        risk_temperature_modifiers = {"LOW": 1.0, "MEDIUM": 1.0, "HIGH": 1.0}
+        risk_temperature_reasons = {
+            "LOW": "calibration_disabled",
+            "MEDIUM": "calibration_disabled",
+            "HIGH": "calibration_disabled",
+        }
+        if calibration_mode in {"global", "context", "full"}:
+            calibration_temperature, calibration_used = _fit_temperature(calibration_y, val_probs)
+        if calibration_mode in {"context", "full"}:
+            contextual_temperatures, contextual_temperature_reasons = _contextual_temperatures(
+                calibration_y,
+                val_probs,
+                _calibration_routes,
+                calibration_temperature,
+            )
         context_calibrated = _apply_contextual_temperatures(
             val_probs,
             _calibration_routes,
-            contextual_temperatures,
-            calibration_temperature,
+            contextual_temperatures if calibration_mode in {"context", "full"} else {"GLOBAL": 1.0},
+            calibration_temperature if calibration_mode in {"global", "context", "full"} else 1.0,
         )
-        risk_temperature_modifiers, risk_temperature_reasons = _risk_temperature_modifiers(
-            calibration_y,
-            context_calibrated,
-            calibration_risk_diag["risk"],
-        )
+        if calibration_mode == "full":
+            risk_temperature_modifiers, risk_temperature_reasons = _risk_temperature_modifiers(
+                calibration_y,
+                context_calibrated,
+                calibration_risk_diag["risk"],
+            )
 
         selected.append({
             "oos_fold": int(fold_index),
@@ -843,6 +872,10 @@ def run_walk_forward(
             "risk_temperature_modifiers": risk_temperature_modifiers,
             "risk_temperature_reasons": risk_temperature_reasons,
             "dynamic_routing": dynamic_policy,
+            "calibration_mode": calibration_mode,
+            "routing_mode": routing_mode,
+            "prediction_mode": prediction_mode,
+            "max_train_rows": max_train_rows,
         })
 
         # Refit candidates on all historical data available before this OOS block.
@@ -859,19 +892,23 @@ def run_walk_forward(
             dynamic_policy=dynamic_policy,
             return_diagnostics=True,
         )
+        if prediction_mode == "best_single":
+            probs = fitted[best].predict_proba(oos[feature_cols])
         probs = np.clip(probs, 1e-9, 1.0)
         probs /= probs.sum(axis=1, keepdims=True)
-        probs = _apply_contextual_temperatures(
-            probs,
-            _oos_routes,
-            contextual_temperatures,
-            calibration_temperature,
-        )
-        probs = _apply_risk_temperature_modifiers(
-            probs,
-            oos_risk_diag["risk"],
-            risk_temperature_modifiers,
-        )
+        if calibration_mode in {"global", "context", "full"}:
+            probs = _apply_contextual_temperatures(
+                probs,
+                _oos_routes,
+                contextual_temperatures if calibration_mode in {"context", "full"} else {"GLOBAL": 1.0},
+                calibration_temperature,
+            )
+        if calibration_mode == "full":
+            probs = _apply_risk_temperature_modifiers(
+                probs,
+                oos_risk_diag["risk"],
+                risk_temperature_modifiers,
+            )
 
         if case_output_path:
             labels = np.asarray([0, 1, 2], dtype=int)
@@ -945,6 +982,10 @@ def run_walk_forward(
             "target_met": bool(candidate_metrics["accuracy"] >= TARGET_ACCURACY),
             "target_gap": float(candidate_metrics["accuracy"] - TARGET_ACCURACY),
             "blend_optimizer_used": blend_optimizer_used,
+            "calibration_mode": calibration_mode,
+            "routing_mode": routing_mode,
+            "prediction_mode": prediction_mode,
+            "max_train_rows": max_train_rows,
         })
         start = oos_end
 
