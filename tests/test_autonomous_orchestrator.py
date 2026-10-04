@@ -12,7 +12,8 @@ def test_orchestrator_is_fail_closed_and_main_pinned():
     assert 'git/ref/heads/main' in text
     assert 'main_sha="$(api' in text
     assert 'gh workflow run "${workflow}" --repo "${GH_REPO}" --ref main' in text
-    assert 'and r.get("headSha") == main_sha' in text
+    assert 'r.get("headSha") == main_sha' in text
+    assert 'r.get("conclusion") == "success"' in text
     assert "DISPATCH:no_current_main_history" in text
     assert '"production_change_allowed": False' in text
     assert '"frozen_holdout_access_allowed": False' in text
