@@ -133,3 +133,21 @@ def test_run_is_fail_closed_warmup_without_dataset(tmp_path):
     assert status["oos_claimed"] is False
     saved = (tmp_path / "artifacts" / "match_state_status.json").read_text()
     assert '"research_only": true' in saved
+
+
+def test_chronological_hazard_oos_is_match_level_and_research_only():
+    frame = build_state_features(validate_snapshot_contract(_rows(150)))
+    from src.research.match_state_hazard import evaluate_hazard_chronological_oos
+    result = evaluate_hazard_chronological_oos(
+        frame,
+        method="logistic",
+        min_training_matches=60,
+        min_test_matches=10,
+        max_folds=2,
+    )
+    assert result["status"] == "EVALUATED"
+    assert result["oos_claimed"] is True
+    assert result["production_usable"] is False
+    assert result["policy"].startswith("match-level_expanding_chronological_OOS")
+    assert result["snapshot_rows"] > 0
+    assert np.isfinite(result["overall_next_event_logloss"])
