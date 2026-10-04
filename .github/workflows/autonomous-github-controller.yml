@@ -91,9 +91,11 @@ jobs:
               [ -n "${path}" ] || continue
               case "${path}" in
                 src/research/adoption_gate.py|src/research/stability_gate.py|src/research/engine.py|src/data/pit_source_adapter.py|src/data/pit_source_adapter_v2.py|src/data/pit_source_adapter_fast.py|src/data/pit_archive_fallback.py|src/data/pit_evidence.py|src/data/source_registry.py|src/data/football_data.py)
-                  if [[ "${path}" == ".github/workflows/pit-replay-audit.yml" ]]; then
-                    pit_sensitive=1
-                  fi
+                  case "${path}" in
+                    src/data/pit_*|src/data/source_registry.py|src/data/football_data.py)
+                      pit_sensitive=1
+                      ;;
+                  esac
                   ;;
                 tests/*|docs/*)
                   ;;
