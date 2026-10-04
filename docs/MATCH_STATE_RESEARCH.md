@@ -35,3 +35,7 @@ A match can generate multiple snapshots, so snapshot count is not an independent
 IMPLEMENTED / RESEARCH_CANDIDATE. This is not PERFORMANCE_VERIFIED, PROMOTION_CANDIDATE, ADOPTED or PRODUCTION.
 
 A missing historical in-play dataset produces WARMUP and no performance claim.
+
+## Hazard-label timing
+
+Each snapshot uses a bounded hazard window. `hazard_window_minutes` must be between 0 and 15 and is constant within one research dataset. For a non-NO_EVENT label, `next_event_time_utc` must be strictly after the prediction cutoff and no later than cutoff plus the hazard window. For NO_EVENT, `next_event_time_utc` must be missing. This prevents an event at the current cutoff from being accidentally treated as a future event.
