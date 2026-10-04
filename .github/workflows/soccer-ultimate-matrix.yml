@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: soccer-ultimate-matrix
+  group: soccer-ultimate-matrix-${{ github.event.pull_request.number || github.ref_name }}-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
