@@ -38,12 +38,14 @@ def _holdout_integrity(holdout: Mapping[str, Any]) -> tuple[bool, str]:
         return False, "holdout_not_explicitly_locked"
     if holdout.get("selection_frozen") is not True:
         return False, "holdout_selection_not_frozen"
-    if holdout.get("used_for_selection") is True:
-        return False, "holdout_was_used_for_selection"
-    if holdout.get("used_for_calibration") is True:
-        return False, "holdout_was_used_for_calibration"
-    if holdout.get("used_for_threshold_tuning") is True:
-        return False, "holdout_was_used_for_threshold_tuning"
+    usage_flags = {
+        "used_for_selection": "holdout_selection_usage_flag_missing_or_invalid",
+        "used_for_calibration": "holdout_calibration_usage_flag_missing_or_invalid",
+        "used_for_threshold_tuning": "holdout_threshold_usage_flag_missing_or_invalid",
+    }
+    for field, invalid_reason in usage_flags.items():
+        if holdout.get(field) is not False:
+            return False, invalid_reason
 
     development_end = _parse_utc(holdout.get("development_end_utc"))
     holdout_start = _parse_utc(holdout.get("holdout_start_utc"))
