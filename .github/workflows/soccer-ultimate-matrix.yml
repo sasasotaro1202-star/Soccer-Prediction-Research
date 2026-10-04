@@ -101,6 +101,20 @@ jobs:
           print("PIT FEATURE HANDOFF PASS")
           PY
 
+      - name: Fingerprint PIT feature handoff
+        id: pit_fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/pit_replay_features.csv
+          echo "sha256=$(sha256sum artifacts/pit_replay_features.csv | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore ultimate matrix checkpoint cache
+        id: ultimate_cache_restore
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: artifacts/ultimate_matrix
+          key: soccer-ultimate-matrix-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/research/ultimate_matrix.py', 'src/research/feature_set_variants.py', 'src/evaluation/walk_forward.py', 'src/models/baselines.py') }}-${{ steps.pit_fingerprint.outputs.sha256 }}
       - name: Run staged ultimate matrix
         env:
           PYTHONPATH: .
@@ -117,6 +131,12 @@ jobs:
             --top-features 6 \
             --top-combos 3
 
+      - name: Save ultimate matrix checkpoint cache
+        if: always() && steps.ultimate_cache_restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: artifacts/ultimate_matrix
+          key: soccer-ultimate-matrix-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/research/ultimate_matrix.py', 'src/research/feature_set_variants.py', 'src/evaluation/walk_forward.py', 'src/models/baselines.py') }}-${{ steps.pit_fingerprint.outputs.sha256 }}
       - name: Run winner robustness and case-level diagnostics
         id: robustness
         if: success()
