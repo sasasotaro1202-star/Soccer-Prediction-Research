@@ -16,7 +16,7 @@ def test_filter_keeps_only_prior_mature_states():
         "experience_available_at_utc": [
             "2026-01-01T09:00:00Z",
             "2026-01-01T11:00:00Z",
-            "2026-01-01T10:00:00Z",
+            "2026-01-01T11:00:00Z",
         ],
     })
     result = filter_prior_mature_training(
