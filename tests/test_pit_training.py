@@ -22,7 +22,7 @@ def test_filter_keeps_only_prior_mature_states():
     result = filter_prior_mature_training(
         frame, pd.Timestamp("2026-01-01T10:00:00Z")
     )
-    assert result["prediction_pit_cutoff_utc"].tolist() == [
+    assert pd.to_datetime(result["prediction_pit_cutoff_utc"], utc=True).tolist() == [
         pd.Timestamp("2026-01-01T08:00:00Z"),
     ]
 
