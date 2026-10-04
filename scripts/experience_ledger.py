@@ -149,6 +149,11 @@ def record_prediction_file(
         c for c in ("source_available_at_utc", "available_at_utc")
         if c in incoming.columns
     ]
+    if "pit_verified" not in incoming.columns:
+        raise RuntimeError(
+            "prediction ledger input missing required PIT provenance columns: ['pit_verified']"
+        )
+
     if not availability_columns:
         raise RuntimeError(
             "prediction ledger requires source_available_at_utc or available_at_utc; refusing unknown PIT"
@@ -158,6 +163,15 @@ def record_prediction_file(
     availability = pd.to_datetime(
         incoming[availability_columns[0]], utc=True, errors="coerce"
     )
+    pit_verified = incoming["pit_verified"].astype("string").str.strip().str.casefold()
+    pit_verified = pit_verified.map({
+        "true": True, "false": False, "1": True, "0": False, "yes": True, "no": False
+    })
+    if pit_verified.isna().any():
+        raise RuntimeError("prediction ledger contains invalid pit_verified values")
+    if bool((~pit_verified).any()):
+        raise RuntimeError("prediction ledger contains pit_verified=false; refusing unknown PIT")
+
     published = (
         pd.to_datetime(incoming["published_at_utc"], utc=True, errors="coerce")
         if "published_at_utc" in incoming.columns
@@ -190,6 +204,9 @@ def record_prediction_file(
                 "prediction ledger source availability aliases disagree; refusing ambiguous PIT"
             )
 
+    if bool((~pit_verified.astype(bool)).any()):
+        raise RuntimeError("prediction ledger contains pit_verified=false; refusing unknown PIT")
+
     if bool((cutoffs >= kickoff).any()):
         raise RuntimeError("prediction ledger contains a prediction at/after kickoff; refusing non-pregame state")
     if bool((availability > cutoffs).any()):
@@ -210,11 +227,6 @@ def record_prediction_file(
             raise RuntimeError(
                 "prediction ledger publication occurs after prediction cutoff; refusing unknown PIT"
             )
-        if bool((published < availability).any()):
-            raise RuntimeError(
-                "prediction ledger publication precedes source availability; refusing ambiguous PIT"
-            )
-
     if "retrieved_at_utc" in incoming.columns:
         if retrieved.isna().any():
             raise RuntimeError(
@@ -236,6 +248,7 @@ def record_prediction_file(
     incoming["source_available_at_utc"] = availability.map(
         lambda ts: pd.Timestamp(ts).isoformat()
     )
+    incoming["pit_verified"] = pit_verified.astype(bool).to_numpy()
     if "available_at_utc" not in incoming.columns:
         incoming["available_at_utc"] = incoming["source_available_at_utc"]
     incoming["prediction_pit_cutoff_utc"] = cutoffs.map(lambda ts: pd.Timestamp(ts).isoformat())
