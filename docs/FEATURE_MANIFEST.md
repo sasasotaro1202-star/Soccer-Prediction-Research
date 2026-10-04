@@ -222,3 +222,10 @@ These are reference gates, not automatic promotion rules.
 - frozen holdout is never used for feature tuning;
 - evidence-affecting feature changes invalidate stale OOS evidence;
 - Production must preserve exact feature order and schema hash.
+
+
+## Dynamic match-state / event-hazard research candidate
+
+`src/research/match_state_hazard.py` is a RESEARCH_CANDIDATE feature family, separate from the current production feature vector. It represents elapsed time, remaining time, current score, lead/trailing/draw regime and red-card state, with optional pre-match priors. It estimates a bounded next-event hazard and propagates future score/discipline states deterministically to derive 1X2 and top-score distributions.
+
+The feature family requires explicit per-snapshot PIT provenance and strict label maturity. Match-level chronological OOS is required before comparing methods; snapshot count is not treated as independent sample size. No Production eligibility is implied by implementation.
