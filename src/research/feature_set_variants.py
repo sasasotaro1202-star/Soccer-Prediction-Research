@@ -208,6 +208,20 @@ def select_feature_set(frame: pd.DataFrame, variant: str) -> tuple[list[str], di
             return fam == "strength"
         if variant == "strength_rest":
             return fam in {"strength", "rest"}
+        if variant == "strength_rest_history":
+            return fam in {"strength", "rest", "history_support"}
+        if variant == "form_3_only":
+            return fam in {"strength", "rest"} or (fam == "form" and w == 3)
+        if variant == "form_10_only":
+            return fam in {"strength", "rest"} or (fam == "form" and w == 10)
+        if variant == "form_20_only":
+            return fam in {"strength", "rest"} or (fam == "form" and w == 20)
+        if variant == "form_3_5":
+            return fam in {"strength", "rest"} or (fam == "form" and w in {3, 5})
+        if variant == "form_5_10":
+            return fam in {"strength", "rest"} or (fam == "form" and w in {5, 10})
+        if variant == "form_3_5_10":
+            return fam in {"strength", "rest"} or (fam == "form" and w in {3, 5, 10})
         if variant == "core_form_5":
             return fam in {"strength", "rest"} or (fam == "form" and w == 5)
         if variant == "form_3_10":
@@ -216,8 +230,20 @@ def select_feature_set(frame: pd.DataFrame, variant: str) -> tuple[list[str], di
             return fam in {"strength", "rest", "form"}
         if variant == "basic_stats_5":
             return fam in {"strength", "rest", "form"} or (fam == "basic_stats" and w == 5)
+        if variant == "basic_3_10":
+            return fam in {"strength", "rest", "form"} or (fam == "basic_stats" and w in {3, 10})
         if variant == "advanced_stats_5":
             return fam in {"strength", "rest", "form", "basic_stats"} or (fam == "advanced_stats" and w == 5)
+        if variant == "advanced_3_10":
+            return fam in {"strength", "rest", "form", "basic_stats"} or (fam == "advanced_stats" and w in {3, 10})
+        if variant == "xg_possession_dense":
+            if fam in {"strength", "rest", "form", "basic_stats"}:
+                return True
+            if fam == "advanced_stats":
+                return any(token in c for token in (
+                    "_xg_", "_possession_", "_pass_accuracy_", "_shots_inside_box_",
+                ))
+            return False
         if variant == "advanced_all":
             return fam in {"strength", "rest", "form", "basic_stats", "advanced_stats"}
         if variant == "h2h_momentum":
@@ -268,11 +294,21 @@ def select_feature_set(frame: pd.DataFrame, variant: str) -> tuple[list[str], di
 VARIANT_ORDER = (
     "strength_only",
     "strength_rest",
+    "strength_rest_history",
+    "form_3_only",
     "core_form_5",
+    "form_10_only",
+    "form_20_only",
+    "form_3_5",
     "form_3_10",
+    "form_5_10",
+    "form_3_5_10",
     "form_all",
     "basic_stats_5",
+    "basic_3_10",
     "advanced_stats_5",
+    "advanced_3_10",
+    "xg_possession_dense",
     "advanced_all",
     "h2h_momentum",
     "interactions",
@@ -392,14 +428,24 @@ def run_feature_set_research(
     selected_variants = list(variants or (
         "strength_only",
         "strength_rest",
+        "strength_rest_history",
+        "form_3_only",
         "core_form_5",
+        "form_10_only",
+        "form_3_5",
         "form_3_10",
+        "form_5_10",
+        "form_3_5_10",
         "form_all",
         "basic_stats_5",
+        "basic_3_10",
         "advanced_stats_5",
+        "advanced_3_10",
+        "xg_possession_dense",
         "advanced_all",
         "h2h_momentum",
-        "compact",
+        "interactions",
+        "difference_heavy",
     ))
     valid_names = {x["variant"] for x in variant_catalog()}
     unknown = [x for x in selected_variants if x not in valid_names]
