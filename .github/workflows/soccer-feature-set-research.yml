@@ -1,0 +1,181 @@
+name: Soccer Feature Set Research
+
+on:
+  push:
+    branches:
+      - "research/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+
+concurrency:
+  group: soccer-feature-set-research
+  cancel-in-progress: false
+
+jobs:
+  feature-set-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout exact research commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cache raw soccer data
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: data/raw
+          key: soccer-feature-research-raw-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/data/**/*.py', 'src/data/*.py') }}
+          restore-keys: soccer-feature-research-raw-${{ runner.os }}-
+
+      - name: Cache PIT archive evidence
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: data/raw/pit_evidence
+          key: soccer-feature-research-pit-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/data/pit_source_adapter_fast.py', 'src/data/pit_source_adapter_v2.py', 'src/data/pit_archive_fallback.py') }}
+          restore-keys: soccer-feature-research-pit-${{ runner.os }}-
+
+      - name: Install dependencies with bounded retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt; then
+              exit 0
+            fi
+            echo "dependency installation attempt ${attempt} failed; retrying..."
+            sleep $((attempt * 5))
+          done
+          exit 1
+
+      - name: Compile source and tests
+        run: python -m compileall -q src tests
+
+      - name: Run feature research regression tests
+        run: python -m pytest -q tests/test_feature_set_variants.py
+
+      - name: Run full deterministic preflight tests
+        id: tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          python -m pytest -q | tee artifacts/feature_research_pytest_stdout.txt
+
+      - name: Run fixture/source structural audit
+        id: audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          python -m src.data.fixture_field_audit | tee artifacts/feature_research_audit_stdout.json
+
+      - name: Enforce audit gate
+        id: audit_gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("artifacts/audit_summary.json")
+          if not p.exists():
+              raise SystemExit("audit_summary.json missing")
+          s = json.loads(p.read_text(encoding="utf-8"))
+          reasons = []
+          if not s.get("audit_execution_ok", False):
+              reasons.append("audit_execution_ok=false")
+          if int(s.get("duplicate_source_rows", 0)) != 0:
+              reasons.append("duplicate_source_rows!=0")
+          if int(s.get("collision_rows", 0)) != 0:
+              reasons.append("collision_rows!=0")
+          if int(s.get("team_mapping_invalid_rows", 0)) != 0:
+              reasons.append("team_mapping_invalid_rows!=0")
+          if not s.get("coverage_scope_complete", False):
+              reasons.append("coverage_scope_complete=false")
+          if reasons:
+              raise SystemExit("AUDIT GATE FAILED: " + "; ".join(reasons))
+          print("AUDIT GATE PASS")
+          PY
+
+      - name: Build strict PIT feature handoff
+        id: completion
+        shell: bash
+        env:
+          PIT_ENABLE_ARCHIVE_AUDIT: "1"
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          python -m src.data.completion_gate | tee artifacts/feature_research_completion_stdout.json
+          test -s artifacts/completion_gate.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          state = json.loads(Path("artifacts/completion_gate.json").read_text(encoding="utf-8"))
+          if not state.get("full_gate_passed", False):
+              raise SystemExit(
+                  "COMPLETION/PIT GATE FAILED: " + "; ".join(state.get("blocking_reasons", []))
+              )
+          if not Path("artifacts/pit_replay_features.csv").is_file():
+              raise SystemExit("pit_replay_features.csv missing after completion gate")
+          print("PIT FEATURE HANDOFF PASS")
+          PY
+
+      - name: Run feature-set WFO matrix
+        id: research
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/feature_set_research
+          python -m src.research.feature_set_variants             --input artifacts/pit_replay_features.csv             --output-dir artifacts/feature_set_research             --min-train 2000             --oos-block 4000
+
+      - name: Publish feature research status
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## Soccer feature-set research"
+            if [ -s artifacts/feature_set_research/feature_set_research_status.json ]; then
+              python - <<'PY'
+          import json
+          from pathlib import Path
+          state = json.loads(
+              Path("artifacts/feature_set_research/feature_set_research_status.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          winner = state.get("winner") or {}
+          print(f"- Status={state.get('status')}")
+          print(f"- Variants tested={state.get('variant_count', 0)}")
+          print(f"- Winner={winner.get('variant', 'UNKNOWN')}")
+          print(f"- Winner development relative LogLoss improvement={winner.get('development_relative_logloss_improvement')}")
+          print("- Locked OOS used for selection=False")
+          print("- Production changed=False")
+          PY
+            else
+              echo "- Feature-set matrix did not execute."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload feature research artifacts
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-feature-set-research-${{ github.sha }}
+          path: artifacts/
+          retention-days: 14
+          if-no-files-found: warn
