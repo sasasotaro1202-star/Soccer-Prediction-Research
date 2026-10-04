@@ -18,6 +18,8 @@ def _base_row(**extra):
         "p_draw": 0.25,
         "p_away": 0.25,
         "model_version": "v1",
+        "source_available_at_utc": "2026-09-26T07:30:00Z",
+        "pit_verified": True,
     }
     row.update(extra)
     return row
