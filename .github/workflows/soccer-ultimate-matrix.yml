@@ -1,9 +1,6 @@
 name: Soccer Ultimate Experiment Matrix
 
 on:
-  push:
-    branches:
-      - "research/**"
   pull_request:
     branches:
       - main
