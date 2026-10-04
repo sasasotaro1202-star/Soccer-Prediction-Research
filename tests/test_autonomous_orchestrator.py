@@ -23,6 +23,7 @@ def test_orchestrator_has_pit_and_research_reconciliation_lanes():
         "soccer-research-robust.yml",
         "soccer-predictability-research.yml",
         "soccer-historical-learning.yml",
+        "soccer-experience-ledger.yml",
         "adaptive_data_discovery.yml",
         "soccer-scope-frontier.yml",
         "pit-replay-audit.yml",
