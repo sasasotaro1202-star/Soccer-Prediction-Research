@@ -9,11 +9,13 @@ on:
       - "src/research/predictability_calibration.py"
       - "src/research/pit_training.py"
       - "src/research/future_model_failure_oos.py"
+      - "tests/test_pit_training.py"
       - "tests/test_predictability_map.py"
       - "tests/test_temporal_conformal_sets.py"
       - "tests/test_predictability_calibration.py"
       - "tests/test_predictability_calibration_pit_provenance.py"
       - "tests/test_future_model_failure_oos.py"
+      - "tests/test_pit_training.py"
       - ".github/workflows/soccer-predictability-research.yml"
   workflow_dispatch:
   schedule:
@@ -70,7 +72,7 @@ jobs:
         run: python -m compileall -q src tests
 
       - name: Run predictability, calibration and conformal regression tests
-        run: python -m pytest -q tests/test_predictability_map.py tests/test_predictability_calibration.py tests/test_predictability_calibration_pit_provenance.py tests/test_temporal_conformal_sets.py tests/test_future_model_failure_oos.py
+        run: python -m pytest -q tests/test_predictability_map.py tests/test_predictability_calibration.py tests/test_predictability_calibration_pit_provenance.py tests/test_temporal_conformal_sets.py tests/test_future_model_failure_oos.py tests/test_pit_training.py
 
       - name: Build chronological predictability calibration artifacts
         run: |
