@@ -363,3 +363,32 @@ def test_verified_evidence_cache_revalidates_lower_bound(tmp_path):
     path = adapter._evidence_cache_path("https://example.invalid/test.csv", row, bound)
     path.write_text("{\"cache_version\":1,\"status\":\"VERIFIED\",\"url\":\"https://example.invalid/test.csv\",\"row_key\":[\"2025-09-01\",\"teama\",\"teamb\",2.0,1.0,\"H\"],\"source_available_at_utc\":\"2025-09-01T20:00:00+00:00\"}", encoding="utf-8")
     assert adapter._load_verified_evidence_cache("https://example.invalid/test.csv", row, bound) is None
+
+
+def test_resumable_pit_replay_preserves_duplicate_row_keys(tmp_path, monkeypatch):
+    adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
+    captures = [{"timestamp": "20250901220000", "digest": "digest-1", "original": "https://example.invalid/test.csv"}]
+    monkeypatch.setattr(adapter, "captures", lambda url: captures)
+    monkeypatch.setenv("PIT_CAPTURE_BATCH_SIZE", "1")
+
+    def fake_snapshot(capture, original_url):
+        return type("Diag", (), {
+            "status": "SNAPSHOT_PARSED",
+            "keys": {("2025-09-01", "teama", "teamb", 2.0, 1.0, "H")},
+        })()
+
+    monkeypatch.setattr(adapter, "_load_snapshot_keys", fake_snapshot)
+    rows = [pd.Series({
+        "match_id": "source-a", "source_name": "same-source", "source_record_id": "1",
+        "source_event_date": "2025-09-01", "kickoff_utc": "2025-09-01T18:00:00Z",
+        "kickoff_time_available": True, "home_team": "Team A", "away_team": "Team B",
+        "home_goals": 2, "away_goals": 1, "result": "H",
+    }), pd.Series({
+        "match_id": "source-b", "source_name": "same-source", "source_record_id": "2",
+        "source_event_date": "2025-09-01", "kickoff_utc": "2025-09-01T18:00:00Z",
+        "kickoff_time_available": True, "home_team": "Team A", "away_team": "Team B",
+        "home_goals": 2, "away_goals": 1, "result": "H",
+    })]
+    result = adapter._prefetch_url("https://example.invalid/test.csv", rows, workers=1)
+    assert [item.evidence_status for item in result] == ["VERIFIED", "VERIFIED"]
+    assert [item.capture_digest for item in result] == ["digest-1", "digest-1"]
