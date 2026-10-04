@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+from pathlib import Path
 
 from src.research.match_state_hazard import (
     EVENT_TYPES,
@@ -151,3 +152,13 @@ def test_chronological_hazard_oos_is_match_level_and_research_only():
     assert result["policy"].startswith("match-level_expanding_chronological_OOS")
     assert result["snapshot_rows"] > 0
     assert np.isfinite(result["overall_next_event_logloss"])
+
+
+def test_match_state_workflow_is_autonomous_but_non_production():
+    workflow = Path(".github/workflows/soccer-match-state-research.yml").read_text(encoding="utf-8")
+    assert "actions: write" in workflow
+    assert 'gh workflow run "adaptive_data_discovery.yml"' in workflow
+    assert 'gh workflow run "soccer-source-probe.yml"' in workflow
+    assert "performance_verified_false" in workflow
+    assert "promotion_candidate_false" in workflow
+    assert "|| true" not in workflow
