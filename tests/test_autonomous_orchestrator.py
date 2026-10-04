@@ -68,6 +68,13 @@ def test_orchestrator_supplies_required_pit_replay_inputs():
     assert "-f rows_per_season=1" in text
 
 
+def test_orchestrator_has_bounded_dispatch_and_active_run_caps():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "dispatch_budget=6" in text
+    assert "max_active_runs=10" in text
+    assert "dispatch_budget_exhausted" in text
+    assert "active_run_cap" in text
+
 def test_orchestrator_includes_match_state_research_lane():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert 'ensure_lane "soccer-match-state-research.yml" 360 60' in text
