@@ -101,6 +101,28 @@ def test_record_rejects_missing_source_availability(tmp_path, monkeypatch):
         mod.record_prediction_file(str(predictions))
 
 
+def test_record_rejects_missing_pit_verified(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+
+    predictions = tmp_path / "predictions.csv"
+    monkeypatch.setattr(mod, "LEDGER", tmp_path / "ledger.csv")
+    pd.DataFrame([{
+        "match_id": "espn:no-pit-flag",
+        "kickoff_utc": "2026-09-26T10:00:00Z",
+        "prediction_time_utc": "2026-09-26T08:00:00Z",
+        "source_available_at_utc": "2026-09-26T07:30:00Z",
+        "home_team": "A",
+        "away_team": "B",
+        "competition": "EPL",
+        "p_home": 0.5,
+        "p_draw": 0.25,
+        "p_away": 0.25,
+        "model_version": "v1",
+    }]).to_csv(predictions, index=False)
+    with pytest.raises(RuntimeError, match="pit_verified"):
+        mod.record_prediction_file(str(predictions))
+
+
 def test_record_rejects_unverified_pit_state(tmp_path, monkeypatch):
     from scripts import experience_ledger as mod
 
@@ -198,6 +220,30 @@ def test_record_normalizes_available_alias_and_validates_ordering(tmp_path, monk
     recorded = pd.read_csv(ledger)
     assert recorded.loc[0, "source_available_at_utc"] == "2026-09-26T07:30:00+00:00"
     assert recorded.loc[0, "available_at_utc"] == "2026-09-26T07:30:00+00:00"
+
+
+def test_record_rejects_disagreeing_availability_aliases(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+
+    predictions = tmp_path / "predictions.csv"
+    monkeypatch.setattr(mod, "LEDGER", tmp_path / "ledger.csv")
+    pd.DataFrame([{
+        "match_id": "espn:alias-conflict",
+        "kickoff_utc": "2026-09-26T10:00:00Z",
+        "prediction_time_utc": "2026-09-26T08:00:00Z",
+        "source_available_at_utc": "2026-09-26T07:30:00Z",
+        "available_at_utc": "2026-09-26T07:31:00Z",
+        "pit_verified": True,
+        "home_team": "A",
+        "away_team": "B",
+        "competition": "EPL",
+        "p_home": 0.5,
+        "p_draw": 0.25,
+        "p_away": 0.25,
+        "model_version": "v1",
+    }]).to_csv(predictions, index=False)
+    with pytest.raises(RuntimeError, match="aliases disagree"):
+        mod.record_prediction_file(str(predictions))
 
 
 def test_record_allows_publication_before_source_availability(tmp_path, monkeypatch):
