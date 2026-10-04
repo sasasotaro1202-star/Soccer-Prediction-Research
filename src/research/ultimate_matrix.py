@@ -18,6 +18,8 @@ BASE_MODELS = (
     "dynamic_elo_logistic",
     "logistic",
     "logistic_select",
+    "extra_trees",
+    "random_forest",
     "hist_gb",
 )
 
@@ -32,27 +34,37 @@ MODEL_ECOLOGY = (
     "quantile_32",
     "quantile_128",
     "logistic",
+    "logistic_c0_05",
     "logistic_c0_15",
+    "logistic_c0_5",
     "logistic_c2",
     "logistic_c4",
+    "logistic_c8",
+    "logistic_l1",
     "logistic_select",
     "logistic_l2_strong",
     "extra_trees",
     "extra_trees_600",
+    "extra_trees_minleaf15",
     "random_forest",
     "random_forest_600",
+    "random_forest_minleaf15",
     "hist_gb",
     "hist_gb_robust",
     "hist_gb_deep",
     "hist_gb_high_reg",
+    "hist_gb_shallow",
+    "hist_gb_wide",
 )
 
 CALIBRATION_MODES = ("none", "global", "context", "full")
 ROUTING_MODES = ("global", "context", "dynamic")
 TRAINING_WINDOWS = (
     ("expanding", None),
+    ("rolling_4000", 4000),
     ("rolling_8000", 8000),
     ("rolling_12000", 12000),
+    ("rolling_16000", 16000),
 )
 
 LOCKED_BLOCKS = 2
@@ -117,39 +129,49 @@ def summarize_oos(wf: pd.DataFrame) -> dict:
     if wf.empty:
         raise RuntimeError("Cannot summarize empty WFO result")
     blocks = len(wf)
-    locked_n = min(LOCKED_BLOCKS, blocks)
-    dev = wf.iloc[: max(0, blocks - locked_n)]
-    locked = wf.tail(locked_n)
+    required_blocks = LOCKED_BLOCKS + (2 * 3)
+    if blocks < required_blocks:
+        raise RuntimeError(
+            f"Ultimate matrix requires at least {required_blocks} chronological OOS blocks; got {blocks}"
+        )
 
-    confirm_n = min(CONFIRM_BLOCKS, len(dev))
-    screen = dev.iloc[:-confirm_n] if confirm_n else dev
-    confirm = dev.tail(confirm_n) if confirm_n else dev.iloc[0:0]
+    locked = wf.tail(LOCKED_BLOCKS)
+    dev = wf.iloc[:-LOCKED_BLOCKS]
+    config_confirm = dev.tail(2)
+    model_confirm = dev.iloc[-4:-2]
+    screen = dev.iloc[:-4]
 
     return {
         "blocks": int(blocks),
         "development_blocks": int(len(dev)),
         "screen_blocks": int(len(screen)),
-        "confirm_blocks": int(len(confirm)),
+        "model_confirm_blocks": int(len(model_confirm)),
+        "config_confirm_blocks": int(len(config_confirm)),
         "locked_blocks": int(len(locked)),
-        "development_n": int(pd.to_numeric(dev["n"]).sum()) if not dev.empty else 0,
-        "screen_n": int(pd.to_numeric(screen["n"]).sum()) if not screen.empty else 0,
-        "confirm_n": int(pd.to_numeric(confirm["n"]).sum()) if not confirm.empty else 0,
-        "locked_n": int(pd.to_numeric(locked["n"]).sum()) if not locked.empty else 0,
+        "development_n": int(pd.to_numeric(dev["n"]).sum()),
+        "screen_n": int(pd.to_numeric(screen["n"]).sum()),
+        "model_confirm_n": int(pd.to_numeric(model_confirm["n"]).sum()),
+        "config_confirm_n": int(pd.to_numeric(config_confirm["n"]).sum()),
+        "locked_n": int(pd.to_numeric(locked["n"]).sum()),
         "development_logloss": _weighted(dev, "logloss"),
         "screen_logloss": _weighted(screen, "logloss"),
-        "confirm_logloss": _weighted(confirm, "logloss"),
+        "model_confirm_logloss": _weighted(model_confirm, "logloss"),
+        "config_confirm_logloss": _weighted(config_confirm, "logloss"),
         "locked_logloss": _weighted(locked, "logloss"),
         "development_brier": _weighted(dev, "brier"),
         "screen_brier": _weighted(screen, "brier"),
-        "confirm_brier": _weighted(confirm, "brier"),
+        "model_confirm_brier": _weighted(model_confirm, "brier"),
+        "config_confirm_brier": _weighted(config_confirm, "brier"),
         "locked_brier": _weighted(locked, "brier"),
         "development_accuracy": _weighted(dev, "accuracy"),
         "screen_accuracy": _weighted(screen, "accuracy"),
-        "confirm_accuracy": _weighted(confirm, "accuracy"),
+        "model_confirm_accuracy": _weighted(model_confirm, "accuracy"),
+        "config_confirm_accuracy": _weighted(config_confirm, "accuracy"),
         "locked_accuracy": _weighted(locked, "accuracy"),
         "development_ece": _weighted(dev, "ece"),
         "screen_ece": _weighted(screen, "ece"),
-        "confirm_ece": _weighted(confirm, "ece"),
+        "model_confirm_ece": _weighted(model_confirm, "ece"),
+        "config_confirm_ece": _weighted(config_confirm, "ece"),
         "locked_ece": _weighted(locked, "ece"),
         "oos_window_signature": str(wf["oos_window_signature"].iloc[0]),
     }
@@ -328,6 +350,51 @@ def run_ultimate_matrix(
     config_table = pd.DataFrame(config_rows)
     config_table.to_csv(out / "ultimate_configuration_screen.csv", index=False)
 
+    # Final configuration-mode robustness screen: keep this as a small, predeclared
+    # perturbation rather than reusing the same confirmation slice for broad tuning.
+    top_config = (
+        config_table.sort_values(
+            ["config_confirm_logloss", "config_confirm_brier", "config_confirm_ece"],
+            kind="mergesort",
+        )
+        .head(int(top_combos))
+        .copy()
+    )
+    prediction_mode_rows = []
+    for _, combo in top_config.iterrows():
+        cols, meta = select_feature_set(frame, str(combo["variant"]))
+        model_name = str(combo["model_name"])
+        anchor_model = "logistic" if model_name != "logistic" else "logistic_c0_15"
+        for prediction_mode in ("fixed", "best_single", "ensemble"):
+            mode_arg = (
+                f"fixed:{model_name}" if prediction_mode == "fixed" else prediction_mode
+            )
+            wf, _ = run_walk_forward(
+                frame,
+                cols,
+                min_train=min_train,
+                oos_block=oos_block,
+                random_state=random_state,
+                candidate_names=[model_name, anchor_model],
+                calibration_mode=str(combo["calibration_mode"]),
+                routing_mode=str(combo["routing_mode"]),
+                prediction_mode=mode_arg,
+                max_train_rows=(
+                    None if str(combo["training_window"]) == "expanding"
+                    else int(combo["max_train_rows"])
+                ),
+            )
+            row = {**meta, **summarize_oos(wf)}
+            row["model_name"] = model_name
+            row["prediction_mode_variant"] = prediction_mode
+            row["base_training_window"] = str(combo["training_window"])
+            row["base_calibration_mode"] = str(combo["calibration_mode"])
+            row["base_routing_mode"] = str(combo["routing_mode"])
+            prediction_mode_rows.append(row)
+
+    prediction_mode_table = pd.DataFrame(prediction_mode_rows)
+    prediction_mode_table.to_csv(out / "ultimate_prediction_mode_screen.csv", index=False)
+
     baseline_mask = (
         (config_table["training_window"] == "expanding")
         & (config_table["calibration_mode"] == "full")
@@ -339,7 +406,7 @@ def run_ultimate_matrix(
 
     winners = (
         config_table.sort_values(
-            ["confirm_logloss", "confirm_brier", "confirm_ece",
+            ["config_confirm_logloss", "config_confirm_brier", "config_confirm_ece",
              "training_window", "calibration_mode", "routing_mode"],
             kind="mergesort",
         )
@@ -365,19 +432,20 @@ def run_ultimate_matrix(
         "locked_blocks": LOCKED_BLOCKS,
         "winner": winner,
         "winner_vs_same_combo_baseline": {
-            "confirm_logloss_delta": float(winner["confirm_logloss"] - winner_baseline["confirm_logloss"]),
+            "config_confirm_logloss_delta": float(winner["config_confirm_logloss"] - winner_baseline["config_confirm_logloss"]),
             "locked_logloss_delta": float(winner["locked_logloss"] - winner_baseline["locked_logloss"]),
-            "confirm_brier_delta": float(winner["confirm_brier"] - winner_baseline["confirm_brier"]),
+            "config_confirm_brier_delta": float(winner["config_confirm_brier"] - winner_baseline["config_confirm_brier"]),
             "locked_brier_delta": float(winner["locked_brier"] - winner_baseline["locked_brier"]),
-            "confirm_accuracy_delta": float(winner["confirm_accuracy"] - winner_baseline["confirm_accuracy"]),
+            "config_confirm_accuracy_delta": float(winner["config_confirm_accuracy"] - winner_baseline["config_confirm_accuracy"]),
             "locked_accuracy_delta": float(winner["locked_accuracy"] - winner_baseline["locked_accuracy"]),
-            "confirm_ece_delta": float(winner["confirm_ece"] - winner_baseline["confirm_ece"]),
+            "config_confirm_ece_delta": float(winner["config_confirm_ece"] - winner_baseline["config_confirm_ece"]),
             "locked_ece_delta": float(winner["locked_ece"] - winner_baseline["locked_ece"]),
         },
         "selection_firewall": {
             "feature_selection": "screen_blocks_only",
-            "model_selection": "confirm_blocks_only_after_feature_screen",
-            "configuration_selection": "confirm_blocks_only",
+            "model_selection": "model_confirm_blocks_only_after_feature_screen",
+            "configuration_selection": "config_confirm_blocks_only_after_model_screen",
+            "prediction_mode_screen": "small_predeclared_perturbation_after_configuration_candidate_screen",
             "locked_oos_used_for_selection": False,
             "frozen_holdout_used_for_selection": False,
             "same_oos_window_required": True,
