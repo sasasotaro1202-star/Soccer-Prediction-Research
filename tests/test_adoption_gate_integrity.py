@@ -12,6 +12,8 @@ def _valid_holdout(**overrides):
         "used_for_threshold_tuning": False,
         "development_end_utc": "2024-12-31T23:59:59Z",
         "holdout_start_utc": "2025-01-01T00:00:00Z",
+        "pit_status": "PASS",
+        "pit_violations": 0,
         "baseline": {"logloss": 1.0, "brier": 0.25, "ece": 0.10, "accuracy": 0.50},
         "candidate": {"logloss": 0.90, "brier": 0.24, "ece": 0.09, "accuracy": 0.51},
     }
@@ -19,8 +21,36 @@ def _valid_holdout(**overrides):
     return payload
 
 
+
+def _stability_folds():
+    return [
+        {
+            "league": "EPL",
+            "season": "2022",
+            "baseline": {"logloss": 1.00, "brier": 0.25, "accuracy": 0.50},
+            "candidate": {"logloss": 0.95, "brier": 0.24, "accuracy": 0.51},
+        },
+        {
+            "league": "Bundesliga",
+            "season": "2023",
+            "baseline": {"logloss": 1.02, "brier": 0.25, "accuracy": 0.50},
+            "candidate": {"logloss": 0.98, "brier": 0.24, "accuracy": 0.51},
+        },
+        {
+            "league": "Serie A",
+            "season": "2024",
+            "baseline": {"logloss": 1.01, "brier": 0.25, "accuracy": 0.50},
+            "candidate": {"logloss": 0.99, "brier": 0.24, "accuracy": 0.51},
+        },
+    ]
+
+
 def test_valid_locked_holdout_can_adopt():
-    result = independent_adoption_gate({}, _valid_holdout())
+    result = independent_adoption_gate(
+        {"development_oos": True},
+        _valid_holdout(),
+        stability_folds=_stability_folds(),
+    )
     assert result["status"] == "ADOPT"
     assert result["holdout_integrity_verified"] is True
 
@@ -38,14 +68,14 @@ def test_missing_lock_metadata_fails_closed():
 
 
 def test_holdout_used_for_selection_is_blocked():
-    result = independent_adoption_gate({}, _valid_holdout(used_for_selection=True))
+    result = independent_adoption_gate({"development_oos": True}, _valid_holdout(used_for_selection=True), stability_folds=_stability_folds())
     assert result["status"] == "HOLD"
     assert result["reason"] == "holdout_was_used_for_selection"
 
 
 def test_holdout_overlap_is_blocked():
     result = independent_adoption_gate(
-        {},
+        {"development_oos": True},
         _valid_holdout(holdout_start_utc="2024-12-31T23:00:00Z"),
     )
     assert result["status"] == "HOLD"
@@ -54,7 +84,7 @@ def test_holdout_overlap_is_blocked():
 
 def test_naive_holdout_boundary_fails_closed():
     result = independent_adoption_gate(
-        {},
+        {"development_oos": True},
         _valid_holdout(development_end_utc="2024-12-31T23:59:59"),
     )
     assert result["status"] == "HOLD"
@@ -63,11 +93,43 @@ def test_naive_holdout_boundary_fails_closed():
 
 def test_offset_boundaries_are_compared_in_utc():
     result = independent_adoption_gate(
-        {},
+        {"development_oos": True},
         _valid_holdout(
             development_end_utc="2024-12-31T21:00:00-02:00",
             holdout_start_utc="2025-01-01T00:00:00Z",
         ),
+        stability_folds=_stability_folds(),
     )
     assert result["status"] == "ADOPT"
     assert result["holdout_integrity_verified"] is True
+
+
+
+def test_adoption_requires_zero_pit_violations():
+    result = independent_adoption_gate(
+        {"development_oos": True},
+        _valid_holdout(pit_violations=1),
+        stability_folds=_stability_folds(),
+    )
+    assert result["status"] == "HOLD"
+    assert result["reason"] == "pit_violations_present"
+
+
+def test_adoption_requires_explicit_stability_evidence():
+    result = independent_adoption_gate({"development_oos": True}, _valid_holdout())
+    assert result["status"] == "HOLD"
+    assert result["reason"] == "stability_evidence_missing"
+
+
+def test_adoption_requires_reference_relative_improvement_thresholds():
+    result = independent_adoption_gate(
+        {"development_oos": True},
+        _valid_holdout(
+            baseline={"logloss": 1.0, "brier": 0.25, "ece": 0.10, "accuracy": 0.50},
+            candidate={"logloss": 0.98, "brier": 0.249, "ece": 0.10, "accuracy": 0.50},
+        ),
+        stability_folds=_stability_folds(),
+    )
+    assert result["status"] == "REJECT"
+    assert result["primary_logloss_relative_improvement"] < 0.03
+    assert result["auxiliary_brier_relative_improvement"] < 0.01
