@@ -102,6 +102,10 @@ def test_predictability_workflow_warmup_uses_frozen_holdout_key():
     text = workflow.read_text(encoding="utf-8")
     assert '"frozen_holdout_touched": False' in text
     assert '"locked_holdout_touched": False' not in text
+    assert "Install dependencies with bounded retry" in text
+    assert "for attempt in 1 2 3; do" in text
+    assert 'if [ "${attempt}" -eq 3 ]; then' in text
+    assert "set -euo pipefail" in text
 
 
 def test_calibration_gate_requires_meaningful_stable_development():
