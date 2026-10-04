@@ -26,6 +26,30 @@ def test_stability_passes_when_improvement_is_repeatable():
     result = evaluate_stability(folds)
     assert result["status"] == "PASS"
     assert result["worst_logloss_delta"] <= 0
+    assert result["min_improved_fraction"] == .70
+
+
+def test_project_70_percent_gate_rejects_two_of_three_metric_non_regression():
+    folds = [
+        _fold("EPL", 2022, 1.00, .95, b_base=.25, b_cand=.24),
+        _fold("Bundesliga", 2023, 1.02, .98, b_base=.25, b_cand=.24),
+        _fold("Serie A", 2024, 1.01, .99, b_base=.25, b_cand=.26),
+    ]
+    result = evaluate_stability(folds)
+    assert result["status"] == "HOLD"
+    assert result["brier_improved_or_equal_folds"] == 2
+    assert result["min_improved_fraction"] == .70
+
+
+def test_weaker_than_project_fraction_is_rejected():
+    folds = [
+        _fold("EPL", 2022, 1.00, .95),
+        _fold("Bundesliga", 2023, 1.02, .98),
+        _fold("Serie A", 2024, 1.01, .99),
+    ]
+    result = evaluate_stability(folds, min_improved_fraction=2 / 3)
+    assert result["status"] == "HOLD"
+    assert result["reason"] == "improved_fraction_below_project_minimum_or_invalid"
 
 
 def test_one_logloss_regression_blocks_stability():
