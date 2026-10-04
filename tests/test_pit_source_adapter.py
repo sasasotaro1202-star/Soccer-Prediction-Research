@@ -287,3 +287,79 @@ def test_compatibility_adapter_default_timeout_none_reaches_resilience_layer(tmp
     assert observed
     assert observed[0]["timeout"] is None
     assert observed[0]["retries"] == 1
+
+
+def test_verified_evidence_cache_resumes_without_new_archive_fetch(tmp_path, monkeypatch):
+    adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
+    row = pd.Series({
+        "competition": "EPL",
+        "season_start": 2025,
+        "source_event_date": "2025-09-01",
+        "kickoff_utc": "2025-09-01T18:00:00Z",
+        "kickoff_time_available": True,
+        "home_team": "Team A",
+        "away_team": "Team B",
+        "home_goals": 2,
+        "away_goals": 1,
+        "result": "H",
+    })
+    evidence = SourceEvidence(
+        "2025-09-01T22:00:00+00:00",
+        "VERIFIED",
+        "https://web.archive.org/web/20250901220000id_/https://example.invalid/test.csv",
+        "digest-2",
+        "verified-test",
+    )
+    lower_bound, _ = _result_lower_bound(row)
+    adapter._save_verified_evidence_cache("https://example.invalid/test.csv", row, lower_bound, evidence)
+
+    def fail_fetch(*args, **kwargs):
+        raise AssertionError("archive snapshot must not be fetched when VERIFIED cache is valid")
+
+    monkeypatch.setattr(adapter, "captures", fail_fetch)
+    resumed = adapter._prefetch_url("https://example.invalid/test.csv", [row], workers=1)[0]
+
+    assert resumed.evidence_status == "VERIFIED"
+    assert resumed.source_available_at_utc == evidence.source_available_at_utc
+    assert resumed.evidence_url == evidence.evidence_url
+    assert resumed.capture_digest == evidence.capture_digest
+
+
+def test_unverifiable_evidence_is_not_cached_for_future_recovery(tmp_path):
+    adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
+    row = pd.Series({
+        "competition": "EPL",
+        "season_start": 2025,
+        "source_event_date": "2025-09-01",
+        "kickoff_utc": "2025-09-01T18:00:00Z",
+        "kickoff_time_available": True,
+        "home_team": "Team A",
+        "away_team": "Team B",
+        "home_goals": 2,
+        "away_goals": 1,
+        "result": "H",
+    })
+    lower_bound, _ = _result_lower_bound(row)
+    evidence = SourceEvidence(None, "UNVERIFIABLE", reason="temporary archive outage")
+    adapter._save_verified_evidence_cache("https://example.invalid/test.csv", row, lower_bound, evidence)
+    assert not adapter._evidence_cache_path("https://example.invalid/test.csv", row, lower_bound).exists()
+
+
+def test_verified_evidence_cache_revalidates_lower_bound(tmp_path):
+    adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
+    row = pd.Series({
+        "competition": "EPL",
+        "season_start": 2025,
+        "source_event_date": "2025-09-01",
+        "kickoff_utc": "2025-09-01T18:00:00Z",
+        "kickoff_time_available": True,
+        "home_team": "Team A",
+        "away_team": "Team B",
+        "home_goals": 2,
+        "away_goals": 1,
+        "result": "H",
+    })
+    bound = pd.Timestamp("2025-09-01T21:00:00Z")
+    path = adapter._evidence_cache_path("https://example.invalid/test.csv", row, bound)
+    path.write_text("{\"cache_version\":1,\"status\":\"VERIFIED\",\"url\":\"https://example.invalid/test.csv\",\"row_key\":[\"2025-09-01\",\"teama\",\"teamb\",2.0,1.0,\"H\"],\"source_available_at_utc\":\"2025-09-01T20:00:00+00:00\"}", encoding="utf-8")
+    assert adapter._load_verified_evidence_cache("https://example.invalid/test.csv", row, bound) is None
