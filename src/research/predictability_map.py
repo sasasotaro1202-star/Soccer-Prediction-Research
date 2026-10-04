@@ -263,7 +263,7 @@ def _oos_evaluate(
         train = filter_prior_mature_training(train, target_cutoff)
         y_train = train["error_label"].to_numpy(dtype=int)
         y_oos = oos["error_label"].to_numpy(dtype=int)
-        if np.unique(y_train).size < 2:
+        if len(train) < MIN_TRAIN_ROWS or np.unique(y_train).size < 2:
             continue
 
         model = _meta_model()
