@@ -70,7 +70,7 @@ def test_mature_outcomes_are_required_and_duplicate_states_reduce_to_latest_fixt
 
 def test_chronological_failure_risk_candidate_is_research_only():
     rows = []
-    for i in range(420):
+    for i in range(480):
         block_risk = 0.10 if i < 180 else 0.85
         # Keep both outcome classes present in every training window so the
         # five chronological OOS-block contract is exercised directly.
@@ -92,7 +92,7 @@ def test_chronological_failure_risk_candidate_is_research_only():
         frame["kickoff_utc"] + pd.Timedelta(hours=2)
     )
     state = analyze(frame)
-    assert state["rows"] == 420
+    assert state["rows"] == 480
     assert len(state["oos_blocks"]) >= 5
     assert state["production_usable"] is False
     assert state["safety_contract"]["production_probabilities_changed"] is False
