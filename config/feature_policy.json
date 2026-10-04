@@ -1,0 +1,54 @@
+{
+  "schema_version": "soccer-feature-policy-v1",
+  "manifest": "docs/FEATURE_MANIFEST.md",
+  "enforcement_status": "DOCUMENTED_CONTRACT; runtime consumption must be explicitly verified before Production use",
+  "current_production_feature_status": "UNVERIFIABLE",
+  "nominal_full_field_model_input_candidates": 540,
+  "actual_feature_count_is_input_coverage_dependent": true,
+  "state_vocabulary": [
+    "ACTIVE",
+    "CONDITIONAL",
+    "OBSERVATION_ONLY",
+    "RESEARCH_CANDIDATE"
+  ],
+  "target_isolation": true,
+  "selection_axes": [
+    "feature_family",
+    "feature_subset",
+    "historical_window",
+    "representation",
+    "aggregation",
+    "interaction",
+    "source_context_channel",
+    "model",
+    "training_window",
+    "calibration",
+    "routing"
+  ],
+  "nested_prequential_selection": true,
+  "inner_temporal_selection_when_needed": true,
+  "frozen_holdout_protected": true,
+  "contiguous_prior_fold_evidence_required": true,
+  "jointly_bind_model_feature_window": true,
+  "feature_source_ablation_required": true,
+  "duplicate_experiment_fingerprints_required": true,
+  "missingness_rule": "missing/unavailable/unknown/delayed/source_failed are not zero",
+  "matchday_context_default": "CONDITIONAL_OR_RESEARCH_CANDIDATE",
+  "production_bundle_requirements": [
+    "ordered_feature_cols",
+    "feature_manifest_version",
+    "feature_policy_version",
+    "feature_schema_hash",
+    "source_snapshot_or_lineage",
+    "target_version",
+    "calibration",
+    "router",
+    "fallback"
+  ],
+  "reference_adoption_gate": {
+    "relative_logloss_minimum": 0.03,
+    "auxiliary_relative_minimum": 0.01,
+    "development_blocks_without_deterioration_minimum": 0.7,
+    "pit_violations_allowed": 0
+  }
+}
