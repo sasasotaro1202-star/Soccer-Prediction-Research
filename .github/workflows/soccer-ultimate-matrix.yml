@@ -170,16 +170,14 @@ jobs:
             --top-combos 3
 
       - name: Save ultimate matrix checkpoint cache
-        if: steps.head_guard.outputs.fresh == 'true' || steps.head_guard.outcome == 'skipped'
-        if: always() && steps.ultimate_cache_restore.outputs.cache-hit != 'true'
+        if: (steps.head_guard.outputs.fresh == 'true' || steps.head_guard.outcome == 'skipped') && always() && steps.ultimate_cache_restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: artifacts/ultimate_matrix
           key: soccer-ultimate-matrix-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/research/ultimate_matrix.py', 'src/research/feature_set_variants.py', 'src/evaluation/walk_forward.py', 'src/models/baselines.py') }}-${{ steps.pit_fingerprint.outputs.sha256 }}
       - name: Run winner robustness and case-level diagnostics
-        if: steps.head_guard.outputs.fresh == 'true' || steps.head_guard.outcome == 'skipped'
         id: robustness
-        if: success()
+        if: (steps.head_guard.outputs.fresh == 'true' || steps.head_guard.outcome == 'skipped') && success()
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
