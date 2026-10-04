@@ -148,6 +148,7 @@ jobs:
           # PIT/data integrity lanes.
           ensure_lane "pit-replay-audit.yml" 1440 120
           ensure_lane "soccer-coverage-pit-audit.yml" 1440 120
+          ensure_lane "soccer-audit.yml" 1440 120
           ensure_lane "soccer-versioned-pit-research.yml" 720 120
 
           # Lower-frequency research lanes.
