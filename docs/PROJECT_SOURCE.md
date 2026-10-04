@@ -41,3 +41,7 @@ A dedicated regression module `tests/test_predictability_calibration_pit_provena
 ## PIT Replay Audit fail-closed boundary — 2026-10-04
 
 The diagnostic PIT Replay Audit workflow now uses bounded dependency-install retries and distinguishes the canonical audit `BLOCKED` result (exit code 2) from unexpected implementation/runtime failures. Only exit code 2 is normalized to a successful diagnostic workflow step; other non-zero exits remain fatal. This prevents infrastructure/logic failures from being silently classified as evidence shortage. PIT remains a hard gate for OOS/model adoption, and this change does not alter production predictions, model selection, target semantics, calibration, OOS or frozen holdout evidence.
+
+## Experience commit guard missing-path fix — 2026-10-04
+
+The durable experience commit guard now recognizes Git's current missing-path diagnostic (neither on disk nor in the index) as an absent optional output, while preserving fatal behavior for unrelated git errors. This prevents a normal no-prediction/WARMUP run from failing at the persistence guard. No prediction, OOS, calibration, holdout or production state is altered.
