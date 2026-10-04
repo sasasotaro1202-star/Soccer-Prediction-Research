@@ -11,6 +11,9 @@ from collections.abc import Iterable
 from typing import Any, Mapping, Sequence
 
 
+PROJECT_MIN_IMPROVED_FRACTION = 0.70
+
+
 def _metric_delta(candidate: Mapping[str, float], baseline: Mapping[str, float], metric: str) -> float:
     return float(candidate[metric]) - float(baseline[metric])
 
@@ -39,9 +42,31 @@ def evaluate_stability(
     min_folds: int = 3,
     min_unique_leagues: int = 2,
     min_unique_seasons: int = 2,
-    min_improved_fraction: float = 2 / 3,
+    min_improved_fraction: float = PROJECT_MIN_IMPROVED_FRACTION,
 ) -> dict[str, Any]:
-    """Return HOLD unless chronological-fold improvement is repeatable."""
+    """Return HOLD unless chronological-fold improvement is repeatable.
+
+    The project-level adoption benchmark requires non-regression in at least
+    70% of development evaluation periods. Callers may pass a stricter or
+    explicitly justified threshold, but the default must not be weaker than
+    the project benchmark.
+    """
+    try:
+        required_fraction = float(min_improved_fraction)
+    except (TypeError, ValueError):
+        return {
+            "status": "HOLD",
+            "reason": "invalid_improved_fraction",
+            "min_improved_fraction": min_improved_fraction,
+        }
+    if not 0.70 <= required_fraction <= 1.0:
+        return {
+            "status": "HOLD",
+            "reason": "improved_fraction_below_project_minimum_or_invalid",
+            "min_improved_fraction": required_fraction,
+            "project_min_improved_fraction": PROJECT_MIN_IMPROVED_FRACTION,
+        }
+
     if len(folds) < min_folds:
         return {"status": "HOLD", "reason": "too_few_folds", "folds": len(folds)}
 
@@ -69,9 +94,9 @@ def evaluate_stability(
     n = len(folds)
 
     stable = (
-        ll_good / n >= min_improved_fraction
-        and brier_good / n >= min_improved_fraction
-        and acc_good / n >= min_improved_fraction
+        ll_good / n >= required_fraction
+        and brier_good / n >= required_fraction
+        and acc_good / n >= required_fraction
         and max(ll_deltas) <= 0
     )
     return {
@@ -85,5 +110,6 @@ def evaluate_stability(
         "worst_logloss_delta": max(ll_deltas),
         "worst_brier_delta": max(brier_deltas),
         "worst_accuracy_delta": min(acc_deltas),
-        "min_improved_fraction": min_improved_fraction,
+        "min_improved_fraction": required_fraction,
+        "project_min_improved_fraction": PROJECT_MIN_IMPROVED_FRACTION,
     }
