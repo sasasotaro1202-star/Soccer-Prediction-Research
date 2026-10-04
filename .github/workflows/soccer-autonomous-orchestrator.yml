@@ -61,7 +61,7 @@ jobs:
 
           workflow_state() {
             local workflow="$1"
-            gh run list --repo "${GH_REPO}" --workflow "${workflow}" --limit 30               --json status,conclusion,createdAt,headSha,databaseId
+            gh run list --repo "${GH_REPO}" --workflow "${workflow}" --limit 50               --json status,conclusion,createdAt,headSha,headBranch,databaseId
           }
 
           ensure_lane() {
@@ -95,12 +95,17 @@ jobs:
 
           completed = [
               r for r in runs
-              if r.get("status") == "completed" and r.get("createdAt")
+              if r.get("status") == "completed"
+              and r.get("createdAt")
+              and r.get("headSha") == main_sha
           ]
           completed.sort(key=lambda r: r["createdAt"], reverse=True)
 
+          # Only a completed run executed against the exact current main SHA
+          # counts as cadence evidence. PR/old-main runs must not suppress
+          # catch-up dispatches for the current production branch.
           if not completed:
-              print("DISPATCH:no_history")
+              print("DISPATCH:no_current_main_history")
               raise SystemExit
 
           latest = datetime.fromisoformat(completed[0]["createdAt"].replace("Z", "+00:00"))
