@@ -28,12 +28,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_PR_HEAD: ${{ github.event.pull_request.head.sha }}
         shell: bash
         run: |
           set -euo pipefail
           current_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
-          if [ "${current_head}" != "${GITHUB_SHA}" ]; then
-            echo "Stale research run: workflow SHA=${GITHUB_SHA}, current PR head=${current_head}"
+          if [ "${current_head}" != "${EVENT_PR_HEAD}" ]; then
+            echo "Stale research run: event PR head=${EVENT_PR_HEAD}, current PR head=${current_head}"
             echo "fresh=false" >> "${GITHUB_OUTPUT}"
           else
             echo "fresh=true" >> "${GITHUB_OUTPUT}"
