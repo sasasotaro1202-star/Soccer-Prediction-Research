@@ -223,3 +223,7 @@ A research-only dynamic in-play lane is implemented on a fresh branch from the l
 The lane is fail-closed on explicit PIT provenance and label maturity. It rejects post-cutoff source availability, unverified snapshots and labels available at/before the prediction cutoff. The research OOS splitter is match-level and expanding so snapshots from one match are never divided between train and test. This is a research evidence layer only; no Production, Champion, frozen holdout or registry authority is changed.
 
 The scheduled workflow records WARMUP when the historical in-play dataset is absent and then dispatches the existing free-source discovery/probe lanes without masking dispatch failures. Once data is available, the workflow runs chronological hazard OOS and reports evidence while remaining non-production.
+
+
+## Autonomous dispatch pressure control — 2026-10-05
+The live autonomous orchestrator now applies two operational backpressure limits: maximum 6 new workflow dispatches per reconciliation run and a repository-wide active-run cap of 10. When a limit is reached, the affected stale lane is recorded as HOLD rather than repeatedly queued. Later 30-minute reconciliations can resume the same stale lane. This is execution-pressure hardening only and does not alter model, PIT, OOS, calibration, holdout or production authority.
