@@ -56,6 +56,7 @@ jobs:
           tests/test_pit_feature_replay.py
           tests/test_prediction_mode_contract.py
           tests/test_model_bundle.py
+          tests/test_pit_source_adapter_fast_exact_kickoff.py
 
       - name: Run fixture/source structural audit
         run: python -m src.data.fixture_field_audit
