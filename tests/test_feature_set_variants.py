@@ -18,6 +18,8 @@ def _frame():
         "target": [0, 2],
         "pit_verified": [True, True],
         "kickoff_utc": ["2026-01-01T10:00:00Z", "2026-01-02T10:00:00Z"],
+        "home_elo": [1520.0, 1480.0],
+        "away_elo": [1490.0, 1510.0],
         "elo_diff": [10.0, -20.0],
         "comp_elo_diff": [5.0, -10.0],
         "home_elo_expected": [0.52, 0.48],
