@@ -11,27 +11,45 @@ def test_ultimate_catalog_has_broad_feature_space():
     assert len(variant_catalog()) >= 20
 
 
-def test_summarize_oos_separates_screen_confirm_and_locked():
+def test_summarize_oos_has_disjoint_screen_model_config_and_locked_layers():
     wf = pd.DataFrame(
         {
-            "n": [100, 100, 100, 100, 100, 100],
-            "logloss": [1.0, 0.9, 0.8, 0.75, 0.7, 0.65],
-            "brier": [0.30, 0.29, 0.28, 0.27, 0.26, 0.25],
-            "accuracy": [0.50, 0.51, 0.52, 0.53, 0.54, 0.55],
-            "ece": [0.10, 0.09, 0.08, 0.07, 0.06, 0.05],
-            "oos_window_signature": ["sig"] * 6,
+            "n": [100] * 8,
+            "logloss": [1.00, 0.90, 0.80, 0.75, 0.70, 0.65, 0.60, 0.55],
+            "brier": [0.30, 0.29, 0.28, 0.27, 0.26, 0.25, 0.24, 0.23],
+            "accuracy": [0.50, 0.51, 0.52, 0.53, 0.54, 0.55, 0.56, 0.57],
+            "ece": [0.10, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03],
+            "oos_window_signature": ["sig"] * 8,
         }
     )
     out = summarize_oos(wf)
     assert out["screen_blocks"] == 2
-    assert out["confirm_blocks"] == 2
+    assert out["model_confirm_blocks"] == 2
+    assert out["config_confirm_blocks"] == 2
     assert out["locked_blocks"] == 2
     assert out["screen_n"] == 200
-    assert out["confirm_n"] == 200
+    assert out["model_confirm_n"] == 200
+    assert out["config_confirm_n"] == 200
     assert out["locked_n"] == 200
     assert out["screen_logloss"] == pytest.approx(0.95)
-    assert out["confirm_logloss"] == pytest.approx(0.775)
-    assert out["locked_logloss"] == pytest.approx(0.675)
+    assert out["model_confirm_logloss"] == pytest.approx(0.775)
+    assert out["config_confirm_logloss"] == pytest.approx(0.675)
+    assert out["locked_logloss"] == pytest.approx(0.575)
+
+
+def test_summarize_oos_rejects_too_few_blocks():
+    wf = pd.DataFrame(
+        {
+            "n": [100] * 7,
+            "logloss": [1.0] * 7,
+            "brier": [0.3] * 7,
+            "accuracy": [0.5] * 7,
+            "ece": [0.1] * 7,
+            "oos_window_signature": ["sig"] * 7,
+        }
+    )
+    with pytest.raises(RuntimeError, match="at least 8 chronological OOS blocks"):
+        summarize_oos(wf)
 
 
 def test_validate_input_rejects_future_feature_availability():
