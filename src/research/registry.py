@@ -23,6 +23,10 @@ def save_registry(
     training_end: str | None = None,
     calibration: dict[str, Any] | None = None,
     feature_cols: list[str] | None = None,
+    feature_manifest_version: str | None = None,
+    feature_policy_version: str | None = None,
+    feature_schema_hash: str | None = None,
+    target_version: str | None = None,
 ) -> dict[str, Any]:
     """Write a reproducible registry record and preserve prior history."""
     p = Path(path)
@@ -38,6 +42,10 @@ def save_registry(
         "training_end": training_end,
         "calibration": calibration or {},
         "feature_cols": list(feature_cols) if feature_cols is not None else None,
+        "feature_manifest_version": feature_manifest_version,
+        "feature_policy_version": feature_policy_version,
+        "feature_schema_hash": feature_schema_hash,
+        "target_version": target_version,
         "adoption_status": adoption_status,
         "created_at_utc": _utc_now(),
     }
