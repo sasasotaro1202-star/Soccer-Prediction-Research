@@ -330,3 +330,14 @@ def test_contract_rejects_feature_contract_json_mismatch(tmp_path):
     result = evaluate_production_contract(str(tmp_path))
     assert result.passed is False
     assert "production_model_json_feature_schema_hash" in result.failures
+
+
+
+def test_provenance_artifact_preserves_feature_contract(tmp_path):
+    _minimal_passing_artifacts(tmp_path)
+    write_contract_result(str(tmp_path))
+    provenance = json.loads((tmp_path / "production_provenance.json").read_text())
+    assert provenance["feature_contract"]["manifest_version"] == FEATURE_MANIFEST_VERSION
+    assert provenance["feature_contract"]["policy_version"] == FEATURE_POLICY_VERSION
+    assert provenance["feature_contract"]["schema_hash"] == _feature_schema_hash(["f1"])
+    assert provenance["feature_contract"]["target_version"] == TARGET_CONTRACT_VERSION
