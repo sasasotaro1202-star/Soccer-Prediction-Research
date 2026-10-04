@@ -115,9 +115,17 @@ jobs:
           status = json.loads(p.read_text(encoding="utf-8"))
           checks = {
               "production_usable_false": status.get("production_usable") is False,
-              "oos_claimed_false": status.get("oos_claimed") is False,
               "research_only_true": status.get("research_only") is True,
-              "status_allowed": status.get("status") in {"WARMUP", "SCHEMA_VERIFIED"},
+              "performance_verified_false": status.get("performance_verified") is False,
+              "promotion_candidate_false": status.get("promotion_candidate") is False,
+              "status_allowed": status.get("status") in {"WARMUP", "SCHEMA_VERIFIED", "OOS_EVALUATED"},
+              "oos_consistent": (
+                  status.get("status") == "OOS_EVALUATED"
+                  and status.get("oos_claimed") is True
+              ) or (
+                  status.get("status") != "OOS_EVALUATED"
+                  and status.get("oos_claimed") is False
+              ),
           }
           failures = [name for name, ok in checks.items() if not ok]
           if failures:
