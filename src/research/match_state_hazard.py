@@ -743,17 +743,42 @@ def run_match_state_research(
     fingerprint = snapshot_fingerprint(enriched)
     enriched.to_csv(out / "validated_snapshots.csv", index=False)
 
+    oos_results = {}
+    for method in ("logistic", "histgb"):
+        try:
+            oos_results[method] = evaluate_hazard_chronological_oos(
+                enriched,
+                method=method,
+                min_training_matches=60,
+                min_test_matches=10,
+                max_folds=8,
+            )
+        except Exception as exc:
+            oos_results[method] = {
+                "status": "FAILED",
+                "oos_claimed": False,
+                "production_usable": False,
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+
+    evaluated = [
+        v for v in oos_results.values()
+        if isinstance(v, dict) and v.get("status") == "EVALUATED"
+    ]
     status = {
         "schema_version": 1,
-        "status": "SCHEMA_VERIFIED",
+        "status": "OOS_EVALUATED" if evaluated else "SCHEMA_VERIFIED",
         "rows": int(len(enriched)),
         "matches": int(enriched["match_id"].nunique()),
         "input_fingerprint": fingerprint,
-        "oos_claimed": False,
+        "oos_claimed": bool(evaluated),
+        "performance_verified": False,
+        "promotion_candidate": False,
         "production_usable": False,
         "research_only": True,
         "pit_status": "PASS",
-        "next_step": "chronological_OOS_required",
+        "oos": oos_results,
+        "next_step": "calibration_and_robustness_required" if evaluated else "chronological_OOS_required",
     }
     (out / "match_state_status.json").write_text(
         json.dumps(status, indent=2, ensure_ascii=False),
