@@ -91,7 +91,7 @@ jobs:
             while IFS= read -r path; do
               [ -n "${path}" ] || continue
               case "${path}" in
-                .github/workflows/*|src/research/*|tests/*|docs/*|src/data/pit_source_adapter.py|src/data/pit_source_adapter_v2.py|src/data/pit_source_adapter_fast.py)
+                src/research/*|tests/*|docs/*|src/data/pit_source_adapter.py|src/data/pit_source_adapter_v2.py|src/data/pit_source_adapter_fast.py)
                   ;;
                 *)
                   unsafe=1
