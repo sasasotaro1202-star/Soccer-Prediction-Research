@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import pandas as pd
 
 
@@ -71,13 +73,45 @@ def _development_non_regression(
 
     non_regressed = 0
     rows = []
-    for _, row in development_oos.iterrows():
+    metric_fields = (
+        "logloss",
+        "accuracy",
+        "brier",
+        "rps",
+        "ece",
+        "baseline_logistic_logloss",
+        "baseline_logistic_accuracy",
+        "baseline_logistic_brier",
+        "baseline_logistic_rps",
+        "baseline_logistic_ece",
+    )
+    for block_index, (_, row) in enumerate(development_oos.iterrows()):
+        try:
+            values = {field: float(row[field]) for field in metric_fields}
+        except (TypeError, ValueError, OverflowError):
+            return {
+                "status": "HOLD",
+                "reason": "Development OOS metrics contain non-numeric values",
+                "development_blocks": int(len(development_oos)),
+                "non_regressed_blocks": 0,
+                "non_regression_fraction": 0.0,
+                "bad_block": block_index,
+            }
+        if not all(math.isfinite(value) for value in values.values()):
+            return {
+                "status": "HOLD",
+                "reason": "Development OOS metrics contain non-finite values",
+                "development_blocks": int(len(development_oos)),
+                "non_regressed_blocks": 0,
+                "non_regression_fraction": 0.0,
+                "bad_block": block_index,
+            }
         checks = {
-            "logloss": float(row["logloss"]) <= float(row["baseline_logistic_logloss"]),
-            "brier": float(row["brier"]) <= float(row["baseline_logistic_brier"]),
-            "rps": float(row["rps"]) <= float(row["baseline_logistic_rps"]),
-            "ece": float(row["ece"]) - float(row["baseline_logistic_ece"]) <= max_ece_regression,
-            "accuracy": float(row["accuracy"]) >= float(row["baseline_logistic_accuracy"]),
+            "logloss": values["logloss"] <= values["baseline_logistic_logloss"],
+            "brier": values["brier"] <= values["baseline_logistic_brier"],
+            "rps": values["rps"] <= values["baseline_logistic_rps"],
+            "ece": values["ece"] - values["baseline_logistic_ece"] <= max_ece_regression,
+            "accuracy": values["accuracy"] >= values["baseline_logistic_accuracy"],
         }
         ok = all(checks.values())
         non_regressed += int(ok)
