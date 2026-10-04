@@ -13,6 +13,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from src.research.pit_training import filter_prior_mature_training
 
 LABELS = {"H": 0, "D": 1, "A": 2}
 MIN_TRAIN_ROWS = 120
@@ -91,6 +92,15 @@ def _validate_and_reduce(frame: pd.DataFrame) -> pd.DataFrame:
     d = frame.copy()
     for col in ("kickoff_utc", "prediction_pit_cutoff_utc", "experience_available_at_utc"):
         d[col] = pd.to_datetime(d[col], utc=True, errors="coerce")
+    optional_time_columns = (
+        "available_at_utc",
+        "source_available_at_utc",
+        "published_at_utc",
+        "retrieved_at_utc",
+    )
+    for col in optional_time_columns:
+        if col in d.columns:
+            d[col] = pd.to_datetime(d[col], utc=True, errors="coerce")
     d["match_id"] = d["match_id"].astype("string").str.strip()
     d["actual_result"] = d["actual_result"].astype("string").str.strip().str.upper()
     for col in ("p_home", "p_draw", "p_away"):
@@ -106,13 +116,29 @@ def _validate_and_reduce(frame: pd.DataFrame) -> pd.DataFrame:
             "predictability ledger contains duplicate match_id without prediction_state_id"
         )
 
-    valid = d["prediction_pit_gate"].astype("string").eq("PASS")
+    pit_rows = d["prediction_pit_gate"].astype("string").eq("PASS")
+    pit_valid = d["kickoff_utc"].notna() & d["prediction_pit_cutoff_utc"].notna()
+    pit_valid &= d["experience_available_at_utc"].notna()
+    pit_valid &= d["prediction_pit_cutoff_utc"] < d["kickoff_utc"]
+    pit_valid &= d["experience_available_at_utc"] > d["kickoff_utc"]
+    pit_valid &= d["experience_available_at_utc"] > d["prediction_pit_cutoff_utc"]
+    for col in optional_time_columns:
+        if col not in d.columns:
+            continue
+        pit_valid &= d[col].notna()
+        pit_valid &= d[col] <= d["prediction_pit_cutoff_utc"]
+        if col == "retrieved_at_utc":
+            for available_col in ("source_available_at_utc", "available_at_utc"):
+                if available_col in d.columns:
+                    pit_valid &= d[col] >= d[available_col]
+        if col == "published_at_utc" and "retrieved_at_utc" in d.columns:
+            pit_valid &= d["retrieved_at_utc"] >= d[col]
+    if bool((pit_rows & ~pit_valid).any()):
+        raise RuntimeError("predictability ledger contains PIT-invalid PASS row")
+
+    valid = pit_rows.copy()
     valid &= d["match_id"].notna() & d["match_id"].ne("")
-    valid &= d["kickoff_utc"].notna() & d["prediction_pit_cutoff_utc"].notna()
-    valid &= d["experience_available_at_utc"].notna()
-    valid &= d["prediction_pit_cutoff_utc"] < d["kickoff_utc"]
-    valid &= d["experience_available_at_utc"] > d["kickoff_utc"]
-    valid &= d["experience_available_at_utc"] > d["prediction_pit_cutoff_utc"]
+    valid &= pit_valid
     valid &= d["actual_result"].isin(LABELS)
 
     p = d[["p_home", "p_draw", "p_away"]].to_numpy(dtype=float)
@@ -257,9 +283,12 @@ def _oos_evaluate(
     for block_id, train, oos in _chronological_blocks(
         data, MIN_TRAIN_ROWS, block_size
     ):
+        target_cutoff = oos["prediction_pit_cutoff_utc"].min()
+        raw_train_rows = int(len(train))
+        train = filter_prior_mature_training(train, target_cutoff)
         y_train = train["error_label"].to_numpy(dtype=int)
         y_oos = oos["error_label"].to_numpy(dtype=int)
-        if np.unique(y_train).size < 2:
+        if len(train) < MIN_TRAIN_ROWS or np.unique(y_train).size < 2:
             continue
 
         model = _meta_model()
@@ -288,6 +317,9 @@ def _oos_evaluate(
             "oos_start": oos["prediction_pit_cutoff_utc"].min().isoformat(),
             "oos_end": oos["prediction_pit_cutoff_utc"].max().isoformat(),
             "n": int(len(oos)),
+            "training_rows": int(len(train)),
+            "raw_training_rows": raw_train_rows,
+            "excluded_immature_training_rows": int(raw_train_rows - len(train)),
             "meta_logloss": meta_m["logloss"],
             "meta_brier": meta_m["brier"],
             "meta_ece": meta_m["ece"],
