@@ -71,12 +71,15 @@ def test_weaker_than_project_fraction_is_rejected():
 
 
 def test_stability_requires_explicit_chronological_boundaries():
-    folds = [_fold("EPL", 2022, 1, .9), _fold("Bundesliga", 2023, 1, .9)]
-    folds.append({
-        **_fold("Serie A", 2024, 1, .9),
-        "oos_start_utc": None,
-        "oos_end_utc": None,
-    })
+    folds = [
+        _fold("EPL", 2022, 1, .9, start="2024-01-01T00:00:00Z", end="2024-01-31T23:59:59Z"),
+        _fold("Bundesliga", 2023, 1, .9, start="2024-02-01T00:00:00Z", end="2024-02-29T23:59:59Z"),
+        {
+            **_fold("Serie A", 2024, 1, .9, start="2024-03-01T00:00:00Z", end="2024-03-31T23:59:59Z"),
+            "oos_start_utc": None,
+            "oos_end_utc": None,
+        },
+    ]
     result = evaluate_stability(folds)
     assert result["status"] == "HOLD"
     assert result["reason"] == "chronology_evidence_missing_or_invalid"
