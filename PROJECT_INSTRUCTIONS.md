@@ -107,3 +107,7 @@ Automatic merge is limited to explicitly marked `automation_policy: hardening-sa
 Routine execution must not depend on an exact cron tick. The `Soccer Autonomous Orchestrator` runs every 30 minutes, reads the current `main` SHA, checks active/current-main and completed/current-main history, and dispatches only stale/missing lanes on `main`. It covers prediction refresh, matchday intelligence, experience settlement, research, discovery, PIT and coverage audits, scope, source probing, catalog, robustness and integrity lanes. Duplicate active runs are held. Every decision is persisted as an auditable Actions artifact.
 
 This control plane cannot authorize production/model/feature/calibration/target changes, frozen-holdout access or performance claims. Automatic merging remains limited to hardening-safe control-plane paths with completed successful verification and final SHA race checks.
+
+
+## Dynamic match-state research lane
+The in-play research lane is research-only. Its canonical chain is PRE-MATCH PRIOR → CUTOFF STATE → NEXT-EVENT HAZARD → SCENARIO PROPAGATION → FINAL 1X2/SCORE. Each snapshot requires explicit source availability at or before prediction cutoff, plus label maturity after cutoff. The next-event target uses a bounded hazard window. Deterministic scenario propagation is preferred for reproducibility. This lane cannot alter Production, Champion, frozen holdout or registry state and cannot claim performance without identical chronological OOS, calibration, robustness and holdout evidence.
