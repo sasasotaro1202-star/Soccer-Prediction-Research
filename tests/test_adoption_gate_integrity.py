@@ -78,6 +78,24 @@ def test_holdout_used_for_selection_is_blocked():
     assert result["reason"] == "holdout_was_used_for_selection"
 
 
+def test_holdout_usage_flags_must_be_explicit_false():
+    for field, reason in (
+        ("used_for_selection", "holdout_selection_usage_flag_missing_or_invalid"),
+        ("used_for_calibration", "holdout_calibration_usage_flag_missing_or_invalid"),
+        ("used_for_threshold_tuning", "holdout_threshold_usage_flag_missing_or_invalid"),
+    ):
+        missing = _valid_holdout()
+        missing.pop(field)
+        result = independent_adoption_gate({"development_oos": True}, missing, stability_folds=_stability_folds())
+        assert result["status"] == "HOLD"
+        assert result["reason"] == reason
+
+        non_boolean = _valid_holdout(**{field: 0})
+        result = independent_adoption_gate({"development_oos": True}, non_boolean, stability_folds=_stability_folds())
+        assert result["status"] == "HOLD"
+        assert result["reason"] == reason
+
+
 def test_holdout_overlap_is_blocked():
     result = independent_adoption_gate(
         {"development_oos": True},
