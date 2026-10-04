@@ -43,3 +43,131 @@ A dedicated regression module `tests/test_predictability_calibration_pit_provena
 The diagnostic PIT Replay Audit workflow now uses bounded dependency-install retries and distinguishes the canonical audit `BLOCKED` result (exit code 2) from unexpected implementation/runtime failures. Only exit code 2 is normalized to a successful diagnostic workflow step; other non-zero exits remain fatal. This prevents infrastructure/logic failures from being silently classified as evidence shortage. PIT remains a hard gate for OOS/model adoption, and this change does not alter production predictions, model selection, target semantics, calibration, OOS or frozen holdout evidence.
 
 A dedicated regression module `tests/test_predictability_calibration_pit_provenance.py` covers post-cutoff source availability, post-cutoff retrieval, and impossible retrieval-before-source ordering. The research workflow now includes this regression module in its explicit test-file allowlist; current-main Actions must still pass before it is marked VERIFIED. Predictability research also treats a `prediction_pit_gate=PASS` row with invalid cutoff/maturity or optional provenance ordering as a hard PIT failure rather than silently dropping it.
+
+
+## Feature ecology and selection source — verified design contract 2026-10-04
+
+Feature selection is a first-class research dimension rather than an implicit consequence of the feature builder. The current source-level feature generator can expose a large candidate matrix, while different model consumers use different subsets. Current main does not contain a verifiable `models/current` production bundle, so the exact production `feature_cols` cannot be claimed from source code alone. This source therefore distinguishes the candidate feature pool from verified production usage.
+
+### Canonical feature-state vocabulary
+
+The Soccer feature contract uses four states:
+- ACTIVE — explicitly consumed by a currently verified production bundle.
+- CONDITIONAL — eligible only when an explicit PIT-safe context/cutoff contract passes.
+- OBSERVATION_ONLY — preserved for diagnostics/evidence and not fed into production probabilities.
+- RESEARCH_CANDIDATE — available to research/OOS experiments but not production-authorized.
+
+The exact feature list and order consumed by Production must be recorded in the bundle and linked to a feature manifest/policy version. Feature names appearing in Python source are not evidence of production consumption.
+
+### Current feature candidate pool
+
+Under the full-field historical input schema, the current `src/features/soccer_features.py` design has a nominal model-input candidate pool of about 540 numeric/bool columns. The actual count is input-dependent because advanced-stat fields are optional and missing source channels remain unavailable rather than being fabricated.
+
+The candidate pool consists of:
+1. Match/strength state: neutral-venue state, home-advantage state, global Elo, competition Elo, expected Elo probability, dynamic Elo, shrunk competition Elo and associated gaps/interactions.
+2. Schedule/rest: home/away rest hours, rest difference and strength-rest interaction.
+3. Recent team form at windows 3/5/10/20. Each window contains 49 summary statistics per team, covering games, GF/GA, points, GD, win/draw/loss rates, average/EWMA form, volatility, venue mix, total-goal tendency, clean sheets, failed-to-score rate, and optional basic/advanced match statistics.
+4. Home/away representation and explicit differences for each window. With the full field set this yields 123 columns per window and 492 columns across the four windows.
+5. H2H last-five descriptors.
+6. Momentum comparing 3-match versus 10-match states for points, GD, GF, GA and win rate, including home, away and differential forms.
+7. Interaction features including attack-defense matchup, draw tension and strength/rest relationships.
+8. History-support counts.
+9. PIT metadata such as `pit_verified` and `feature_source_max_available_at_utc`, which are validation metadata and are excluded from model features.
+
+The principal feature families are documented in `docs/FEATURE_MANIFEST.md`. Matchday lineup, injuries, suspensions, market and weather context are separate research/conditional channels and are not assumed to be part of the core production 1X2 feature vector without a PIT-safe adoption result.
+
+### Feature-combination research matrix
+
+The candidate space is explicitly multidimensional:
+- feature family;
+- individual feature or subset;
+- 3/5/10/20 or future validated historical window;
+- level versus home/away versus difference representation;
+- average versus EWMA versus volatility/trend representation;
+- interaction inclusion/exclusion;
+- source/context channel;
+- model family;
+- training window;
+- calibration;
+- routing policy.
+
+The intended research patterns include:
+- baseline/Elo-only versus richer representations;
+- additive family expansion;
+- backward group ablation;
+- individual/group deletion;
+- window-only and window-combination ablation;
+- average-vs-EWMA selection;
+- home/away-vs-difference selection;
+- basic-stat versus advanced-stat ablation;
+- H2H add/remove;
+- interaction add/remove;
+- source removal;
+- missingness-aware variants;
+- model-specific feature selectors;
+- competition specialists;
+- regime/data-quality conditional feature sets.
+
+This is a research search space, not a statement that every combination is currently implemented or production-authorized.
+
+### Nested/prequential selection firewall
+
+For an outer chronological OOS fold, feature selection may use only the training side of that fold. If the selector is data-driven, its own parameters/ranking/percentile must be learned from prior data, using an inner chronological validation/WFO process when selection requires tuning. The outer OOS block is scored once the feature-set, model, training window, calibration and routing identity are locked.
+
+The locked/frozen holdout is never used for feature selection, feature transformation choice, source selection, threshold selection, model selection or routing. Selection evidence must be contiguous enough to support the claim being made; sparse prior-fold evidence cannot be silently treated as equivalent to a complete prequential sequence.
+
+Feature-set identity is part of the experiment fingerprint. The minimum reproducibility record is:
+`feature_set_id`, ordered `feature_cols`, manifest version, policy version, source-set fingerprint, data snapshot/hash, model id, training-window definition, calibration, router, OOS definition, seed, implementation Git SHA and experiment fingerprint.
+
+When model, feature set and training window can influence one another, they must be selected as one jointly prequential candidate identity. This prevents the same chronological OOS information from being reused first to select a model/window and then to claim unbiased performance for the resulting feature configuration.
+
+### Information value over feature count
+
+A larger feature vector is not inherently better. Features derived from the same upstream, mirror, wrapper or republisher do not count as independent information. New feature families should therefore be evaluated by incremental OOS value and failure-slice behavior, with source/group ablations used to distinguish information gain from feature-volume effects.
+
+Material feature additions must report at least OOS LogLoss, Brier, Accuracy, calibration/ECE, newest evaluation block, fold stability, robustness, PIT status and relevant case-level slices. High-confidence misses, upsets, OOD, source conflicts, sparse-history and degraded-data cases are explicit diagnostic slices. These slices are research diagnostics and cannot turn the frozen holdout into a tuning set.
+
+### Feature-aware routing
+
+A routed system may choose among validated feature/model configurations based on competition, phase, regime, data quality or other prediction-time states, but only when the routing evidence is chronologically validated. Specialist feature configurations require adequate sample size, fold/class coverage, recent stability and calibration evidence. Sparse or unstable specialists must fall back to a broader validated configuration.
+
+### Production and research separation
+
+Current research-only matchday context remains separate from the core production feature contract. In particular, current-page or retrieval-time lineup/injury/weather/market information is not historical PIT evidence. A conditional context feature becomes production-eligible only after explicit local PIT verification, chronological OOS/WFO, calibration, ablation, robustness, frozen holdout and adoption/release gates.
+
+No feature-selection result, model-file existence or green Actions run is sufficient to change the Champion. The evidence state machine remains IMPLEMENTED → EXECUTED → VERIFIED → PERFORMANCE_VERIFIED → PROMOTION_CANDIDATE → ADOPTED → PRODUCTION, with HOLD/REJECTED/BLOCKED/UNVERIFIABLE preserved when evidence is insufficient.
+
+## Cross-project mechanism review — 2026-10-04
+
+The following mechanisms were rechecked in the other four repositories and transferred only at the mechanism level.
+
+### Baseball-Prediction-System
+Observed mechanism: a canonical Feature Manifest plus machine-readable feature policy distinguishes ACTIVE/CONDITIONAL/OBSERVATION_ONLY/RESEARCH_CANDIDATE; deterministic assembly and actual feature-count/schema-hash recording are explicit; lineup/weather are conditional context rather than automatic production inputs.
+
+Soccer adaptation: use the same state vocabulary and manifest/policy pattern, while keeping Soccer's own target, feature schema and PIT rules.
+
+### Stock-Daily-Prediction-3000
+Observed mechanism: nested/prequential model-window ranking, contiguous prior-fold evidence requirements, explicit window-conditioned identity, and freshness rules that invalidate stale OOS evidence after evidence-affecting changes.
+
+Soccer adaptation: feature-set, model and training-window selection are jointly prequential when coupled; a changed feature-selection implementation retriggers the relevant OOS lane.
+
+### BTC-Prediction-Research
+Observed mechanism: feature-level lineage, source graph/independence grouping, experiment fingerprints, hierarchical routing/fallback, selective actions, uncertainty separation and retention of negative research evidence.
+
+Soccer adaptation: track feature/source lineage and experiment identity, avoid counting correlated mirrors as independent sources, and permit fallback/abstain/defer rather than forcing degraded feature configurations.
+
+### 7-Sport-Prediction-Research
+Observed mechanism: broad competition/phase scope management, specialist routing only with sufficient evidence, scheduled experience/reconciliation controls, and explicit production-versus-research lane separation.
+
+Soccer adaptation: competition and phase remain explicit routing/evaluation dimensions, while all newly scoped competitions remain research-only until local evidence passes.
+
+### Transfer firewall
+
+No domain-specific feature, model, benchmark result or production claim is copied from another repository. Every imported mechanism is subject to:
+DISCOVER → ABSTRACT_MECHANISM → COMPATIBILITY → ADAPT → LOCAL_PIT → LOCAL_OOS/WFO → ROBUSTNESS → LOCAL_FROZEN_HOLDOUT → SHADOW → PROMOTE.
+
+## Current status after this governance update — 2026-10-04
+
+This update is governance/documentation and feature-contract work only. It does not alter prediction probabilities, target semantics, calibration outputs, OOS results, frozen holdout, Champion, Production registry or historical experience.
+
+Current main remains BLOCKED by recorded preflight test/data-audit failures; the repository still records no OOS claim from that blocked run. Current main also has no committed `models/current` production bundle or durable experience ledger that would allow an exact production feature list to be independently verified. Therefore the feature contract is updated and the candidate space is defined, but no new feature set is promoted or claimed as Production.
