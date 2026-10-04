@@ -24,11 +24,18 @@ def _run_git(*args: str) -> bytes | None:
     )
     if proc.returncode == 0:
         return proc.stdout
-    if proc.returncode == 128 and (
-        b"does not exist in" in proc.stderr
-        or (b"pathspec" in proc.stderr and b"did not match any file" in proc.stderr)
-    ):
-        return None
+    if proc.returncode == 128:
+        stderr = proc.stderr.lower()
+        # Git versions differ in the wording used when an optional path is absent.
+        # Treat only explicit "path does not exist" / "did not match" diagnostics as
+        # absence; every other git failure remains fatal.
+        absent_path = (
+            b"does not exist in" in stderr
+            or b"did not match any file" in stderr
+            or b"neither on disk nor in the index" in stderr
+        )
+        if absent_path:
+            return None
     raise RuntimeError(proc.stderr.decode("utf-8", errors="replace").strip() or "git command failed")
 
 
