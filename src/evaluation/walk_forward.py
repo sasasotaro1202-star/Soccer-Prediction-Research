@@ -731,7 +731,68 @@ def run_walk_forward(
     if oos_block is None:
         oos_block = max(500, int(os.getenv("SOCCER_OOS_BLOCK", "2000")))
     validation_max = max(500, int(os.getenv("SOCCER_VALIDATION_MAX", "2000")))
+    required_pit_columns = {
+        "match_id",
+        "kickoff_utc",
+        "prediction_cutoff_at_utc",
+        "feature_source_max_available_at_utc",
+        "pit_verified",
+        "target",
+    }
+    missing_pit_columns = sorted(required_pit_columns - set(df.columns))
+    if missing_pit_columns:
+        raise RuntimeError(
+            "Walk-forward requires explicit PIT provenance columns: "
+            f"{missing_pit_columns}"
+        )
     d = df.sort_values("kickoff_utc", kind="mergesort").reset_index(drop=True).copy()
+    pit = d["pit_verified"].astype(str).str.strip().str.lower()
+    allowed_pit = {"true", "false", "1", "0", "yes", "no"}
+    if not pit.isin(allowed_pit).all():
+        raise RuntimeError("Walk-forward input contains ambiguous pit_verified values")
+    d["pit_verified"] = pit.isin({"true", "1", "yes"})
+    verified = d.loc[d["pit_verified"]].copy()
+    if not verified.empty:
+        verified["kickoff_utc"] = pd.to_datetime(
+            verified["kickoff_utc"], utc=True, errors="coerce"
+        )
+        verified["prediction_cutoff_at_utc"] = pd.to_datetime(
+            verified["prediction_cutoff_at_utc"], utc=True, errors="coerce"
+        )
+        verified["feature_source_max_available_at_utc"] = pd.to_datetime(
+            verified["feature_source_max_available_at_utc"], utc=True, errors="coerce"
+        )
+        temporal = verified[
+            [
+                "kickoff_utc",
+                "prediction_cutoff_at_utc",
+                "feature_source_max_available_at_utc",
+            ]
+        ]
+        if temporal.isna().any().any():
+            raise RuntimeError("Walk-forward input contains invalid PIT temporal fields")
+        cutoff_ok = (
+            verified["feature_source_max_available_at_utc"]
+            <= verified["prediction_cutoff_at_utc"]
+        )
+        kickoff_ok = verified["prediction_cutoff_at_utc"] <= verified["kickoff_utc"]
+        if not bool((cutoff_ok & kickoff_ok).all()):
+            bad = int((cutoff_ok & kickoff_ok).eq(False).sum())
+            raise RuntimeError(
+                "Walk-forward PIT provenance validation failed "
+                f"for {bad} verified rows"
+            )
+        d.loc[verified.index, [
+            "kickoff_utc",
+            "prediction_cutoff_at_utc",
+            "feature_source_max_available_at_utc",
+        ]] = verified[
+            [
+                "kickoff_utc",
+                "prediction_cutoff_at_utc",
+                "feature_source_max_available_at_utc",
+            ]
+        ]
     d = d[d["pit_verified"] == True].reset_index(drop=True).dropna(subset=["target"])
     if len(d) < min_train + oos_block:
         raise ValueError(f"Not enough PIT-verified rows: {len(d)}; need at least {min_train + oos_block}")
