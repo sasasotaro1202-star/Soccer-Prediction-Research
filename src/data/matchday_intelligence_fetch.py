@@ -1189,10 +1189,33 @@ def collect_matchday_snapshots(
     if not frame.empty:
         available = pd.to_datetime(frame["matchday_available_at_utc"], utc=True, errors="coerce")
         frame["matchday_pit_verified"] = available.notna() & (available <= pd.Timestamp(snapshot_finished))
+
+    discovery_sources_observed = sorted({
+        str(value).strip()
+        for value in frame.get("matchday_source", pd.Series(dtype="string")).dropna().tolist()
+        if str(value).strip()
+    })
+    discovery_source_names = {
+        "espn_scoreboard",
+        "sofascore",
+        "football-data.co.uk",
+    }
+    discovery_source_errors = sorted({
+        str(item.get("source", "")).strip()
+        for item in errors
+        if str(item.get("source", "")).strip() in discovery_source_names
+    })
+    status_name = (
+        "COLLECTED"
+        if not frame.empty and not errors
+        else "COLLECTED_WITH_ERRORS"
+        if not frame.empty
+        else "DEFERRED_EXTERNAL_SOURCE"
+        if errors
+        else "NO_UPCOMING_FIXTURES"
+    )
     status = {
-        "status": "COLLECTED" if not frame.empty else (
-            "DEFERRED_EXTERNAL_SOURCE" if errors else "NO_UPCOMING_FIXTURES"
-        ),
+        "status": status_name,
         "prediction_time_utc": iso_utc(snapshot_finished),
         "snapshot_started_at_utc": iso_utc(now),
         "snapshot_finished_at_utc": iso_utc(snapshot_finished),
@@ -1201,6 +1224,9 @@ def collect_matchday_snapshots(
         "max_events": None if max_events is None else int(max_events),
         "global_event_cap_enabled": max_events is not None,
         "errors": errors,
+        "discovery_sources_observed": discovery_sources_observed,
+        "discovery_source_errors": discovery_source_errors,
+        "discovery_source_redundancy_ok": bool(discovery_sources_observed),
         "fallback_usage": fallback_usage,
         "historical_pit_claim": False,
         "current_snapshot_pit_basis": "retrieval_time_recorded_separately;_source_availability_unknown;PIT_not_verified",
