@@ -15,7 +15,7 @@ def test_record_deduplicates_prediction_state(tmp_path, monkeypatch):
     monkeypatch.setattr("scripts.experience_ledger.LEDGER", ledger)
     monkeypatch.setattr("scripts.experience_ledger.PREDICTION_SNAPSHOTS", snapshots)
     row = {
-        "match_id":"espn:1","kickoff_utc":"2026-09-26T10:00:00Z","prediction_time_utc":"2026-09-26T08:00:00Z","home_team":"A","away_team":"B",
+        "match_id":"espn:1","kickoff_utc":"2026-09-26T10:00:00Z","prediction_time_utc":"2026-09-26T08:00:00Z","source_available_at_utc":"2026-09-26T07:30:00Z","home_team":"A","away_team":"B",
         "competition":"EPL","p_home":0.5,"p_draw":0.25,"p_away":0.25,"model_version":"v1",
         "score_1":"1-0","score_1_probability":0.2,"score_2":"0-0","score_2_probability":0.1,
         "score_3":"1-1","score_3_probability":0.1,
@@ -52,6 +52,7 @@ def test_record_keeps_distinct_prediction_times_as_distinct_states(tmp_path, mon
         "p_draw": 0.25,
         "p_away": 0.25,
         "model_version": "v1",
+        "source_available_at_utc": "2026-09-26T07:30:00Z",
         "score_1": "1-0",
         "score_1_probability": 0.2,
         "score_2": "0-0",
@@ -78,6 +79,100 @@ def test_record_keeps_distinct_prediction_times_as_distinct_states(tmp_path, mon
     assert len({row["prediction_state_id"] for row in snapshot_rows}) == 2
 
 
+def test_record_rejects_missing_source_availability(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+
+    predictions = tmp_path / "predictions.csv"
+    monkeypatch.setattr(mod, "LEDGER", tmp_path / "ledger.csv")
+    pd.DataFrame([{
+        "match_id": "espn:no-source",
+        "kickoff_utc": "2026-09-26T10:00:00Z",
+        "prediction_time_utc": "2026-09-26T08:00:00Z",
+        "home_team": "A",
+        "away_team": "B",
+        "competition": "EPL",
+        "p_home": 0.5,
+        "p_draw": 0.25,
+        "p_away": 0.25,
+        "model_version": "v1",
+    }]).to_csv(predictions, index=False)
+    with pytest.raises(RuntimeError, match="source_available_at_utc or available_at_utc"):
+        mod.record_prediction_file(str(predictions))
+
+
+def test_record_rejects_source_available_after_cutoff(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+
+    predictions = tmp_path / "predictions.csv"
+    monkeypatch.setattr(mod, "LEDGER", tmp_path / "ledger.csv")
+    pd.DataFrame([{
+        "match_id": "espn:late-source",
+        "kickoff_utc": "2026-09-26T10:00:00Z",
+        "prediction_time_utc": "2026-09-26T08:00:00Z",
+        "source_available_at_utc": "2026-09-26T08:01:00Z",
+        "home_team": "A",
+        "away_team": "B",
+        "competition": "EPL",
+        "p_home": 0.5,
+        "p_draw": 0.25,
+        "p_away": 0.25,
+        "model_version": "v1",
+    }]).to_csv(predictions, index=False)
+    with pytest.raises(RuntimeError, match="after prediction cutoff"):
+        mod.record_prediction_file(str(predictions))
+
+
+def test_record_rejects_retrieval_after_cutoff(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+
+    predictions = tmp_path / "predictions.csv"
+    monkeypatch.setattr(mod, "LEDGER", tmp_path / "ledger.csv")
+    pd.DataFrame([{
+        "match_id": "espn:late-retrieval",
+        "kickoff_utc": "2026-09-26T10:00:00Z",
+        "prediction_time_utc": "2026-09-26T08:00:00Z",
+        "source_available_at_utc": "2026-09-26T07:30:00Z",
+        "retrieved_at_utc": "2026-09-26T08:01:00Z",
+        "home_team": "A",
+        "away_team": "B",
+        "competition": "EPL",
+        "p_home": 0.5,
+        "p_draw": 0.25,
+        "p_away": 0.25,
+        "model_version": "v1",
+    }]).to_csv(predictions, index=False)
+    with pytest.raises(RuntimeError, match="retrieval occurs after prediction cutoff"):
+        mod.record_prediction_file(str(predictions))
+
+
+def test_record_normalizes_available_alias_and_validates_ordering(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+
+    ledger = tmp_path / "ledger.csv"
+    predictions = tmp_path / "predictions.csv"
+    monkeypatch.setattr(mod, "LEDGER", ledger)
+    pd.DataFrame([{
+        "match_id": "espn:alias",
+        "kickoff_utc": "2026-09-26T10:00:00Z",
+        "prediction_time_utc": "2026-09-26T08:00:00Z",
+        "available_at_utc": "2026-09-26T07:30:00Z",
+        "published_at_utc": "2026-09-26T07:35:00Z",
+        "retrieved_at_utc": "2026-09-26T07:40:00Z",
+        "home_team": "A",
+        "away_team": "B",
+        "competition": "EPL",
+        "p_home": 0.5,
+        "p_draw": 0.25,
+        "p_away": 0.25,
+        "model_version": "v1",
+    }]).to_csv(predictions, index=False)
+
+    assert mod.record_prediction_file(str(predictions))["added"] == 1
+    recorded = pd.read_csv(ledger)
+    assert recorded.loc[0, "source_available_at_utc"] == "2026-09-26T07:30:00+00:00"
+    assert recorded.loc[0, "available_at_utc"] == "2026-09-26T07:30:00+00:00"
+
+
 def test_record_rejects_invalid_1x2_probabilities(tmp_path, monkeypatch):
     from scripts import experience_ledger as mod
     import pytest
@@ -89,6 +184,7 @@ def test_record_rejects_invalid_1x2_probabilities(tmp_path, monkeypatch):
         "match_id": "espn:bad",
         "kickoff_utc": "2026-09-26T10:00:00Z",
         "prediction_time_utc": "2026-09-26T08:00:00Z",
+        "source_available_at_utc": "2026-09-26T07:30:00Z",
         "home_team": "A",
         "away_team": "B",
         "competition": "EPL",
