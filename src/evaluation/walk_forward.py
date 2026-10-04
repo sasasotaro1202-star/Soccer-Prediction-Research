@@ -744,8 +744,8 @@ def run_walk_forward(
         oos_end = _advance_past_same_kickoff(d, min(start + oos_block, len(d)))
         train_start = max(0, start - int(max_train_rows)) if max_train_rows is not None else 0
         train, oos = d.iloc[train_start:start], d.iloc[start:oos_end]
-        if len(train) < 600:
-            raise ValueError(f"Training slice became too short: {len(train)}")
+        if max_train_rows is not None and len(train) < 600:
+            raise ValueError(f"Training slice became too short for bounded rolling window: {len(train)}")
         val_n = min(max(120, int(len(train) * validation_frac)), validation_max, max(120, len(train) - 300))
         fit, validation = train.iloc[:-val_n], train.iloc[-val_n:]
 
