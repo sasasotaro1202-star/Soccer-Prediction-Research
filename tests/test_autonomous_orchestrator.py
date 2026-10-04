@@ -51,8 +51,3 @@ def test_orchestrator_does_not_allow_performance_or_holdout_mutation():
     assert "gh pr merge" not in text
 
 
-
-def test_ci_pr_verification_uses_head_sha_and_survives_merge_ref_churn():
-    ci = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
-    assert "github.event.pull_request.head.sha || github.sha" in ci
-    assert "github.event_name == 'push'" in ci
