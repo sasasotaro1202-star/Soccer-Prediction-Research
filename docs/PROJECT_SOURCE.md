@@ -214,3 +214,12 @@ The repository control plane is designed to operate from GitHub Actions without 
 The live repository contains a state-based `.github/workflows/soccer-autonomous-orchestrator.yml` that reconciles routine soccer research and operations on a 30-minute cadence. It dispatches catch-up executions only on the current `main` SHA, refuses to suppress cadence based on old/PR runs, avoids duplicate active current-main runs, and records DISPATCH/HOLD evidence. Covered lanes include matchday refresh, daily forecast, 9H research, robust/predictability/historical research, experience settlement, adaptive discovery, scope frontier, PIT replay/coverage/versioned audits, global data lake, MOM, catalog/source audits, research cycle, overnight integrity and Opta-like monitoring. The orchestrator has no authority to change production models, frozen holdout evidence, targets, calibration, or performance claims.
 
 The autonomous merge controller separately allowlists the orchestrator workflow and the narrowly scoped experience commit guard as hardening-safe-v1. This is a control-plane bootstrap only; research/performance-affecting changes remain outside automatic merge. All PIT/OOS/WFO/calibration/robustness/holdout/adoption gates remain authoritative.
+
+
+## Match-State / Event-Hazard research — 2026-10-05
+
+A research-only dynamic in-play lane is implemented on a fresh branch from the live main baseline. It uses cutoff state → discrete next-event hazard → deterministic scenario propagation → final 1X2/score distribution. The initial state contract is intentionally compact: elapsed time, remaining time, current score, lead/trailing/draw state, red-card state and optional pre-match priors.
+
+The lane is fail-closed on explicit PIT provenance and label maturity. It rejects post-cutoff source availability, unverified snapshots and labels available at/before the prediction cutoff. The research OOS splitter is match-level and expanding so snapshots from one match are never divided between train and test. This is a research evidence layer only; no Production, Champion, frozen holdout or registry authority is changed.
+
+The scheduled workflow records WARMUP when the historical in-play dataset is absent and then dispatches the existing free-source discovery/probe lanes without masking dispatch failures. Once data is available, the workflow runs chronological hazard OOS and reports evidence while remaining non-production.
