@@ -404,6 +404,10 @@ def _build_research_gates(
 
 def run(out_dir: str = "artifacts") -> dict:
     out = Path(out_dir); out.mkdir(parents=True, exist_ok=True); _write_source_registry(out)
+    source_registry_sha256 = _sha256(out / "source_registry.csv")
+    feature_manifest_version = "soccer-feature-contract-v1"
+    feature_policy_version = "soccer-feature-policy-v1"
+    target_definition_version = "soccer-target-contract-v1"
     try:
         audit_report = run_audit(str(out))
     except Exception as exc:
@@ -669,6 +673,15 @@ def run(out_dir: str = "artifacts") -> dict:
                 score_locked_gate=score_locked_gate,
                 score_selection_by_competition=competition_score_selection,
                 score_locked_gate_by_competition=competition_score_locked_gate,
+                feature_manifest_version=feature_manifest_version,
+                feature_policy_version=feature_policy_version,
+                target_definition_version=target_definition_version,
+                source_lineage={
+                    "schema_version": 1,
+                    "status": "HASHED_SOURCE_REGISTRY",
+                    "source_registry_sha256": source_registry_sha256,
+                    "data_snapshot_id": snapshot_id(history),
+                },
             )
             (out / "validated_candidate_model.json").write_text(
                 json.dumps({**validated_candidate_bundle, "status": "VALIDATED_CANDIDATE"}, indent=2, ensure_ascii=False, default=str),
@@ -692,6 +705,11 @@ def run(out_dir: str = "artifacts") -> dict:
                     "routing_policy": validated_candidate_bundle.get("routing_policy"),
                 },
                 training_end=validated_candidate_bundle.get("fit_end"),
+                feature_manifest_version=feature_manifest_version,
+                feature_policy_version=feature_policy_version,
+                feature_schema_hash=validated_candidate_bundle.get("feature_schema_hash"),
+                source_lineage=validated_candidate_bundle.get("source_lineage"),
+                target_definition_version=target_definition_version,
                 calibration={
                     "temperature": validated_candidate_bundle.get("temperature"),
                     "score_method": validated_candidate_bundle.get("score_method", "primary"),
@@ -745,6 +763,15 @@ def run(out_dir: str = "artifacts") -> dict:
                 snapshot_id(history),
                 score_selection=score_selection,
                 score_locked_gate=score_locked_gate,
+                feature_manifest_version=feature_manifest_version,
+                feature_policy_version=feature_policy_version,
+                target_definition_version=target_definition_version,
+                source_lineage={
+                    "schema_version": 1,
+                    "status": "HASHED_SOURCE_REGISTRY",
+                    "source_registry_sha256": source_registry_sha256,
+                    "data_snapshot_id": snapshot_id(history),
+                },
             )
             registry = save_registry(
                 str(out / "model_registry.json"),
@@ -765,6 +792,11 @@ def run(out_dir: str = "artifacts") -> dict:
                 },
                 training_end=model_bundle.get("fit_end"),
                 feature_cols=_model_features(feats),
+                feature_manifest_version=feature_manifest_version,
+                feature_policy_version=feature_policy_version,
+                feature_schema_hash=model_bundle.get("feature_schema_hash"),
+                source_lineage=model_bundle.get("source_lineage"),
+                target_definition_version=target_definition_version,
                 calibration={
                     "temperature": model_bundle.get("temperature"),
                     "score_method": model_bundle.get("score_method", "primary"),

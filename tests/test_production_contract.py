@@ -1,4 +1,5 @@
 import json
+import hashlib
 import os
 import pickle
 
@@ -77,6 +78,23 @@ def _minimal_passing_artifacts(tmp_path):
     estimator = DummyClassifier(strategy="prior").fit(
         np.asarray([[0.0], [1.0], [2.0]]), np.asarray([0, 1, 2])
     )
+    feature_schema_hash = hashlib.sha256(
+        json.dumps(["f1"], sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    source_lineage = {
+        "schema_version": 1,
+        "status": "HASHED_SOURCE_REGISTRY",
+        "source_registry_sha256": "a" * 64,
+        "data_snapshot_id": "unit-snapshot",
+    }
+    feature_metadata = {
+        "feature_manifest_version": "soccer-feature-contract-v1",
+        "feature_policy_version": "soccer-feature-policy-v1",
+        "feature_schema_hash": feature_schema_hash,
+        "source_lineage": source_lineage,
+        "target_definition_version": "soccer-target-contract-v1",
+    }
+
     routing_policy = {
         "schema_version": 1,
         "type": "hierarchical_validation_context",
@@ -106,6 +124,7 @@ def _minimal_passing_artifacts(tmp_path):
         "model_version": "v1",
         "data_snapshot_id": "unit-snapshot",
         "feature_cols": ["f1"],
+        **feature_metadata,
         "weights": {"m": 1.0},
         "temperature": 1.0,
         "models": {"m": estimator},
@@ -121,6 +140,7 @@ def _minimal_passing_artifacts(tmp_path):
         "adoption_status": "ADOPT",
         "model_version": "v1",
         "feature_cols": ["f1"],
+        **feature_metadata,
         "git_commit_sha": os.getenv("GITHUB_SHA", ""),
         "parameters": {"weights": {"m": 1.0}, "routing_policy": routing_policy},
         "calibration": {"temperature": 1.0},
@@ -129,6 +149,7 @@ def _minimal_passing_artifacts(tmp_path):
         "adoption_status": "ADOPT",
         "model_version": "v1",
         "feature_cols": ["f1"],
+        **feature_metadata,
         "weights": {"m": 1.0},
         "temperature": 1.0,
         "routing_policy": routing_policy,
@@ -284,3 +305,13 @@ def test_contract_does_not_skip_bundle_validation_for_champion_status(tmp_path):
     result = write_contract_result(str(tmp_path))
     assert result.passed is False
     assert "production_bundle_load" in result.failures
+
+
+def test_contract_rejects_missing_feature_contract_metadata(tmp_path):
+    _minimal_passing_artifacts(tmp_path)
+    model_json = json.loads((tmp_path / "production_model.json").read_text())
+    model_json.pop("feature_policy_version", None)
+    (tmp_path / "production_model.json").write_text(json.dumps(model_json))
+    result = evaluate_production_contract(str(tmp_path))
+    assert result.passed is False
+    assert "production_model_json_feature_policy_version_missing" in result.failures

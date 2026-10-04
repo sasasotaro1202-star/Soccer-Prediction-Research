@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import pickle
+import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +47,10 @@ def train_and_save_bundle(
     score_locked_gate: dict[str, Any] | None = None,
     score_selection_by_competition: dict[str, Any] | None = None,
     score_locked_gate_by_competition: dict[str, Any] | None = None,
+    feature_manifest_version: str = "soccer-feature-contract-v1",
+    feature_policy_version: str = "soccer-feature-policy-v1",
+    target_definition_version: str = "soccer-target-contract-v1",
+    source_lineage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Train the already-locked production ensemble on all data available after evaluation.
 
@@ -66,6 +72,25 @@ def train_and_save_bundle(
     d = feats[feats["pit_verified"] == True].dropna(subset=["target"]).copy()
     if d.empty:
         raise ValueError("Cannot build production bundle from empty PIT-verified data")
+    metadata_versions = {
+        "feature_manifest_version": str(feature_manifest_version).strip(),
+        "feature_policy_version": str(feature_policy_version).strip(),
+        "target_definition_version": str(target_definition_version).strip(),
+    }
+    if any(not value for value in metadata_versions.values()):
+        raise ValueError("Production bundle metadata versions must be non-empty")
+    feature_schema_hash = hashlib.sha256(
+        json.dumps(list(feature_cols), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    resolved_source_lineage = dict(source_lineage) if isinstance(source_lineage, dict) else {
+        "schema_version": 1,
+        "status": "UNVERIFIED",
+        "data_snapshot_id": data_snapshot_id,
+    }
+    if str(resolved_source_lineage.get("data_snapshot_id", "")).strip() not in {"", str(data_snapshot_id)}:
+        raise ValueError("Production bundle source_lineage data_snapshot_id mismatch")
+    resolved_source_lineage["data_snapshot_id"] = str(data_snapshot_id)
+
     weights = {str(k): float(v) for k, v in (selection.get("weights") or {}).items()}
     if not weights or any(not np.isfinite(v) or v < 0 for v in weights.values()):
         raise ValueError("Locked selection contains invalid ensemble weights")
@@ -276,6 +301,9 @@ def train_and_save_bundle(
         "model_version": model_version,
         "data_snapshot_id": data_snapshot_id,
         "feature_cols": list(feature_cols),
+        "feature_schema_hash": feature_schema_hash,
+        **metadata_versions,
+        "source_lineage": resolved_source_lineage,
         "weights": weights,
         "temperature": temperature,
         "models": fitted,
@@ -305,6 +333,9 @@ def train_and_save_bundle(
         "model_version": model_version,
         "data_snapshot_id": data_snapshot_id,
         "feature_cols": list(feature_cols),
+        "feature_schema_hash": feature_schema_hash,
+        **metadata_versions,
+        "source_lineage": resolved_source_lineage,
         "fit_rows": int(len(d)),
         "fit_end": str(d["kickoff_utc"].max()),
         "feature_count": len(feature_cols),

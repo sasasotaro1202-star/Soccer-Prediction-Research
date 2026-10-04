@@ -117,6 +117,54 @@ def _canonical_hash(value: Any) -> str | None:
     return hashlib.sha256(raw).hexdigest()
 
 
+PRODUCTION_METADATA_FIELDS = (
+    "feature_manifest_version",
+    "feature_policy_version",
+    "feature_schema_hash",
+    "source_lineage",
+    "target_definition_version",
+)
+
+
+def _validate_production_metadata(
+    failures: list[str],
+    root: Path,
+    bundle: dict[str, Any],
+    model_json: dict[str, Any],
+    registry: dict[str, Any],
+) -> None:
+    artifacts = {"bundle": bundle, "model_json": model_json, "registry": registry}
+    for name, payload in artifacts.items():
+        for field in PRODUCTION_METADATA_FIELDS:
+            value = payload.get(field)
+            if field == "source_lineage":
+                if not isinstance(value, dict) or not value:
+                    failures.append(f"production_{name}_{field}_missing")
+            elif not isinstance(value, str) or not value.strip():
+                failures.append(f"production_{name}_{field}_missing")
+    for field in PRODUCTION_METADATA_FIELDS:
+        values = [payload.get(field) for payload in artifacts.values()]
+        if all(value is not None for value in values):
+            if not all(_canonical_hash(value) == _canonical_hash(values[0]) for value in values[1:]):
+                failures.append(f"production_{field}_metadata_mismatch")
+    canonical_feature_hash = _canonical_hash(bundle.get("feature_cols"))
+    for name, payload in artifacts.items():
+        if payload.get("feature_schema_hash") != canonical_feature_hash:
+            failures.append(f"production_{name}_feature_schema_hash_mismatch")
+        lineage = payload.get("source_lineage")
+        if not isinstance(lineage, dict):
+            continue
+        source_hash = lineage.get("source_registry_sha256")
+        if not isinstance(source_hash, str) or len(source_hash) != 64 or any(ch not in "0123456789abcdefABCDEF" for ch in source_hash):
+            failures.append(f"production_{name}_source_registry_hash_invalid")
+        elif _file_nonempty(root, "source_registry.csv") and _sha256(root / "source_registry.csv") != source_hash:
+            failures.append(f"production_{name}_source_registry_hash_mismatch")
+        if str(lineage.get("data_snapshot_id", "")) != str(bundle.get("data_snapshot_id", "")):
+            failures.append(f"production_{name}_source_lineage_snapshot_mismatch")
+        if str(lineage.get("status", "")).upper() != "HASHED_SOURCE_REGISTRY":
+            failures.append(f"production_{name}_source_lineage_not_hashed")
+
+
 def _write_provenance(root: Path) -> None:
     """Write immutable-in-run hashes for deployable and prediction artifacts."""
     files: dict[str, dict[str, Any]] = {}
@@ -136,6 +184,11 @@ def _write_provenance(root: Path) -> None:
         "feature_schema_sha256": _canonical_hash(feature_schema),
         "registry_model_version": registry.get("model_version"),
         "production_model_json_version": model_json.get("model_version"),
+        "feature_manifest_version": model_json.get("feature_manifest_version") or registry.get("feature_manifest_version"),
+        "feature_policy_version": model_json.get("feature_policy_version") or registry.get("feature_policy_version"),
+        "feature_schema_hash": model_json.get("feature_schema_hash") or registry.get("feature_schema_hash"),
+        "source_lineage": model_json.get("source_lineage") or registry.get("source_lineage"),
+        "target_definition_version": model_json.get("target_definition_version") or registry.get("target_definition_version"),
     }
     (root / "production_provenance.json").write_text(
         json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True), encoding="utf-8"
@@ -232,6 +285,7 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
             except Exception:
                 failures.append("production_bundle_load")
             else:
+                _validate_production_metadata(failures, root, bundle, model_json, registry)
                 if int(bundle.get("schema_version", 0)) < 3:
                     failures.append("production_bundle_routing_schema_missing")
                 bundle_routing = bundle.get("routing_policy")

@@ -357,3 +357,31 @@ def test_bundle_accepts_matchday_policy_pass_with_locked_oos_evidence(tmp_path):
     )
     bundle = load_bundle(str(path))
     assert bundle["matchday_policy"] == policy
+
+
+def test_bundle_records_feature_contract_metadata(tmp_path):
+    df = _fixture()
+    path = tmp_path / "production_model.pkl"
+    lineage = {
+        "schema_version": 1,
+        "status": "HASHED_SOURCE_REGISTRY",
+        "source_registry_sha256": "a" * 64,
+        "data_snapshot_id": "snapshot-1",
+    }
+    train_and_save_bundle(
+        df, ["f1", "f2"], {"weights": {"logistic": 1.0}, "temperature": 1.0},
+        str(path), "test-version", "snapshot-1",
+        feature_manifest_version="soccer-feature-contract-v1",
+        feature_policy_version="soccer-feature-policy-v1",
+        target_definition_version="soccer-target-contract-v1",
+        source_lineage=lineage,
+    )
+    bundle = load_bundle(str(path))
+    expected_hash = __import__("hashlib").sha256(
+        __import__("json").dumps(["f1", "f2"], sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    assert bundle["feature_manifest_version"] == "soccer-feature-contract-v1"
+    assert bundle["feature_policy_version"] == "soccer-feature-policy-v1"
+    assert bundle["target_definition_version"] == "soccer-target-contract-v1"
+    assert bundle["feature_schema_hash"] == expected_hash
+    assert bundle["source_lineage"] == lineage
