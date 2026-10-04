@@ -142,6 +142,7 @@ def _write_provenance(root: Path) -> None:
         "feature_schema_sha256": _canonical_hash(feature_schema),
         "registry_model_version": registry.get("model_version"),
         "production_model_json_version": model_json.get("model_version"),
+        "feature_contract": model_json.get("feature_contract"),
     }
     (root / "production_provenance.json").write_text(
         json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True), encoding="utf-8"
