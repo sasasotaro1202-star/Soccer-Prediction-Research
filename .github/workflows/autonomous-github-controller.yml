@@ -1,0 +1,132 @@
+name: Autonomous GitHub Controller
+
+on:
+  schedule:
+    - cron: "7 */6 * * *"
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Soccer CI
+      - Soccer PIT Replay Audit
+      - Overnight Integrity
+      - Soccer Ultimate Experiment Matrix
+      - Soccer Feature Set Research
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: soccer-autonomous-controller
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: main
+
+      - name: Reconcile open safe-hardenings and publish controller evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          main_sha="$(git rev-parse HEAD)"
+          report="controller-report.json"
+
+          cat > "${report}" <<EOF
+          {
+            "controller": "Autonomous GitHub Controller",
+            "run_id": "${GITHUB_RUN_ID}",
+            "evaluated_at_utc": "${now}",
+            "main_sha": "${main_sha}",
+            "auto_merge_policy": "hardening-safe-v1",
+            "production_change_allowed": false,
+            "frozen_holdout_access_allowed": false,
+            "performance_claim_allowed": false,
+            "decisions": []
+          }
+          EOF
+
+          mapfile -t pr_numbers < <(gh pr list --repo "${GH_REPO}" --state open --base main --limit 50 --json number --jq '.[].number')
+
+          for number in "${pr_numbers[@]:-}"; do
+            [ -n "${number}" ] || continue
+
+            pr_json="$(gh pr view "${number}" --repo "${GH_REPO}" --json number,title,body,isDraft,mergeStateStatus,headRefOid,statusCheckRollup)"
+            policy="$(jq -r '.body // ""' <<<"${pr_json}")"
+
+            # Only explicitly marked hardening PRs can ever be merged automatically.
+            if ! grep -Fq "automation_policy: hardening-safe-v1" <<<"${policy}"; then
+              continue
+            fi
+            if jq -e '.isDraft == true' <<<"${pr_json}" >/dev/null; then
+              continue
+            fi
+            if ! jq -e '.mergeStateStatus == "CLEAN"' <<<"${pr_json}" >/dev/null; then
+              continue
+            fi
+
+            # Every reported check must be completed successfully; an empty check set
+            # is not enough evidence for automatic merge.
+            check_count="$(jq '[.statusCheckRollup[]?] | length' <<<"${pr_json}")"
+            bad_checks="$(jq '[.statusCheckRollup[]? | select((.status == "COMPLETED" and (.conclusion == "SUCCESS" or .conclusion == "NEUTRAL" or .conclusion == "SKIPPED")) | not)] | length' <<<"${pr_json}")"
+            if [ "${check_count}" -eq 0 ] || [ "${bad_checks}" -ne 0 ]; then
+              continue
+            fi
+
+            head_sha="$(jq -r '.headRefOid' <<<"${pr_json}")"
+            changed="$(gh pr diff "${number}" --repo "${GH_REPO}" --name-only)"
+            unsafe=0
+            while IFS= read -r path; do
+              [ -n "${path}" ] || continue
+              case "${path}" in
+                .github/workflows/*|src/research/*|tests/*|docs/*|src/data/pit_source_adapter.py|src/data/pit_source_adapter_v2.py|src/data/pit_source_adapter_fast.py)
+                  ;;
+                *)
+                  unsafe=1
+                  ;;
+              esac
+            done <<< "${changed}"
+            if [ "${unsafe}" -ne 0 ]; then
+              continue
+            fi
+
+            # Re-read the PR immediately before merge to close the head-sha race.
+            final_head="$(gh pr view "${number}" --repo "${GH_REPO}" --json headRefOid,mergeStateStatus --jq '.headRefOid + "|" + .mergeStateStatus')"
+            current_head="${final_head%%|*}"
+            current_state="${final_head##*|}"
+            if [ "${current_head}" != "${head_sha}" ] || [ "${current_state}" != "CLEAN" ]; then
+              continue
+            fi
+
+            if gh pr merge "${number}" --repo "${GH_REPO}" --squash --delete-branch --match-head-commit "${head_sha}"; then
+              jq --arg n "${number}" --arg sha "${head_sha}" '.decisions += [{"pr":($n|tonumber),"decision":"MERGED","head_sha":$sha}]' "${report}" > "${report}.tmp"
+              mv "${report}.tmp" "${report}"
+            fi
+          done
+
+          jq --arg main_sha "${main_sha}" '.main_sha=$main_sha' "${report}" > "${report}.tmp"
+          mv "${report}.tmp" "${report}"
+
+      - name: Upload controller evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-autonomous-controller-${{ github.run_id }}
+          path: controller-report.json
+          retention-days: 14
+
+# Automatic merging is deliberately narrower than automatic research:
+# only explicitly marked hardening PRs with a clean merge state and all checks green
+# may be merged. Production/model/feature changes are never auto-merged by this controller.
