@@ -145,6 +145,8 @@ jobs:
 
           # High-frequency live lanes: these are catch-up guards only; their own schedules remain authoritative.
           ensure_lane "soccer-matchday-intelligence.yml" 30 15
+          # Dynamic in-play state research: catch up stale/missing hazard/scenario research.
+          ensure_lane "soccer-match-state-research.yml" 360 60
           ensure_lane "soccer-daily-research-forecast.yml" 60 20
 
           # Core research lanes.
