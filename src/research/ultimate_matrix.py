@@ -8,20 +8,13 @@ import pandas as pd
 
 from src.evaluation.walk_forward import run_walk_forward
 from src.research.feature_set_variants import (
+    FEATURE_SCREEN_MODELS,
     select_feature_set,
     variant_catalog,
 )
 
 
-BASE_MODELS = (
-    # Representation-compatible common screen. Specialist Elo candidates are
-    # deliberately reserved for the model-ecology stage.
-    "logistic",
-    "logistic_select",
-    "extra_trees",
-    "random_forest",
-    "hist_gb",
-)
+BASE_MODELS = FEATURE_SCREEN_MODELS
 
 MODEL_ECOLOGY = (
     "elo_logistic",
