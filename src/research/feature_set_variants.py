@@ -200,6 +200,47 @@ def _keep_representation(column: str, representation: str) -> bool:
     raise ValueError(f"Unknown representation: {representation}")
 
 
+def _is_offensive(column: str) -> bool:
+    tokens = (
+        "_gf_", "_goal_total_avg_", "_xg_", "_shots_", "_shots_on_target_",
+        "_goals_ht_", "_xg_ht_", "_failed_to_score_rate_",
+    )
+    return any(token in column for token in tokens)
+
+
+def _is_defensive(column: str) -> bool:
+    tokens = (
+        "_ga_", "_gd_", "_clean_sheet_rate_", "_blocked_shots_",
+        "_failed_to_score_rate_",
+    )
+    return any(token in column for token in tokens)
+
+
+def _is_process(column: str) -> bool:
+    tokens = (
+        "_xg_", "_possession_", "_pass_accuracy_", "_shots_inside_box_",
+        "_shots_outside_box_", "_blocked_shots_", "_offsides_",
+    )
+    return any(token in column for token in tokens)
+
+
+def _is_discipline(column: str) -> bool:
+    tokens = ("_fouls_", "_yellow_cards_", "_red_cards_", "_penalties_")
+    return any(token in column for token in tokens)
+
+
+def _is_goal_environment(column: str) -> bool:
+    tokens = (
+        "_goal_total_avg_", "_gf_", "_ga_", "_xg_", "_goals_ht_", "_xg_ht_",
+        "_clean_sheet_rate_", "_failed_to_score_rate_",
+    )
+    return any(token in column for token in tokens)
+
+
+def _is_volatility(column: str) -> bool:
+    return "_std_" in column or "volatility" in column
+
+
 def select_feature_set(frame: pd.DataFrame, variant: str) -> tuple[list[str], dict]:
     cols = available_feature_columns(frame)
 
@@ -272,6 +313,44 @@ def select_feature_set(frame: pd.DataFrame, variant: str) -> tuple[list[str], di
             if fam == "advanced_stats" and w == 10:
                 return any(token in c for token in ("_xg_", "_shots_on_target_", "_possession_"))
             return fam in {"h2h", "momentum", "interaction"}
+        if variant == "offense_lean":
+            if fam in {"strength", "rest"}:
+                return True
+            return _is_offensive(c)
+        if variant == "defense_lean":
+            if fam in {"strength", "rest"}:
+                return True
+            return _is_defensive(c)
+        if variant == "process_lean":
+            if fam in {"strength", "rest"}:
+                return True
+            return _is_process(c)
+        if variant == "discipline_lean":
+            if fam in {"strength", "rest"}:
+                return True
+            return _is_discipline(c)
+        if variant == "goal_environment":
+            if fam in {"strength", "rest"}:
+                return True
+            return _is_goal_environment(c)
+        if variant == "volatility_lean":
+            if fam in {"strength", "rest"}:
+                return True
+            return _is_volatility(c)
+        if variant == "short_form_3_5":
+            if fam in {"strength", "rest"}:
+                return True
+            return fam in {"form", "basic_stats", "advanced_stats", "derived_difference"} and w in {3, 5}
+        if variant == "long_form_10_20":
+            if fam in {"strength", "rest"}:
+                return True
+            return fam in {"form", "basic_stats", "advanced_stats", "derived_difference"} and w in {10, 20}
+        if variant == "ewma_difference":
+            return _keep_representation(c, "difference") and ("ewma" in c or fam in {"strength", "rest"})
+        if variant == "levels_form":
+            if fam in {"strength", "rest", "form", "basic_stats", "advanced_stats"}:
+                return _keep_representation(c, "levels")
+            return False
         if variant == "levels_only":
             return _keep_representation(c, "levels")
         raise ValueError(f"Unknown feature-set variant: {variant}")
@@ -306,18 +385,28 @@ VARIANT_ORDER = (
     "form_5_10",
     "form_3_5_10",
     "form_all",
+    "short_form_3_5",
+    "long_form_10_20",
     "basic_stats_5",
     "basic_3_10",
     "advanced_stats_5",
     "advanced_3_10",
     "xg_possession_dense",
+    "offense_lean",
+    "defense_lean",
+    "process_lean",
+    "discipline_lean",
+    "goal_environment",
+    "volatility_lean",
     "advanced_all",
     "h2h_momentum",
     "interactions",
     "difference_heavy",
     "ewma_heavy",
+    "ewma_difference",
     "compact",
     "levels_only",
+    "levels_form",
 )
 
 
@@ -434,20 +523,33 @@ def run_feature_set_research(
         "form_3_only",
         "core_form_5",
         "form_10_only",
+        "form_20_only",
         "form_3_5",
         "form_3_10",
         "form_5_10",
         "form_3_5_10",
         "form_all",
+        "short_form_3_5",
+        "long_form_10_20",
         "basic_stats_5",
         "basic_3_10",
         "advanced_stats_5",
         "advanced_3_10",
         "xg_possession_dense",
+        "offense_lean",
+        "defense_lean",
+        "process_lean",
+        "discipline_lean",
+        "goal_environment",
+        "volatility_lean",
         "advanced_all",
         "h2h_momentum",
         "interactions",
         "difference_heavy",
+        "ewma_difference",
+        "compact",
+        "levels_only",
+        "levels_form",
     ))
     valid_names = {x["variant"] for x in variant_catalog()}
     unknown = [x for x in selected_variants if x not in valid_names]
