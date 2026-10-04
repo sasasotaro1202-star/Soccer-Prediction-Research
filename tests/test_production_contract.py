@@ -7,6 +7,7 @@ from sklearn.dummy import DummyClassifier
 
 from src.research.production_contract import evaluate_production_contract, write_contract_result
 from src.research.task_scope import build_task_scope_matrix
+from src.prediction.model_bundle import _feature_schema_hash, FEATURE_MANIFEST_VERSION, FEATURE_POLICY_VERSION, TARGET_CONTRACT_VERSION
 
 
 def _write(path, value):
@@ -101,11 +102,20 @@ def _minimal_passing_artifacts(tmp_path):
             "reference_scope": "final_pit_verified_training_data_only",
         },
     }
+    feature_contract = {
+        "schema_version": 1,
+        "manifest_version": FEATURE_MANIFEST_VERSION,
+        "policy_version": FEATURE_POLICY_VERSION,
+        "schema_hash": _feature_schema_hash(["f1"]),
+        "source_snapshot_id": "unit-snapshot",
+        "target_version": TARGET_CONTRACT_VERSION,
+    }
     bundle = {
         "schema_version": 3,
         "model_version": "v1",
         "data_snapshot_id": "unit-snapshot",
         "feature_cols": ["f1"],
+        "feature_contract": feature_contract,
         "weights": {"m": 1.0},
         "temperature": 1.0,
         "models": {"m": estimator},
@@ -121,6 +131,10 @@ def _minimal_passing_artifacts(tmp_path):
         "adoption_status": "ADOPT",
         "model_version": "v1",
         "feature_cols": ["f1"],
+        "feature_manifest_version": FEATURE_MANIFEST_VERSION,
+        "feature_policy_version": FEATURE_POLICY_VERSION,
+        "feature_schema_hash": _feature_schema_hash(["f1"]),
+        "target_version": TARGET_CONTRACT_VERSION,
         "git_commit_sha": os.getenv("GITHUB_SHA", ""),
         "parameters": {"weights": {"m": 1.0}, "routing_policy": routing_policy},
         "calibration": {"temperature": 1.0},
@@ -129,6 +143,7 @@ def _minimal_passing_artifacts(tmp_path):
         "adoption_status": "ADOPT",
         "model_version": "v1",
         "feature_cols": ["f1"],
+        "feature_contract": feature_contract,
         "weights": {"m": 1.0},
         "temperature": 1.0,
         "routing_policy": routing_policy,
@@ -284,3 +299,34 @@ def test_contract_does_not_skip_bundle_validation_for_champion_status(tmp_path):
     result = write_contract_result(str(tmp_path))
     assert result.passed is False
     assert "production_bundle_load" in result.failures
+
+
+
+def test_contract_rejects_feature_contract_registry_mismatch(tmp_path):
+    _minimal_passing_artifacts(tmp_path)
+    _write(tmp_path / "model_registry.json", {
+        "adoption_status": "ADOPT",
+        "model_version": "v1",
+        "feature_cols": ["f1"],
+        "feature_manifest_version": FEATURE_MANIFEST_VERSION,
+        "feature_policy_version": FEATURE_POLICY_VERSION,
+        "feature_schema_hash": "0" * 64,
+        "target_version": TARGET_CONTRACT_VERSION,
+        "git_commit_sha": os.getenv("GITHUB_SHA", ""),
+        "data_snapshot_id": "unit-snapshot",
+        "parameters": {"weights": {"m": 1.0}},
+        "calibration": {"temperature": 1.0},
+    })
+    result = evaluate_production_contract(str(tmp_path))
+    assert result.passed is False
+    assert "model_registry_feature_contract_mismatch" in result.failures
+
+
+def test_contract_rejects_feature_contract_json_mismatch(tmp_path):
+    _minimal_passing_artifacts(tmp_path)
+    payload = json.loads((tmp_path / "production_model.json").read_text())
+    payload["feature_contract"]["schema_hash"] = "0" * 64
+    _write(tmp_path / "production_model.json", payload)
+    result = evaluate_production_contract(str(tmp_path))
+    assert result.passed is False
+    assert "production_model_json_feature_schema_hash" in result.failures
