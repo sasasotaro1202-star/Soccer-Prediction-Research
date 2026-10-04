@@ -39,6 +39,14 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Cache raw and PIT evidence for resumable Phase 1 replay
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: |
+            data/raw
+            data/raw/pit_evidence
+          key: soccer-9h-data-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/data/**/*.py', 'src/data/*.py') }}
+          restore-keys: soccer-9h-data-${{ runner.os }}-
       - name: Install dependencies with retry
         shell: bash
         run: |
