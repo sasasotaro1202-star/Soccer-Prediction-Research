@@ -136,6 +136,37 @@ def test_run_is_fail_closed_warmup_without_dataset(tmp_path):
     assert '"research_only": true' in saved
 
 
+def test_chronological_hazard_oos_blocks_immature_labels_at_test_cutoff():
+    frame = build_state_features(validate_snapshot_contract(_rows(150)))
+    base = pd.Timestamp("2026-01-01T12:00:00Z")
+    # Put many matches close together and delay final-label maturity so a naive
+    # "max training label" as-of boundary would reach into the future test block.
+    kickoff_by_match = {
+        f"m{i}": base + pd.Timedelta(minutes=2 * i) for i in range(150)
+    }
+    frame["label_available_at_utc"] = frame["match_id"].map(
+        lambda mid: kickoff_by_match[str(mid)] + pd.Timedelta(minutes=120)
+    )
+    result = __import__(
+        "src.research.match_state_hazard",
+        fromlist=["evaluate_hazard_chronological_oos"],
+    ).evaluate_hazard_chronological_oos(
+        frame,
+        method="logistic",
+        min_training_matches=20,
+        min_test_matches=10,
+        max_folds=4,
+    )
+    for fold in result.get("folds", []):
+        assert pd.Timestamp(fold["training_label_cutoff_utc"]) <= pd.Timestamp(
+            fold["test_start_utc"]
+        )
+    if result["status"] == "EVALUATED":
+        assert result["overall_next_event_logloss"] == np.mean(
+            [f["next_event_logloss"] for f in result["folds"]]
+        )
+
+
 def test_chronological_hazard_oos_is_match_level_and_research_only():
     frame = build_state_features(validate_snapshot_contract(_rows(150)))
     from src.research.match_state_hazard import evaluate_hazard_chronological_oos
