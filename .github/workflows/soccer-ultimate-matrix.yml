@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: soccer-ultimate-matrix-${{ github.event.pull_request.number || github.ref_name }}-${{ github.sha }}
@@ -40,13 +41,33 @@ jobs:
           done
           exit 1
 
+      - name: Guard against stale PR head
+        id: head_guard
+        if: github.event.pull_request.number
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          if [ "${current_head}" != "${GITHUB_SHA}" ]; then
+            echo "Stale research run: workflow SHA=${GITHUB_SHA}, current PR head=${current_head}"
+            echo "fresh=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "fresh=true" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Compile source and tests
+        if: steps.head_guard.outputs.fresh == 'true' || steps.head_guard.outcome == 'skipped'
         run: python -m compileall -q src tests
 
       - name: Run focused research tests
+        if: steps.head_guard.outputs.fresh == 'true' || steps.head_guard.outcome == 'skipped'
         run: python -m pytest -q tests/test_feature_set_variants.py tests/test_ultimate_matrix.py tests/test_ultimate_robustness.py
 
       - name: Run research preflight tests
+        if: steps.head_guard.outputs.fresh == 'true' || steps.head_guard.outcome == 'skipped'
         run: >-
           python -m pytest -q
           tests/test_feature_set_variants.py
@@ -59,9 +80,11 @@ jobs:
           tests/test_pit_source_adapter_fast_exact_kickoff.py
 
       - name: Run fixture/source structural audit
+        if: steps.head_guard.outputs.fresh == 'true' || steps.head_guard.outcome == 'skipped'
         run: python -m src.data.fixture_field_audit
 
       - name: Enforce audit gate
+        if: steps.head_guard.outputs.fresh == 'true' || steps.head_guard.outcome == 'skipped'
         shell: bash
         run: |
           set -euo pipefail
@@ -89,6 +112,7 @@ jobs:
           PY
 
       - name: Build strict PIT feature handoff
+        if: steps.head_guard.outputs.fresh == 'true' || steps.head_guard.outcome == 'skipped'
         env:
           PIT_ENABLE_ARCHIVE_AUDIT: "1"
           PYTHONPATH: .
@@ -111,6 +135,7 @@ jobs:
           PY
 
       - name: Fingerprint PIT feature handoff
+        if: steps.head_guard.outputs.fresh == 'true' || steps.head_guard.outcome == 'skipped'
         id: pit_fingerprint
         shell: bash
         run: |
@@ -119,12 +144,14 @@ jobs:
           echo "sha256=$(sha256sum artifacts/pit_replay_features.csv | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Restore ultimate matrix checkpoint cache
+        if: steps.head_guard.outputs.fresh == 'true' || steps.head_guard.outcome == 'skipped'
         id: ultimate_cache_restore
         uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: artifacts/ultimate_matrix
           key: soccer-ultimate-matrix-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/research/ultimate_matrix.py', 'src/research/feature_set_variants.py', 'src/evaluation/walk_forward.py', 'src/models/baselines.py') }}-${{ steps.pit_fingerprint.outputs.sha256 }}
       - name: Run staged ultimate matrix
+        if: steps.head_guard.outputs.fresh == 'true' || steps.head_guard.outcome == 'skipped'
         env:
           PYTHONPATH: .
           PYTHONHASHSEED: "0"
@@ -141,12 +168,14 @@ jobs:
             --top-combos 3
 
       - name: Save ultimate matrix checkpoint cache
+        if: steps.head_guard.outputs.fresh == 'true' || steps.head_guard.outcome == 'skipped'
         if: always() && steps.ultimate_cache_restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: artifacts/ultimate_matrix
           key: soccer-ultimate-matrix-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/research/ultimate_matrix.py', 'src/research/feature_set_variants.py', 'src/evaluation/walk_forward.py', 'src/models/baselines.py') }}-${{ steps.pit_fingerprint.outputs.sha256 }}
       - name: Run winner robustness and case-level diagnostics
+        if: steps.head_guard.outputs.fresh == 'true' || steps.head_guard.outcome == 'skipped'
         id: robustness
         if: success()
         env:
