@@ -234,12 +234,17 @@ jobs:
 
           reasons = []
           for check in checks:
+              name = check.get("name") or ""
+              # The controller is itself a check run on the PR. Waiting for its
+              # own result would self-deadlock the merge controller.
+              if name == "Safe Hardening Auto-Merge":
+                  continue
               status = check.get("status")
               conclusion = check.get("conclusion")
               if status in pending_states:
-                  reasons.append(f"pending check: {check.get('name')}")
+                  reasons.append(f"pending check: {name}")
               elif conclusion in bad_conclusions:
-                  reasons.append(f"failed check: {check.get('name')}={conclusion}")
+                  reasons.append(f"failed check: {name}={conclusion}")
 
           for name in sorted(required):
               candidates = [
