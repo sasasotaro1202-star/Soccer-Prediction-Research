@@ -207,3 +207,10 @@ Current main remains BLOCKED by recorded preflight test/data-audit failures; the
 ## GitHub-side autonomous operation — active on main after merge
 
 The repository control plane is designed to operate from GitHub Actions without a fresh chat instruction each cycle. The autonomous controller only merges explicitly marked hardening-safe PRs after current-main/base equality, same-repository checks, allowlisted changed paths, completed successful checks, PIT evidence when relevant, and a final head-SHA race check. Production/model/feature/calibration/target/frozen-holdout/performance changes remain outside this automatic merge policy. The controller emits an auditable artifact and never converts missing or ambiguous evidence into PASS.
+
+
+## GitHub-native autonomous orchestration — 2026-10-05
+
+The live repository contains a state-based `.github/workflows/soccer-autonomous-orchestrator.yml` that reconciles routine soccer research and operations on a 30-minute cadence. It dispatches catch-up executions only on the current `main` SHA, refuses to suppress cadence based on old/PR runs, avoids duplicate active current-main runs, and records DISPATCH/HOLD evidence. Covered lanes include matchday refresh, daily forecast, 9H research, robust/predictability/historical research, experience settlement, adaptive discovery, scope frontier, PIT replay/coverage/versioned audits, global data lake, MOM, catalog/source audits, research cycle, overnight integrity and Opta-like monitoring. The orchestrator has no authority to change production models, frozen holdout evidence, targets, calibration, or performance claims.
+
+The autonomous merge controller separately allowlists this orchestrator workflow as hardening-safe-v1. This is a control-plane bootstrap only; research/performance-affecting changes remain outside automatic merge. All PIT/OOS/WFO/calibration/robustness/holdout/adoption gates remain authoritative.
