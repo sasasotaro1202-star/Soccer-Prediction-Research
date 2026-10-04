@@ -47,7 +47,7 @@ def test_metrics_tail_uses_only_locked_suffix():
 
 
 def test_locked_match_ids_are_deterministic_and_suffix_based():
-    n = 16
+    n = 18
     kickoff = pd.date_range("2026-01-01T00:00:00Z", periods=n, freq="h")
     frame = pd.DataFrame(
         {
@@ -76,6 +76,12 @@ def test_locked_match_ids_move_boundary_past_shared_kickoff():
             "2026-01-01T06:00:00Z",
             "2026-01-01T07:00:00Z",
             "2026-01-01T08:00:00Z",
+            "2026-01-01T09:00:00Z",
+            "2026-01-01T10:00:00Z",
+            "2026-01-01T11:00:00Z",
+            "2026-01-01T12:00:00Z",
+            "2026-01-01T13:00:00Z",
+            "2026-01-01T14:00:00Z",
         ],
         utc=True,
     )
@@ -85,7 +91,7 @@ def test_locked_match_ids_move_boundary_past_shared_kickoff():
         {
             "match_id": [f"m{i}" for i in range(len(kickoff))],
             "kickoff_utc": kickoff,
-            "target": [0, 1, 2] * 3,
+            "target": [0, 1, 2] * 5 + [0],
             "pit_verified": [True] * len(kickoff),
             "prediction_cutoff_at_utc": kickoff - pd.Timedelta(minutes=60),
             "feature_source_max_available_at_utc": kickoff - pd.Timedelta(minutes=120),
