@@ -23,8 +23,10 @@ permissions:
 concurrency:
   # CI is disposable; keep only the newest verification for each ref to prevent stale queue buildup.
   # Long-running 9H research uses a separate concurrency group and is never cancelled by this policy.
-  group: soccer-ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: soccer-ci-${{ github.event.pull_request.head.sha || github.sha }}
+  # PR verification is evidence for the immutable PR head SHA and must not be
+  # be cancelled by merge-ref churn. Main push verification remains disposable.
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
   test:
