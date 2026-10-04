@@ -100,3 +100,10 @@ PIT replay remains scheduled and diagnostic; BLOCKED evidence is never promoted 
 Routine repository operation is expected to run from GitHub Actions without requiring a new chat instruction each cycle:
 MONITOR → RECONCILE → RETRY_TRANSIENT_FAILURE_ONCE → PIT_AUDIT → TEST → OOS/WFO → CALIBRATION/ROBUSTNESS → ADOPTION_GATE → SAFE_RELEASE.
 Automatic merge is limited to explicitly marked `automation_policy: hardening-safe-v1` hardening PRs whose base is the current `main`, whose diff stays inside the hardening allowlist, whose checks are complete and successful, and whose final head-SHA race check remains clean. Model, feature, calibration, target, frozen-holdout, production-bundle and performance-affecting research changes remain outside the automatic-merge policy.
+
+
+## GitHub-side state-based autonomy
+
+Routine execution must not depend on an exact cron tick. The `Soccer Autonomous Orchestrator` runs every 30 minutes, reads the current `main` SHA, checks active/current-main and completed/current-main history, and dispatches only stale/missing lanes on `main`. It covers prediction refresh, matchday intelligence, experience settlement, research, discovery, PIT and coverage audits, scope, source probing, catalog, robustness and integrity lanes. Duplicate active runs are held. Every decision is persisted as an auditable Actions artifact.
+
+This control plane cannot authorize production/model/feature/calibration/target changes, frozen-holdout access or performance claims. Automatic merging remains limited to hardening-safe control-plane paths with completed successful verification and final SHA race checks.
