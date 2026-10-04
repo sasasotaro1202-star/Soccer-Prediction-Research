@@ -127,6 +127,41 @@ def test_replay_rejects_completed_result_observed_before_180m_even_after_kickoff
     assert evidence.source_available_at_utc is None
 
 
+
+def test_replay_accepts_result_at_exact_conservative_completion_boundary(tmp_path, monkeypatch):
+    adapter = FootballDataWaybackAdapter(cache_dir=str(tmp_path))
+    monkeypatch.setattr(
+        adapter,
+        "captures",
+        lambda url: [{"timestamp": "20250901210000", "digest": "digest-boundary", "original": url}],
+    )
+    monkeypatch.setattr(
+        adapter,
+        "_load_snapshot_keys",
+        lambda capture, original_url: type("Diag", (), {
+            "status": "SNAPSHOT_PARSED",
+            "keys": {("2025-09-01", "teama", "teamb", 2.0, 1.0, "H")},
+        })(),
+    )
+    row = pd.Series({
+        "competition": "EPL",
+        "season_start": 2025,
+        "home_team": "Team A",
+        "away_team": "Team B",
+        "source_event_date": "2025-09-01",
+        "kickoff_utc": "2025-09-01T18:00:00Z",
+        "kickoff_time_available": True,
+        "home_goals": 2,
+        "away_goals": 1,
+        "result": "H",
+    })
+
+    evidence = adapter._prefetch_url("https://example.invalid/test.csv", [row], workers=1)[0]
+
+    assert evidence.evidence_status == "VERIFIED"
+    assert evidence.source_available_at_utc == "2025-09-01T21:00:00+00:00"
+
+
 def test_arquivo_cdx_mapping_error_is_treated_as_no_capture(monkeypatch):
     class Response:
         def raise_for_status(self): return None
