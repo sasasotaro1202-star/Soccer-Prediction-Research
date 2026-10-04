@@ -154,13 +154,14 @@ jobs:
 
             api "/${API}/pulls/${PR_NUMBER}/files?per_page=100" > "/tmp/hardening/pr-${PR_NUMBER}-files.json"
             set +e
-            python - "/tmp/hardening/pr-${PR_NUMBER}-files.json" "${PR_NUMBER}" <<'PY'
+            python - "/tmp/hardening/pr-${PR_NUMBER}-files.json" "${PR_NUMBER}" "/tmp/hardening/pr-${PR_NUMBER}.json" <<'PY'
           import fnmatch
           import json
           import sys
           from pathlib import Path
 
           files = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          pr = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8"))
           allowed_exact = {
               ".github/workflows/action-failure-recovery.yml",
               ".github/workflows/pit-replay-audit.yml",
