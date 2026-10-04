@@ -26,6 +26,7 @@ def _run_git(*args: str) -> bytes | None:
         return proc.stdout
     if proc.returncode == 128 and (
         b"does not exist in" in proc.stderr
+        or b"does not exist (neither on disk nor in the index)" in proc.stderr
         or (b"pathspec" in proc.stderr and b"did not match any file" in proc.stderr)
     ):
         return None
