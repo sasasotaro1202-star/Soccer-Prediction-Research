@@ -76,6 +76,29 @@ class FootballDataWaybackAdapter(_FastFootballDataWaybackAdapter):
         self.snapshot_retries = max(1, int(snapshot_retries))
         self.snapshot_retry_backoff = max(0.0, float(snapshot_retry_backoff))
 
+    def _prefetch_url(self, url, rows, workers=None):
+        """Apply a final conservative PIT lower-bound recheck before returning evidence."""
+        results = super()._prefetch_url(url, rows, workers=workers)
+        checked = []
+        for row, evidence in zip(rows, results):
+            lower_bound, bound_reason = _result_lower_bound(row)
+            observed_at = _utc(evidence.source_available_at_utc)
+            if (
+                evidence.evidence_status == "VERIFIED"
+                and (
+                    lower_bound is None
+                    or observed_at is None
+                    or observed_at < lower_bound
+                )
+            ):
+                evidence = SourceEvidence(
+                    None,
+                    "UNVERIFIABLE",
+                    reason=f"pit_acceptance_boundary_recheck_failed:{bound_reason.lower()}",
+                )
+            checked.append(evidence)
+        return checked
+
     def captures(self, url: str):
         for attempt in range(1, self.cdx_retries + 1):
             self._captures.pop(url, None)

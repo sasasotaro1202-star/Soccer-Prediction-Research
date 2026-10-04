@@ -4,16 +4,22 @@ on:
   workflow_run:
     workflows:
       - Soccer CI
+      - Soccer PIT Replay Audit
       - Soccer Matchday Intelligence Refresh
       - Legacy V9/V12 Bridge Check
+      - Overnight Integrity
+      - Soccer Ultimate Experiment Matrix
+      - Soccer Feature Set Research
+      - Autonomous GitHub Controller
+      - Soccer 9H Autonomous Research
     types: [completed]
 
 permissions:
   actions: write
 
 concurrency:
-  # Only one short CI recovery controller is needed at a time.
-  group: action-failure-recovery-soccer-ci
+  # One bounded recovery controller; it never recursively retries an already retried run.
+  group: action-failure-recovery-soccer
   cancel-in-progress: true
 
 jobs:
@@ -34,9 +40,6 @@ jobs:
           set -euo pipefail
           echo "Automatic one-time recovery for failed workflow: ${RUN_NAME} (${RUN_ID})"
 
-          # The recovery action itself must tolerate transient GitHub API/network
-          # failures, but it must never loop: the parent workflow is only retried
-          # when run_attempt == 1.
           for attempt in 1 2 3; do
             if gh run rerun "${RUN_ID}" --failed --repo "${GITHUB_REPOSITORY}"; then
               echo "Recovery rerun requested on attempt ${attempt}."

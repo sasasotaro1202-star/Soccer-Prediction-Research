@@ -127,6 +127,34 @@ def _oos_temporal_integrity(frame: pd.DataFrame, *, locked_blocks: int = 2) -> d
     return result
 
 
+def _build_stability_folds(development_oos: pd.DataFrame) -> list[dict]:
+    """Convert development-only OOS blocks into stability evidence.
+    
+    Locked/frozen OOS must remain excluded because stability is selection/development
+    evidence rather than final holdout evidence.
+    """
+    stability_folds = []
+    for _, row in development_oos.iterrows():
+        stability_folds.append({
+            "league": row.get("leagues", ""),
+            "season": row.get("seasons", ""),
+            "baseline": {
+                "logloss": row.get("baseline_logistic_logloss"),
+                "brier": row.get("baseline_logistic_brier"),
+                "accuracy": row.get("baseline_logistic_accuracy"),
+            },
+            "candidate": {
+                "logloss": row.get("logloss"),
+                "brier": row.get("brier"),
+                "accuracy": row.get("accuracy"),
+            },
+            "oos_start_utc": row.get("oos_start"),
+            "oos_end_utc": row.get("oos_end"),
+        })
+    return stability_folds
+
+
+
 def snapshot_id(df: pd.DataFrame) -> str:
     excluded = {"retrieved_at_utc", "source_available_at_utc", "pit_evidence_url", "capture_digest"}
     stable = df[[c for c in df.columns if c not in excluded]].copy()
@@ -608,23 +636,16 @@ def run(out_dir: str = "artifacts") -> dict:
     (out / "calibration_gate.json").write_text(
         json.dumps(calibration_gate, indent=2, ensure_ascii=False, default=str), encoding="utf-8"
     )
-    stability_folds = []
-    for _, row in wf.iterrows():
-        stability_folds.append({
-            "league": row.get("leagues", ""),
-            "season": row.get("seasons", ""),
-            "baseline": {
-                "logloss": row.get("baseline_logistic_logloss"),
-                "brier": row.get("baseline_logistic_brier"),
-                "accuracy": row.get("baseline_logistic_accuracy"),
-            },
-            "candidate": {
-                "logloss": row.get("logloss"),
-                "brier": row.get("brier"),
-                "accuracy": row.get("accuracy"),
-            },
-        })
+    # Stability is development evidence only. Locked OOS blocks are reserved for
+    # final verification and must never influence candidate stability/selection.
+    stability_folds = _build_stability_folds(development_oos)
     stability = evaluate_stability(stability_folds)
+    stability["evidence_scope"] = {
+        "source": "development_oos_only",
+        "development_blocks": int(len(development_oos)),
+        "locked_oos_blocks_excluded": int(len(locked)),
+        "locked_oos_used_for_stability": False,
+    }
     (out / "stability_gate.json").write_text(json.dumps(stability, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     candidate_lock = {"status": "LOCKED", "selection_source": "historical_validation_only", "selection_artifact": "model_selection.csv", "development_oos_blocks": int(len(development_oos)), "locked_oos_blocks": int(len(locked)), "locked_oos_untouched": True, "target_accuracy": TARGET_ACCURACY, "model_family": "validation-selected calibrated ensemble", "feature_policy": "PIT-safe numeric features only", "pit_policy": PIT_POLICY}
     (out / "candidate_lock.json").write_text(json.dumps(candidate_lock, indent=2, ensure_ascii=False), encoding="utf-8")
