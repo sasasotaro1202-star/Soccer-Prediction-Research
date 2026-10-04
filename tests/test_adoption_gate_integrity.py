@@ -157,3 +157,26 @@ def test_adoption_requires_reference_relative_improvement_thresholds():
     assert result["status"] == "REJECT"
     assert result["primary_logloss_relative_improvement"] < 0.03
     assert result["auxiliary_brier_relative_improvement"] < 0.01
+
+
+def test_adoption_rejects_invalid_holdout_row_count():
+    for invalid in (None, True, "200", -1):
+        result = independent_adoption_gate(
+            {"development_oos": True},
+            _valid_holdout(n=invalid),
+            stability_folds=_stability_folds(),
+        )
+        assert result["status"] == "HOLD"
+        assert result["reason"] == "holdout_row_count_missing_or_invalid"
+
+
+def test_adoption_rejects_non_finite_holdout_metrics():
+    result = independent_adoption_gate(
+        {"development_oos": True},
+        _valid_holdout(
+            candidate={"logloss": 0.90, "brier": 0.24, "ece": float("nan"), "accuracy": 0.51}
+        ),
+        stability_folds=_stability_folds(),
+    )
+    assert result["status"] == "HOLD"
+    assert result["reason"] == "non_finite_holdout_metrics"
