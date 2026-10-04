@@ -78,7 +78,7 @@ jobs:
           python -m src.research.match_state_hazard --input "${MATCH_STATE_INPUT}" --out "${MATCH_STATE_OUT}"
 
       - name: Trigger source discovery when historical in-play data is unavailable
-        if: always()
+        if: always() && github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
@@ -134,7 +134,7 @@ jobs:
           PY
 
       - name: Persist research status on main
-        if: success()
+        if: success() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
@@ -149,7 +149,10 @@ jobs:
           for attempt in 1 2 3; do
             git fetch --prune origin main
             if ! git rebase origin/main; then
-              git rebase --abort || true
+              if ! git rebase --abort; then
+                echo "Research status rebase abort failed; refusing automatic resolution."
+                exit 1
+              fi
               echo "Research status rebase conflict; refusing automatic resolution."
               exit 1
             fi
