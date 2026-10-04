@@ -274,6 +274,18 @@ def run_ultimate_matrix(
     out.mkdir(parents=True, exist_ok=True)
     frame = _validate_input(input_path)
 
+    fingerprint = _experiment_fingerprint(
+        input_path=input_path,
+        min_train=min_train,
+        oos_block=oos_block,
+        random_state=random_state,
+        top_features=top_features,
+        top_combos=top_combos,
+    )
+    checkpoint_path = out / "ultimate_matrix_checkpoint.json"
+    checkpoint = _load_checkpoint(checkpoint_path, fingerprint)
+    checkpoint["fingerprint"] = fingerprint
+
     features = [row["variant"] for row in variant_catalog()]
     catalog = {
         "schema_version": 1,
@@ -316,9 +328,11 @@ def run_ultimate_matrix(
         encoding="utf-8",
     )
 
-    feature_rows = []
-    feature_wfs: dict[str, pd.DataFrame] = {}
+    feature_rows = list(checkpoint.get("feature_rows", []))
+    completed_features = _completed_variant_keys(feature_rows)
     for variant in features:
+        if variant in completed_features:
+            continue
         cols, meta = select_feature_set(frame, variant)
         wf, _ = run_walk_forward(
             frame,
@@ -333,7 +347,9 @@ def run_ultimate_matrix(
         )
         summary = summarize_oos(wf)
         feature_rows.append({**meta, **summary})
-        feature_wfs[variant] = wf
+        checkpoint["feature_rows"] = feature_rows
+        checkpoint["stage"] = "feature_screen"
+        _save_checkpoint(checkpoint_path, checkpoint)
 
     feature_table = pd.DataFrame(feature_rows)
     feature_table.to_csv(out / "ultimate_feature_screen.csv", index=False)
@@ -341,6 +357,7 @@ def run_ultimate_matrix(
     if len(window_signatures) != 1:
         raise RuntimeError("Feature screen variants do not share one OOS window signature")
 
+    checkpoint["feature_rows"] = feature_rows
     selected_features = (
         feature_table.sort_values(
             ["screen_logloss", "screen_brier", "screen_ece", "variant"],
@@ -354,10 +371,13 @@ def run_ultimate_matrix(
         encoding="utf-8",
     )
 
-    model_rows = []
+    model_rows = list(checkpoint.get("model_rows", []))
+    completed_models = _completed_model_keys(model_rows)
     for variant in selected_features:
         cols, meta = select_feature_set(frame, variant)
         for model_name in MODEL_ECOLOGY:
+            if (str(variant), str(model_name)) in completed_models:
+                continue
             anchor = "logistic" if model_name != "logistic" else "logistic_c0_15"
             wf, _ = run_walk_forward(
                 frame,
@@ -377,7 +397,12 @@ def run_ultimate_matrix(
                 "anchor_model": anchor,
                 **summary,
             })
+            checkpoint["model_rows"] = model_rows
+            checkpoint["selected_features"] = selected_features
+            checkpoint["stage"] = "model_screen"
+            _save_checkpoint(checkpoint_path, checkpoint)
 
+    checkpoint["model_rows"] = model_rows
     model_table = pd.DataFrame(model_rows)
     model_table.to_csv(out / "ultimate_model_screen.csv", index=False)
     model_best = model_table.sort_values(
@@ -392,7 +417,8 @@ def run_ultimate_matrix(
         encoding="utf-8",
     )
 
-    config_rows = []
+    config_rows = list(checkpoint.get("config_rows", []))
+    completed_configs = _completed_config_keys(config_rows)
     for combo in selected_combos:
         cols, meta = select_feature_set(frame, str(combo["variant"]))
         model_name = str(combo["model_name"])
@@ -400,6 +426,15 @@ def run_ultimate_matrix(
         for train_name, max_train in TRAINING_WINDOWS:
             for calibration in CALIBRATION_MODES:
                 for routing in ROUTING_MODES:
+                    config_key = (
+                        str(combo["variant"]),
+                        str(model_name),
+                        str(train_name),
+                        str(calibration),
+                        str(routing),
+                    )
+                    if config_key in completed_configs:
+                        continue
                     wf, _ = run_walk_forward(
                         frame,
                         cols,
@@ -422,7 +457,12 @@ def run_ultimate_matrix(
                         "routing_mode": routing,
                         **summary,
                     })
+                    checkpoint["config_rows"] = config_rows
+                    checkpoint["selected_combos"] = selected_combos
+                    checkpoint["stage"] = "configuration_screen"
+                    _save_checkpoint(checkpoint_path, checkpoint)
 
+    checkpoint["config_rows"] = config_rows
     config_table = pd.DataFrame(config_rows)
     config_table.to_csv(out / "ultimate_configuration_screen.csv", index=False)
 
@@ -436,12 +476,23 @@ def run_ultimate_matrix(
         .head(int(top_combos))
         .copy()
     )
-    prediction_mode_rows = []
+    prediction_mode_rows = list(checkpoint.get("prediction_mode_rows", []))
+    completed_prediction_modes = _completed_prediction_mode_keys(prediction_mode_rows)
     for _, combo in top_config.iterrows():
         cols, meta = select_feature_set(frame, str(combo["variant"]))
         model_name = str(combo["model_name"])
         anchor_model = "logistic" if model_name != "logistic" else "logistic_c0_15"
         for prediction_mode in ("fixed", "best_single", "ensemble"):
+            prediction_key = (
+                str(combo["variant"]),
+                str(model_name),
+                str(combo["training_window"]),
+                str(combo["calibration_mode"]),
+                str(combo["routing_mode"]),
+                str(prediction_mode),
+            )
+            if prediction_key in completed_prediction_modes:
+                continue
             mode_arg = (
                 f"fixed:{model_name}" if prediction_mode == "fixed" else prediction_mode
             )
@@ -467,7 +518,11 @@ def run_ultimate_matrix(
             row["base_calibration_mode"] = str(combo["calibration_mode"])
             row["base_routing_mode"] = str(combo["routing_mode"])
             prediction_mode_rows.append(row)
+            checkpoint["prediction_mode_rows"] = prediction_mode_rows
+            checkpoint["stage"] = "prediction_mode_screen"
+            _save_checkpoint(checkpoint_path, checkpoint)
 
+    checkpoint["prediction_mode_rows"] = prediction_mode_rows
     prediction_mode_table = pd.DataFrame(prediction_mode_rows)
     prediction_mode_table.to_csv(out / "ultimate_prediction_mode_screen.csv", index=False)
 
@@ -536,6 +591,9 @@ def run_ultimate_matrix(
             "production_registry_changed": False,
         },
     }
+    checkpoint["status"] = summary
+    checkpoint["stage"] = "complete"
+    _save_checkpoint(checkpoint_path, checkpoint)
     (out / "ultimate_matrix_status.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False, default=str),
         encoding="utf-8",
