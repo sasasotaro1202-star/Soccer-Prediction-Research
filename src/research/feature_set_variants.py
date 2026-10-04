@@ -1,0 +1,355 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+from typing import Iterable
+
+import numpy as np
+import pandas as pd
+
+MODEL_META_COLUMNS = {
+    "match_id",
+    "competition",
+    "season",
+    "season_start",
+    "kickoff_utc",
+    "home_team",
+    "away_team",
+    "prediction_cutoff_at_utc",
+    "home_goals",
+    "away_goals",
+    "target",
+    "pit_verified",
+    "feature_source_max_available_at_utc",
+    "source_available_at_utc",
+}
+
+CORE_STRENGTH = {
+    "neutral_venue",
+    "neutral_venue_known",
+    "home_advantage",
+    "home_elo",
+    "away_elo",
+    "elo_diff",
+    "home_comp_elo",
+    "away_comp_elo",
+    "comp_elo_diff",
+    "home_elo_expected",
+    "home_dynamic_elo",
+    "away_dynamic_elo",
+    "dynamic_elo_diff",
+    "dynamic_home_elo_expected",
+    "home_comp_elo_shrunk",
+    "away_comp_elo_shrunk",
+    "comp_elo_shrunk_diff",
+    "home_comp_elo_shrunk_expected",
+    "elo_gap_abs",
+}
+
+CORE_REST = {
+    "home_rest_hours",
+    "away_rest_hours",
+    "rest_diff_hours",
+    "strength_rest_interaction",
+}
+
+BASIC_STAT_KEYS = (
+    "shots",
+    "shots_on_target",
+    "corners",
+    "fouls",
+    "yellow_cards",
+    "red_cards",
+)
+
+ADVANCED_STAT_KEYS = (
+    "xg",
+    "possession",
+    "offsides",
+    "pass_accuracy",
+    "goals_ht",
+    "xg_ht",
+    "shots_inside_box",
+    "shots_outside_box",
+    "blocked_shots",
+    "penalties",
+)
+
+SUMMARY_KEYS = {
+    "games",
+    "gf",
+    "ga",
+    "points",
+    "gd",
+    "win_rate",
+    "draw_rate",
+    "loss_rate",
+    "gf_ewma",
+    "ga_ewma",
+    "gd_ewma",
+    "points_ewma",
+    "gd_std",
+    "home_rate",
+    "goal_total_avg",
+    "clean_sheet_rate",
+    "failed_to_score_rate",
+}
+
+MOMENTUM_KEYS = {
+    "points_ewma",
+    "gd_ewma",
+    "gf_ewma",
+    "ga_ewma",
+    "win_rate",
+}
+
+
+def _is_numeric_feature(column: str) -> bool:
+    return column not in MODEL_META_COLUMNS and not column.startswith("baseline_")
+
+
+def _window(column: str) -> int | None:
+    parts = column.rsplit("_", 1)
+    if len(parts) != 2:
+        return None
+    try:
+        value = int(parts[1])
+    except ValueError:
+        return None
+    return value if value in {3, 5, 10, 20} else None
+
+
+def _is_summary_feature(column: str) -> bool:
+    for prefix in ("home_", "away_"):
+        body = column[len(prefix):] if column.startswith(prefix) else column
+        if any(body == f"{k}_{w}" for k in SUMMARY_KEYS for w in (3, 5, 10, 20)):
+            return True
+        if any(body == f"{k}_{w}" for k in BASIC_STAT_KEYS for w in (3, 5, 10, 20)):
+            return True
+        if any(body == f"{k}_{w}" for k in ADVANCED_STAT_KEYS for w in (3, 5, 10, 20)):
+            return True
+    return False
+
+
+def _contains_stat(column: str, keys: Iterable[str]) -> bool:
+    stem = column
+    for prefix in ("home_", "away_"):
+        if stem.startswith(prefix):
+            stem = stem[len(prefix):]
+    return any(stem.startswith(f"{k}_") for k in keys)
+
+
+def _family(column: str) -> str:
+    if column in CORE_STRENGTH:
+        return "strength"
+    if column in CORE_REST:
+        return "rest"
+    if column.startswith("h2h_"):
+        return "h2h"
+    if "momentum_3v10" in column:
+        return "momentum"
+    if column in {"attack_defense_matchup_diff_5", "attack_defense_matchup_sum_5", "draw_tension_10"}:
+        return "interaction"
+    if column in {"home_history_support_n", "away_history_support_n"}:
+        return "history_support"
+    if _contains_stat(column, ADVANCED_STAT_KEYS):
+        return "advanced_stats"
+    if _contains_stat(column, BASIC_STAT_KEYS):
+        return "basic_stats"
+    if _is_summary_feature(column):
+        return "form"
+    return "other"
+
+
+def available_feature_columns(frame: pd.DataFrame) -> list[str]:
+    numeric = frame.select_dtypes(include=["number", "bool"]).columns.tolist()
+    return [c for c in numeric if _is_numeric_feature(c)]
+
+
+def _keep_window(column: str, windows: set[int]) -> bool:
+    value = _window(column)
+    return value in windows if value is not None else True
+
+
+def _keep_representation(column: str, representation: str) -> bool:
+    if representation == "all":
+        return True
+    if representation == "difference":
+        if column.endswith("_diff_3") or column.endswith("_diff_5") or column.endswith("_diff_10") or column.endswith("_diff_20"):
+            return True
+        return column in {
+            "elo_diff",
+            "comp_elo_diff",
+            "dynamic_elo_diff",
+            "comp_elo_shrunk_diff",
+            "rest_diff_hours",
+            "elo_gap_abs",
+            "attack_defense_matchup_diff_5",
+            "draw_tension_10",
+        }
+    if representation == "levels":
+        return not (
+            column.endswith("_diff_3")
+            or column.endswith("_diff_5")
+            or column.endswith("_diff_10")
+            or column.endswith("_diff_20")
+        ) and column not in {"elo_diff", "comp_elo_diff", "dynamic_elo_diff", "comp_elo_shrunk_diff", "rest_diff_hours"}
+    raise ValueError(f"Unknown representation: {representation}")
+
+
+def select_feature_set(frame: pd.DataFrame, variant: str) -> tuple[list[str], dict]:
+    cols = available_feature_columns(frame)
+
+    def allow(c: str) -> bool:
+        fam = _family(c)
+        w = _window(c)
+        if variant == "strength_only":
+            return fam == "strength"
+        if variant == "strength_rest":
+            return fam in {"strength", "rest"}
+        if variant == "core_form_5":
+            return fam in {"strength", "rest"} or (fam == "form" and w == 5)
+        if variant == "form_3_10":
+            return fam in {"strength", "rest"} or (fam == "form" and w in {3, 10})
+        if variant == "form_all":
+            return fam in {"strength", "rest", "form"}
+        if variant == "basic_stats_5":
+            return fam in {"strength", "rest", "form"} or (fam == "basic_stats" and w == 5)
+        if variant == "advanced_stats_5":
+            return fam in {"strength", "rest", "form", "basic_stats"} or (fam == "advanced_stats" and w == 5)
+        if variant == "advanced_all":
+            return fam in {"strength", "rest", "form", "basic_stats", "advanced_stats"}
+        if variant == "h2h_momentum":
+            return fam in {"strength", "rest", "form", "h2h", "momentum"}
+        if variant == "interactions":
+            return fam in {"strength", "rest", "form", "h2h", "momentum", "interaction"}
+        if variant == "difference_heavy":
+            return _keep_representation(c, "difference") and fam not in {"other", "history_support"}
+        if variant == "ewma_heavy":
+            if fam in {"strength", "rest", "h2h", "momentum", "interaction"}:
+                return True
+            return ("_ewma_" in c or c.endswith("_ewma_3") or c.endswith("_ewma_5")
+                    or c.endswith("_ewma_10") or c.endswith("_ewma_20"))
+        if variant == "compact":
+            if fam == "strength":
+                return True
+            if fam == "rest":
+                return True
+            if fam == "form" and w in {5, 10}:
+                return any(token in c for token in (
+                    "_points_", "_gd_", "_win_rate_", "_gf_", "_ga_",
+                    "_clean_sheet_rate_", "_failed_to_score_rate_",
+                ))
+            if fam == "advanced_stats" and w == 10:
+                return any(token in c for token in ("_xg_", "_shots_on_target_", "_possession_"))
+            return fam in {"h2h", "momentum", "interaction"}
+        if variant == "levels_only":
+            return _keep_representation(c, "levels")
+        raise ValueError(f"Unknown feature-set variant: {variant}")
+
+    selected = [c for c in cols if allow(c)]
+    if not selected:
+        raise RuntimeError(f"Feature variant {variant!r} produced zero columns")
+
+    payload = {"variant": variant, "ordered_feature_cols": selected}
+    feature_set_id = "fs-" + hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()[:16]
+    meta = {
+        "feature_set_id": feature_set_id,
+        "variant": variant,
+        "feature_count": len(selected),
+        "families": sorted({_family(c) for c in selected}),
+    }
+    return selected, meta
+
+
+VARIANT_ORDER = (
+    "strength_only",
+    "strength_rest",
+    "core_form_5",
+    "form_3_10",
+    "form_all",
+    "basic_stats_5",
+    "advanced_stats_5",
+    "advanced_all",
+    "h2h_momentum",
+    "interactions",
+    "difference_heavy",
+    "ewma_heavy",
+    "compact",
+    "levels_only",
+)
+
+
+def variant_catalog() -> list[dict]:
+    return [{"variant": name, "order": i} for i, name in enumerate(VARIANT_ORDER)]
+
+
+def aggregate_fold_metrics(wf: pd.DataFrame, *, locked_blocks: int = 2) -> dict:
+    if wf.empty:
+        raise RuntimeError("Cannot aggregate empty WFO result")
+    if "n" not in wf.columns:
+        raise RuntimeError("WFO result missing n")
+    weights = pd.to_numeric(wf["n"], errors="coerce").to_numpy(dtype=float)
+    if not np.isfinite(weights).all() or (weights <= 0).any():
+        raise RuntimeError("WFO result contains invalid fold weights")
+    development = wf.iloc[:-locked_blocks] if len(wf) > locked_blocks else wf.iloc[0:0]
+    locked = wf.tail(locked_blocks)
+    def weighted(frame: pd.DataFrame, key: str) -> float | None:
+        if frame.empty or key not in frame.columns:
+            return None
+        v = pd.to_numeric(frame[key], errors="coerce").to_numpy(dtype=float)
+        w = pd.to_numeric(frame["n"], errors="coerce").to_numpy(dtype=float)
+        if not np.isfinite(v).all() or not np.isfinite(w).all() or w.sum() <= 0:
+            return None
+        return float(np.average(v, weights=w))
+    return {
+        "blocks": int(len(wf)),
+        "development_blocks": int(len(development)),
+        "locked_blocks": int(len(locked)),
+        "development_n": int(pd.to_numeric(development["n"], errors="coerce").sum()) if not development.empty else 0,
+        "locked_n": int(pd.to_numeric(locked["n"], errors="coerce").sum()) if not locked.empty else 0,
+        "development_logloss": weighted(development, "logloss"),
+        "development_brier": weighted(development, "brier"),
+        "development_accuracy": weighted(development, "accuracy"),
+        "development_ece": weighted(development, "ece"),
+        "locked_logloss": weighted(locked, "logloss"),
+        "locked_brier": weighted(locked, "brier"),
+        "locked_accuracy": weighted(locked, "accuracy"),
+        "locked_ece": weighted(locked, "ece"),
+    }
+
+
+def select_development_winner(results: pd.DataFrame, baseline_variant: str) -> dict:
+    required = {
+        "variant", "feature_set_id", "development_logloss", "development_brier",
+        "development_accuracy", "development_ece", "oos_window_signature",
+    }
+    missing = required - set(results.columns)
+    if missing:
+        raise RuntimeError(f"Feature-set comparison missing columns: {sorted(missing)}")
+
+    if results["oos_window_signature"].nunique(dropna=True) != 1:
+        raise RuntimeError("Feature variants were evaluated on different OOS window signatures")
+
+    baseline = results.loc[results["variant"] == baseline_variant]
+    if len(baseline) != 1:
+        raise RuntimeError(f"Baseline variant {baseline_variant!r} must exist exactly once")
+
+    candidates = results.copy()
+    candidates = candidates.sort_values(
+        ["development_logloss", "development_brier", "development_ece", "variant"],
+        kind="mergesort",
+    )
+    winner = candidates.iloc[0].to_dict()
+    base_ll = float(baseline.iloc[0]["development_logloss"])
+    winner_ll = float(winner["development_logloss"])
+    winner["development_relative_logloss_improvement"] = (
+        float((base_ll - winner_ll) / base_ll) if base_ll > 0 else None
+    )
+    winner["baseline_variant"] = baseline_variant
+    winner["selection_basis"] = "development_chronological_oos_only"
+    winner["locked_oos_used_for_selection"] = False
+    return winner
