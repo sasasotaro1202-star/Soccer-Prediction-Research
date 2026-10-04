@@ -200,3 +200,10 @@ DISCOVER → ABSTRACT_MECHANISM → COMPATIBILITY → ADAPT → LOCAL_PIT → LO
 This update is governance/documentation and feature-contract work only. It does not alter prediction probabilities, target semantics, calibration outputs, OOS results, frozen holdout, Champion, Production registry or historical experience.
 
 Current main remains BLOCKED by recorded preflight test/data-audit failures; the repository still records no OOS claim from that blocked run. Current main also has no committed `models/current` production bundle or durable experience ledger that would allow an exact production feature list to be independently verified. Therefore the feature contract is updated and the candidate space is defined, but no new feature set is promoted or claimed as Production.
+
+
+
+
+## GitHub-side autonomous operation — active on main after merge
+
+The repository control plane is designed to operate from GitHub Actions without a fresh chat instruction each cycle. The autonomous controller only merges explicitly marked hardening-safe PRs after current-main/base equality, same-repository checks, allowlisted changed paths, completed successful checks, PIT evidence when relevant, and a final head-SHA race check. Production/model/feature/calibration/target/frozen-holdout/performance changes remain outside this automatic merge policy. The controller emits an auditable artifact and never converts missing or ambiguous evidence into PASS.
