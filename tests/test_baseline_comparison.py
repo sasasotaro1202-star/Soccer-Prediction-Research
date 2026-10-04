@@ -43,11 +43,11 @@ def test_same_oos_rejects_missing_rows():
 
 
 def test_independent_gate_adopts_only_with_holdout_improvement():
-    development = {"selected": "candidate"}
+    development = {"development_oos": True}
     holdout = _locked_holdout()
     assert independent_adoption_gate(development, holdout)["status"] == "ADOPT"
 
 
 def test_independent_gate_rejects_candidate_with_worse_logloss():
     holdout = _locked_holdout(candidate={"logloss": 1.01, "brier": .60, "ece": .10, "accuracy": .52})
-    assert independent_adoption_gate({}, holdout)["status"] == "REJECT"
+    assert independent_adoption_gate({"development_oos": True}, holdout)["status"] == "REJECT"
