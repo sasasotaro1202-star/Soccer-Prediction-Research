@@ -3,12 +3,27 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from src.research.ultimate_matrix import summarize_oos, _validate_input
+from src.research.ultimate_matrix import (
+    CALIBRATION_MODES,
+    MODEL_ECOLOGY,
+    ROUTING_MODES,
+    TRAINING_WINDOWS,
+    summarize_oos,
+    _validate_input,
+)
 from src.research.feature_set_variants import variant_catalog
 
 
 def test_ultimate_catalog_has_broad_feature_space():
     assert len(variant_catalog()) >= 20
+
+
+def test_ultimate_matrix_axes_are_broad_and_explicit():
+    assert len(variant_catalog()) >= 30
+    assert len(MODEL_ECOLOGY) >= 30
+    assert len(TRAINING_WINDOWS) >= 5
+    assert set(CALIBRATION_MODES) == {"none", "global", "context", "full"}
+    assert set(ROUTING_MODES) == {"global", "context", "dynamic"}
 
 
 def test_summarize_oos_has_disjoint_screen_model_config_and_locked_layers():
