@@ -170,6 +170,6 @@ jobs:
           retention-days: 14
 
 # Automatic merging is restricted to explicitly marked, same-repository hardening PRs.
-# The state-based orchestrator is the only controller-generated workflow allowlisted here.
+# The state-based orchestrator and narrowly scoped experience guard are allowlisted here.
 # Research-engine/data-pipeline/feature/model/calibration/target/controller changes are not in the auto-merge allowlist.
 # Any missing, pending, failed, stale, or ambiguous evidence results in HOLD.
