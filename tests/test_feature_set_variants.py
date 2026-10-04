@@ -7,6 +7,7 @@ from src.research.feature_set_variants import (
     aggregate_fold_metrics,
     select_feature_set,
     select_development_winner,
+    variant_catalog,
 )
 
 
@@ -57,6 +58,56 @@ def test_feature_variants_are_deterministic_and_do_not_include_targets():
         "source_available_at_utc",
     }
     assert forbidden.isdisjoint(first)
+
+
+def test_broad_variant_catalog_contains_multiple_window_and_information_patterns():
+    names = [row["variant"] for row in variant_catalog()]
+    assert len(names) >= 20
+    for expected in (
+        "form_3_only",
+        "form_10_only",
+        "form_3_5",
+        "form_5_10",
+        "basic_3_10",
+        "advanced_3_10",
+        "xg_possession_dense",
+        "difference_heavy",
+    ):
+        assert expected in names
+
+
+def test_window_specific_variants_are_distinct_when_columns_exist():
+    frame = _frame()
+    # Add the windows needed to verify that the selector is genuinely window-specific.
+    frame["home_points_3"] = [2.0, 1.0]
+    frame["away_points_3"] = [1.0, 2.0]
+    frame["points_diff_3"] = [1.0, -1.0]
+    frame["home_points_10"] = [3.0, 2.0]
+    frame["away_points_10"] = [2.0, 3.0]
+    frame["points_diff_10"] = [1.0, -1.0]
+    only3, _ = select_feature_set(frame, "form_3_only")
+    only10, _ = select_feature_set(frame, "form_10_only")
+    assert "home_points_3" in only3
+    assert "home_points_10" not in only3
+    assert "home_points_10" in only10
+    assert "home_points_3" not in only10
+
+
+def test_xg_possession_dense_keeps_target_signal_subset():
+    frame = _frame()
+    frame["home_possession_5"] = [55.0, 48.0]
+    frame["away_possession_5"] = [45.0, 52.0]
+    frame["possession_diff_5"] = [10.0, -4.0]
+    frame["home_pass_accuracy_5"] = [88.0, 84.0]
+    frame["away_pass_accuracy_5"] = [82.0, 86.0]
+    frame["pass_accuracy_diff_5"] = [6.0, -2.0]
+    frame["home_corners_5"] = [6.0, 4.0]
+    frame["away_corners_5"] = [3.0, 5.0]
+    dense, _ = select_feature_set(frame, "xg_possession_dense")
+    assert "home_xg_avg_5" in dense
+    assert "home_possession_5" in dense
+    assert "home_pass_accuracy_5" in dense
+    assert "home_corners_5" in dense
 
 
 def test_difference_heavy_is_restricted_to_difference_representation():
