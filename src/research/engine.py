@@ -674,6 +674,7 @@ def run(out_dir: str = "artifacts") -> dict:
                 json.dumps({**validated_candidate_bundle, "status": "VALIDATED_CANDIDATE"}, indent=2, ensure_ascii=False, default=str),
                 encoding="utf-8",
             )
+            feature_contract = validated_candidate_bundle.get("feature_contract") or {}
             candidate_registry = save_registry(
                 str(out / "validated_candidate_registry.json"),
                 model_version=candidate_version,
@@ -697,6 +698,10 @@ def run(out_dir: str = "artifacts") -> dict:
                     "score_method": validated_candidate_bundle.get("score_method", "primary"),
                     "gate": calibration_gate,
                 },
+                feature_manifest_version=feature_contract.get("manifest_version"),
+                feature_policy_version=feature_contract.get("policy_version"),
+                feature_schema_hash=feature_contract.get("schema_hash"),
+                target_version=feature_contract.get("target_version"),
             )
             (out / "validated_candidate_registry.json").write_text(
                 json.dumps({**candidate_registry, "adoption_status": "VALIDATED_CANDIDATE"}, indent=2, ensure_ascii=False, default=str),
@@ -746,6 +751,7 @@ def run(out_dir: str = "artifacts") -> dict:
                 score_selection=score_selection,
                 score_locked_gate=score_locked_gate,
             )
+            feature_contract = model_bundle.get("feature_contract") or {}
             registry = save_registry(
                 str(out / "model_registry.json"),
                 model_version=model_version,
@@ -769,6 +775,10 @@ def run(out_dir: str = "artifacts") -> dict:
                     "temperature": model_bundle.get("temperature"),
                     "score_method": model_bundle.get("score_method", "primary"),
                 },
+                feature_manifest_version=feature_contract.get("manifest_version"),
+                feature_policy_version=feature_contract.get("policy_version"),
+                feature_schema_hash=feature_contract.get("schema_hash"),
+                target_version=feature_contract.get("target_version"),
             )
             (out / "production_model.json").write_text(json.dumps({**model_bundle, "adoption_status": "ADOPT", "registry": registry}, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
         except Exception as exc:
