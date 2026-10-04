@@ -1,0 +1,107 @@
+name: Soccer Match State Research
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/research/match_state_hazard.py"
+      - "tests/test_match_state_hazard.py"
+      - "docs/MATCH_STATE_RESEARCH.md"
+      - "config/match_state_policy.json"
+      - "data/research/README.md"
+      - ".github/workflows/soccer-match-state-research.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/research/match_state_hazard.py"
+      - "tests/test_match_state_hazard.py"
+      - "docs/MATCH_STATE_RESEARCH.md"
+      - "config/match_state_policy.json"
+      - "data/research/README.md"
+      - ".github/workflows/soccer-match-state-research.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "43 */6 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soccer-match-state-research
+  cancel-in-progress: false
+
+jobs:
+  match-state:
+    name: PIT-safe state -> hazard -> scenario research
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: .
+      PYTHONHASHSEED: "0"
+      MATCH_STATE_INPUT: data/research/match_state_snapshots.csv
+      MATCH_STATE_OUT: artifacts/match_state_research
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies with bounded retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt; then
+              exit 0
+            fi
+            echo "dependency installation attempt ${attempt} failed; retrying..."
+            if [ "${attempt}" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+
+      - name: Compile research module
+        run: python -m compileall -q src/research/match_state_hazard.py tests/test_match_state_hazard.py
+
+      - name: Run match-state regression tests
+        run: python -m pytest -q tests/test_match_state_hazard.py
+
+      - name: Execute PIT/schema research gate
+        run: |
+          set -euo pipefail
+          python -m src.research.match_state_hazard --input "${MATCH_STATE_INPUT}" --out "${MATCH_STATE_OUT}"
+
+      - name: Verify research safety contract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("artifacts/match_state_research/match_state_status.json")
+          if not p.is_file() or p.stat().st_size <= 0:
+              raise SystemExit("MATCH STATE SAFETY GATE FAILED: missing status artifact")
+          status = json.loads(p.read_text(encoding="utf-8"))
+          checks = {
+              "production_usable_false": status.get("production_usable") is False,
+              "oos_claimed_false": status.get("oos_claimed") is False,
+              "research_only_true": status.get("research_only") is True,
+              "status_allowed": status.get("status") in {"WARMUP", "SCHEMA_VERIFIED"},
+          }
+          failures = [name for name, ok in checks.items() if not ok]
+          if failures:
+              raise SystemExit("MATCH STATE SAFETY GATE FAILED: " + ", ".join(failures))
+          print("match_state_safety: PASS")
+          PY
+
+      - name: Upload research evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-match-state-research-${{ github.run_id }}
+          path: artifacts/match_state_research/
+          retention-days: 14
