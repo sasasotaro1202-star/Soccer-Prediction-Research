@@ -353,3 +353,203 @@ def select_development_winner(results: pd.DataFrame, baseline_variant: str) -> d
     winner["selection_basis"] = "development_chronological_oos_only"
     winner["locked_oos_used_for_selection"] = False
     return winner
+
+
+def run_feature_set_research(
+    input_path: str,
+    output_dir: str,
+    variants: list[str] | None = None,
+    *,
+    min_train: int = 2000,
+    oos_block: int = 4000,
+    random_state: int = 42,
+    model_names: list[str] | None = None,
+) -> dict:
+    """Compare predeclared feature-set variants on identical chronological WFO windows.
+
+    Feature-set selection is performed on development OOS blocks only. The final two
+    OOS blocks are retained as locked verification and are never consulted when
+    choosing the winner.
+    """
+    from src.evaluation.walk_forward import run_walk_forward
+
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    frame = pd.read_csv(input_path)
+    required = {"match_id", "kickoff_utc", "target", "pit_verified"}
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise RuntimeError(f"Feature research input missing required columns: {missing}")
+    frame["kickoff_utc"] = pd.to_datetime(frame["kickoff_utc"], utc=True, errors="coerce")
+    if frame["kickoff_utc"].isna().any():
+        raise RuntimeError("Feature research input contains invalid kickoff_utc")
+    pit = frame["pit_verified"].astype(str).str.strip().str.lower()
+    if not pit.isin({"true", "false", "1", "0", "yes", "no"}).all():
+        raise RuntimeError("Feature research input contains ambiguous pit_verified values")
+    frame["pit_verified"] = pit.isin({"true", "1", "yes"})
+    frame = frame.sort_values(["kickoff_utc", "match_id"], kind="mergesort").reset_index(drop=True)
+
+    selected_variants = list(variants or (
+        "strength_only",
+        "strength_rest",
+        "core_form_5",
+        "form_3_10",
+        "form_all",
+        "basic_stats_5",
+        "advanced_stats_5",
+        "advanced_all",
+        "h2h_momentum",
+        "compact",
+    ))
+    valid_names = {x["variant"] for x in variant_catalog()}
+    unknown = [x for x in selected_variants if x not in valid_names]
+    if unknown:
+        raise RuntimeError(f"Unknown feature-set variants: {unknown}")
+
+    models = list(model_names or (
+        "elo_logistic",
+        "dynamic_elo_logistic",
+        "logistic",
+        "logistic_select",
+        "hist_gb",
+    ))
+    manifest_path = out / "feature_variant_catalog.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "variants": variant_catalog(),
+                "selected_variants": selected_variants,
+                "models": models,
+                "min_train": int(min_train),
+                "oos_block": int(oos_block),
+                "locked_blocks": 2,
+                "selection_basis": "development_chronological_oos_only",
+                "locked_oos_used_for_selection": False,
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    rows = []
+    detailed: dict[str, pd.DataFrame] = {}
+    signatures: set[str] = set()
+    for variant in selected_variants:
+        feature_cols, meta = select_feature_set(frame, variant)
+        wf, _selection = run_walk_forward(
+            frame,
+            feature_cols,
+            min_train=min_train,
+            oos_block=oos_block,
+            random_state=random_state,
+            candidate_names=models,
+        )
+        agg = aggregate_fold_metrics(wf, locked_blocks=2)
+        signature = str(wf["oos_window_signature"].iloc[0])
+        signatures.add(signature)
+        rows.append({
+            **meta,
+            **agg,
+            "oos_window_signature": signature,
+        })
+        detailed[variant] = wf
+
+    if len(signatures) != 1:
+        raise RuntimeError("Feature variants were not evaluated on the same OOS window signature")
+
+    comparison = pd.DataFrame(rows)
+    comparison.to_csv(out / "feature_set_comparison.csv", index=False)
+    winner = select_development_winner(comparison, "strength_only")
+    (out / "feature_set_winner.json").write_text(
+        json.dumps(winner, indent=2, ensure_ascii=False, default=str),
+        encoding="utf-8",
+    )
+
+    baseline = comparison.loc[comparison["variant"] == "strength_only"].iloc[0]
+    candidate_rows = []
+    for _, row in comparison.iterrows():
+        candidate_rows.append({
+            "variant": row["variant"],
+            "development_logloss_delta_vs_strength_only": float(row["development_logloss"] - baseline["development_logloss"]),
+            "development_relative_logloss_improvement_vs_strength_only": (
+                float((baseline["development_logloss"] - row["development_logloss"]) / baseline["development_logloss"])
+                if float(baseline["development_logloss"]) > 0 else None
+            ),
+            "locked_logloss_delta_vs_strength_only": (
+                float(row["locked_logloss"] - baseline["locked_logloss"])
+                if pd.notna(row["locked_logloss"]) and pd.notna(baseline["locked_logloss"]) else None
+            ),
+            "locked_brier_delta_vs_strength_only": (
+                float(row["locked_brier"] - baseline["locked_brier"])
+                if pd.notna(row["locked_brier"]) and pd.notna(baseline["locked_brier"]) else None
+            ),
+            "locked_accuracy_delta_vs_strength_only": (
+                float(row["locked_accuracy"] - baseline["locked_accuracy"])
+                if pd.notna(row["locked_accuracy"]) and pd.notna(baseline["locked_accuracy"]) else None
+            ),
+        })
+    pd.DataFrame(candidate_rows).to_csv(out / "feature_set_deltas.csv", index=False)
+
+    winner_variant = str(winner["variant"])
+    winner_features, _ = select_feature_set(frame, winner_variant)
+    case_path = out / "winner_case_diagnostics.csv"
+    winner_wf, _ = run_walk_forward(
+        frame,
+        winner_features,
+        min_train=min_train,
+        oos_block=oos_block,
+        random_state=random_state,
+        case_output_path=str(case_path),
+        candidate_names=models,
+    )
+    # Keep the diagnostic rerun explicitly linked to the predeclared winner identity.
+    winner_wf.to_csv(out / "winner_oos_metrics.csv", index=False)
+
+    manifest = {
+        "schema_version": 1,
+        "status": "RESEARCH_EXECUTED",
+        "feature_variants_tested": selected_variants,
+        "models_per_variant": models,
+        "variant_count": len(selected_variants),
+        "oos_window_signature": next(iter(signatures)),
+        "winner": winner,
+        "winner_case_diagnostics": "winner_case_diagnostics.csv",
+        "safety_contract": {
+            "research_only": True,
+            "production_changed": False,
+            "production_registry_changed": False,
+            "frozen_holdout_used_for_selection": False,
+            "locked_oos_used_for_selection": False,
+            "pit_verified_input_required": True,
+            "same_oos_window_required": True,
+        },
+    }
+    (out / "feature_set_research_status.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False, default=str),
+        encoding="utf-8",
+    )
+    return manifest
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run Soccer feature-set OOS research.")
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--min-train", type=int, default=2000)
+    parser.add_argument("--oos-block", type=int, default=4000)
+    parser.add_argument("--variants", nargs="*", default=None)
+    parser.add_argument("--models", nargs="*", default=None)
+    args = parser.parse_args()
+    result = run_feature_set_research(
+        args.input,
+        args.output_dir,
+        args.variants,
+        min_train=args.min_train,
+        oos_block=args.oos_block,
+        model_names=args.models,
+    )
+    print(json.dumps(result, ensure_ascii=False, default=str))
