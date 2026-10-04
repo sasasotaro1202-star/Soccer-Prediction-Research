@@ -73,3 +73,23 @@ def test_adoption_allows_seventy_percent_development_non_regression():
     assert result["development_stability"]["non_regression_fraction"] == 0.7
     assert result["checks"]["primary_logloss_threshold_met"] is True
     assert result["checks"]["auxiliary_threshold_met"] is True
+
+
+def test_adoption_holds_on_non_numeric_development_metrics():
+    base, cand = _frames([500, 500])
+    development = _development()
+    development.loc[0, "logloss"] = "bad"
+    result = adoption_decision(base, cand, development_oos=development)
+    assert result["status"] == "REJECT"
+    assert result["development_stability"]["status"] == "HOLD"
+    assert result["development_stability"]["reason"] == "Development OOS metrics contain non-numeric values"
+
+
+def test_adoption_holds_on_non_finite_development_metrics():
+    base, cand = _frames([500, 500])
+    development = _development()
+    development.loc[0, "ece"] = float("nan")
+    result = adoption_decision(base, cand, development_oos=development)
+    assert result["status"] == "REJECT"
+    assert result["development_stability"]["status"] == "HOLD"
+    assert result["development_stability"]["reason"] == "Development OOS metrics contain non-finite values"

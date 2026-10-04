@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import math
 from typing import Any, Mapping, Sequence
 
 from src.research.stability_gate import evaluate_stability
@@ -37,12 +38,26 @@ def _holdout_integrity(holdout: Mapping[str, Any]) -> tuple[bool, str]:
         return False, "holdout_not_explicitly_locked"
     if holdout.get("selection_frozen") is not True:
         return False, "holdout_selection_not_frozen"
-    if holdout.get("used_for_selection") is True:
-        return False, "holdout_was_used_for_selection"
-    if holdout.get("used_for_calibration") is True:
-        return False, "holdout_was_used_for_calibration"
-    if holdout.get("used_for_threshold_tuning") is True:
-        return False, "holdout_was_used_for_threshold_tuning"
+    usage_flags = {
+        "used_for_selection": (
+            "holdout_selection_usage_flag_missing_or_invalid",
+            "holdout_was_used_for_selection",
+        ),
+        "used_for_calibration": (
+            "holdout_calibration_usage_flag_missing_or_invalid",
+            "holdout_was_used_for_calibration",
+        ),
+        "used_for_threshold_tuning": (
+            "holdout_threshold_usage_flag_missing_or_invalid",
+            "holdout_was_used_for_threshold_tuning",
+        ),
+    }
+    for field, (invalid_reason, used_reason) in usage_flags.items():
+        value = holdout.get(field)
+        if type(value) is not bool:
+            return False, invalid_reason
+        if value is True:
+            return False, used_reason
 
     development_end = _parse_utc(holdout.get("development_end_utc"))
     holdout_start = _parse_utc(holdout.get("holdout_start_utc"))
@@ -62,8 +77,9 @@ def independent_adoption_gate(
 ) -> dict[str, Any]:
     """Fail-closed independent-OOS adoption gate.
 
-    A candidate is adoptable only when the holdout is explicitly locked and
-    selection-independent, PIT violations are explicitly zero, the same-OOS
+    A candidate is adoptable only when the development evidence explicitly
+    identifies a development-OOS evaluation, the holdout is explicitly locked
+    and selection-independent, PIT violations are explicitly zero, the same-OOS
     baseline comparison shows at least the project reference improvement, and
     chronological stability evidence passes across multiple folds/leagues/seasons.
     """
@@ -76,10 +92,10 @@ def independent_adoption_gate(
             "promotion_authority": "deterministic_research_engine",
         }
 
-    if not development:
+    if not isinstance(development, Mapping) or development.get("development_oos") is not True:
         return {
             "status": "HOLD",
-            "reason": "development_evidence_missing",
+            "reason": "development_evidence_missing_or_invalid",
             "oos_claimed": False,
             "promotion_authority": "deterministic_research_engine",
         }
@@ -110,7 +126,15 @@ def independent_adoption_gate(
             "promotion_authority": "deterministic_research_engine",
         }
 
-    if int(holdout.get("n", 0)) < min_holdout_rows:
+    holdout_rows = holdout.get("n")
+    if isinstance(holdout_rows, bool) or not isinstance(holdout_rows, int) or holdout_rows < 0:
+        return {
+            "status": "HOLD",
+            "reason": "holdout_row_count_missing_or_invalid",
+            "oos_claimed": False,
+            "promotion_authority": "deterministic_research_engine",
+        }
+    if holdout_rows < min_holdout_rows:
         return {"status": "HOLD", "reason": "independent_holdout_too_small", "oos_claimed": False}
     if holdout.get("same_oos") is not True:
         return {"status": "HOLD", "reason": "holdout_is_not_same_oos", "oos_claimed": False}
@@ -147,8 +171,21 @@ def independent_adoption_gate(
         candidate_ece = float(cand["ece"])
         baseline_accuracy = float(base["accuracy"])
         candidate_accuracy = float(cand["accuracy"])
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return {"status": "HOLD", "reason": "non_numeric_holdout_metrics", "oos_claimed": False}
+
+    metrics = (
+        baseline_logloss,
+        candidate_logloss,
+        baseline_brier,
+        candidate_brier,
+        baseline_ece,
+        candidate_ece,
+        baseline_accuracy,
+        candidate_accuracy,
+    )
+    if not all(math.isfinite(value) for value in metrics):
+        return {"status": "HOLD", "reason": "non_finite_holdout_metrics", "oos_claimed": False}
 
     primary_relative_improvement = (
         (baseline_logloss - candidate_logloss) / baseline_logloss
@@ -185,7 +222,7 @@ def independent_adoption_gate(
         "calibration_ok": calibration_ok,
         "accuracy_not_worse": accuracy_not_worse,
         "development_evidence_present": True,
-        "holdout_rows": int(holdout["n"]),
+        "holdout_rows": holdout_rows,
         "holdout_integrity_verified": True,
         "pit_status": pit_status,
         "pit_violations": pit_violations,
@@ -193,5 +230,3 @@ def independent_adoption_gate(
         "stability": stability_result,
         "promotion_authority": "deterministic_research_engine",
     }
-
-
