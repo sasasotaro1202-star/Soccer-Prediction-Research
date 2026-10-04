@@ -23,6 +23,9 @@ def test_autonomous_workflow_has_continuous_9h_cycle_and_strict_concurrency():
         assert phase in text
     assert "production_provenance.json" in text
     assert "pit_preflight_manifest.json" in text
+    assert "Cache raw and PIT evidence for resumable Phase 1 replay" in text
+    phase1_block = text.split("phase2_research:", 1)[0]
+    assert phase1_block.index("Cache raw and PIT evidence for resumable Phase 1 replay") < phase1_block.index("Run strict completion gate")
     assert 'PIT_OPENFOOTBALL_COUNTRY_MAX_COMMIT_PAGES: "12"' in text
     assert "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803" in text
     assert "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1" in text
