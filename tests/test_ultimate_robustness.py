@@ -47,44 +47,30 @@ def test_metrics_tail_uses_only_locked_suffix():
 
 
 def test_locked_match_ids_are_deterministic_and_suffix_based():
-    n = 18
+    n = 32
     kickoff = pd.date_range("2026-01-01T00:00:00Z", periods=n, freq="h")
     frame = pd.DataFrame(
         {
             "match_id": [f"m{i}" for i in range(n)],
             "kickoff_utc": kickoff,
-            "target": [0, 1, 2] * 6,
+            "target": [0, 1, 2] * 10 + [0, 1],
             "pit_verified": [True] * n,
             "prediction_cutoff_at_utc": kickoff - pd.Timedelta(minutes=60),
             "feature_source_max_available_at_utc": kickoff - pd.Timedelta(minutes=120),
         }
     )
     ids = _locked_match_ids(frame, min_train=4, oos_block=4)
-    assert ids == {f"m{i}" for i in range(12, 18)}
+    assert ids == {f"m{i}" for i in range(24, 32)}
 
 
 
 def test_locked_match_ids_keep_shared_kickoff_rows_together():
     kickoff = pd.to_datetime(
         [
-            "2026-01-01T00:00:00Z",
-            "2026-01-01T01:00:00Z",
-            "2026-01-01T02:00:00Z",
-            "2026-01-01T03:00:00Z",
-            "2026-01-01T04:00:00Z",
-            "2026-01-01T05:00:00Z",
-            "2026-01-01T06:00:00Z",
-            "2026-01-01T07:00:00Z",
-            "2026-01-01T08:00:00Z",
-            "2026-01-01T09:00:00Z",
-            "2026-01-01T10:00:00Z",
-            "2026-01-01T11:00:00Z",
-            "2026-01-01T12:00:00Z",
-            "2026-01-01T13:00:00Z",
-            "2026-01-01T14:00:00Z",
-            "2026-01-01T14:00:00Z",
-            "2026-01-01T15:00:00Z",
-            "2026-01-01T16:00:00Z",
+            *[f"2026-01-01T{hour:02d}:00:00Z" for hour in range(29)],
+            "2026-01-02T05:00:00Z",
+            "2026-01-02T05:00:00Z",
+            "2026-01-02T06:00:00Z",
         ],
         utc=True,
     )
@@ -94,16 +80,16 @@ def test_locked_match_ids_keep_shared_kickoff_rows_together():
         {
             "match_id": [f"m{i}" for i in range(n)],
             "kickoff_utc": kickoff,
-            "target": [0, 1, 2] * 6,
+            "target": [0, 1, 2] * 10 + [0, 1],
             "pit_verified": [True] * n,
             "prediction_cutoff_at_utc": kickoff - pd.Timedelta(minutes=60),
             "feature_source_max_available_at_utc": kickoff - pd.Timedelta(minutes=120),
         }
     )
     ids = _locked_match_ids(frame, min_train=2, oos_block=4)
-    assert {"m14", "m15"}.issubset(ids)
-    assert "m13" not in ids
-    assert "m16" in ids
+    assert {"m29", "m30"}.issubset(ids)
+    assert "m28" in ids
+    assert "m31" in ids
 
 
 def test_status_is_research_only_contract(tmp_path):
