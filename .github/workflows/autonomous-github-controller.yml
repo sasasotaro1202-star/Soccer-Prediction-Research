@@ -74,8 +74,26 @@ jobs:
             title="$(jq -r '.title' <<<"${pr_json}")"
 
             [ "${base_ref}" = "main" ] || continue
-            [ "${base_oid}" = "${main_sha}" ] || continue
             [ "${head_repo}" = "${GH_REPO}" ] || continue
+
+            # Only an explicitly marked same-repository hardening PR may be
+            # retargeted from an older main base. Research/performance PRs are
+            # never rewritten by the controller.
+            if [ "${base_oid}" != "${main_sha}" ]; then
+              for marker in \
+                "automation_policy: hardening-safe-v1" \
+                "Production changed=False" \
+                "No OOS tuning or holdout access" \
+                "Candidate remains non-production" \
+                "No model, feature, calibration, target, or production bundle change."; do
+                grep -Fq "${marker}" <<<"${body}" || continue 2
+              done
+              gh api --method PATCH "repos/${GH_REPO}/pulls/${number}" \
+                -f base=main >/dev/null
+              pr_json="$(gh pr view "${number}" --repo "${GH_REPO}" --json number,title,body,isDraft,baseRefName,baseRefOid,headRefName,headRefOid,headRepository,mergeStateStatus)"
+              base_oid="$(jq -r ".baseRefOid" <<<"${pr_json}")"
+            fi
+            [ "${base_oid}" = "${main_sha}" ] || continue
             [[ "${head_ref}" == hardening/* ]] || continue
             [[ "${title,,}" == hardening:* ]] || continue
             jq -e '.isDraft == false' <<<"${pr_json}" >/dev/null || continue
