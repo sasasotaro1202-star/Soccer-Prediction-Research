@@ -180,10 +180,18 @@ def summarize_oos(wf: pd.DataFrame) -> dict:
 def _rank(rows: pd.DataFrame, score_column: str, group_cols: list[str]) -> pd.DataFrame:
     if rows.empty:
         raise RuntimeError("No research rows to rank")
+    if "config_confirm" in score_column:
+        secondary = ["config_confirm_brier", "config_confirm_ece"]
+    elif "model_confirm" in score_column:
+        secondary = ["model_confirm_brier", "model_confirm_ece"]
+    elif "screen" in score_column:
+        secondary = ["screen_brier", "screen_ece"]
+    else:
+        secondary = ["locked_brier", "locked_ece"]
     parts = []
     for _, group in rows.groupby(group_cols, dropna=False, sort=False):
         ordered = group.sort_values(
-            [score_column, "confirm_brier", "confirm_ece"],
+            [score_column, *secondary],
             kind="mergesort",
         )
         parts.append(ordered.iloc[0])
@@ -230,7 +238,13 @@ def run_ultimate_matrix(
                 "purpose": "training_window_calibration_routing_screen",
             },
             "locked_blocks": LOCKED_BLOCKS,
-            "selection_rule": "screen_then_confirm_then_locked",
+            "selection_layers": {
+                "feature_screen": "screen_blocks",
+                "model_selection": "model_confirm_blocks",
+                "configuration_selection": "config_confirm_blocks",
+                "final_locked_verification": "locked_blocks"
+            },
+            "selection_rule": "screen_then_model_confirm_then_config_confirm_then_locked",
             "pit_required": True,
             "production_changed": False,
         },
@@ -305,7 +319,7 @@ def run_ultimate_matrix(
     model_table = pd.DataFrame(model_rows)
     model_table.to_csv(out / "ultimate_model_screen.csv", index=False)
     model_best = model_table.sort_values(
-        ["confirm_logloss", "confirm_brier", "confirm_ece", "variant", "model_name"],
+        ["model_confirm_logloss", "model_confirm_brier", "model_confirm_ece", "variant", "model_name"],
         kind="mergesort",
     )
     selected_combos = model_best.head(int(top_combos))[
@@ -414,14 +428,14 @@ def run_ultimate_matrix(
         .first()
     )
     winner = winners.sort_values(
-        ["confirm_logloss", "confirm_brier", "confirm_ece", "variant", "model_name"],
+        ["config_confirm_logloss", "config_confirm_brier", "config_confirm_ece", "variant", "model_name"],
         kind="mergesort",
     ).iloc[0].to_dict()
 
     winner_baseline = baselines.loc[
         (baselines["variant"] == winner["variant"])
         & (baselines["model_name"] == winner["model_name"])
-    ].sort_values(["confirm_logloss", "confirm_brier"], kind="mergesort").iloc[0]
+    ].sort_values(["config_confirm_logloss", "config_confirm_brier"], kind="mergesort").iloc[0]
 
     summary = {
         "status": "RESEARCH_EXECUTED",
@@ -429,6 +443,10 @@ def run_ultimate_matrix(
         "base_models": list(BASE_MODELS),
         "model_variants_tested": len(MODEL_ECOLOGY),
         "configuration_rows": int(len(config_table)),
+        "prediction_mode_rows": int(len(prediction_mode_table)),
+        "training_window_variants": len(TRAINING_WINDOWS),
+        "calibration_variants": len(CALIBRATION_MODES),
+        "routing_variants": len(ROUTING_MODES),
         "locked_blocks": LOCKED_BLOCKS,
         "winner": winner,
         "winner_vs_same_combo_baseline": {
