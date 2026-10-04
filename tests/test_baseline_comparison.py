@@ -20,9 +20,40 @@ def _locked_holdout(**metrics):
         "holdout_start_utc": "2025-01-01T00:00:00Z",
         "n": 200,
         "same_oos": True,
+        "pit_status": "PASS",
+        "pit_violations": 0,
         "baseline": metrics.get("baseline", {"logloss": 1.0, "brier": .70, "ece": .12, "accuracy": .50}),
         "candidate": metrics.get("candidate", {"logloss": .90, "brier": .60, "ece": .10, "accuracy": .52}),
     }
+
+
+def _stability_folds():
+    return [
+        {
+            "league": "EPL",
+            "season": "2022",
+            "oos_start_utc": "2024-01-01T00:00:00Z",
+            "oos_end_utc": "2024-01-31T23:59:59Z",
+            "baseline": {"logloss": 1.00, "brier": 0.25, "accuracy": 0.50},
+            "candidate": {"logloss": 0.95, "brier": 0.24, "accuracy": 0.51},
+        },
+        {
+            "league": "Bundesliga",
+            "season": "2023",
+            "oos_start_utc": "2024-02-01T00:00:00Z",
+            "oos_end_utc": "2024-02-29T23:59:59Z",
+            "baseline": {"logloss": 1.02, "brier": 0.25, "accuracy": 0.50},
+            "candidate": {"logloss": 0.98, "brier": 0.24, "accuracy": 0.51},
+        },
+        {
+            "league": "Serie A",
+            "season": "2024",
+            "oos_start_utc": "2024-03-01T00:00:00Z",
+            "oos_end_utc": "2024-03-31T23:59:59Z",
+            "baseline": {"logloss": 1.01, "brier": 0.25, "accuracy": 0.50},
+            "candidate": {"logloss": 0.99, "brier": 0.24, "accuracy": 0.51},
+        },
+    ]
 
 
 def test_same_oos_comparison_requires_identical_rows():
@@ -45,9 +76,15 @@ def test_same_oos_rejects_missing_rows():
 def test_independent_gate_adopts_only_with_holdout_improvement():
     development = {"development_oos": True}
     holdout = _locked_holdout()
-    assert independent_adoption_gate(development, holdout)["status"] == "ADOPT"
+    assert independent_adoption_gate(
+        development, holdout, stability_folds=_stability_folds()
+    )["status"] == "ADOPT"
 
 
 def test_independent_gate_rejects_candidate_with_worse_logloss():
     holdout = _locked_holdout(candidate={"logloss": 1.01, "brier": .60, "ece": .10, "accuracy": .52})
-    assert independent_adoption_gate({"development_oos": True}, holdout)["status"] == "REJECT"
+    assert independent_adoption_gate(
+        {"development_oos": True},
+        holdout,
+        stability_folds=_stability_folds(),
+    )["status"] == "REJECT"
