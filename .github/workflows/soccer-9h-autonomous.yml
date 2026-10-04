@@ -45,6 +45,7 @@ jobs:
           path: |
             data/raw
             data/raw/pit_evidence
+            artifacts/pit_evidence
           key: soccer-9h-data-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/data/**/*.py', 'src/data/*.py') }}
           restore-keys: soccer-9h-data-${{ runner.os }}-
       - name: Install dependencies with retry
