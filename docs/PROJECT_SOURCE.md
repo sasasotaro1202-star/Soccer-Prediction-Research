@@ -200,3 +200,13 @@ DISCOVER → ABSTRACT_MECHANISM → COMPATIBILITY → ADAPT → LOCAL_PIT → LO
 This update is governance/documentation and feature-contract work only. It does not alter prediction probabilities, target semantics, calibration outputs, OOS results, frozen holdout, Champion, Production registry or historical experience.
 
 Current main remains BLOCKED by recorded preflight test/data-audit failures; the repository still records no OOS claim from that blocked run. Current main also has no committed `models/current` production bundle or durable experience ledger that would allow an exact production feature list to be independently verified. Therefore the feature contract is updated and the candidate space is defined, but no new feature set is promoted or claimed as Production.
+
+
+## GitHub-side automation — pending integration from hardening PR #204
+The current hardening lane adds GitHub-native automation so routine maintenance does not depend on a new manual chat prompt. The implementation is intentionally narrower than production automation.
+
+- `.github/workflows/action-failure-recovery.yml` extends one-time bounded recovery to Soccer CI, PIT Replay Audit, Overnight Integrity and research workflows.
+- `.github/workflows/pit-replay-audit.yml` adds a daily scheduled diagnostic PIT replay; BLOCKED evidence remains a hard OOS/production gate.
+- `.github/workflows/autonomous-github-controller.yml` periodically reconciles open PRs and may merge only `automation_policy: hardening-safe-v1` PRs with CLEAN merge state, completed-successful checks, an allowlisted hardening-only diff, and a final head-SHA race check.
+- The controller explicitly forbids automatic production/model/feature/target/calibration/holdout changes and publishes an auditable controller artifact.
+- These changes are on the hardening branch until the normal CI/PIT gates pass and the PR is merged. They must not be described as active main-branch automation before that point.
