@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -190,6 +192,73 @@ def _rank(rows: pd.DataFrame, score_column: str, group_cols: list[str]) -> pd.Da
         parts.append(ordered.iloc[0])
     return pd.DataFrame(parts).reset_index(drop=True)
 
+
+def _sha256_file(path: str | Path) -> str:
+    h = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _experiment_fingerprint(*, input_path: str | Path, min_train: int, oos_block: int, random_state: int, top_features: int, top_combos: int) -> str:
+    payload = {
+        "schema_version": 1,
+        "input_sha256": _sha256_file(input_path),
+        "ultimate_matrix_source_sha256": _sha256_file(Path(__file__)),
+        "feature_variants_source_sha256": _sha256_file(Path(__file__).with_name("feature_set_variants.py")),
+        "walk_forward_source_sha256": _sha256_file(Path(__file__).parents[1] / "evaluation" / "walk_forward.py"),
+        "baselines_source_sha256": _sha256_file(Path(__file__).parents[1] / "models" / "baselines.py"),
+        "git_sha": os.environ.get("GITHUB_SHA", ""),
+        "min_train": int(min_train),
+        "oos_block": int(oos_block),
+        "random_state": int(random_state),
+        "top_features": int(top_features),
+        "top_combos": int(top_combos),
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _load_checkpoint(path: Path, fingerprint: str) -> dict:
+    if not path.is_file() or path.stat().st_size == 0:
+        return {"fingerprint": fingerprint}
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"fingerprint": fingerprint}
+    if state.get("fingerprint") != fingerprint:
+        return {"fingerprint": fingerprint}
+    return state
+
+
+def _save_checkpoint(path: Path, state: dict) -> None:
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(state, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    tmp.replace(path)
+
+
+def _completed_variant_keys(rows: list[dict]) -> set[str]:
+    return {str(row.get("variant")) for row in rows if row.get("variant")}
+
+
+def _completed_model_keys(rows: list[dict]) -> set[tuple[str, str]]:
+    return {(str(row.get("variant")), str(row.get("model_name"))) for row in rows if row.get("variant") and row.get("model_name")}
+
+
+def _completed_config_keys(rows: list[dict]) -> set[tuple[str, str, str, str, str]]:
+    return {
+        (str(row.get("variant")), str(row.get("model_name")), str(row.get("training_window")), str(row.get("calibration_mode")), str(row.get("routing_mode")))
+        for row in rows
+        if all(row.get(key) for key in ("variant", "model_name", "training_window", "calibration_mode", "routing_mode"))
+    }
+
+
+def _completed_prediction_mode_keys(rows: list[dict]) -> set[tuple[str, str, str, str, str, str]]:
+    return {
+        (str(row.get("variant")), str(row.get("model_name")), str(row.get("base_training_window")), str(row.get("base_calibration_mode")), str(row.get("base_routing_mode")), str(row.get("prediction_mode_variant")))
+        for row in rows
+        if all(row.get(key) for key in ("variant", "model_name", "base_training_window", "base_calibration_mode", "base_routing_mode", "prediction_mode_variant"))
+    }
 
 def run_ultimate_matrix(
     input_path: str,
