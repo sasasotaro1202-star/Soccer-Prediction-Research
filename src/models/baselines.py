@@ -243,6 +243,25 @@ def candidates(random_state: int = 42):
             ("scale", StandardScaler()),
             ("model", LogisticRegression(max_iter=2000, C=1.0, random_state=random_state)),
         ]),
+        "logistic_c0_15": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scale", StandardScaler()),
+            ("model", LogisticRegression(max_iter=2200, C=0.15, random_state=random_state)),
+        ]),
+        "logistic_c2": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scale", StandardScaler()),
+            ("model", LogisticRegression(max_iter=2200, C=2.0, random_state=random_state)),
+        ]),
+        "logistic_c4": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scale", StandardScaler()),
+            ("model", LogisticRegression(max_iter=2200, C=4.0, random_state=random_state)),
+        ]),
+        "recency_half_life_300": RecencyLogisticClassifier(random_state=random_state, half_life_rows=300.0),
+        "recency_half_life_1200": RecencyLogisticClassifier(random_state=random_state, half_life_rows=1200.0),
+        "quantile_32": QuantileLogisticClassifier(random_state=random_state, n_quantiles=32),
+        "quantile_128": QuantileLogisticClassifier(random_state=random_state, n_quantiles=128),
         "logistic_select": Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
             ("variance", VarianceThreshold(threshold=1e-12)),
@@ -254,9 +273,17 @@ def candidates(random_state: int = 42):
             ("imputer", SimpleImputer(strategy="median")),
             ("model", ExtraTreesClassifier(n_estimators=300, min_samples_leaf=8, max_features="sqrt", n_jobs=-1, random_state=random_state)),
         ]),
+        "extra_trees_600": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("model", ExtraTreesClassifier(n_estimators=600, min_samples_leaf=5, max_features=0.6, n_jobs=-1, random_state=random_state)),
+        ]),
         "random_forest": Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
             ("model", RandomForestClassifier(n_estimators=300, min_samples_leaf=8, max_features="sqrt", n_jobs=-1, random_state=random_state, class_weight="balanced_subsample")),
+        ]),
+        "random_forest_600": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("model", RandomForestClassifier(n_estimators=600, min_samples_leaf=5, max_features=0.6, n_jobs=-1, random_state=random_state, class_weight="balanced_subsample")),
         ]),
         "hist_gb": Pipeline([
             ("imputer", SimpleImputer(strategy="median")),
@@ -275,6 +302,28 @@ def candidates(random_state: int = 42):
                 max_leaf_nodes=31,
                 min_samples_leaf=30,
                 l2_regularization=2.0,
+                random_state=random_state,
+            )),
+        ]),
+        "hist_gb_deep": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("model", HistGradientBoostingClassifier(
+                max_iter=420,
+                learning_rate=0.04,
+                max_leaf_nodes=31,
+                min_samples_leaf=20,
+                l2_regularization=1.0,
+                random_state=random_state,
+            )),
+        ]),
+        "hist_gb_high_reg": Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("model", HistGradientBoostingClassifier(
+                max_iter=260,
+                learning_rate=0.045,
+                max_leaf_nodes=15,
+                min_samples_leaf=45,
+                l2_regularization=4.0,
                 random_state=random_state,
             )),
         ]),
