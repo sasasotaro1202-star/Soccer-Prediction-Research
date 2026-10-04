@@ -127,6 +127,34 @@ def _oos_temporal_integrity(frame: pd.DataFrame, *, locked_blocks: int = 2) -> d
     return result
 
 
+def _build_stability_folds(development_oos: pd.DataFrame) -> list[dict]:
+    """Convert development-only OOS blocks into stability evidence.
+    
+    Locked/frozen OOS must remain excluded because stability is selection/development
+    evidence rather than final holdout evidence.
+    """
+    stability_folds = []
+    for _, row in development_oos.iterrows():
+        stability_folds.append({
+            "league": row.get("leagues", ""),
+            "season": row.get("seasons", ""),
+            "baseline": {
+                "logloss": row.get("baseline_logistic_logloss"),
+                "brier": row.get("baseline_logistic_brier"),
+                "accuracy": row.get("baseline_logistic_accuracy"),
+            },
+            "candidate": {
+                "logloss": row.get("logloss"),
+                "brier": row.get("brier"),
+                "accuracy": row.get("accuracy"),
+            },
+            "oos_start_utc": row.get("oos_start"),
+            "oos_end_utc": row.get("oos_end"),
+        })
+    return stability_folds
+
+
+
 def snapshot_id(df: pd.DataFrame) -> str:
     excluded = {"retrieved_at_utc", "source_available_at_utc", "pit_evidence_url", "capture_digest"}
     stable = df[[c for c in df.columns if c not in excluded]].copy()
@@ -610,24 +638,7 @@ def run(out_dir: str = "artifacts") -> dict:
     )
     # Stability is development evidence only. Locked OOS blocks are reserved for
     # final verification and must never influence candidate stability/selection.
-    stability_folds = []
-    for _, row in development_oos.iterrows():
-        stability_folds.append({
-            "league": row.get("leagues", ""),
-            "season": row.get("seasons", ""),
-            "baseline": {
-                "logloss": row.get("baseline_logistic_logloss"),
-                "brier": row.get("baseline_logistic_brier"),
-                "accuracy": row.get("baseline_logistic_accuracy"),
-            },
-            "candidate": {
-                "logloss": row.get("logloss"),
-                "brier": row.get("brier"),
-                "accuracy": row.get("accuracy"),
-            },
-            "oos_start_utc": row.get("oos_start"),
-            "oos_end_utc": row.get("oos_end"),
-        })
+    stability_folds = _build_stability_folds(development_oos)
     stability = evaluate_stability(stability_folds)
     stability["evidence_scope"] = {
         "source": "development_oos_only",
