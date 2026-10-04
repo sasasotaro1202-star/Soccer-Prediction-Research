@@ -27,6 +27,10 @@ def filter_prior_mature_training(frame: pd.DataFrame, target_cutoff) -> pd.DataF
         raise RuntimeError(
             "PIT training frame contains missing or invalid prediction/maturity timestamps"
         )
+    if (maturity <= prediction_cutoff).any():
+        raise RuntimeError(
+            "PIT training frame contains outcome maturity at or before its prediction cutoff"
+        )
 
     return d.loc[
         prediction_cutoff.lt(cutoff) & maturity.le(cutoff)
