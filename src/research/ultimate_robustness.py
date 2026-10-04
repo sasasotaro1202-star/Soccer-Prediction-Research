@@ -7,7 +7,7 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 
-from src.evaluation.walk_forward import run_walk_forward
+from src.evaluation.walk_forward import _advance_past_same_kickoff, run_walk_forward
 from src.research.feature_set_variants import _family, select_feature_set
 
 LOCKED_BLOCKS = 2
@@ -61,12 +61,16 @@ def _locked_match_ids(frame: pd.DataFrame, *, min_train: int, oos_block: int) ->
     d = frame.loc[frame["pit_verified"]].sort_values(
         ["kickoff_utc", "match_id"], kind="mergesort"
     ).reset_index(drop=True)
-    if len(d) < min_train + oos_block * (LOCKED_BLOCKS + 1):
+    required_blocks = 8
+    if len(d) < min_train + oos_block * (required_blocks - 1):
         raise RuntimeError("Not enough PIT rows to identify locked blocks")
-    start = min_train
+    start = _advance_past_same_kickoff(d, min_train)
     blocks: list[set[str]] = []
     while start < len(d):
-        end = min(start + oos_block, len(d))
+        raw_end = min(start + oos_block, len(d))
+        end = _advance_past_same_kickoff(d, raw_end)
+        if end <= start:
+            raise RuntimeError("Locked-block boundary failed to advance")
         blocks.append(set(d.iloc[start:end]["match_id"].astype(str)))
         start = end
     if len(blocks) < LOCKED_BLOCKS:
