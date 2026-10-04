@@ -18,6 +18,9 @@ def test_probe_workflow_is_pinned_reproducible_and_fail_closed():
     assert "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1" in text
     assert "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f" in text
     assert "set -euo pipefail" in text
+    assert "Install minimal test dependency with bounded retry" in text
+    assert "for attempt in 1 2 3; do" in text
+    assert 'if [ "${attempt}" -eq 3 ]; then' in text
     assert "@v4" not in text
     assert "@v5" not in text
 
