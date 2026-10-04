@@ -514,17 +514,41 @@ def run_feature_set_research(
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     frame = pd.read_csv(input_path)
-    required = {"match_id", "kickoff_utc", "target", "pit_verified"}
+    required = {
+        "match_id",
+        "kickoff_utc",
+        "target",
+        "pit_verified",
+        "prediction_cutoff_at_utc",
+        "feature_source_max_available_at_utc",
+    }
     missing = sorted(required - set(frame.columns))
     if missing:
-        raise RuntimeError(f"Feature research input missing required columns: {missing}")
+        raise RuntimeError(f"Feature research input missing required PIT columns: {missing}")
     frame["kickoff_utc"] = pd.to_datetime(frame["kickoff_utc"], utc=True, errors="coerce")
-    if frame["kickoff_utc"].isna().any():
-        raise RuntimeError("Feature research input contains invalid kickoff_utc")
+    frame["prediction_cutoff_at_utc"] = pd.to_datetime(
+        frame["prediction_cutoff_at_utc"], utc=True, errors="coerce"
+    )
+    frame["feature_source_max_available_at_utc"] = pd.to_datetime(
+        frame["feature_source_max_available_at_utc"], utc=True, errors="coerce"
+    )
+    if frame[["kickoff_utc", "prediction_cutoff_at_utc", "feature_source_max_available_at_utc"]].isna().any().any():
+        raise RuntimeError("Feature research input contains invalid PIT temporal fields")
     pit = frame["pit_verified"].astype(str).str.strip().str.lower()
     if not pit.isin({"true", "false", "1", "0", "yes", "no"}).all():
         raise RuntimeError("Feature research input contains ambiguous pit_verified values")
     frame["pit_verified"] = pit.isin({"true", "1", "yes"})
+    verified = frame.loc[frame["pit_verified"]]
+    if not verified.empty:
+        availability_ok = (
+            verified["feature_source_max_available_at_utc"] <= verified["prediction_cutoff_at_utc"]
+        )
+        cutoff_ok = verified["prediction_cutoff_at_utc"] <= verified["kickoff_utc"]
+        if not bool((availability_ok & cutoff_ok).all()):
+            bad = int((availability_ok & cutoff_ok).eq(False).sum())
+            raise RuntimeError(
+                f"Feature research PIT provenance validation failed for {bad} verified rows"
+            )
     frame = frame.sort_values(["kickoff_utc", "match_id"], kind="mergesort").reset_index(drop=True)
 
     selected_variants = list(variants or (
