@@ -19,6 +19,10 @@ from src.data.pit_source_adapter_v2 import (
 
 _DATE_KEY = _date_key
 
+# Persist only immutable VERIFIED evidence so interrupted archive replay can resume
+# without trusting prior UNVERIFIABLE results. Bump when verification semantics change.
+PIT_EVIDENCE_CACHE_VERSION = 1
+
 
 def normalize_team_identity(value: object) -> str:
     """Normalize presentation-level team-name differences only."""
@@ -190,6 +194,76 @@ class FootballDataWaybackAdapter(_BaseAdapter):
         self._snapshot_diag[identity] = diag
         return diag
 
+    def _evidence_cache_path(self, url, row, lower_bound):
+        """Return a deterministic row-level cache path for immutable VERIFIED evidence."""
+        key = {
+            "version": PIT_EVIDENCE_CACHE_VERSION,
+            "url": str(url),
+            "row_key": _normalized_row_key(row),
+            "lower_bound": lower_bound.isoformat() if lower_bound is not None else None,
+        }
+        digest = self._cache_key(json.dumps(key, sort_keys=True, default=str))
+        return self.cache_dir / f"evidence_{digest}.json"
+
+    def _load_verified_evidence_cache(self, url, row, lower_bound):
+        """Load a previously VERIFIED result only after rechecking its PIT boundary."""
+        if lower_bound is None:
+            return None
+        path = self._evidence_cache_path(url, row, lower_bound)
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, ValueError, TypeError):
+            return None
+        if payload.get("cache_version") != PIT_EVIDENCE_CACHE_VERSION:
+            return None
+        if payload.get("status") != "VERIFIED":
+            return None
+        timestamp = _utc(payload.get("source_available_at_utc"))
+        if timestamp is None or timestamp < lower_bound:
+            return None
+        expected_key = _normalized_row_key(row)
+        if payload.get("row_key") != list(expected_key or ()):
+            return None
+        if payload.get("url") != str(url):
+            return None
+        return SourceEvidence(
+            timestamp.isoformat(),
+            "VERIFIED",
+            payload.get("evidence_url"),
+            payload.get("capture_digest"),
+            payload.get("reason", "verified_evidence_cache"),
+        )
+
+    def _save_verified_evidence_cache(self, url, row, lower_bound, evidence):
+        """Persist only a PIT-revalidated VERIFIED evidence record; failures stay transient."""
+        if evidence is None or evidence.evidence_status != "VERIFIED":
+            return
+        timestamp = _utc(evidence.source_available_at_utc)
+        row_key = _normalized_row_key(row)
+        if lower_bound is None or timestamp is None or row_key is None or timestamp < lower_bound:
+            return
+        path = self._evidence_cache_path(url, row, lower_bound)
+        payload = {
+            "cache_version": PIT_EVIDENCE_CACHE_VERSION,
+            "status": "VERIFIED",
+            "url": str(url),
+            "row_key": list(row_key),
+            "lower_bound": lower_bound.isoformat(),
+            "source_available_at_utc": timestamp.isoformat(),
+            "evidence_url": evidence.evidence_url,
+            "capture_digest": evidence.capture_digest,
+            "reason": evidence.reason,
+        }
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        try:
+            tmp.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+            tmp.replace(path)
+        except OSError:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+
     def _prefetch_url(self, url, rows, workers=None):
         if not rows:
             return []
@@ -203,6 +277,16 @@ class FootballDataWaybackAdapter(_BaseAdapter):
         bounds = [_result_lower_bound(r) for r in rows]
         results = [None] * len(rows)
         unresolved = {k: i for i, k in enumerate(row_keys) if k is not None}
+
+        # Resume from immutable VERIFIED evidence first. Cached failures are never
+        # consulted, so a later archive update can still turn an earlier miss into PASS.
+        for i, (_, lower_bound) in enumerate(bounds):
+            if i not in unresolved or lower_bound is None:
+                continue
+            cached = self._load_verified_evidence_cache(url, rows[i], lower_bound)
+            if cached is not None:
+                results[i] = cached
+                del unresolved[row_keys[i]]
         valid_bounds = [b for b, _ in bounds if b is not None]
         if not unresolved:
             return [SourceEvidence(None, "UNVERIFIABLE", reason="missing_record_identity") for _ in rows]
@@ -293,6 +377,7 @@ class FootballDataWaybackAdapter(_BaseAdapter):
                             capture.get("digest"),
                             f"archived_completed_result_first_observed_after_{accepted_reason}",
                         )
+                        self._save_verified_evidence_cache(url, rows[i], conservative_bound, results[i])
                         del unresolved[key]
 
         # PIT is fail-closed: a capture before the conservative publication lower
