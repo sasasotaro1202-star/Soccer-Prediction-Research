@@ -53,7 +53,7 @@ def _key(kickoff: Any, home: Any, away: Any) -> str:
     return f"{pd.Timestamp(ts).isoformat()}|{_norm(home)}|{_norm(away)}"
 
 def _hash_state(row: pd.Series) -> str:
-    cols = ["match_id","kickoff_utc","prediction_pit_cutoff_utc","home_team","away_team","competition","model_version",
+    cols = ["match_id","kickoff_utc","prediction_pit_cutoff_utc","source_available_at_utc","published_at_utc","home_team","away_team","competition","model_version",
             "p_home","p_draw","p_away","over_2_5","under_2_5","btts_yes","btts_no","score_1","score_1_probability","score_2","score_2_probability",
             "score_3","score_3_probability","mom_1_player_id","mom_1_probability","mom_2_player_id",
             "mom_2_probability","mom_3_player_id","mom_3_probability","mom_4_player_id","mom_4_probability"]
@@ -141,11 +141,113 @@ def record_prediction_file(
         cutoffs = pd.Series(parsed, index=incoming.index)
     else:
         raise RuntimeError("prediction ledger requires an explicit prediction_time_utc/prediction-time; refusing unknown PIT")
+
+    # The experience ledger is a durable PIT evidence boundary. A retrieval
+    # timestamp by itself is never historical availability proof, so at least
+    # one explicit source-availability timestamp is required for every state.
+    availability_columns = [
+        c for c in ("source_available_at_utc", "available_at_utc")
+        if c in incoming.columns
+    ]
+    if "pit_verified" not in incoming.columns:
+        raise RuntimeError(
+            "prediction ledger input missing required PIT provenance columns: ['pit_verified']"
+        )
+
+    if not availability_columns:
+        raise RuntimeError(
+            "prediction ledger requires source_available_at_utc or available_at_utc; refusing unknown PIT"
+        )
+
     kickoff = pd.to_datetime(incoming["kickoff_utc"], utc=True, errors="coerce")
-    if cutoffs.isna().any() or kickoff.isna().any():
-        raise RuntimeError("prediction ledger contains invalid/missing prediction or kickoff timestamps")
+    availability = pd.to_datetime(
+        incoming[availability_columns[0]], utc=True, errors="coerce"
+    )
+    pit_verified = incoming["pit_verified"].astype("string").str.strip().str.casefold()
+    pit_verified = pit_verified.map({
+        "true": True, "false": False, "1": True, "0": False, "yes": True, "no": False
+    })
+    if pit_verified.isna().any():
+        raise RuntimeError("prediction ledger contains invalid pit_verified values")
+    if bool((~pit_verified).any()):
+        raise RuntimeError("prediction ledger contains pit_verified=false; refusing unknown PIT")
+
+    published = (
+        pd.to_datetime(incoming["published_at_utc"], utc=True, errors="coerce")
+        if "published_at_utc" in incoming.columns
+        else pd.Series(pd.NaT, index=incoming.index)
+    )
+    retrieved = (
+        pd.to_datetime(incoming["retrieved_at_utc"], utc=True, errors="coerce")
+        if "retrieved_at_utc" in incoming.columns
+        else pd.Series(pd.NaT, index=incoming.index)
+    )
+
+    required_timestamp_check = {
+        "prediction cutoff": cutoffs,
+        "kickoff": kickoff,
+        "source availability": availability,
+    }
+    for label, series in required_timestamp_check.items():
+        if series.isna().any():
+            raise RuntimeError(
+                f"prediction ledger contains invalid/missing {label} timestamps"
+            )
+    if "available_at_utc" in incoming.columns and "source_available_at_utc" in incoming.columns:
+        available_alias = pd.to_datetime(
+            incoming["available_at_utc"], utc=True, errors="coerce"
+        )
+        if available_alias.isna().any():
+            raise RuntimeError("prediction ledger contains invalid/missing available_at_utc timestamps")
+        if bool((available_alias != availability).any()):
+            raise RuntimeError(
+                "prediction ledger source availability aliases disagree; refusing ambiguous PIT"
+            )
+
     if bool((cutoffs >= kickoff).any()):
         raise RuntimeError("prediction ledger contains a prediction at/after kickoff; refusing non-pregame state")
+    if bool((availability > cutoffs).any()):
+        raise RuntimeError(
+            "prediction ledger source availability occurs after prediction cutoff; refusing unknown PIT"
+        )
+    if bool((availability > kickoff).any()):
+        raise RuntimeError(
+            "prediction ledger source availability occurs after kickoff; refusing invalid pregame state"
+        )
+
+    if "published_at_utc" in incoming.columns:
+        if published.isna().any():
+            raise RuntimeError(
+                "prediction ledger contains invalid/missing published_at_utc timestamps"
+            )
+        if bool((published > cutoffs).any()):
+            raise RuntimeError(
+                "prediction ledger publication occurs after prediction cutoff; refusing unknown PIT"
+            )
+    if "retrieved_at_utc" in incoming.columns:
+        if retrieved.isna().any():
+            raise RuntimeError(
+                "prediction ledger contains invalid/missing retrieved_at_utc timestamps"
+            )
+        if bool((retrieved > cutoffs).any()):
+            raise RuntimeError(
+                "prediction ledger retrieval occurs after prediction cutoff; refusing unknown PIT"
+            )
+        if bool((retrieved < availability).any()):
+            raise RuntimeError(
+                "prediction ledger retrieval precedes source availability; refusing ambiguous PIT"
+            )
+        if "published_at_utc" in incoming.columns and bool((retrieved < published).any()):
+            raise RuntimeError(
+                "prediction ledger retrieval precedes publication; refusing ambiguous PIT"
+            )
+
+    incoming["source_available_at_utc"] = availability.map(
+        lambda ts: pd.Timestamp(ts).isoformat()
+    )
+    incoming["pit_verified"] = pit_verified.astype(bool).to_numpy()
+    if "available_at_utc" not in incoming.columns:
+        incoming["available_at_utc"] = incoming["source_available_at_utc"]
     incoming["prediction_pit_cutoff_utc"] = cutoffs.map(lambda ts: pd.Timestamp(ts).isoformat())
     incoming["prediction_recorded_at_utc"] = _now()
     incoming["prediction_pit_gate"] = "PASS"
