@@ -153,6 +153,8 @@ def _family(column: str) -> str:
         return "interaction"
     if column in {"home_history_support_n", "away_history_support_n"}:
         return "history_support"
+    if any(column.endswith(f"_diff_{w}") for w in (3, 5, 10, 20)):
+        return "derived_difference"
     if _contains_stat(column, ADVANCED_STAT_KEYS):
         return "advanced_stats"
     if _contains_stat(column, BASIC_STAT_KEYS):
