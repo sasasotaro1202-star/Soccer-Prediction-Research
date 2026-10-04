@@ -123,7 +123,18 @@ jobs:
 
             case "${decision}" in
               DISPATCH:*)
-                gh workflow run "${workflow}" --repo "${GH_REPO}" --ref main
+                case "${workflow}" in
+                  pit-replay-audit.yml)
+                    # This lane has required workflow_dispatch inputs; use only its
+                    # deterministic, audit-only defaults. No prediction is enabled.
+                    gh workflow run "${workflow}" --repo "${GH_REPO}" --ref main \
+                      -f competition=EPL \
+                      -f rows_per_season=1
+                    ;;
+                  *)
+                    gh workflow run "${workflow}" --repo "${GH_REPO}" --ref main
+                    ;;
+                esac
                 update_report dispatched "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":sys.argv[2]},ensure_ascii=False))' "${workflow}" "${decision}")"
                 ;;
               *)

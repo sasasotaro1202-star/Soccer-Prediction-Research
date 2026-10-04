@@ -59,3 +59,10 @@ def test_main_sha_export_precedes_report_initialization():
     export_pos = text.index('export MAIN_SHA="${main_sha}"')
     report_pos = text.index("python - <<'PY' > \"$report\"")
     assert export_pos < report_pos
+
+
+def test_orchestrator_supplies_required_pit_replay_inputs():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "pit-replay-audit.yml)" in text
+    assert "-f competition=EPL" in text
+    assert "-f rows_per_season=1" in text
