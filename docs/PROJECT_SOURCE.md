@@ -182,3 +182,13 @@ DISCOVER → ABSTRACT_MECHANISM → COMPATIBILITY → ADAPT → LOCAL_PIT → LO
 This update is governance/documentation and feature-contract work only. It does not alter prediction probabilities, target semantics, calibration outputs, OOS results, frozen holdout, Champion, Production registry or historical experience.
 
 Current main remains BLOCKED by recorded preflight test/data-audit failures; the repository still records no OOS claim from that blocked run. Current main also has no committed `models/current` production bundle or durable experience ledger that would allow an exact production feature list to be independently verified. Therefore the feature contract is updated and the candidate space is defined, but no new feature set is promoted or claimed as Production.
+
+### Ultimate experiment execution lane — 2026-10-04
+
+The current research branch contains a staged, research-only Ultimate Matrix. The declared search axes are 34 feature-set variants, 31 model variants, 5 training-window variants, 4 calibration modes, 3 routing modes, and a predeclared prediction-mode sensitivity screen. The matrix uses common chronological OOS window signatures and separates feature screening, model confirmation, configuration confirmation and the final locked suffix.
+
+The branch additionally contains a winner-robustness lane that replays the selected configuration under feature-family deletion and locked-block missingness perturbations and writes per-case risk slices. Robustness results are diagnostic only and cannot alter selection authority.
+
+The Ultimate Matrix now writes a fingerprinted checkpoint after completed feature/model/configuration/prediction-mode experiments. The fingerprint binds the PIT input hash, research implementation hashes, core evaluation/model source hashes, Git SHA and experiment parameters. A mismatched or unreadable checkpoint is discarded rather than reused. GitHub Actions caches the checkpoint by the same implementation/PIT-input fingerprint.
+
+These changes are research execution infrastructure. They do not change the Production registry, Production probabilities, frozen holdout status or historical experience. A successful test run is still insufficient for PERFORMANCE_VERIFIED, ADOPTED or PRODUCTION.

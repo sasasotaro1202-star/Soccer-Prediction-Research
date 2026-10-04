@@ -1,0 +1,241 @@
+name: Soccer Ultimate Experiment Matrix
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soccer-ultimate-matrix-${{ github.event.pull_request.number || github.ref_name }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  ultimate-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout exact research commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies with bounded retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt; then
+              exit 0
+            fi
+            echo "dependency installation attempt ${attempt} failed; retrying..."
+            sleep $((attempt * 5))
+          done
+          exit 1
+
+      - name: Compile source and tests
+        run: python -m compileall -q src tests
+
+      - name: Run focused research tests
+        run: python -m pytest -q tests/test_feature_set_variants.py tests/test_ultimate_matrix.py tests/test_ultimate_robustness.py
+
+      - name: Run research preflight tests
+        run: >-
+          python -m pytest -q
+          tests/test_feature_set_variants.py
+          tests/test_ultimate_matrix.py
+          tests/test_ultimate_robustness.py
+          tests/test_oos_case_diagnostics.py
+          tests/test_pit_feature_replay.py
+          tests/test_prediction_mode_contract.py
+          tests/test_model_bundle.py
+
+      - name: Run fixture/source structural audit
+        run: python -m src.data.fixture_field_audit
+
+      - name: Enforce audit gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("artifacts/audit_summary.json")
+          if not p.exists():
+              raise SystemExit("audit_summary.json missing")
+          s = json.loads(p.read_text(encoding="utf-8"))
+          reasons = []
+          if not s.get("audit_execution_ok", False):
+              reasons.append("audit_execution_ok=false")
+          if int(s.get("duplicate_source_rows", 0)) != 0:
+              reasons.append("duplicate_source_rows!=0")
+          if int(s.get("collision_rows", 0)) != 0:
+              reasons.append("collision_rows!=0")
+          if int(s.get("team_mapping_invalid_rows", 0)) != 0:
+              reasons.append("team_mapping_invalid_rows!=0")
+          if not s.get("coverage_scope_complete", False):
+              reasons.append("coverage_scope_complete=false")
+          if reasons:
+              raise SystemExit("AUDIT GATE FAILED: " + "; ".join(reasons))
+          print("AUDIT GATE PASS")
+          PY
+
+      - name: Build strict PIT feature handoff
+        env:
+          PIT_ENABLE_ARCHIVE_AUDIT: "1"
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: |
+          set -euo pipefail
+          python -m src.data.completion_gate
+          test -s artifacts/completion_gate.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          state = json.loads(Path("artifacts/completion_gate.json").read_text(encoding="utf-8"))
+          if not state.get("full_gate_passed", False):
+              raise SystemExit(
+                  "COMPLETION/PIT GATE FAILED: " + "; ".join(state.get("blocking_reasons", []))
+              )
+          if not Path("artifacts/pit_replay_features.csv").is_file():
+              raise SystemExit("pit_replay_features.csv missing after completion gate")
+          print("PIT FEATURE HANDOFF PASS")
+          PY
+
+      - name: Fingerprint PIT feature handoff
+        id: pit_fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/pit_replay_features.csv
+          echo "sha256=$(sha256sum artifacts/pit_replay_features.csv | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore ultimate matrix checkpoint cache
+        id: ultimate_cache_restore
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: artifacts/ultimate_matrix
+          key: soccer-ultimate-matrix-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/research/ultimate_matrix.py', 'src/research/feature_set_variants.py', 'src/evaluation/walk_forward.py', 'src/models/baselines.py') }}-${{ steps.pit_fingerprint.outputs.sha256 }}
+      - name: Run staged ultimate matrix
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+          SOCCER_VALIDATION_MAX: "1200"
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ultimate_matrix
+          python -m src.research.ultimate_matrix \
+            --input artifacts/pit_replay_features.csv \
+            --output-dir artifacts/ultimate_matrix \
+            --min-train 2000 \
+            --oos-block 4000 \
+            --top-features 6 \
+            --top-combos 3
+
+      - name: Save ultimate matrix checkpoint cache
+        if: always() && steps.ultimate_cache_restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: artifacts/ultimate_matrix
+          key: soccer-ultimate-matrix-${{ runner.os }}-${{ hashFiles('requirements.txt', 'src/research/ultimate_matrix.py', 'src/research/feature_set_variants.py', 'src/evaluation/walk_forward.py', 'src/models/baselines.py') }}-${{ steps.pit_fingerprint.outputs.sha256 }}
+      - name: Run winner robustness and case-level diagnostics
+        id: robustness
+        if: success()
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: |
+          set -euo pipefail
+          test -s artifacts/pit_replay_features.csv
+          test -s artifacts/ultimate_matrix/ultimate_matrix_status.json
+          mkdir -p artifacts/ultimate_robustness
+          python -m src.research.ultimate_robustness \
+            --input artifacts/pit_replay_features.csv \
+            --winner artifacts/ultimate_matrix/ultimate_matrix_status.json \
+            --output-dir artifacts/ultimate_robustness \
+            --min-train 2000 \
+            --oos-block 4000
+
+      - name: Enforce robustness diagnostic contract
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -s artifacts/ultimate_robustness/ultimate_robustness_status.json ]; then
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          state = json.loads(
+              Path("artifacts/ultimate_robustness/ultimate_robustness_status.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          if state.get("selection_authority") != "upstream_ultimate_matrix_only":
+              raise SystemExit("ROBUSTNESS CONTRACT FAILED: selection authority changed")
+          if state.get("robustness_is_diagnostic_not_selection") is not True:
+              raise SystemExit("ROBUSTNESS CONTRACT FAILED: diagnostic-only flag missing")
+          if state.get("frozen_holdout_used_for_selection") is not False:
+              raise SystemExit("ROBUSTNESS CONTRACT FAILED: frozen holdout selection violation")
+          if state.get("locked_oos_used_for_selection") is not False:
+              raise SystemExit("ROBUSTNESS CONTRACT FAILED: locked OOS selection violation")
+          if state.get("production_changed") is not False:
+              raise SystemExit("ROBUSTNESS CONTRACT FAILED: production changed")
+          print("ROBUSTNESS DIAGNOSTIC CONTRACT PASS")
+          PY
+          else
+            echo "No robustness status produced; upstream matrix did not execute."
+          fi
+
+      - name: Publish matrix summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## Soccer ultimate experiment matrix"
+            if [ -s artifacts/ultimate_matrix/ultimate_matrix_status.json ]; then
+              python - <<'PY'
+          import json
+          from pathlib import Path
+          state = json.loads(
+              Path("artifacts/ultimate_matrix/ultimate_matrix_status.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          winner = state.get("winner") or {}
+          delta = state.get("winner_vs_same_combo_baseline") or {}
+          print(f"- Status={state.get('status')}")
+          print(f"- Feature variants tested={state.get('feature_variants_tested')}")
+          print(f"- Model variants tested={state.get('model_variants_tested')}")
+          print(f"- Configuration rows={state.get('configuration_rows')}")
+          print(f"- Winner feature={winner.get('variant', 'UNKNOWN')}")
+          print(f"- Winner model={winner.get('model_name', 'UNKNOWN')}")
+          print(f"- Winner training={winner.get('training_window', 'UNKNOWN')}")
+          print(f"- Winner calibration={winner.get('calibration_mode', 'UNKNOWN')}")
+          print(f"- Winner routing={winner.get('routing_mode', 'UNKNOWN')}")
+          print(f"- Confirm LogLoss delta vs same-combo baseline={delta.get('confirm_logloss_delta')}")
+          print(f"- Locked LogLoss delta vs same-combo baseline={delta.get('locked_logloss_delta')}")
+          print("- Locked OOS used for selection=False")
+          print("- Frozen holdout used for selection=False")
+          print("- Production changed=False")
+          PY
+            else
+              echo "- Ultimate matrix did not execute."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload ultimate matrix artifacts
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-ultimate-matrix-${{ github.sha }}
+          path: artifacts/
+          retention-days: 14
+          if-no-files-found: warn
