@@ -1,5 +1,16 @@
 # Soccer-Prediction-Research — Project Source
 
+## Current run reconciliation — 2026-10-04
+
+- Current authoritative main remains `28e74436f393f7df8691e9846e8017dcc076a938` (`config: add soccer feature policy contract`).
+- The research-only feature/model/configuration matrix remains in PR #200 and is not Production, Champion, or performance-verified evidence.
+- During reconciliation, stale duplicate PRs #192, #193, #197, #198 and #199 were closed as superseded because their substantive PIT/recovery/operational hardening is already represented on current main or by later reconstructed main updates. Historical evidence was not rewritten.
+- PR #200 was strengthened with an additional function-boundary PIT check: feature research and WFO execution now require explicit prediction cutoff and feature-source availability provenance for verified rows and fail closed on missing/late timing evidence. This change remains research-branch-only until the PR is merged and verified.
+- Long-running research workflows in PR #200 were changed to preserve in-flight runs instead of cancelling them when another refresh arrives; this is operational hardening only and does not constitute performance evidence.
+- GitHub Actions for the latest PR state are queued; no completed PASS/FAIL result or research artifact from the strengthened head has been accepted as verified yet. Local network execution is unavailable in this environment, so no local test result is substituted for GitHub Actions evidence.
+- Production status remains unchanged: no verifiable committed `models/current` bundle, no new Champion adoption, and no new OOS/holdout performance claim.
+
+
 ## Verified state 2026-10-04
 Current GitHub main is authoritative and is re-checked each run; this section intentionally avoids embedding a self-invalidating commit SHA. Latest merged work hardens OOS PIT lineage boolean/cutoff validation, makes research preflight state strictly fail-closed, prevents no-op experience commits caused only by volatile timestamps, and hardens current matchday discovery with same-upstream SofaScore host fallback, bounded live HTTP retry behavior, and fail-closed source-outage handling. These changes are operational/data-integrity hardening only; no model, target, calibration, OOS, holdout, registry, or production prediction was changed. Matchday source state is now explicit: `COLLECTED` requires no discovery errors; `COLLECTED_WITH_ERRORS` is usable only when a successful discovery source is recorded and redundancy checks pass; empty/error states fail closed.
 README documents a Data Acquisition → Coverage → QC/PIT → Features → Candidate Models → Walk-forward OOS → Metrics/Calibration → Weakness Research → Candidate Validation → Adoption Gate → Registry → Production Prediction architecture. Current prediction is fail-closed when a valid adopted model/current snapshot is unavailable.
