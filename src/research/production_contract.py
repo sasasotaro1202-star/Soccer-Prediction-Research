@@ -11,7 +11,13 @@ import json
 import numpy as np
 from typing import Any
 
-from src.prediction.model_bundle import load_bundle
+from src.prediction.model_bundle import (
+    FEATURE_MANIFEST_VERSION,
+    FEATURE_POLICY_VERSION,
+    TARGET_CONTRACT_VERSION,
+    _feature_schema_hash,
+    load_bundle,
+)
 from src.data.competition_sources import TARGET_COMPETITIONS
 from src.research.task_scope import TASK_SPECS
 
@@ -224,6 +230,36 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
                 if _canonical_hash(registry_features) != _canonical_hash(model_features):
                     failures.append("feature_schema_provenance_mismatch")
 
+            model_feature_contract = model_json.get("feature_contract")
+            if not isinstance(model_feature_contract, dict):
+                failures.append("production_model_json_feature_contract_missing")
+            else:
+                if model_feature_contract.get("schema_version") != 1:
+                    failures.append("production_model_json_feature_contract_schema")
+                if model_feature_contract.get("manifest_version") != FEATURE_MANIFEST_VERSION:
+                    failures.append("production_model_json_feature_manifest_version")
+                if model_feature_contract.get("policy_version") != FEATURE_POLICY_VERSION:
+                    failures.append("production_model_json_feature_policy_version")
+                if model_feature_contract.get("target_version") != TARGET_CONTRACT_VERSION:
+                    failures.append("production_model_json_target_version")
+                if model_features is not None and model_feature_contract.get("schema_hash") != _feature_schema_hash(model_features):
+                    failures.append("production_model_json_feature_schema_hash")
+                if model_feature_contract.get("source_snapshot_id") != model_json.get("data_snapshot_id"):
+                    failures.append("production_model_json_feature_snapshot_mismatch")
+
+            registry_contract = {
+                "schema_version": 1,
+                "manifest_version": registry.get("feature_manifest_version"),
+                "policy_version": registry.get("feature_policy_version"),
+                "schema_hash": registry.get("feature_schema_hash"),
+                "target_version": registry.get("target_version"),
+                "source_snapshot_id": registry.get("data_snapshot_id"),
+            }
+            if any(registry_contract[key] is None for key in registry_contract if key != "schema_version"):
+                failures.append("model_registry_feature_contract_missing")
+            elif isinstance(model_feature_contract, dict) and _canonical_hash(registry_contract) != _canonical_hash(model_feature_contract):
+                failures.append("model_registry_feature_contract_mismatch")
+
             # The production bundle must implement the same validated contextual
             # routing policy that was evaluated OOS; silently regressing to a
             # legacy global-only predictor is not a valid production artifact.
@@ -266,6 +302,13 @@ def evaluate_production_contract(artifacts_dir: str = "artifacts") -> GateResult
                         failures.append("production_routing_registry_mismatch")
 
                 bundle_features = bundle.get("feature_cols")
+                bundle_feature_contract = bundle.get("feature_contract")
+                if not isinstance(bundle_feature_contract, dict):
+                    failures.append("production_bundle_feature_contract_missing")
+                elif isinstance(model_feature_contract, dict) and _canonical_hash(bundle_feature_contract) != _canonical_hash(model_feature_contract):
+                    failures.append("production_bundle_feature_contract_mismatch")
+                if isinstance(bundle_feature_contract, dict) and bundle_feature_contract.get("schema_hash") != _feature_schema_hash(bundle_features or []):
+                    failures.append("production_bundle_feature_schema_hash")
                 if _canonical_hash(bundle_features) != _canonical_hash(model_features):
                     failures.append("production_bundle_feature_schema_mismatch")
                 if _canonical_hash(bundle_features) != _canonical_hash(registry_features):
