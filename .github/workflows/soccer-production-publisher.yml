@@ -1,0 +1,131 @@
+name: Soccer Production Bundle Publisher
+
+on:
+  workflow_run:
+    workflows: ['Soccer 9H Autonomous Research']
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: soccer-production-publisher-main
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Resolve source run
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'Manual publication requires an explicit successful source run; no implicit model is selected.'
+            exit 0
+          fi
+          echo "run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+          echo "head_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Find validated production artifact
+        id: artifact
+        if: steps.source.outputs.run_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          NAME="soccer-production-bundle-${RUN_ID}"
+          JSON="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100")"
+          ID="$(printf '%s' "$JSON" | python -c 'import json,sys; d=json.load(sys.stdin); n=sys.argv[1]; a=next((x for x in d.get("artifacts",[]) if x.get("name")==n and not x.get("expired")),None); print(a.get("id","") if a else "")' "$NAME")"
+          if [ -z "$ID" ]; then
+            echo 'No validated production artifact. Current release is preserved.'
+            exit 0
+          fi
+          echo "artifact_id=${ID}" >> "$GITHUB_OUTPUT"
+
+      - name: Download validated bundle
+        if: steps.artifact.outputs.artifact_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.artifact.outputs.artifact_id }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > production-current.zip
+          test -s production-current.zip
+
+      - name: Verify strict production bundle
+        if: steps.artifact.outputs.artifact_id != ''
+        run: |
+          set -euo pipefail
+          rm -rf production-current && mkdir production-current
+          unzip -q production-current.zip -d production-current
+          for f in production_model.pkl production_model.json model_registry.json production_provenance.json calibration_gate.json adoption_decision.json production_contract.json; do test -s "production-current/$f"; done
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('production-current/model_registry.json').read_text(encoding='utf-8'))
+          a=json.loads(Path('production-current/adoption_decision.json').read_text(encoding='utf-8'))
+          c=json.loads(Path('production-current/calibration_gate.json').read_text(encoding='utf-8'))
+          p=json.loads(Path('production-current/production_contract.json').read_text(encoding='utf-8'))
+          assert str(r.get('adoption_status','')).upper() == 'ADOPT'
+          assert str(a.get('status','')).upper() == 'ADOPT'
+          assert c.get('status') == 'PASS'
+          assert p.get('production_contract_passed') is True
+          PY
+
+      - name: Publish production-current release
+        if: steps.artifact.outputs.artifact_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view production-current >/dev/null 2>&1; then
+            gh release upload production-current production-current.zip --clobber
+          else
+            gh release create production-current production-current.zip --title 'Current Soccer Production Bundle' --notes 'Updated only after strict PIT/OOS/Calibration/Locked OOS/ADOPT/Production Contract verification.'
+          fi
+
+      - name: Publish current manifest
+        if: steps.artifact.outputs.artifact_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.source.outputs.run_id }}
+          HEAD_SHA: ${{ steps.source.outputs.head_sha }}
+          ARTIFACT_ID: ${{ steps.artifact.outputs.artifact_id }}
+        run: |
+          set -euo pipefail
+          MODEL_VERSION="$(unzip -p production-current.zip production_model.json | python -c 'import json,sys; print(json.load(sys.stdin)["model_version"])')"
+          MODEL_SHA256="$(unzip -p production-current.zip production_model.pkl | sha256sum | awk '{print $1}')"
+          export MODEL_VERSION MODEL_SHA256
+          python - <<'PY' > production-current-manifest.json
+          import json,os,time
+          print(json.dumps({
+              'status':'READY',
+              'adoption_status':'ADOPT',
+              'model_version':os.environ['MODEL_VERSION'],
+              'production_model_sha256':os.environ['MODEL_SHA256'],
+              'source_run_id':int(os.environ['RUN_ID']),
+              'source_head_sha':os.environ['HEAD_SHA'],
+              'artifact_id':int(os.environ['ARTIFACT_ID']),
+              'release_tag':'production-current',
+              'release_asset':'production-current.zip',
+              'updated_at_utc':time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+              'fail_closed':True,
+          },ensure_ascii=False,indent=2))
+          PY
+          CONTENT="$(base64 -w0 production-current-manifest.json)"
+          if CURRENT="$(gh api "repos/${GITHUB_REPOSITORY}/contents/production/current.json?ref=main" 2>/dev/null)"; then
+            SHA="$(printf '%s' "$CURRENT" | python -c 'import json,sys; print(json.load(sys.stdin)["sha"])')"
+            gh api -X PUT "repos/${GITHUB_REPOSITORY}/contents/production/current.json" -f message='chore: update current production bundle pointer' -f content="$CONTENT" -f branch=main -f sha="$SHA" >/dev/null
+          else
+            gh api -X PUT "repos/${GITHUB_REPOSITORY}/contents/production/current.json" -f message='chore: publish current production bundle pointer' -f content="$CONTENT" -f branch=main >/dev/null
+          fi
