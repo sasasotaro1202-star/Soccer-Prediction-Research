@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from src.research.feature_set_variants import (
+    FEATURE_SCREEN_MODELS,
     aggregate_fold_metrics,
     select_feature_set,
     select_development_winner,
@@ -108,6 +109,28 @@ def test_xg_possession_dense_keeps_target_signal_subset():
     assert "home_possession_5" in dense
     assert "home_pass_accuracy_5" in dense
     assert "home_corners_5" in dense
+
+
+def test_feature_screen_models_are_common_across_representations():
+    assert set(FEATURE_SCREEN_MODELS) == {
+        "logistic",
+        "logistic_select",
+        "extra_trees",
+        "random_forest",
+        "hist_gb",
+    }
+    assert "elo_logistic" not in FEATURE_SCREEN_MODELS
+    assert "dynamic_elo_logistic" not in FEATURE_SCREEN_MODELS
+
+
+def test_level_only_variant_removes_difference_features_without_emptying_set():
+    frame = _frame()
+    cols, _ = select_feature_set(frame, "levels_only")
+    assert cols
+    assert "home_elo" in cols
+    assert "away_elo" in cols
+    assert "elo_diff" not in cols
+    assert "dynamic_elo_diff" not in cols
 
 
 def test_difference_heavy_is_restricted_to_difference_representation():
