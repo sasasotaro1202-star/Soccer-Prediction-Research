@@ -65,15 +65,12 @@ def test_locked_match_ids_are_deterministic_and_suffix_based():
 
 
 def test_locked_match_ids_keep_shared_kickoff_rows_together():
-    kickoff = pd.to_datetime(
-        [
-            *[f"2026-01-01T{hour:02d}:00:00Z" for hour in range(29)],
-            "2026-01-02T05:00:00Z",
-            "2026-01-02T05:00:00Z",
-            "2026-01-02T06:00:00Z",
-        ],
-        utc=True,
-    )
+    kickoff = pd.date_range(
+        "2026-01-01T00:00:00Z",
+        periods=32,
+        freq="h",
+    ).to_series(index=range(32))
+    kickoff.iloc[29] = kickoff.iloc[28]
     kickoff = pd.Series(kickoff)
     n = len(kickoff)
     frame = pd.DataFrame(
