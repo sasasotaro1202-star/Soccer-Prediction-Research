@@ -1,7 +1,7 @@
 # Soccer-Prediction-Research — Project Source
 
 ## Verified state 2026-10-04
-Current GitHub main is authoritative and is re-checked each run; this section intentionally avoids embedding a self-invalidating commit SHA. Latest merged work hardens OOS PIT lineage boolean/cutoff validation, makes research preflight state strictly fail-closed, prevents no-op experience commits caused only by volatile timestamps, and hardens current matchday discovery with same-upstream SofaScore host fallback, bounded live HTTP retry behavior, and fail-closed source-outage handling. These changes are operational/data-integrity hardening only; no model, target, calibration, OOS, holdout, registry, or production prediction was changed.
+Current GitHub main is authoritative and is re-checked each run; this section intentionally avoids embedding a self-invalidating commit SHA. Latest merged work hardens OOS PIT lineage boolean/cutoff validation, makes research preflight state strictly fail-closed, prevents no-op experience commits caused only by volatile timestamps, and hardens current matchday discovery with same-upstream SofaScore host fallback, bounded live HTTP retry behavior, and fail-closed source-outage handling. These changes are operational/data-integrity hardening only; no model, target, calibration, OOS, holdout, registry, or production prediction was changed. Matchday source state is now explicit: `COLLECTED` requires no discovery errors; `COLLECTED_WITH_ERRORS` is usable only when a successful discovery source is recorded and redundancy checks pass; empty/error states fail closed.
 README documents a Data Acquisition → Coverage → QC/PIT → Features → Candidate Models → Walk-forward OOS → Metrics/Calibration → Weakness Research → Candidate Validation → Adoption Gate → Registry → Production Prediction architecture. Current prediction is fail-closed when a valid adopted model/current snapshot is unavailable.
 
 ## Target isolation
@@ -11,7 +11,7 @@ Maintain independent semantics and experience for 1X2, Score Top1/Top3, O/U, BTT
 retrieved_at_utc is never historical availability evidence. Historical publication evidence is required before PIT verification. Current production requires a successful fresh matchday snapshot; stale prior artifacts are not current prediction evidence.
 
 ## Research
-Features may use team strength/form, schedule/rest, venue, injuries/lineups, market context, event timing and source-quality metadata when PIT-safe. Rolling windows end at cutoff. OOS is chronological and target-specific calibration must be retained. Future model-failure OOS research also requires outcome labels to be mature before they enter the transition predictor; the immediately previous transition label is excluded at prediction time.
+Features may use team strength/form, schedule/rest, venue, injuries/lineups, market context, event timing and source-quality metadata when PIT-safe. Rolling windows end at cutoff. OOS is chronological and target-specific calibration must be retained.
 
 ## Failure frontier
 Prioritize stale-snapshot failures, late lineup information, high-confidence misses, unexplained ranking failures, source conflicts, OOD and competition distribution shift.
