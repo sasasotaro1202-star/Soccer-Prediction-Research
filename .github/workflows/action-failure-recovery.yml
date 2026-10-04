@@ -10,6 +10,8 @@ on:
       - Overnight Integrity
       - Soccer Ultimate Experiment Matrix
       - Soccer Feature Set Research
+      - Autonomous GitHub Controller
+      - Soccer 9H Autonomous Research
     types: [completed]
 
 permissions:
