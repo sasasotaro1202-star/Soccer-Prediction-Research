@@ -587,9 +587,21 @@ def evaluate_hazard_chronological_oos(
         if len(train_ids) < min_training_matches:
             continue
 
-        as_of = pd.to_datetime(train["label_available_at_utc"], utc=True).max()
+        # Strict prequential maturity boundary: every training label must have
+        # become available no later than the earliest prediction cutoff in the
+        # test block. This blocks leakage from simultaneous/overlapping matches
+        # whose final label matured after the test prediction point.
+        test_start = pd.to_datetime(
+            test["prediction_cutoff_utc"], utc=True
+        ).min()
+        mature_train = train[
+            pd.to_datetime(train["label_available_at_utc"], utc=True) <= test_start
+        ].copy()
+        if mature_train["match_id"].nunique() < min_training_matches:
+            continue
+        as_of = test_start
         model = fit_hazard_model(
-            train,
+            mature_train,
             as_of_cutoff=as_of,
             method=method,
             min_rows=max(120, min_training_matches * 3),
@@ -608,15 +620,40 @@ def evaluate_hazard_chronological_oos(
         aligned /= aligned.sum(axis=1, keepdims=True)
         y = test["next_event_type"].astype(str).to_numpy()
 
+        row_losses = -np.log(
+            np.clip(
+                aligned[
+                    np.arange(len(y)),
+                    [EVENT_TYPES.index(v) for v in y],
+                ],
+                1e-12,
+                1.0,
+            )
+        )
+        per_match = (
+            pd.DataFrame(
+                {"match_id": test["match_id"].astype(str), "loss": row_losses}
+            )
+            .groupby("match_id", sort=False)["loss"]
+            .mean()
+        )
         fold_metrics.append({
             "fold": fold_number,
-            "train_matches": int(len(train_ids)),
+            "train_matches": int(mature_train["match_id"].nunique()),
             "test_matches": int(len(test_ids)),
-            "train_snapshots": int(len(train)),
+            "train_snapshots": int(len(mature_train)),
             "test_snapshots": int(len(test)),
-            "test_start_utc": str(test["prediction_cutoff_utc"].min()),
-            "test_end_utc": str(test["prediction_cutoff_utc"].max()),
-            "next_event_logloss": _safe_multiclass_logloss(y, aligned, EVENT_TYPES),
+            "test_start_utc": str(test_start),
+            "test_end_utc": str(pd.to_datetime(test["prediction_cutoff_utc"], utc=True).max()),
+            "training_label_cutoff_utc": str(
+                pd.to_datetime(mature_train["label_available_at_utc"], utc=True).max()
+            ),
+            # Primary aggregate is equal-weighted by match, not by snapshot
+            # count. Snapshot-weighted loss is retained as a diagnostic only.
+            "next_event_logloss": float(per_match.mean()),
+            "snapshot_weighted_next_event_logloss": _safe_multiclass_logloss(
+                y, aligned, EVENT_TYPES
+            ),
         })
         all_y.extend(y.tolist())
         all_p.extend(aligned.tolist())
@@ -631,7 +668,8 @@ def evaluate_hazard_chronological_oos(
 
     p = np.asarray(all_p, dtype=float)
     y = np.asarray(all_y, dtype=str)
-    ll = _safe_multiclass_logloss(y, p, EVENT_TYPES)
+    ll_snapshot = _safe_multiclass_logloss(y, p, EVENT_TYPES)
+    ll_match = float(np.mean([f["next_event_logloss"] for f in fold_metrics]))
     return {
         "status": "EVALUATED",
         "method": method,
@@ -640,8 +678,13 @@ def evaluate_hazard_chronological_oos(
         "test_match_count_sum": int(sum(f["test_matches"] for f in fold_metrics)),
         "snapshot_rows": int(len(y)),
         "folds": fold_metrics,
-        "overall_next_event_logloss": ll,
-        "policy": "match-level_expanding_chronological_OOS; same-match_snapshots_never_split",
+        # Primary: equal-weighted by match to avoid snapshot-count bias.
+        "overall_next_event_logloss": ll_match,
+        "snapshot_weighted_next_event_logloss": ll_snapshot,
+        "policy": (
+            "match-level_expanding_chronological_OOS; same-match_snapshots_never_split; "
+            "training_labels_must_be_mature_by_test_cutoff"
+        ),
     }
 
 
