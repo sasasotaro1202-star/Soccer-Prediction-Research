@@ -92,6 +92,15 @@ def _validate_and_reduce(frame: pd.DataFrame) -> pd.DataFrame:
     d = frame.copy()
     for col in ("kickoff_utc", "prediction_pit_cutoff_utc", "experience_available_at_utc"):
         d[col] = pd.to_datetime(d[col], utc=True, errors="coerce")
+    optional_time_columns = (
+        "available_at_utc",
+        "source_available_at_utc",
+        "published_at_utc",
+        "retrieved_at_utc",
+    )
+    for col in optional_time_columns:
+        if col in d.columns:
+            d[col] = pd.to_datetime(d[col], utc=True, errors="coerce")
     d["match_id"] = d["match_id"].astype("string").str.strip()
     d["actual_result"] = d["actual_result"].astype("string").str.strip().str.upper()
     for col in ("p_home", "p_draw", "p_away"):
@@ -107,7 +116,26 @@ def _validate_and_reduce(frame: pd.DataFrame) -> pd.DataFrame:
             "predictability ledger contains duplicate match_id without prediction_state_id"
         )
 
-    valid = d["prediction_pit_gate"].astype("string").eq("PASS")
+    pit_rows = d["prediction_pit_gate"].astype("string").eq("PASS")
+    pit_valid = d["prediction_pit_cutoff_utc"].notna()
+    pit_valid &= d["experience_available_at_utc"].notna()
+    pit_valid &= d["prediction_pit_cutoff_utc"] < d["kickoff_utc"]
+    pit_valid &= d["experience_available_at_utc"] > d["kickoff_utc"]
+    pit_valid &= d["experience_available_at_utc"] > d["prediction_pit_cutoff_utc"]
+    for col in optional_time_columns:
+        if col not in d.columns:
+            continue
+        pit_valid &= d[col].notna()
+        pit_valid &= d[col] <= d["prediction_pit_cutoff_utc"]
+        if col == "retrieved_at_utc":
+            for available_col in ("source_available_at_utc", "available_at_utc"):
+                if available_col in d.columns:
+                    pit_valid &= d[col] >= d[available_col]
+        if col == "published_at_utc" and "retrieved_at_utc" in d.columns:
+            pit_valid &= d["retrieved_at_utc"] >= d[col]
+    if bool((pit_rows & ~pit_valid).any()):
+        raise RuntimeError("predictability ledger contains PIT-invalid PASS row")
+    valid = pit_rows.copy()
     valid &= d["match_id"].notna() & d["match_id"].ne("")
     valid &= d["kickoff_utc"].notna() & d["prediction_pit_cutoff_utc"].notna()
     valid &= d["experience_available_at_utc"].notna()
