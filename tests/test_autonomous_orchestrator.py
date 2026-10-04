@@ -30,6 +30,9 @@ def test_orchestrator_has_pit_and_research_reconciliation_lanes():
         "soccer-versioned-pit-research.yml",
         "soccer-daily-research-forecast.yml",
         "soccer-matchday-intelligence.yml",
+        "soccer-research-cycle.yml",
+        "overnight-integrity.yml",
+        "soccer-opta-like-24h.yml",
     )
     for workflow in required:
         assert workflow in text
