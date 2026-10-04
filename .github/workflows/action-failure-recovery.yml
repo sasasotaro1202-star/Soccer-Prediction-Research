@@ -6,6 +6,8 @@ on:
       - Soccer CI
       - Soccer Matchday Intelligence Refresh
       - Legacy V9/V12 Bridge Check
+      - Soccer PIT Replay Audit
+      - Soccer Ultimate Experiment Matrix
     types: [completed]
 
 permissions:
