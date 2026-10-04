@@ -77,6 +77,11 @@ def test_chronological_failure_risk_candidate_is_research_only():
         wrong = (i < 180 and i % 10 == 0) or (i >= 180 and i % 2 == 0)
         rows.append(_row(i, risk=block_risk, wrong=wrong))
     frame = pd.DataFrame(rows)
+    # _validate_and_reduce deliberately collapses repeated fixture identities.
+    # Use unique identities here so the synthetic dataset can exercise five full
+    # chronological OOS blocks without accidentally losing rows to deduplication.
+    frame["match_id"] = [f"m{i}" for i in range(len(frame))]
+    frame["prediction_state_id"] = [f"s{i}" for i in range(len(frame))]
     frame["kickoff_utc"] = pd.date_range(
         "2026-01-01", periods=len(frame), freq="h", tz="UTC"
     )
