@@ -21,7 +21,6 @@ def _valid_holdout(**overrides):
     return payload
 
 
-
 def _stability_folds():
     return [
         {
@@ -110,11 +109,28 @@ def test_offset_boundaries_are_compared_in_utc():
     assert result["holdout_integrity_verified"] is True
 
 
-
 def test_adoption_requires_explicit_development_evidence():
     result = independent_adoption_gate({}, _valid_holdout(), stability_folds=_stability_folds())
     assert result["status"] == "HOLD"
-    assert result["reason"] == "development_evidence_missing"
+    assert result["reason"] == "development_evidence_missing_or_invalid"
+
+
+def test_adoption_rejects_non_mapping_development_evidence():
+    for invalid in ([], [("development_oos", True)], "development"):
+        result = independent_adoption_gate(invalid, _valid_holdout(), stability_folds=_stability_folds())
+        assert result["status"] == "HOLD"
+        assert result["reason"] == "development_evidence_missing_or_invalid"
+
+
+def test_adoption_rejects_false_or_non_boolean_development_oos():
+    for invalid in (False, 1, "true", None):
+        result = independent_adoption_gate(
+            {"development_oos": invalid},
+            _valid_holdout(),
+            stability_folds=_stability_folds(),
+        )
+        assert result["status"] == "HOLD"
+        assert result["reason"] == "development_evidence_missing_or_invalid"
 
 
 def test_adoption_rejects_non_numeric_holdout_metrics():
