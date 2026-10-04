@@ -14,8 +14,8 @@ from src.research.feature_set_variants import (
 
 
 BASE_MODELS = (
-    "elo_logistic",
-    "dynamic_elo_logistic",
+    # Representation-compatible common screen. Specialist Elo candidates are
+    # deliberately reserved for the model-ecology stage.
     "logistic",
     "logistic_select",
     "extra_trees",
