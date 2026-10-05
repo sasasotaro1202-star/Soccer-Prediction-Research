@@ -113,7 +113,39 @@ jobs:
             "Soccer Automation Integrity Audit"
           )
 
-          gh api "repos/${GH_REPO}/actions/runs?per_page=100" > /tmp/all-runs.json
+          rm -f /tmp/actions-runs-page-*.json
+          for page in $(seq 1 10); do
+            page_file="/tmp/actions-runs-page-${page}.json"
+            gh api "repos/${GH_REPO}/actions/runs?per_page=100&page=${page}" > "${page_file}"
+            oldest="$(python - "${page_file}" <<'PY'
+import json
+import sys
+from pathlib import Path
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+runs = payload.get("workflow_runs", [])
+print(runs[-1].get("created_at", "") if runs else "")
+PY
+            )"
+            if [ -n "${oldest}" ]; then
+              oldest_epoch="$(date -u -d "${oldest}" +%s)"
+              if [ "$((now_epoch - oldest_epoch))" -gt "$((max_age_seconds + 3600))" ]; then
+                break
+              fi
+            fi
+          done
+          python - <<'PY'
+import json
+from pathlib import Path
+pages = sorted(Path("/tmp").glob("actions-runs-page-*.json"))
+all_runs = []
+for path in pages:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    all_runs.extend(payload.get("workflow_runs", []))
+Path("/tmp/all-runs.json").write_text(
+    json.dumps({"workflow_runs": all_runs}, ensure_ascii=False),
+    encoding="utf-8",
+)
+PY
 
           for workflow in "${workflows[@]}"; do
             while IFS=$'\\t' read -r run_id created_at conclusion run_attempt; do
