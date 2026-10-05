@@ -60,4 +60,6 @@ jobs:
       - name: Run deterministic test suite
         env:
           PYTHONHASHSEED: '0'
-        run: python -m pytest -q
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=30s 300             python -m pytest -q -vv --durations=20
