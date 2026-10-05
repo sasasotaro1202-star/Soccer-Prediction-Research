@@ -105,6 +105,34 @@ jobs:
               ;;
           esac
 
+      - name: Verify staged research evidence contract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          status_path = Path("artifacts/match_state_research/match_state_status.json")
+          status = json.loads(status_path.read_text(encoding="utf-8"))
+          allowed = {"WARMUP", "SCHEMA_VERIFIED", "OOS_EVALUATED", "CALIBRATION_ROBUSTNESS_EVALUATED"}
+          if status.get("status") not in allowed:
+              raise SystemExit(f"unexpected match-state stage: {status.get('status')}")
+          if status.get("research_only") is not True:
+              raise SystemExit("research-only contract missing")
+          if status.get("production_usable") is not False:
+              raise SystemExit("research lane must remain non-production")
+          if status.get("performance_verified") is not False:
+              raise SystemExit("research lane cannot mark performance verified")
+          if status.get("promotion_candidate") is not False:
+              raise SystemExit("research lane cannot self-promote")
+          if status.get("status") == "CALIBRATION_ROBUSTNESS_EVALUATED":
+              if status.get("calibration_status") != "EVALUATED":
+                  raise SystemExit("calibration status is inconsistent")
+              if status.get("robustness_status") != "EVALUATED":
+                  raise SystemExit("robustness status is inconsistent")
+          print("match_state_staged_evidence: PASS")
+          PY
+
       - name: Verify research safety contract
         run: |
           set -euo pipefail
