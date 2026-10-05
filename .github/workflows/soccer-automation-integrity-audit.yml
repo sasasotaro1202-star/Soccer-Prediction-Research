@@ -42,6 +42,7 @@ jobs:
           import json
           import os
           import time
+          from datetime import datetime, timezone
           from pathlib import Path
           from urllib.request import Request, urlopen
 
@@ -153,7 +154,19 @@ jobs:
                   return {"status": "HOLD", "reason": "no_current_main_run"}
               latest = max(current, key=lambda r: r.get("created_at") or "")
               raw = latest.get("created_at")
-              age = time.time() - time.mktime(time.strptime(raw, "%Y-%m-%dT%H:%M:%SZ")) if raw else None
+              try:
+                  created_at = (
+                      datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                      if raw
+                      else None
+                  )
+              except (TypeError, ValueError):
+                  created_at = None
+              age = (
+                  time.time() - created_at.astimezone(timezone.utc).timestamp()
+                  if created_at is not None
+                  else None
+              )
               return {
                   "status": "OK" if age is not None and age <= max_age_seconds else "STALE",
                   "age_seconds": None if age is None else round(age),
