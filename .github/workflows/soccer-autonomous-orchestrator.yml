@@ -130,23 +130,41 @@ jobs:
               print("HOLD:active_current_main")
               raise SystemExit
 
-          completed = [
+          current_completed = [
               r for r in runs
               if r.get("status") == "completed"
-              and r.get("conclusion") == "success"
               and r.get("createdAt")
               and r.get("headSha") == main_sha
           ]
-          completed.sort(key=lambda r: r["createdAt"], reverse=True)
+          current_completed.sort(key=lambda r: r["createdAt"], reverse=True)
 
-          # Only a completed run executed against the exact current main SHA
-          # counts as cadence evidence. PR/old-main runs must not suppress
-          # catch-up dispatches for the current production branch.
-          if not completed:
-              print("DISPATCH:no_current_main_history")
+          # Successful exact-main history provides normal cadence evidence.
+          successful = [
+              r for r in current_completed
+              if r.get("conclusion") == "success"
+          ]
+          if not successful:
+              # Avoid hammering a deterministically failing lane every 30 minutes.
+              # Consecutive failures get bounded exponential backoff, capped at 24h.
+              failures = []
+              for r in current_completed:
+                  if r.get("conclusion") in {"failure", "timed_out", "cancelled"}:
+                      failures.append(r)
+                  else:
+                      break
+              if not failures:
+                  print("DISPATCH:no_current_main_history")
+                  raise SystemExit
+              latest = datetime.fromisoformat(failures[0]["createdAt"].replace("Z", "+00:00"))
+              age_seconds = now - int(latest.timestamp())
+              cooldown = min(24 * 3600, 3600 * (2 ** min(len(failures) - 1, 5)))
+              if age_seconds < cooldown:
+                  print(f"HOLD:failure_backoff:{cooldown}")
+              else:
+                  print("DISPATCH:retry_after_failure_backoff")
               raise SystemExit
 
-          latest = datetime.fromisoformat(completed[0]["createdAt"].replace("Z", "+00:00"))
+          latest = datetime.fromisoformat(successful[0]["createdAt"].replace("Z", "+00:00"))
           age = now - int(latest.timestamp())
           if age < min_gap:
               print("HOLD:recent")
