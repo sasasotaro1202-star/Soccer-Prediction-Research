@@ -54,7 +54,7 @@ def test_integrity_audit_does_not_treat_recent_failed_runs_as_healthy() -> None:
     )
     assert '"FAILED_RECENT"' in workflow
     assert '"OK_ACTIVE"' in workflow
-    assert 'status == "success"' in workflow
+    assert 'latest.get("conclusion") != "success"' in workflow
     assert "status_raw" in workflow
     assert "conclusion" in workflow
 
