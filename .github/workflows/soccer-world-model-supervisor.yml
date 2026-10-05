@@ -161,7 +161,16 @@ jobs:
           from pathlib import Path
 
           text = Path("artifacts/world_model_supervisor/decisions.json").read_text(encoding="utf-8")
-          records = [json.loads(line) for line in text.splitlines() if line.strip().startswith("{")]
+          decoder = json.JSONDecoder()
+          records = []
+          index = 0
+          while index < len(text):
+              while index < len(text) and text[index].isspace():
+                  index += 1
+              if index >= len(text):
+                  break
+              record, index = decoder.raw_decode(text, index)
+              records.append(record)
           failures = [r for r in records if "dispatch_failures" in r]
           count = failures[-1]["dispatch_failures"] if failures else 0
           if int(count) > 0:
