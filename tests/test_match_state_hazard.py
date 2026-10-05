@@ -277,3 +277,25 @@ def test_run_persists_calibration_and_robustness_state(tmp_path):
     assert status["calibration_status"] in {"EVALUATED", "PENDING"}
     assert status["robustness_status"] in {"EVALUATED", "PENDING"}
     assert (tmp_path / "artifacts" / "match_state_status.json").is_file()
+
+
+def test_scenario_score_distribution_is_single_parent_for_derived_outcomes():
+    frame = build_state_features(validate_snapshot_contract(_rows(30)))
+    model = fit_hazard_model(
+        frame,
+        as_of_cutoff=pd.Timestamp("2026-02-15T00:00:00Z"),
+        min_rows=50,
+    )
+    result = propagate_scenarios(model, frame.iloc[0].to_dict(), horizon_minutes=15, step_minutes=5)
+    dist = result["score_distribution"]
+    assert np.isclose(sum(x["probability"] for x in dist), 1.0)
+    home = sum(x["probability"] for x in dist if x["home_goals"] > x["away_goals"])
+    draw = sum(x["probability"] for x in dist if x["home_goals"] == x["away_goals"])
+    away = sum(x["probability"] for x in dist if x["home_goals"] < x["away_goals"])
+    assert np.isclose(home, result["derived_outcomes"]["home_win"])
+    assert np.isclose(draw, result["derived_outcomes"]["draw"])
+    assert np.isclose(away, result["derived_outcomes"]["away_win"])
+    btts = sum(x["probability"] for x in dist if x["home_goals"] > 0 and x["away_goals"] > 0)
+    over = sum(x["probability"] for x in dist if x["home_goals"] + x["away_goals"] >= 3)
+    assert np.isclose(btts, result["derived_outcomes"]["btts_yes"])
+    assert np.isclose(over, result["derived_outcomes"]["over_2_5"])
