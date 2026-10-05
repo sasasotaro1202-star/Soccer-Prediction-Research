@@ -13,7 +13,7 @@ def test_orchestrator_is_fail_closed_and_main_pinned():
     assert 'main_sha="$(api' in text
     assert 'gh workflow run "${workflow}" --repo "${GH_REPO}" --ref main' in text
     assert 'r.get("headSha") == main_sha' in text
-    assert 'r.get("conclusion") == "success"' in text
+    assert 'latest_conclusion == "success"' in text
     assert "DISPATCH:no_current_main_history" in text
     assert '"production_change_allowed": False' in text
     assert '"frozen_holdout_access_allowed": False' in text
@@ -184,3 +184,21 @@ def test_automation_integrity_audit_is_required_and_fail_closed():
 def test_control_plane_watchdog_does_not_mask_errors_with_or_true():
     text = Path(".github/workflows/soccer-control-plane-watchdog.yml").read_text(encoding="utf-8")
     assert "|| true" not in text
+
+def test_orchestrator_never_masks_newest_failure_with_older_success():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    latest_pos = text.index("latest_completed = current_completed[0]")
+    conclusion_pos = text.index("latest_conclusion = latest_completed.get")
+    success_pos = text.index('if latest_conclusion == "success":')
+    failure_pos = text.index('if latest_conclusion in {"failure", "timed_out", "cancelled"}:')
+    assert latest_pos < conclusion_pos < success_pos < failure_pos
+    assert "successful = [" not in text
+    assert "HOLD:unknown_terminal:" in text
+
+def test_orchestrator_can_self_heal_disabled_lanes_with_bounded_retries():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "workflow_activation_state" in text
+    assert "ensure_workflow_active" in text
+    assert 'gh workflow enable "${workflow}" --repo "${GH_REPO}"' in text
+    assert "workflow_inactive_unrecoverable" in text
+    assert text.count("for attempt in 1 2 3;") >= 2
