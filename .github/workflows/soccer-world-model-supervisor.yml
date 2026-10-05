@@ -1,16 +1,11 @@
 name: Soccer World Model Supervisor
 
 on:
+  # The 30-minute autonomous orchestrator already reconciles short-latency
+  # research lanes; this independent 2-hour supervisor is a second-line safety net.
   schedule:
     - cron: "23 */2 * * *"
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Soccer Prospective In-Play PIT Capture
-      - Soccer Prospective In-Play Maturity
-      - Soccer Dynamic Simulator Research
-      - Soccer Research Robust
-    types: [completed]
 
 permissions:
   actions: write
