@@ -82,7 +82,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          main_sha="$(gh api "repos/\${GH_REPO}/git/ref/heads/main" --jq '.object.sha')"
+          main_sha="$(gh api "repos/${GH_REPO}/git/ref/heads/main" --jq '.object.sha')"
           now_epoch="$(date +%s)"
           min_age_seconds=300
           max_age_seconds=1800
@@ -111,45 +111,45 @@ jobs:
             "Soccer Automation Integrity Audit"
           )
 
-          all_runs="$(gh api "repos/\${GH_REPO}/actions/runs?per_page=100")"
+          all_runs="$(gh api "repos/${GH_REPO}/actions/runs?per_page=100")"
 
-          for workflow in "\${workflows[@]}"; do
+          for workflow in "${workflows[@]}"; do
             while IFS=$'\\t' read -r run_id created_at conclusion run_attempt; do
-              [ -n "\${run_id}" ] || continue
+              [ -n "${run_id}" ] || continue
 
-              created_epoch="$(date -u -d "\${created_at}" +%s)"
+              created_epoch="$(date -u -d "${created_at}" +%s)"
               age=$((now_epoch - created_epoch))
-              if [ "\${age}" -lt "\${min_age_seconds}" ] || [ "\${age}" -gt "\${max_age_seconds}" ]; then
+              if [ "${age}" -lt "${min_age_seconds}" ] || [ "${age}" -gt "${max_age_seconds}" ]; then
                 continue
               fi
 
-              if [ "\${rerun_count}" -ge "\${rerun_budget}" ]; then
+              if [ "${rerun_count}" -ge "${rerun_budget}" ]; then
                 echo "Recovery budget exhausted; remaining failed runs remain explicit."
                 failures=$((failures + 1))
                 break
               fi
 
-              echo "Scheduled recovery candidate: workflow=\${workflow} run=\${run_id} age_seconds=\${age}"
+              echo "Scheduled recovery candidate: workflow=${workflow} run=${run_id} age_seconds=${age}"
 
               recovered=false
               for attempt in 1 2 3; do
-                if gh run rerun "\${run_id}" --failed --repo "\${GH_REPO}"; then
-                  echo "Scheduled recovery requested: \${workflow} run=\${run_id}"
+                if gh run rerun "${run_id}" --failed --repo "${GH_REPO}"; then
+                  echo "Scheduled recovery requested: ${workflow} run=${run_id}"
                   recovered=true
                   rerun_count=$((rerun_count + 1))
                   break
                 fi
-                if [ "\${attempt}" -lt 3 ]; then
+                if [ "${attempt}" -lt 3 ]; then
                   sleep $((attempt * 5))
                 fi
               done
 
-              if [ "\${recovered}" != true ]; then
-                echo "Scheduled recovery failed after bounded retries: \${workflow} run=\${run_id}" >&2
+              if [ "${recovered}" != true ]; then
+                echo "Scheduled recovery failed after bounded retries: ${workflow} run=${run_id}" >&2
                 failures=$((failures + 1))
               fi
             done < <(
-              python - "\${all_runs}" "\${main_sha}" "\${workflow}" <<'PY'
+              python - "${all_runs}" "${main_sha}" "${workflow}" <<'PY'
           import json
           import sys
           from datetime import datetime, timezone
@@ -182,9 +182,9 @@ jobs:
             )
           done
 
-          if [ "\${failures}" -gt 0 ]; then
-            echo "Scheduled failure recovery completed with \${failures} unresolved recovery errors." >&2
+          if [ "${failures}" -gt 0 ]; then
+            echo "Scheduled failure recovery completed with ${failures} unresolved recovery errors." >&2
             exit 1
           fi
 
-          echo "Scheduled failure recovery catch-up completed with \${rerun_count} rerun request(s)."
+          echo "Scheduled failure recovery catch-up completed with ${rerun_count} rerun request(s)."
