@@ -218,7 +218,7 @@ The autonomous merge controller separately allowlists the orchestrator workflow 
 
 ## Current live-state reconciliation — 2026-10-05
 
-- Live GitHub `main` was re-read on 2026-10-05 and remains the authoritative branch. Current HEAD is `a7eaa02640ed99bca6a2352d89c5f39c06c8cd65` at the time of this reconciliation.
+- Live GitHub `main` was re-read on 2026-10-05 and remains the authoritative branch. The current HEAD is intentionally not hardcoded in this historical reconciliation; every new run must read the live `main` ref again.
 - Current main has no verifiable `models/current/production_model.json` or `models/current/production_model.pkl`, and no committed current `model_registry.json`, `adoption_decision.json`, locked OOS metrics, calibration gate or production provenance artifact. Therefore Champion/Production performance remains UNKNOWN/UNVERIFIABLE, not zero and not a claimed regression.
 - The latest main research-cycle artifact state records `BLOCKED`, with `oos_claimed=false`; the recorded blockers are preflight test failure and data-audit failure. These historical artifacts are preserved and are not rewritten as part of this reconciliation.
 - PR #215 (`fix/research-engine-sha-helper-20261005`) is a direct runtime repair for the missing deterministic `_sha256` helper used by source-registry/provenance code. Its exact-head `Soccer CI` run was still `in_progress` during reconciliation, so it is not treated as VERIFIED or merged here.
