@@ -327,3 +327,13 @@ This remains research-only. Prospective observations are evidence-generation dat
 - Monthly mature partitions feed the dynamic hazard runner directly. The runner performs match-level expanding chronological OOS, prequential temperature calibration using prior folds only, scenario-derived match-level 1X2 evaluation, joint score-distribution output, and bounded feature-family robustness.
 - The autonomous orchestrator now reconciles prospective capture, maturity, dynamic simulator and World Model supervisor lanes. The supervisor separately catches stale current-main World Model lanes, while Action Failure Recovery provides bounded one-time recovery.
 - The new continuous data path has not established Production performance superiority. No Champion/Production adoption claim is authorized until incumbent comparison, case-level diagnostics, robustness, frozen holdout and release gates pass with zero PIT violations.
+
+
+## Current live-state reconciliation — 2026-10-06 (control-plane event isolation)
+
+- The live GitHub main HEAD at this reconciliation is 922b8c49864e68799e099007a8d3719af6e39fa4; later commits supersede this exact SHA.
+- Autonomous GitHub Controller and Action Failure Recovery were converted away from normal workflow_run completion fan-out. They now use bounded periodic reconciliation, while safe-hardening pull requests remain explicitly scoped.
+- Soccer 9H Recovery Controller, Soccer World Model Supervisor, and Soccer Matchday Intelligence Refresh now use independent recurring schedules instead of workflow_run completion triggers. The central orchestrator and dedicated queue watchdogs remain the continuity paths.
+- Soccer Experience Ledger intentionally retains its workflow_run trigger for Matchday artifact lineage; this is data-consumption lineage rather than failure-recovery control and the ledger has its own scheduled catch-up path.
+- The Automation Integrity Audit and regression tests enforce these event-isolation invariants and the 10-minute Failure Recovery cadence. Historical reconciliation notes above remain preserved as historical evidence and are not rewritten.
+- These changes are control-plane hardening only. They do not establish new prediction performance evidence, change OOS/WFO results, alter frozen holdout evidence, or authorize Production adoption.
