@@ -32,8 +32,10 @@ permissions:
   actions: write
 
 concurrency:
-  group: action-failure-recovery
-  cancel-in-progress: false
+  # Workflow-run failures for different lanes must not cancel each other.
+  # Scheduled catch-up uses a shared empty suffix and therefore remains serialized.
+  group: action-failure-recovery-${{ github.event.workflow_run.name }}
+  cancel-in-progress: true
 
 env:
   GH_REPO: ${{ github.repository }}
