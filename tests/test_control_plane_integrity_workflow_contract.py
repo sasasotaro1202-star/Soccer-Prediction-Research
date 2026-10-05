@@ -171,3 +171,11 @@ def test_soccer_ci_has_a_bounded_diagnostic_pytest_execution() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "timeout --signal=TERM --kill-after=30s 300" in workflow
     assert "python -m pytest -q -vv --durations=20" in workflow
+
+
+def test_world_model_supervisor_parses_multi_document_decision_evidence() -> None:
+    workflow = Path(".github/workflows/soccer-world-model-supervisor.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "JSONDecoder" in workflow
+    assert "raw_decode" in workflow
