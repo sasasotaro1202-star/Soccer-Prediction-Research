@@ -34,6 +34,9 @@ jobs:
           now_epoch="$(date +%s)"
           main_sha="$(api "repos/${GH_REPO}/git/ref/heads/main" --jq '.object.sha')"
           export MAIN_SHA="${main_sha}"
+          dispatch_budget=6
+          dispatched_count=0
+          max_active_runs=10
           report="autonomous-orchestrator-report.json"
 
           python - <<'PY' > "$report"
@@ -49,6 +52,11 @@ jobs:
           }
           print(json.dumps(payload, ensure_ascii=False, indent=2))
           PY
+
+          active_run_count() {
+            gh run list --repo "${GH_REPO}" --limit 100 --json status \
+              --jq '[.[] | select(.status == "queued" or .status == "in_progress" or .status == "pending" or .status == "waiting" or .status == "requested")] | length'
+          }
 
           update_report() {
             python - "$report" "$1" "$2" <<'PY'
@@ -123,6 +131,15 @@ jobs:
 
             case "${decision}" in
               DISPATCH:*)
+                if [ "${dispatched_count}" -ge "${dispatch_budget}" ]; then
+                  update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"dispatch_budget_exhausted"},ensure_ascii=False))' "${workflow}")"
+                  return
+                fi
+                active_count="$(active_run_count)"
+                if [ "${active_count}" -ge "${max_active_runs}" ]; then
+                  update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"active_run_cap","active_run_count":int(sys.argv[2])},ensure_ascii=False))' "${workflow}" "${active_count}")"
+                  return
+                fi
                 case "${workflow}" in
                   pit-replay-audit.yml)
                     # This lane has required workflow_dispatch inputs; use only its
@@ -135,7 +152,8 @@ jobs:
                     gh workflow run "${workflow}" --repo "${GH_REPO}" --ref main
                     ;;
                 esac
-                update_report dispatched "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":sys.argv[2]},ensure_ascii=False))' "${workflow}" "${decision}")"
+                dispatched_count=$((dispatched_count + 1))
+                update_report dispatched "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":sys.argv[2],"dispatch_sequence":int(sys.argv[3])},ensure_ascii=False))' "${workflow}" "${decision}" "${dispatched_count}")"
                 ;;
               *)
                 update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":sys.argv[2]},ensure_ascii=False))' "${workflow}" "${decision}")"
@@ -179,6 +197,8 @@ jobs:
           print(f"- main_sha: {s['main_sha']}")
           print(f"- dispatched: {len(s['dispatched'])}")
           print(f"- held: {len(s['held'])}")
+          print("- dispatch_budget: 6")
+          print("- max_active_runs: 10")
           print("- production_change_allowed: false")
           print("- frozen_holdout_access_allowed: false")
           print("- performance_claim_allowed: false")
