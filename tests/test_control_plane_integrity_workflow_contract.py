@@ -199,3 +199,12 @@ def test_failure_recovery_passes_actions_history_through_a_file_not_argv() -> No
     assert 'all_runs="$(gh api "repos/${GH_REPO}/actions/runs?per_page=100")"' not in workflow
     assert 'gh api "repos/${GH_REPO}/actions/runs?per_page=100" > /tmp/all-runs.json' in workflow
     assert 'Path(sys.argv[1]).read_text()' in workflow
+
+
+def test_controller_rebases_safe_hardening_branches_after_main_moves() -> None:
+    workflow = Path(".github/workflows/autonomous-github-controller.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "gh pr update-branch" in workflow
+    assert "--rebase" in workflow
+    assert "HOLD" in workflow
