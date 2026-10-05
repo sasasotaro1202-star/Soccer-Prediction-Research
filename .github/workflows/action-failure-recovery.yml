@@ -21,8 +21,9 @@ permissions:
   actions: write
 
 concurrency:
-  # One bounded recovery controller; it never recursively retries an already retried run.
-  group: action-failure-recovery-soccer
+  # Isolate recovery by source workflow so a failure in one lane cannot cancel
+  # recovery for a different lane. Each workflow_run is still retried only once.
+  group: action-failure-recovery-${{ github.event.workflow_run.name }}
   cancel-in-progress: true
 
 jobs:
