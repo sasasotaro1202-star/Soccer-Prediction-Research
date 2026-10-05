@@ -68,6 +68,7 @@ def test_integrity_audit_checks_world_model_liveness_windows() -> None:
         '"soccer-prospective-inplay-maturity.yml": 90 * 60',
         '"soccer-world-model-supervisor.yml": 5 * 3600',
         '"soccer-dynamic-simulator-research.yml": 12 * 3600',
+        '"soccer-match-state-research.yml": 12 * 3600',
     )
     for marker in expected_windows:
         assert marker in workflow
@@ -86,3 +87,18 @@ def test_integrity_audit_covers_recovery_for_each_world_model_lane() -> None:
     )
     for marker in recovery_markers:
         assert marker in workflow
+
+
+def test_action_failure_recovery_lists_all_world_model_lanes() -> None:
+    workflow = Path(".github/workflows/action-failure-recovery.yml").read_text(
+        encoding="utf-8"
+    )
+    required_lanes = (
+        "Soccer Prospective In-Play PIT Capture",
+        "Soccer Prospective In-Play Maturity",
+        "Soccer World Model Supervisor",
+        "Soccer Dynamic Simulator Research",
+        "Soccer Match State Research",
+    )
+    for lane in required_lanes:
+        assert lane in workflow
