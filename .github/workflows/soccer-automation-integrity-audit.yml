@@ -254,6 +254,7 @@ jobs:
               "prospective_maturity": recent_current_main("soccer-prospective-inplay-maturity.yml", 90 * 60),
               "world_model_supervisor": recent_current_main("soccer-world-model-supervisor.yml", 5 * 3600),
               "dynamic_simulator": recent_current_main("soccer-dynamic-simulator-research.yml", 12 * 3600),
+              "match_state": recent_current_main("soccer-match-state-research.yml", 12 * 3600),
           }
           for name, state in liveness.items():
               if state.get("status") not in {"OK", "OK_ACTIVE"}:
