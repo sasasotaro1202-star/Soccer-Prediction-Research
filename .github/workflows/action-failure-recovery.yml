@@ -11,10 +11,10 @@ permissions:
   actions: write
 
 concurrency:
-  # Failure events can arrive in bursts. Coalesce each source workflow's recovery
-  # and keep scheduled catch-up in one shared lane.
-  group: action-failure-recovery-${{ github.event.workflow_run.name || 'scheduled' }}
-  cancel-in-progress: true
+  # One recovery scan runs to completion. A later tick may replace only
+  # the pending request; it must never interrupt an active recovery scan.
+  group: action-failure-recovery
+  cancel-in-progress: false
 
 env:
   GH_REPO: ${{ github.repository }}
