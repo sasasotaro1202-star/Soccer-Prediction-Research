@@ -110,7 +110,7 @@ jobs:
           )
 
           for workflow in "${workflows[@]}"; do
-            if ! candidates="$(gh run list --repo "${GH_REPO}" --workflow "${workflow}" --limit 20 --json databaseId,createdAt,status,conclusion,headSha --jq '.[] | select(.status == "completed" and (.conclusion == "failure" or .conclusion == "timed_out")) | [.databaseId, .createdAt, .headSha] | @tsv')"; then
+            if ! candidates="$(gh run list --repo "${GH_REPO}" --workflow "${workflow}" --limit 100 --json databaseId,createdAt,status,conclusion,headSha --jq '.[] | select(.status == "completed" and (.conclusion == "failure" or .conclusion == "timed_out")) | [.databaseId, .createdAt, .headSha] | @tsv')"; then
               echo "Recovery query failed for workflow=${workflow}; preserving failure signal." >&2
               failures=$((failures + 1))
               continue
