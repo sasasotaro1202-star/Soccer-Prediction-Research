@@ -231,3 +231,15 @@ def test_ci_keeps_deterministic_suite_bounded_but_allows_slow_regressions():
     assert "timeout-minutes: 30" in text
     assert "timeout --signal=TERM --kill-after=60s 900" in text
     assert "python -m pytest -q -vv --durations=20" in text
+
+
+def test_heartbeat_can_reenable_core_control_plane_without_masking_errors():
+    text = Path(".github/workflows/soccer-automation-heartbeat.yml").read_text(encoding="utf-8")
+    assert "actions: write" in text
+    assert "reenable_core_workflow()" in text
+    assert "actions/workflows/${workflow}" in text
+    assert "gh workflow enable \"${workflow}\" --repo \"${GH_REPO}\"" in text
+    assert "for attempt in 1 2 3; do" in text
+    assert "|| true" not in text
+    assert "production_change_allowed" in text
+    assert "frozen_holdout_access_allowed" in text
