@@ -241,3 +241,18 @@ def test_failure_recovery_declares_top_level_schedule_trigger() -> None:
         encoding="utf-8"
     )
     assert '\n  schedule:\n    - cron: "*/15 * * * *"\n' in workflow
+
+
+def test_failure_recovery_has_real_scheduled_trigger_not_just_a_job_name() -> None:
+    workflow = Path(".github/workflows/action-failure-recovery.yml").read_text(
+        encoding="utf-8"
+    )
+    assert 'on:\n  schedule:\n    - cron: "*/15 * * * *"\n  workflow_run:' in workflow
+
+
+def test_maturity_pr_validation_checks_exact_pr_head() -> None:
+    workflow = Path(".github/workflows/soccer-prospective-inplay-maturity.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "github.event_name == 'pull_request'" in workflow
+    assert "ref: ${{ github.sha }}" in workflow
