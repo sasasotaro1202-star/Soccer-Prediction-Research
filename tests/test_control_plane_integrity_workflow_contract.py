@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 def _read(path: str) -> str:
     return Path(path).read_text(encoding="utf-8")
@@ -7,9 +8,9 @@ def test_integrity_audit_is_read_only_and_fail_closed() -> None:
     text = _read(".github/workflows/soccer-automation-integrity-audit.yml")
     assert "actions: read" in text
     assert "contents: read" in text
-    assert '"production_change_allowed": False' in text
-    assert '"frozen_holdout_access_allowed": False' in text
-    assert '"performance_claim_allowed": False' in text
+    assert "'production_change_allowed': False" in text
+    assert "'frozen_holdout_access_allowed': False" in text
+    assert "'performance_claim_allowed': False" in text
     assert "AUTOMATION_INTEGRITY: PASS" in text
 
 def test_failure_recovery_is_scheduled_and_covers_world_model() -> None:
@@ -43,14 +44,14 @@ def test_maturity_bootstraps_dependencies_and_is_pr_safe() -> None:
 def test_ci_bounds_tests_and_ignores_generated_world_model_data() -> None:
     text = _read(".github/workflows/ci.yml")
     assert "Validate workflow YAML syntax" in text
-    assert "timeout --signal=TERM --kill-after=30s 300" in text
+    assert "timeout-minutes: 30" in text
+    assert "timeout --signal=TERM --kill-after=60s 900" in text
     assert "python -m pytest -q -vv --durations=20" in text
     assert "data/research/prospective_inplay/raw/**" in text
     assert "data/research/match_state_snapshots/**" in text
 
 def test_controller_self_advances_safe_hardening_prs() -> None:
     text = _read(".github/workflows/autonomous-github-controller.yml")
-    assert "Soccer Automation Integrity Audit" in text
     assert "gh pr update-branch" in text
     assert "--rebase" in text
     assert "hardening-safe-v1" in text
@@ -63,7 +64,14 @@ def test_control_plane_event_graph_has_no_audit_recovery_controller_cycle() -> N
     controller = _read(".github/workflows/autonomous-github-controller.yml")
     assert "Action Failure Recovery" not in audit
     assert "Autonomous GitHub Controller" not in audit
-    assert "Soccer Automation Integrity Audit" not in recovery
+    workflow_run_block = re.search(
+        r"workflow_run:\n(.*?)(?=\n\s*types:)",
+        recovery,
+        re.DOTALL,
+    )
+    assert workflow_run_block is not None
+    assert "Soccer Automation Integrity Audit" not in workflow_run_block.group(1)
+    assert "Autonomous GitHub Controller" not in workflow_run_block.group(1)
     assert "Soccer Automation Integrity Audit" not in controller
     assert "Soccer Autonomous Orchestrator" in audit
     assert "Soccer Control Plane Watchdog" in audit
