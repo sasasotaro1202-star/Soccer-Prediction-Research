@@ -89,12 +89,18 @@ jobs:
               r for r in payload.get("workflow_runs", [])
               if r.get("head_sha") == main_sha and r.get("status") in prestart
           ]
+          queued_grace_min = 180
 
-          # Do not repeatedly cancel/requeue a queued control-plane run. A queued
-          # run is evidence that GitHub accepted the work; requeueing while the
-          # hosted runner pool is busy only creates additional queue churn.
+          # A queued/pending run is already accepted by GitHub. Re-dispatching it
+          # while hosted runners are busy creates queue churn and can starve the
+          # very control-plane workflow intended to recover the system.
           if current_prestart:
-              print("QUEUED_WAIT")
+              oldest = min(current_prestart, key=ts)
+              age_min = (now - ts(oldest)).total_seconds() / 60.0
+              if age_min < queued_grace_min:
+                  print("QUEUED_WAIT")
+                  raise SystemExit(0)
+              print("QUEUED_STALE")
               raise SystemExit(0)
 
           if current_running:
@@ -154,6 +160,24 @@ jobs:
               ;;
             QUEUED_WAIT)
               echo "WATCHDOG: current-main orchestrator is queued; preserve the accepted run and avoid requeue churn."
+              ;;
+            QUEUED_STALE)
+              echo "WATCHDOG: current-main orchestrator remained pre-started beyond the 180-minute queue grace; reconciling it once."
+              while IFS= read -r run_id; do
+                [ -n "${run_id}" ] || continue
+                cancel_run "${run_id}"
+              done < <(
+                python - /tmp/orchestrator-runs.json "${MAIN_SHA}" <<'PY'
+          import json, sys
+          from pathlib import Path
+          payload=json.loads(Path(sys.argv[1]).read_text())
+          main_sha=sys.argv[2]
+          for r in payload.get("workflow_runs", []):
+              if r.get("head_sha")==main_sha and r.get("status") in {"queued","pending","waiting","requested"}:
+                  print(r.get("id"))
+          PY
+              )
+              dispatch_orchestrator
               ;;
             DISPATCH)
               dispatch_orchestrator
