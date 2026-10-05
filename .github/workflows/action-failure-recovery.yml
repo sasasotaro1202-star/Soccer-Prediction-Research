@@ -154,10 +154,10 @@ jobs:
           import sys
           from datetime import datetime, timezone
 
-          payload = json.loads(sys.argv[1])
+          from pathlib import Path
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
           main_sha = sys.argv[2]
           workflow_name = sys.argv[3]
-          now = datetime.now(timezone.utc)
           for run in payload.get("workflow_runs", []):
               if run.get("name") != workflow_name:
                   continue
