@@ -148,3 +148,13 @@ def test_failure_recovery_has_scheduled_catchup_for_missed_workflow_events() -> 
     assert "gh run list" in workflow
     assert "run_attempt" in workflow
     assert "gh run rerun" in workflow
+
+
+def test_failure_recovery_has_no_escaped_github_expressions() -> None:
+    workflow = Path(".github/workflows/action-failure-recovery.yml").read_text(
+        encoding="utf-8"
+    )
+    assert r"\\${{" not in workflow
+    assert "${{ github.event_name == 'schedule' }}" in workflow
+    assert "${{ github.token }}" in workflow
+    assert "${{ github.repository }}" in workflow
