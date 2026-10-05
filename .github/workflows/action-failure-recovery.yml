@@ -1,6 +1,8 @@
 name: Action Failure Recovery
 
 on:
+  schedule:
+    - cron: "*/15 * * * *"
   workflow_run:
     workflows:
       - Soccer CI
