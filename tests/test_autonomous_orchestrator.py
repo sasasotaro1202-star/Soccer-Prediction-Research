@@ -243,3 +243,9 @@ def test_heartbeat_can_reenable_core_control_plane_without_masking_errors():
     assert "|| true" not in text
     assert "production_change_allowed" in text
     assert "frozen_holdout_access_allowed" in text
+
+
+def test_autonomous_controller_allowlists_heartbeat_as_safe_control_plane():
+    text = Path(".github/workflows/autonomous-github-controller.yml").read_text(encoding="utf-8")
+    assert ".github/workflows/soccer-automation-heartbeat.yml" in text
+    assert "production/model/data/artifact mutation paths" not in text
