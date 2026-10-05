@@ -263,3 +263,12 @@ def test_failure_recovery_catchup_window_survives_extended_event_delivery_delays
         encoding="utf-8"
     )
     assert "max_age_seconds=21600" in workflow
+
+
+def test_failure_recovery_paginates_actions_history_for_extended_window() -> None:
+    workflow = Path(".github/workflows/action-failure-recovery.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "per_page=100&page=" in workflow
+    assert "oldest" in workflow
+    assert "max_age_seconds" in workflow
