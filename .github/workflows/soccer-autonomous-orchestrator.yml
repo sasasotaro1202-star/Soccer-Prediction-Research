@@ -68,9 +68,40 @@ jobs:
           PY
           }
 
+          workflow_activation_state() {
+            local workflow="$1"
+            gh api "repos/${GH_REPO}/actions/workflows/${workflow}" --jq '.state'
+          }
+
+          ensure_workflow_active() {
+            local workflow="$1"
+            local state
+
+            if ! state="$(workflow_activation_state "${workflow}")"; then
+              return 1
+            fi
+            if [ "${state}" = "active" ]; then
+              return 0
+            fi
+
+            echo "Workflow ${workflow} is ${state}; attempting bounded re-enable." >&2
+            for attempt in 1 2 3; do
+              if gh workflow enable "${workflow}" --repo "${GH_REPO}"; then
+                if state="$(workflow_activation_state "${workflow}")" && [ "${state}" = "active" ]; then
+                  return 0
+                fi
+              fi
+              if [ "${attempt}" -lt 3 ]; then
+                sleep $((attempt * 5))
+              fi
+            done
+            return 1
+          }
+
           workflow_state() {
             local workflow="$1"
-            gh run list --repo "${GH_REPO}" --workflow "${workflow}" --limit 50               --json status,conclusion,createdAt,headSha,headBranch,databaseId
+            gh run list --repo "${GH_REPO}" --workflow "${workflow}" --limit 50 \
+              --json status,conclusion,createdAt,headSha,headBranch,databaseId
           }
 
           dispatch_workflow() {
@@ -102,6 +133,11 @@ jobs:
             local workflow="$1"
             local cadence_minutes="$2"
             local min_gap_minutes="$3"
+
+            if ! ensure_workflow_active "${workflow}"; then
+              update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"workflow_inactive_unrecoverable"},ensure_ascii=False))' "${workflow}")"
+              return
+            fi
 
             local runs
             if ! runs="$(workflow_state "${workflow}")"; then
@@ -138,12 +174,27 @@ jobs:
           ]
           current_completed.sort(key=lambda r: r["createdAt"], reverse=True)
 
-          # Successful exact-main history provides normal cadence evidence.
-          successful = [
-              r for r in current_completed
-              if r.get("conclusion") == "success"
-          ]
-          if not successful:
+          latest_completed = current_completed[0] if current_completed else None
+          if latest_completed is None:
+              print("DISPATCH:no_current_main_history")
+              raise SystemExit
+
+          # Never allow an older success to mask a newer non-success.
+          latest_conclusion = latest_completed.get("conclusion")
+          if latest_conclusion == "success":
+              latest = datetime.fromisoformat(
+                  latest_completed["createdAt"].replace("Z", "+00:00")
+              )
+              age = now - int(latest.timestamp())
+              if age < min_gap:
+                  print("HOLD:recent")
+              elif age >= cadence:
+                  print("DISPATCH:stale")
+              else:
+                  print("HOLD:within_cadence")
+              raise SystemExit
+
+          if latest_conclusion in {"failure", "timed_out", "cancelled"}:
               # Avoid hammering a deterministically failing lane every 30 minutes.
               # Consecutive failures get bounded exponential backoff, capped at 24h.
               failures = []
@@ -152,10 +203,9 @@ jobs:
                       failures.append(r)
                   else:
                       break
-              if not failures:
-                  print("DISPATCH:no_current_main_history")
-                  raise SystemExit
-              latest = datetime.fromisoformat(failures[0]["createdAt"].replace("Z", "+00:00"))
+              latest = datetime.fromisoformat(
+                  failures[0]["createdAt"].replace("Z", "+00:00")
+              )
               age_seconds = now - int(latest.timestamp())
               cooldown = min(24 * 3600, 3600 * (2 ** min(len(failures) - 1, 5)))
               if age_seconds < cooldown:
@@ -164,14 +214,10 @@ jobs:
                   print("DISPATCH:retry_after_failure_backoff")
               raise SystemExit
 
-          latest = datetime.fromisoformat(successful[0]["createdAt"].replace("Z", "+00:00"))
-          age = now - int(latest.timestamp())
-          if age < min_gap:
-              print("HOLD:recent")
-          elif age >= cadence:
-              print("DISPATCH:stale")
-          else:
-              print("HOLD:within_cadence")
+          # Unknown/ambiguous terminal states fail closed instead of treating
+          # any older success as cadence evidence.
+          print(f"HOLD:unknown_terminal:{latest_conclusion or 'missing'}")
+          raise SystemExit
           PY
             )"
 
