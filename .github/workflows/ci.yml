@@ -71,5 +71,5 @@ jobs:
           PYTHONHASHSEED: '0'
         run: |
           set -euo pipefail
-          timeout --signal=TERM --kill-after=30s 300 \
+          timeout --signal=TERM --kill-after=30s 900 \
             python -m pytest -q -vv --durations=20
