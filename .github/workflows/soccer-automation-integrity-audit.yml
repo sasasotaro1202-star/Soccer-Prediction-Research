@@ -1,0 +1,199 @@
+name: Soccer Automation Integrity Audit
+
+on:
+  schedule:
+    - cron: "29 */12 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: soccer-automation-integrity-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Audit continuous control-plane integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      GH_API: ${{ github.api_url }}
+    steps:
+      - name: Verify control-plane contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CURL_ARGS=(--connect-timeout 20 --max-time 90 --retry 4 --retry-delay 2 --retry-all-errors -fsSL)
+          MAIN_SHA="$(curl "${CURL_ARGS[@]}" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${GH_API}/repos/${GH_REPO}/git/ref/heads/main" |
+            python -c 'import json,sys; print(json.load(sys.stdin)["object"]["sha"])')"
+          export MAIN_SHA
+
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import time
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          repo = os.environ["GH_REPO"]
+          token = os.environ["GH_TOKEN"]
+          api = os.environ["GH_API"]
+          main_sha = os.environ["MAIN_SHA"]
+
+          required_files = {
+              "docs/PROJECT_INSTRUCTIONS.md": [
+                  "future generalization",
+                  "source_available_at",
+                  "Soccer Autonomous Orchestrator",
+                  "Soccer Control Plane Watchdog",
+                  "Soccer Automation Heartbeat",
+                  "Soccer Automation Integrity Audit",
+              ],
+              "docs/PROJECT_SOURCE.md": [
+                  "Current live-state reconciliation",
+                  "No new OOS/WFO",
+              ],
+              ".github/workflows/soccer-autonomous-orchestrator.yml": [
+                  'cron: "*/30 * * * *"',
+                  "git/ref/heads/main",
+                  "dispatch_budget=6",
+                  '"production_change_allowed": False',
+                  '"performance_claim_allowed": False',
+                  '"frozen_holdout_access_allowed": False',
+              ],
+              ".github/workflows/soccer-control-plane-watchdog.yml": [
+                  'cron: "*/10 * * * *"',
+                  "RESTART",
+                  "DISPATCH",
+                  "max-time 90",
+                  '"performance_claim_allowed": False',
+              ],
+              ".github/workflows/action-failure-recovery.yml": [
+                  "Soccer Autonomous Orchestrator",
+                  "Soccer Control Plane Watchdog",
+                  "Soccer Automation Heartbeat",
+                  "Soccer Automation Integrity Audit",
+                  "run_attempt == 1",
+              ],
+              ".github/workflows/autonomous-github-controller.yml": [
+                  "cancel-in-progress: true",
+                  "soccer-control-plane-watchdog.yml",
+                  "Research-engine/data-pipeline/feature/model/calibration/target/controller changes are not in the auto-merge allowlist.",
+              ],
+              ".github/workflows/soccer-automation-heartbeat.yml": [
+                  'cron: "17 4 * * 0"',
+                  "contents: write",
+                  "chore: automation heartbeat",
+                  "production_change_allowed",
+                  "frozen_holdout_access_allowed",
+              ],
+              ".github/workflows/soccer-automation-integrity-audit.yml": [
+                  'cron: "29 */12 * * *"',
+                  "CONTROL-PLANE INTEGRITY AUDIT HOLD/FAIL",
+              ],
+              ".github/workflows/ci.yml": [".github/automation/**"],
+              ".github/workflows/legacy-bridge-check.yml": [".github/automation/**"],
+          }
+
+          failures = []
+          files_checked = []
+
+          def get_json(url: str):
+              req = Request(url, headers={
+                  "Authorization": f"Bearer {token}",
+                  "Accept": "application/vnd.github+json",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              })
+              with urlopen(req, timeout=60) as response:
+                  return json.load(response)
+
+          for path, markers in required_files.items():
+              data = get_json(f"{api}/repos/{repo}/contents/{path}?ref=main")
+              content = base64.b64decode(data["content"]).decode("utf-8")
+              files_checked.append(path)
+              for marker in markers:
+                  if marker not in content:
+                      failures.append({"path": path, "reason": "missing_marker", "marker": marker})
+
+          workflows = [
+              "soccer-autonomous-orchestrator.yml",
+              "soccer-control-plane-watchdog.yml",
+              "soccer-automation-heartbeat.yml",
+              "soccer-automation-integrity-audit.yml",
+          ]
+          workflow_state = {}
+          for workflow_file in workflows:
+              wf = get_json(f"{api}/repos/{repo}/actions/workflows/{workflow_file}")
+              workflow_state[workflow_file] = wf.get("state")
+              if wf.get("state") != "active":
+                  failures.append({"path": workflow_file, "reason": "workflow_not_active", "state": wf.get("state")})
+
+          def recent_current_main(workflow_file: str, max_age_seconds: int):
+              runs = get_json(f"{api}/repos/{repo}/actions/workflows/{workflow_file}/runs?per_page=20").get("workflow_runs", [])
+              current = [r for r in runs if r.get("head_sha") == main_sha]
+              if not current:
+                  return {"status": "HOLD", "reason": "no_current_main_run"}
+              latest = max(current, key=lambda r: r.get("created_at") or "")
+              raw = latest.get("created_at")
+              age = time.time() - time.mktime(time.strptime(raw, "%Y-%m-%dT%H:%M:%SZ")) if raw else None
+              return {
+                  "status": "OK" if age is not None and age <= max_age_seconds else "STALE",
+                  "age_seconds": None if age is None else round(age),
+                  "run_id": latest.get("id"),
+                  "status_raw": latest.get("status"),
+                  "conclusion": latest.get("conclusion"),
+              }
+
+          liveness = {
+              "orchestrator": recent_current_main("soccer-autonomous-orchestrator.yml", 2 * 3600),
+              "watchdog": recent_current_main("soccer-control-plane-watchdog.yml", 60 * 60),
+          }
+          for name, state in liveness.items():
+              if state.get("status") != "OK":
+                  failures.append({"path": name, "reason": "stale_liveness", "evidence": state})
+
+          heartbeat = get_json(f"{api}/repos/{repo}/contents/.github/automation/heartbeat.json?ref=main")
+          heartbeat_payload = json.loads(base64.b64decode(heartbeat["content"]).decode("utf-8"))
+          heartbeat_status = heartbeat_payload.get("status")
+          if heartbeat_status not in {"BOOTSTRAPPED", "ACTIVE"}:
+              failures.append({"path": ".github/automation/heartbeat.json", "reason": "unexpected_status", "status": heartbeat_status})
+
+          report = {
+              "status": "PASS" if not failures else "HOLD",
+              "main_sha": main_sha,
+              "files_checked": files_checked,
+              "workflow_state": workflow_state,
+              "liveness": liveness,
+              "heartbeat_status": heartbeat_status,
+              "failures": failures,
+              "production_change_allowed": False,
+              "performance_claim_allowed": False,
+              "frozen_holdout_access_allowed": False,
+          }
+          Path("automation-integrity-audit.json").write_text(
+              json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+          )
+          print(json.dumps(report, ensure_ascii=False, indent=2))
+
+          if failures:
+              raise SystemExit("CONTROL-PLANE INTEGRITY AUDIT HOLD/FAIL")
+          PY
+
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-automation-integrity-${{ github.run_id }}
+          path: automation-integrity-audit.json
+          retention-days: 14
+          if-no-files-found: warn
