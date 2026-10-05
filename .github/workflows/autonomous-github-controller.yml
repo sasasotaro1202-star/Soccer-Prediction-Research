@@ -107,7 +107,7 @@ jobs:
             while IFS= read -r path; do
               [ -n "${path}" ] || continue
               case "${path}" in
-                src/research/adoption_gate.py|src/research/stability_gate.py|src/data/pit_source_adapter.py|src/data/pit_source_adapter_v2.py|src/data/pit_source_adapter_fast.py|src/data/pit_archive_fallback.py|src/data/pit_evidence.py|scripts/experience_commit_guard.py|.github/workflows/action-failure-recovery.yml|.github/workflows/pit-replay-audit.yml|.github/workflows/soccer-autonomous-orchestrator.yml|.github/workflows/soccer-control-plane-watchdog.yml)
+                src/research/adoption_gate.py|src/research/stability_gate.py|src/data/pit_source_adapter.py|src/data/pit_source_adapter_v2.py|src/data/pit_source_adapter_fast.py|src/data/pit_archive_fallback.py|src/data/pit_evidence.py|scripts/experience_commit_guard.py|.github/workflows/action-failure-recovery.yml|.github/workflows/pit-replay-audit.yml|.github/workflows/soccer-autonomous-orchestrator.yml|.github/workflows/soccer-control-plane-watchdog.yml|.github/workflows/ci.yml|.github/workflows/soccer-automation-integrity-audit.yml|.github/workflows/soccer-prospective-inplay-maturity.yml|.github/workflows/soccer-world-model-supervisor.yml)
                   case "${path}" in
                     src/data/pit_*|.github/workflows/pit-replay-audit.yml)
                       pit_sensitive=1
