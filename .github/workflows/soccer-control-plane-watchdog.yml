@@ -4,6 +4,14 @@ on:
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Soccer Autonomous Orchestrator
+      - Soccer Research Robust
+      - Soccer 9H Autonomous Research
+      - Soccer Research Cycle
+      - Soccer PIT Replay Audit
+    types: [completed]
 
 permissions:
   actions: write
