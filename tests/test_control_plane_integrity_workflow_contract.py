@@ -225,3 +225,12 @@ def test_failure_recovery_emits_real_tab_delimiters() -> None:
     )
     assert 'print("\\t".join([' in workflow
     assert 'print("\\\\t".join([' not in workflow
+
+
+def test_maturity_lane_pr_validation_cannot_write_main() -> None:
+    workflow = Path(".github/workflows/soccer-prospective-inplay-maturity.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "pull_request:" in workflow
+    assert "github.event_name != 'pull_request'" in workflow
+    assert "git push origin HEAD:main" in workflow
