@@ -1,0 +1,32 @@
+{
+  "schema_version": 2,
+  "research_only": true,
+  "event_types": [
+    "HOME_GOAL",
+    "AWAY_GOAL",
+    "HOME_RED",
+    "AWAY_RED",
+    "NO_EVENT"
+  ],
+  "default_step_minutes": 5,
+  "max_step_minutes": 15,
+  "max_states": 10000,
+  "max_cutoff_minutes_after_kickoff": 120,
+  "production_usable": false,
+  "auto_adoption": false,
+  "frozen_holdout_access": false,
+  "performance_claim_allowed": false,
+  "pit_rule": "source_available_at_utc <= prediction_cutoff_utc",
+  "label_maturity_rule": "label_available_at_utc > prediction_cutoff_utc",
+  "next_event_time_contract": "non-NO_EVENT: prediction_cutoff_utc < next_event_time_utc <= prediction_cutoff_utc + hazard_window_minutes; NO_EVENT requires missing next_event_time_utc",
+  "hazard_window_minutes_contract": "constant per dataset; 0 < value <= 15",
+  "research_stages": [
+    "PIT",
+    "OOS",
+    "PREQUENTIAL_CALIBRATION",
+    "ROBUSTNESS_ABLATION",
+    "INCUMBENT_COMPARISON",
+    "FROZEN_HOLDOUT",
+    "RELEASE"
+  ]
+}
