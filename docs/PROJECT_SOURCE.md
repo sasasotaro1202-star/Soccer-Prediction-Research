@@ -262,3 +262,13 @@ The autonomous merge controller separately allowlists the orchestrator workflow 
 - The autonomous orchestrator now applies bounded exponential backoff to consecutive exact-main failures/timed-out/cancelled executions of a lane. The cooldown grows up to 24 hours, while successful current-main history restores normal cadence evaluation.
 - This reduces deterministic-failure thrashing and protects GitHub runner/free-usage efficiency without converting failure evidence to PASS.
 - No model, feature, target, calibration, OOS, frozen-holdout or production evidence is modified by this control-plane hardening.
+
+
+## Current live-state reconciliation — 2026-10-05 (control-plane integrity audit)
+
+- Live `main` was re-read before this change and remains the authority. The continuous control-plane implementation is operational infrastructure, not performance evidence.
+- `docs/PROJECT_INSTRUCTIONS.md` is now synchronized with the project’s PIT, chronological OOS/WFO, calibration, robustness, frozen-holdout, production and autonomous-control requirements.
+- A new read-only `Soccer Automation Integrity Audit` workflow runs every 12 hours away from the top of the hour. It checks that the control-plane workflows, schedules, safety flags, heartbeat and current-main liveness assumptions remain present and active.
+- The audit is fail-closed: missing markers, inactive control workflows or stale control-plane execution produce HOLD/failure evidence rather than silently passing. It does not modify model, feature, target, calibration, frozen-holdout or production state.
+- `Action Failure Recovery` now includes the integrity-audit lane for one bounded retry of workflow failure.
+- This change is hardening only. No model, feature, target, calibration, OOS, robustness, frozen-holdout, Champion or Production performance result is introduced or rewritten.
