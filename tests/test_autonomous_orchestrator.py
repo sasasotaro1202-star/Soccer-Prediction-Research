@@ -100,6 +100,10 @@ def test_failure_recovery_is_schedule_only_and_bounded():
     assert "Soccer Automation Integrity Audit" not in text
     assert "timed_out" in text
     assert "rerun_budget=2" in text
+    # The candidate query must select exact-main failures before choosing the
+    # newest failure, otherwise a newer obsolete-SHA failure can mask recovery
+    # for the current main.
+    assert 'select(.headSha == $main_sha)' in text
 
 
 def test_autonomous_controller_is_not_a_workflow_run_event_sink():

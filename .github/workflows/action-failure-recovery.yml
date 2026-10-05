@@ -56,7 +56,11 @@ jobs:
 
           for workflow in "${workflows[@]}"; do
             if ! candidates="$(gh run list --repo "${GH_REPO}" --workflow "${workflow}" --limit 30 --json databaseId,createdAt,status,conclusion,headSha |
-              jq -r '[.[] | select(.status == "completed" and (.conclusion == "failure" or .conclusion == "timed_out"))] |
+              jq -r --arg main_sha "${main_sha}" '
+                [.[] |
+                  select(.headSha == $main_sha) |
+                  select(.status == "completed" and (.conclusion == "failure" or .conclusion == "timed_out"))
+                ] |
                 sort_by(.createdAt) | reverse | .[0] |
                 if . == null then empty else [.databaseId, .createdAt, .headSha] | @tsv end')"; then
               echo "Recovery query failed for workflow=${workflow}; preserving failure signal." >&2
