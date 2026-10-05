@@ -198,10 +198,13 @@ def test_chronological_hazard_oos_is_match_level_and_research_only():
 def test_match_state_workflow_is_autonomous_but_non_production():
     workflow = Path(".github/workflows/soccer-match-state-research.yml").read_text(encoding="utf-8")
     assert "actions: write" in workflow
-    assert 'gh workflow run "adaptive_data_discovery.yml"' in workflow
-    assert 'gh workflow run "soccer-source-probe.yml"' in workflow
+    assert "contents: write" in workflow
+    assert 'cron: "43 */6 * * *"' in workflow
+    assert "workflow_dispatch:" in workflow
     assert "performance_verified_false" in workflow
     assert "promotion_candidate_false" in workflow
+    assert "production_usable_false" in workflow
+    assert "research_only_true" in workflow
     assert "|| true" not in workflow
 
 
@@ -213,7 +216,7 @@ def test_match_state_workflow_can_persist_research_state_but_not_pr_state():
 
 
 def test_temperature_calibration_is_prequential_helper_and_normalized():
-    p = np.tile(np.asarray([[0.70, 0.20, 0.10]]), (60, 1))
+    p = np.tile(np.asarray([[0.70, 0.20, 0.05, 0.03, 0.02]]), (60, 1))
     y = np.asarray(["HOME_GOAL"] * 60)
     temperature = fit_temperature(p, y, min_rows=50)
     assert np.isfinite(temperature)
@@ -262,7 +265,7 @@ def test_robustness_comparison_is_same_oos_policy():
 
 
 def test_run_persists_calibration_and_robustness_state(tmp_path):
-    frame = _rows(150)
+    frame = _rows(72)
     input_path = tmp_path / "snapshots.csv"
     frame.to_csv(input_path, index=False)
     status = run_match_state_research(

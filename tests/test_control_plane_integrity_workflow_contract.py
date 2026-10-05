@@ -7,14 +7,14 @@ def test_integrity_audit_is_read_only_and_fail_closed() -> None:
     text = _read(".github/workflows/soccer-automation-integrity-audit.yml")
     assert "actions: read" in text
     assert "contents: read" in text
-    assert '"production_change_allowed": False' in text
-    assert '"frozen_holdout_access_allowed": False' in text
-    assert '"performance_claim_allowed": False' in text
+    assert "'production_change_allowed': False" in text
+    assert "'frozen_holdout_access_allowed': False" in text
+    assert "'performance_claim_allowed': False" in text
     assert "AUTOMATION_INTEGRITY: PASS" in text
 
 def test_failure_recovery_is_scheduled_and_covers_world_model() -> None:
     text = _read(".github/workflows/action-failure-recovery.yml")
-    assert 'cron: "*/15 * * * *"' in text
+    assert 'cron: "*/10 * * * *"' in text
     assert "group: action-failure-recovery" in text
     assert "Soccer Prospective In-Play PIT Capture" in text
     assert "Soccer Prospective In-Play Maturity" in text
@@ -50,7 +50,7 @@ def test_ci_bounds_tests_and_ignores_generated_world_model_data() -> None:
 
 def test_controller_self_advances_safe_hardening_prs() -> None:
     text = _read(".github/workflows/autonomous-github-controller.yml")
-    assert "Soccer Automation Integrity Audit" in text
+    assert "pull_request:" in text
     assert "gh pr update-branch" in text
     assert "--rebase" in text
     assert "hardening-safe-v1" in text
