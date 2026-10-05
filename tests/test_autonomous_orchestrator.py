@@ -143,3 +143,34 @@ def test_orchestrator_backs_off_repeated_failures():
     assert "failure_backoff" in text
     assert "retry_after_failure_backoff" in text
     assert "24 * 3600" in text
+
+
+def test_automation_integrity_audit_is_scheduled_and_fail_closed():
+    path = Path(".github/workflows/soccer-automation-integrity-audit.yml")
+    text = path.read_text(encoding="utf-8")
+    assert 'cron: "29 */12 * * *"' in text
+    assert "permissions:" in text
+    assert "actions: read" in text
+    assert "contents: read" in text
+    assert "recent_current_main" in text
+    assert "CONTROL-PLANE INTEGRITY AUDIT HOLD/FAIL" in text
+    assert '"production_change_allowed": False' in text
+    assert '"performance_claim_allowed": False' in text
+    assert '"frozen_holdout_access_allowed": False' in text
+
+
+def test_project_instructions_codifies_continuous_control_plane():
+    text = Path("docs/PROJECT_INSTRUCTIONS.md").read_text(encoding="utf-8")
+    required = (
+        "future generalization",
+        "source_available_at",
+        "Soccer Autonomous Orchestrator",
+        "Soccer Control Plane Watchdog",
+        "Soccer Automation Heartbeat",
+        "Soccer Automation Integrity Audit",
+        "PIT / temporal integrity",
+        "chronological WFO/OOS",
+        "frozen holdout",
+    )
+    for marker in required:
+        assert marker in text
