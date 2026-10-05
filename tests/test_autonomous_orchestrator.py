@@ -81,3 +81,11 @@ def test_orchestrator_does_not_stop_on_single_dispatch_error():
     assert 'if case "${workflow}" in' in text
     assert '"reason":"dispatch_error"' in text
     assert "continue reconciliation" in text
+
+
+def test_orchestrator_retries_dispatch_and_isolates_state_query_errors():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "dispatch_workflow()" in text
+    assert "for attempt in 1 2 3" in text
+    assert '"reason":"workflow_state_error"' in text
+    assert '"reason":"active_run_count_error"' in text
