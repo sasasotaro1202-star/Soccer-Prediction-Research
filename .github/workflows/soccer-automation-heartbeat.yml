@@ -55,6 +55,8 @@ jobs:
           PY
 
           encoded="$(base64 -w0 /tmp/heartbeat.json)"
+          export ENCODED="$encoded"
+          export CURRENT_SHA="$current_sha"
 
           for attempt in 1 2 3 4; do
             response="/tmp/heartbeat-response.json"
