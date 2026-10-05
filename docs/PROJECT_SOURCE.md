@@ -279,3 +279,13 @@ The autonomous merge controller separately allowlists the orchestrator workflow 
 - The hardening-safe autonomous merge controller allowlist now includes the control-plane integrity audit workflow.
 - This expands automation only for the read-only integrity/audit lane. It does not add model, feature, target, calibration, OOS, frozen-holdout or production changes to the auto-merge allowlist.
 - The audit workflow and its regression coverage remain subject to exact-head CI and the controller’s existing same-repository, non-draft, clean-state and evidence checks.
+
+
+## Current hardening reconciliation — 2026-10-05 (World Model control-plane depth)
+
+- The pending hardening branch extends the integrity audit beyond the core orchestrator/watchdog pair to the complete continuous World Model lane set: prospective capture, prospective maturity, World Model supervisor, dynamic simulator and match-state research.
+- Liveness is evaluated by current-main SHA. An active current-main run is healthy, a recent completed non-success run is explicitly unhealthy, and absent/stale current-main execution remains HOLD rather than being treated as healthy merely because a run exists.
+- The audit checks the exact workflow display identity as well as workflow file presence/state, reducing the risk that a renamed/replaced workflow silently satisfies a stale contract.
+- The weekly heartbeat is checked for explicit timestamp freshness after activation, with an eight-day tolerance; BOOTSTRAPPED remains an explicit non-failure initialization state until the first heartbeat is recorded.
+- Action Failure Recovery is required to cover every World Model research lane, including Match State Research. No automatic path converts a failed research lane into PASS or grants Production/frozen-holdout/performance authority.
+- These are control-plane hardening changes only. They do not introduce new OOS/WFO performance evidence, alter the Champion/Production state, or authorize promotion.
