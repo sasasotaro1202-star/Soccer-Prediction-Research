@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "controller": "Soccer Autonomous Orchestrator",
+  "lanes": [
+    {
+      "workflow": "soccer-matchday-intelligence.yml",
+      "cadence_minutes": 30,
+      "min_gap_minutes": 15
+    },
+    {
+      "workflow": "soccer-daily-research-forecast.yml",
+      "cadence_minutes": 60,
+      "min_gap_minutes": 20
+    },
+    {
+      "workflow": "soccer-9h-autonomous.yml",
+      "cadence_minutes": 480,
+      "min_gap_minutes": 60
+    },
+    {
+      "workflow": "soccer-research-robust.yml",
+      "cadence_minutes": 1440,
+      "min_gap_minutes": 120
+    },
+    {
+      "workflow": "soccer-predictability-research.yml",
+      "cadence_minutes": 360,
+      "min_gap_minutes": 60
+    },
+    {
+      "workflow": "soccer-dynamic-simulator-research.yml",
+      "cadence_minutes": 360,
+      "min_gap_minutes": 60
+    },
+    {
+      "workflow": "soccer-prospective-inplay-capture.yml",
+      "cadence_minutes": 15,
+      "min_gap_minutes": 10
+    },
+    {
+      "workflow": "soccer-prospective-inplay-maturity.yml",
+      "cadence_minutes": 30,
+      "min_gap_minutes": 15
+    },
+    {
+      "workflow": "soccer-world-model-supervisor.yml",
+      "cadence_minutes": 120,
+      "min_gap_minutes": 30
+    },
+    {
+      "workflow": "soccer-match-state-research.yml",
+      "cadence_minutes": 360,
+      "min_gap_minutes": 60
+    },
+    {
+      "workflow": "soccer-historical-learning.yml",
+      "cadence_minutes": 360,
+      "min_gap_minutes": 90
+    },
+    {
+      "workflow": "soccer-experience-ledger.yml",
+      "cadence_minutes": 360,
+      "min_gap_minutes": 90
+    },
+    {
+      "workflow": "adaptive_data_discovery.yml",
+      "cadence_minutes": 360,
+      "min_gap_minutes": 60
+    },
+    {
+      "workflow": "soccer-scope-frontier.yml",
+      "cadence_minutes": 360,
+      "min_gap_minutes": 60
+    },
+    {
+      "workflow": "pit-replay-audit.yml",
+      "cadence_minutes": 1440,
+      "min_gap_minutes": 120
+    },
+    {
+      "workflow": "soccer-coverage-pit-audit.yml",
+      "cadence_minutes": 1440,
+      "min_gap_minutes": 120
+    },
+    {
+      "workflow": "soccer-audit.yml",
+      "cadence_minutes": 1440,
+      "min_gap_minutes": 120
+    },
+    {
+      "workflow": "soccer-versioned-pit-research.yml",
+      "cadence_minutes": 720,
+      "min_gap_minutes": 120
+    },
+    {
+      "workflow": "soccer-global-datalake.yml",
+      "cadence_minutes": 10080,
+      "min_gap_minutes": 240
+    },
+    {
+      "workflow": "soccer-mom-research.yml",
+      "cadence_minutes": 10080,
+      "min_gap_minutes": 240
+    },
+    {
+      "workflow": "full-catalog-audit.yml",
+      "cadence_minutes": 10080,
+      "min_gap_minutes": 240
+    },
+    {
+      "workflow": "soccer-source-probe.yml",
+      "cadence_minutes": 10080,
+      "min_gap_minutes": 120
+    },
+    {
+      "workflow": "soccer-research-cycle.yml",
+      "cadence_minutes": 10080,
+      "min_gap_minutes": 240
+    },
+    {
+      "workflow": "overnight-integrity.yml",
+      "cadence_minutes": 1440,
+      "min_gap_minutes": 120
+    },
+    {
+      "workflow": "soccer-opta-like-24h.yml",
+      "cadence_minutes": 1440,
+      "min_gap_minutes": 180
+    }
+  ]
+}
