@@ -124,7 +124,6 @@ def test_ambiguous_multi_event_transition_is_excluded_without_imputation():
              home_score=1, away_score=1, home_red_cards=0, away_red_cards=0),
     ]
     mature = build_mature_rows(rows)
-    assert len(mature) == 1
-    assert mature[0]["prediction_cutoff_utc"] == "2026-10-05T18:10:00+00:00"
-    assert mature[0]["next_event_type"] == "NO_EVENT"
-    assert mature[0]["next_event_time_utc"] is None
+    # Both home and away scores changed between adjacent snapshots, so the
+    # transition is ambiguous and must be excluded rather than imputed.
+    assert mature == []
