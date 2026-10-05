@@ -1,10 +1,17 @@
 from __future__ import annotations
 
-"""Research-only current-match forecast. Never Production."""
+"""Current-match research forecast lane.
+
+This module is deliberately outside the Production adoption path. It provides a
+fresh, current-state research forecast for explicitly requested matches while
+preserving provenance, timestamps, uncertainty and fail-closed behavior.
+"""
 
 import argparse
+import hashlib
 import json
 import math
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -13,318 +20,532 @@ import numpy as np
 import pandas as pd
 import requests
 
-ELO_URL = "https://www.eloratings.net/World.tsv"
-LIVE_URL = "https://www.sofascore.com/api/v1/sport/football/events/live"
-SCHEDULE_URL = "https://www.sofascore.com/api/v1/sport/football/scheduled-events/{date}"
-HOME_ADVANTAGE_ELO = 80.0
-BASE_TOTAL_GOALS = 2.45
-PROB_SHRINK = 0.85
-TIMEOUT = 20.0
+DEFAULT_CONFIG_PATH = Path("config/live_research_forecast.json")
+
+REQUIRED = {
+    "match_id",
+    "prediction_revision_id",
+    "kickoff_utc",
+    "home_team",
+    "away_team",
+    "result_prediction",
+    "p_home",
+    "p_draw",
+    "p_away",
+    "score_1",
+    "score_1_probability",
+    "score_2",
+    "score_2_probability",
+    "score_3",
+    "score_3_probability",
+    "prediction_state",
+    "pit_status",
+    "production_status",
+    "data_completeness",
+    "uncertainty",
+    "predictability",
+    "source_snapshot_hash",
+    "source_snapshot_hashes",
+    "config_sha256",
+    "git_commit_sha",
+    "experiment_fingerprint",
+}
 
 
-def now_utc():
+def now_utc() -> pd.Timestamp:
     return pd.Timestamp(datetime.now(timezone.utc))
 
 
-def get_text(url: str):
-    at = now_utc().isoformat()
-    r = requests.get(url, timeout=TIMEOUT, headers={"User-Agent": "Soccer-Prediction-Research/1.0"})
-    r.raise_for_status()
-    return r.text, at
+def load_config() -> tuple[dict[str, Any], str]:
+    path = Path(os.environ.get("LIVE_FORECAST_CONFIG", str(DEFAULT_CONFIG_PATH)))
+    if not path.is_file() or path.stat().st_size <= 0:
+        raise RuntimeError(f"live forecast config missing: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or int(payload.get("schema_version", 0)) != 1:
+        raise RuntimeError("unsupported live forecast config schema")
+    return payload, hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def get_json(url: str):
+def _get(url: str, timeout: float) -> tuple[bytes, str, str]:
     at = now_utc().isoformat()
-    r = requests.get(url, timeout=TIMEOUT, headers={"User-Agent": "Soccer-Prediction-Research/1.0"})
-    r.raise_for_status()
-    data = r.json()
+    response = requests.get(
+        url,
+        timeout=timeout,
+        headers={"User-Agent": "Soccer-Prediction-Research/1.0"},
+    )
+    response.raise_for_status()
+    body = response.content
+    return body, at, hashlib.sha256(body).hexdigest()
+
+
+def _get_json(url: str, timeout: float) -> tuple[dict[str, Any], str, str]:
+    body, at, digest = _get(url, timeout)
+    data = json.loads(body.decode("utf-8"))
     if not isinstance(data, dict):
-        raise RuntimeError("unexpected JSON payload")
-    return data, at
+        raise RuntimeError(f"unexpected JSON payload from {url}")
+    return data, at, digest
 
 
-def load_elo():
-    text, at = get_text(ELO_URL)
-    frame = pd.read_csv(pd.io.common.StringIO(text), sep="\t", engine="python")
-    cols = {str(c).strip().lower(): c for c in frame.columns}
-    team_col = next((cols[c] for c in ("team", "country", "name") if c in cols), None)
-    rating_col = next((cols[c] for c in ("rating", "elo", "value") if c in cols), None)
-    if team_col is None or rating_col is None:
-        if len(frame.columns) < 3:
-            raise RuntimeError("unsupported Elo TSV schema")
-        team_col, rating_col = frame.columns[0], frame.columns[2]
-    ratings = {}
-    for _, row in frame.iterrows():
-        team = str(row.get(team_col, "")).strip().lower()
+def parse_elo_tsv(text: str, elo_codes: dict[str, str]) -> dict[str, float]:
+    """Parse current eloratings World.tsv conservatively.
+
+    World.tsv is a compact tab-separated table without a stable header contract;
+    the current layout exposes team code in column 3 and Elo in column 4.
+    """
+    ratings_by_code: dict[str, float] = {}
+    for raw in text.splitlines():
+        cells = raw.strip().split("\t")
+        if len(cells) < 4:
+            continue
+        code = cells[2].strip().upper()
         try:
-            rating = float(row.get(rating_col))
+            rating = float(cells[3])
         except (TypeError, ValueError):
             continue
-        if team and np.isfinite(rating):
-            ratings[team.replace("türkiye", "turkey")] = rating
-    for alias, canonical in (("turkiye", "turkey"), ("türkiye", "turkey")):
-        if alias in ratings and canonical not in ratings:
-            ratings[canonical] = ratings[alias]
-    required = ("france", "belgium", "italy", "turkey")
-    missing = [x for x in required if x not in ratings]
+        if code and np.isfinite(rating):
+            ratings_by_code[code] = rating
+    ratings = {
+        team_key: ratings_by_code[code]
+        for code, team_key in elo_codes.items()
+        if code in ratings_by_code
+    }
+    return ratings
+
+
+def load_elo(config: dict[str, Any]) -> tuple[dict[str, float], str, str]:
+    timeout = float(config["runtime"]["request_timeout_seconds"])
+    body, observed_at, digest = _get(
+        str(config["sources"]["elo_url"]),
+        timeout,
+    )
+    ratings = parse_elo_tsv(body.decode("utf-8", errors="replace"), config["team_aliases"]["elo_codes"])
+    missing = [team for team in config["target_teams"] if team not in ratings]
     if missing:
         raise RuntimeError(f"Elo source missing teams: {missing}")
-    return ratings, at
+    return ratings, observed_at, digest
 
 
-def find_target(event):
+def _normalized_team(value: str) -> str:
+    return " ".join(value.strip().lower().replace("türkiye", "turkey").split())
+
+
+def find_target(event: dict[str, Any], config: dict[str, Any]) -> str | None:
     home = str((event.get("homeTeam") or {}).get("name") or "").strip()
     away = str((event.get("awayTeam") or {}).get("name") or "").strip()
-    pair = {home.lower().replace("türkiye", "turkey"), away.lower().replace("türkiye", "turkey")}
-    if pair == {"france", "belgium"}:
-        return "France-Belgium"
-    if pair == {"italy", "turkey"}:
-        return "Italy-Turkey"
+    if not home or not away:
+        return None
+    observed = frozenset((_normalized_team(home), _normalized_team(away)))
+    for label, pair in config["target_pairs"].items():
+        wanted = frozenset(_normalized_team(x) for x in pair)
+        if observed == wanted:
+            return str(label)
     return None
 
 
-def collect_events(ts):
-    found = {}
-    source_times = {}
-    live, at = get_json(LIVE_URL)
-    source_times["sofascore_live"] = at
+def collect_events(
+    prediction_time: pd.Timestamp,
+    config: dict[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, str], dict[str, str]]:
+    timeout = float(config["runtime"]["request_timeout_seconds"])
+    found: dict[str, dict[str, Any]] = {}
+    source_times: dict[str, str] = {}
+    source_hashes: dict[str, str] = {}
+
+    live, observed, digest = _get_json(str(config["sources"]["sofascore_live_url"]), timeout)
+    source_times["sofascore_live"] = observed
+    source_hashes["sofascore_live"] = digest
     for event in live.get("events", []) or []:
-        if isinstance(event, dict):
-            key = find_target(event)
-            if key:
-                found[key] = event
-    for day in (ts.date(), (ts + pd.Timedelta(days=1)).date()):
-        payload, at = get_json(SCHEDULE_URL.format(date=day.isoformat()))
-        source_times[f"sofascore_scheduled_{day.isoformat()}"] = at
+        if not isinstance(event, dict):
+            continue
+        label = find_target(event, config)
+        if label:
+            found[label] = event
+
+    schedule_template = str(config["sources"]["sofascore_scheduled_url"])
+    schedule_days = max(int(config["runtime"]["schedule_days"]), 1)
+    for offset in range(schedule_days):
+        day = (prediction_time + pd.Timedelta(days=offset)).date()
+        key = f"sofascore_scheduled_{day.isoformat()}"
+        payload, observed, digest = _get_json(schedule_template.format(date=day.isoformat()), timeout)
+        source_times[key] = observed
+        source_hashes[key] = digest
         for event in payload.get("events", []) or []:
             if not isinstance(event, dict):
                 continue
-            key = find_target(event)
-            if not key:
+            label = find_target(event, config)
+            if not label:
                 continue
             kickoff = pd.to_datetime(event.get("startTimestamp"), unit="s", utc=True, errors="coerce")
-            if pd.notna(kickoff) and kickoff >= ts - pd.Timedelta(minutes=5):
-                found[key] = event
-    return list(found.values()), source_times
+            if pd.isna(kickoff):
+                continue
+            if kickoff >= prediction_time - pd.Timedelta(minutes=float(config["runtime"]["schedule_past_tolerance_minutes"])):
+                found.setdefault(label, event)
+
+    return list(found.values()), source_times, source_hashes
 
 
-def poisson(lam, max_goals=8):
-    out = np.array([math.exp(-lam) * lam**g / math.factorial(g) for g in range(max_goals + 1)], dtype=float)
-    return out / max(float(out.sum()), 1e-12)
+def poisson(lam: float, max_goals: int) -> np.ndarray:
+    values = np.asarray(
+        [math.exp(-lam) * lam**g / math.factorial(g) for g in range(max_goals + 1)],
+        dtype=float,
+    )
+    total = float(values.sum())
+    return values / max(total, 1e-12)
 
 
-def matrix(home_lambda, away_lambda, max_goals=8):
-    out = np.outer(poisson(home_lambda, max_goals), poisson(away_lambda, max_goals))
-    return out / max(float(out.sum()), 1e-12)
+def score_matrix(home_lambda: float, away_lambda: float, max_goals: int) -> np.ndarray:
+    matrix = np.outer(poisson(home_lambda, max_goals), poisson(away_lambda, max_goals))
+    return matrix / max(float(matrix.sum()), 1e-12)
 
 
-def result_probs(mat):
-    raw = np.array([np.tril(mat, -1).sum(), np.trace(mat), np.triu(mat, 1).sum()], dtype=float)
+def result_probs(matrix: np.ndarray, shrink: float) -> np.ndarray:
+    raw = np.asarray(
+        [np.tril(matrix, -1).sum(), np.trace(matrix), np.triu(matrix, 1).sum()],
+        dtype=float,
+    )
     raw = raw / max(float(raw.sum()), 1e-12)
-    out = PROB_SHRINK * raw + (1.0 - PROB_SHRINK) / 3.0
+    shrink = float(np.clip(shrink, 0.0, 1.0))
+    out = shrink * raw + (1.0 - shrink) / 3.0
     return out / max(float(out.sum()), 1e-12)
 
 
-def lambdas(home_elo, away_elo):
-    delta = home_elo - away_elo + HOME_ADVANTAGE_ELO
+def pre_match_lambdas(home_elo: float, away_elo: float, config: dict[str, Any]) -> tuple[float, float]:
+    model = config["model"]
+    delta = home_elo - away_elo + float(model["home_advantage_elo"])
     share = 1.0 / (1.0 + 10.0 ** (-delta / 400.0))
-    return BASE_TOTAL_GOALS * share, BASE_TOTAL_GOALS * (1.0 - share)
+    total = float(model["base_total_goals"])
+    return total * share, total * (1.0 - share)
 
 
-def status_type(event):
-    return str((event.get("status") or {}).get("type") or "").lower().strip()
+def _status_type(event: dict[str, Any]) -> str:
+    return str((event.get("status") or {}).get("type") or "").strip().lower()
 
 
-def current_score(event):
-    hs = event.get("homeScore") or {}
-    aas = event.get("awayScore") or {}
+def _current_score(event: dict[str, Any]) -> tuple[int, int]:
+    home_score = event.get("homeScore") or {}
+    away_score = event.get("awayScore") or {}
     try:
-        h = int(hs.get("normaltime", hs.get("current", 0)) or 0)
-        a = int(aas.get("normaltime", aas.get("current", 0)) or 0)
+        home = int(home_score.get("normaltime", home_score.get("current", 0)) or 0)
+        away = int(away_score.get("normaltime", away_score.get("current", 0)) or 0)
     except (TypeError, ValueError):
-        h, a = 0, 0
-    return max(0, h), max(0, a)
+        home, away = 0, 0
+    return max(0, home), max(0, away)
 
 
-def elapsed(event, ts):
+def _elapsed(event: dict[str, Any], prediction_time: pd.Timestamp) -> float:
     kickoff = pd.to_datetime(event.get("startTimestamp"), unit="s", utc=True, errors="coerce")
     if pd.isna(kickoff):
         return 0.0
-    return float(np.clip((ts - kickoff).total_seconds() / 60.0, 0.0, 90.0))
+    return float(
+        np.clip((prediction_time - kickoff).total_seconds() / 60.0, 0.0, 90.0)
+    )
 
 
-def live_matrix(home_elo, away_elo, hg, ag, mins):
-    bh, ba = lambdas(home_elo, away_elo)
-    f = float(np.clip(mins / 90.0, 0.0, 1.0))
-    expected = max(BASE_TOTAL_GOALS * f, 0.05)
-    observed = hg + ag
-    tempo = float(np.clip(observed / expected, 0.65, 1.55))
-    tempo = float(np.clip(0.70 + 0.30 * tempo, 0.80, 1.30))
-    rem = max(0.0, 1.0 - f)
-    rh, ra = max(1e-6, bh * rem * tempo), max(1e-6, ba * rem * tempo)
-    remaining = matrix(rh, ra, 8)
-    final = np.zeros((9, 9), dtype=float)
-    for h in range(9):
-        for a in range(9):
-            fh, fa = hg + h, ag + a
-            if fh < 9 and fa < 9:
-                final[fh, fa] += remaining[h, a]
+def live_final_matrix(
+    home_elo: float,
+    away_elo: float,
+    current_home: int,
+    current_away: int,
+    elapsed_minutes: float,
+    config: dict[str, Any],
+) -> np.ndarray:
+    model = config["model"]
+    base_home, base_away = pre_match_lambdas(home_elo, away_elo, config)
+    fraction = float(np.clip(elapsed_minutes / 90.0, 0.0, 1.0))
+    expected = max(float(model["base_total_goals"]) * fraction, 0.05)
+    observed = current_home + current_away
+    raw_tempo = observed / expected
+    tempo = float(
+        np.clip(
+            raw_tempo,
+            float(model["tempo_ratio_min"]),
+            float(model["tempo_ratio_max"]),
+        )
+    )
+    tempo_multiplier = float(
+        np.clip(
+            float(model["tempo_multiplier_base"]) + float(model["tempo_multiplier_slope"]) * tempo,
+            float(model["tempo_multiplier_min"]),
+            float(model["tempo_multiplier_max"]),
+        )
+    )
+    remaining_fraction = max(0.0, 1.0 - fraction)
+    rem_home = max(1e-6, base_home * remaining_fraction * tempo_multiplier)
+    rem_away = max(1e-6, base_away * remaining_fraction * tempo_multiplier)
+    remaining = score_matrix(rem_home, rem_away, int(model["max_goals"]))
+    size = int(model["max_goals"]) + 1
+    final = np.zeros((size, size), dtype=float)
+    for rh in range(remaining.shape[0]):
+        for ra in range(remaining.shape[1]):
+            fh, fa = current_home + rh, current_away + ra
+            if fh < size and fa < size:
+                final[fh, fa] += remaining[rh, ra]
     return final / max(float(final.sum()), 1e-12)
 
 
-def top_scores(mat):
-    pairs = [(f"{h}-{a}", float(mat[h, a])) for h in range(mat.shape[0]) for a in range(mat.shape[1]) if mat[h, a] > 0]
-    pairs.sort(key=lambda x: (-x[1], x[0]))
-    return pairs[:3]
+def _top_scores(matrix: np.ndarray, n: int) -> list[tuple[str, float]]:
+    values = [
+        (f"{home}-{away}", float(matrix[home, away]))
+        for home in range(matrix.shape[0])
+        for away in range(matrix.shape[1])
+        if matrix[home, away] > 0
+    ]
+    values.sort(key=lambda x: (-x[1], x[0]))
+    return values[:n]
 
 
-def predict(event, ratings, ts, source_times):
+def predict(
+    event: dict[str, Any],
+    ratings: dict[str, float],
+    prediction_time: pd.Timestamp,
+    source_times: dict[str, str],
+    source_hashes: dict[str, str],
+    config: dict[str, Any],
+    config_hash: str,
+    elo_hash: str,
+) -> dict[str, Any]:
     home = str((event.get("homeTeam") or {}).get("name") or "").strip()
     away = str((event.get("awayTeam") or {}).get("name") or "").strip()
-    hk, ak = home.lower().replace("türkiye", "turkey"), away.lower().replace("türkiye", "turkey")
+    home_key = _normalized_team(home)
+    away_key = _normalized_team(away)
     kickoff = pd.to_datetime(event.get("startTimestamp"), unit="s", utc=True, errors="coerce")
     if pd.isna(kickoff):
-        raise RuntimeError("invalid kickoff")
-    if hk not in ratings or ak not in ratings:
-        raise RuntimeError(f"missing Elo for {home} vs {away}")
-    hgoals, agoals = current_score(event)
-    mins = elapsed(event, ts)
-    st = status_type(event)
-    live = st in {"inprogress", "live", "halftime"} or (kickoff <= ts < kickoff + pd.Timedelta(minutes=100) and hgoals + agoals > 0)
+        raise RuntimeError(f"invalid kickoff: {home} vs {away}")
+    if home_key not in ratings or away_key not in ratings:
+        raise RuntimeError(f"missing Elo rating: {home} vs {away}")
+
+    status = _status_type(event)
+    current_home, current_away = _current_score(event)
+    elapsed_minutes = _elapsed(event, prediction_time)
+    live_window = kickoff <= prediction_time < kickoff + pd.Timedelta(minutes=100)
+    live = status in {"inprogress", "live", "halftime"} or (live_window and (current_home + current_away > 0))
+
     if live:
-        mat = live_matrix(ratings[hk], ratings[ak], hgoals, agoals, mins)
-        state = "LIVE_RESEARCH_FORECAST"
-        pit = "CURRENT_OBSERVED_BEFORE_CUTOFF"
+        matrix = live_final_matrix(
+            ratings[home_key],
+            ratings[away_key],
+            current_home,
+            current_away,
+            elapsed_minutes,
+            config,
+        )
+        prediction_state = "LIVE_RESEARCH_FORECAST"
+        pit_status = "CURRENT_OBSERVED_BEFORE_CUTOFF"
     else:
-        if kickoff <= ts:
-            raise RuntimeError("past event not eligible for pre-match prediction")
-        lh, la = lambdas(ratings[hk], ratings[ak])
-        mat = matrix(lh, la)
-        state = "PREMATCH_RESEARCH_FORECAST"
-        pit = "CURRENT_OBSERVED_PRE_KICKOFF"
-    probs = result_probs(mat)
+        if kickoff <= prediction_time:
+            raise RuntimeError(f"past event is not eligible: {home} vs {away}")
+        home_lambda, away_lambda = pre_match_lambdas(ratings[home_key], ratings[away_key], config)
+        matrix = score_matrix(home_lambda, away_lambda, int(config["model"]["max_goals"]))
+        prediction_state = "PREMATCH_RESEARCH_FORECAST"
+        pit_status = "CURRENT_OBSERVED_PRE_KICKOFF"
+
+    probs = result_probs(matrix, float(config["model"]["probability_shrink"]))
     labels = ("Home", "Draw", "Away")
-    top = top_scores(mat)
+    top = _top_scores(matrix, int(config["model"]["top_scorelines"]))
+
+    required_state_fields = (
+        event.get("id"),
+        event.get("startTimestamp"),
+        home,
+        away,
+        event.get("status"),
+        event.get("homeScore"),
+        event.get("awayScore"),
+    )
+    data_completeness = float(
+        sum(value is not None for value in required_state_fields) / len(required_state_fields)
+    )
     entropy = -float(np.sum(probs * np.log(np.clip(probs, 1e-12, 1.0))))
-    predictability = float(np.clip(1.0 - entropy / math.log(3), 0.0, 1.0))
+    base_predictability = float(np.clip(1.0 - entropy / math.log(3.0), 0.0, 1.0))
+    predictability = float(np.clip(base_predictability * data_completeness, 0.0, 1.0))
+    uncertainty = float(
+        np.clip(
+            1.0 - float(np.max(probs)) + (1.0 - data_completeness) * float(config["model"]["data_quality_uncertainty_penalty"]),
+            0.0,
+            1.0,
+        )
+    )
+
+    event_hash = hashlib.sha256(
+        json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    git_sha = os.environ.get("GITHUB_SHA", "UNKNOWN")
+    fingerprint = hashlib.sha256(
+        "|".join([config_hash, git_sha, elo_hash, event_hash, prediction_state]).encode("utf-8")
+    ).hexdigest()
+    revision_id = fingerprint[:24]
+
+    source_snapshot_hashes = dict(source_hashes)
     return {
         "match_id": f"sofascore:{event.get('id')}",
-        "source_event_id": str(event.get("id") or ""),
+        "prediction_revision_id": revision_id,
         "event_source": "sofascore",
-        "kickoff_utc": kickoff.isoformat(),
-        "prediction_time_utc": ts.isoformat(),
+        "source_event_id": str(event.get("id") or ""),
+        "kickoff_utc": pd.Timestamp(kickoff).isoformat(),
+        "prediction_time_utc": prediction_time.isoformat(),
         "home_team": home,
         "away_team": away,
         "competition": str(((event.get("tournament") or {}).get("uniqueTournament") or {}).get("name") or ""),
-        "match_status": st or "unknown",
-        "elapsed_minutes": round(mins, 2),
-        "current_home_goals": hgoals,
-        "current_away_goals": agoals,
-        "home_elo": ratings[hk],
-        "away_elo": ratings[ak],
+        "match_status": status or "unknown",
+        "elapsed_minutes": round(elapsed_minutes, 2),
+        "current_home_goals": current_home,
+        "current_away_goals": current_away,
+        "home_elo": float(ratings[home_key]),
+        "away_elo": float(ratings[away_key]),
         "result_prediction": labels[int(np.argmax(probs))],
         "p_home": round(float(probs[0]), 6),
         "p_draw": round(float(probs[1]), 6),
         "p_away": round(float(probs[2]), 6),
-        "score_1": top[0][0], "score_1_probability": round(top[0][1], 6),
-        "score_2": top[1][0], "score_2_probability": round(top[1][1], 6),
-        "score_3": top[2][0], "score_3_probability": round(top[2][1], 6),
-        "uncertainty": round(1.0 - float(np.max(probs)), 6),
+        "score_1": top[0][0],
+        "score_1_probability": round(top[0][1], 6),
+        "score_2": top[1][0],
+        "score_2_probability": round(top[1][1], 6),
+        "score_3": top[2][0],
+        "score_3_probability": round(top[2][1], 6),
+        "uncertainty": round(uncertainty, 6),
         "predictability": round(predictability, 6),
-        "prediction_state": state,
+        "data_completeness": round(data_completeness, 6),
+        "prediction_state": prediction_state,
+        "decision_state": "PREDICT",
         "model_status": "RESEARCH_ONLY_HEURISTIC_ELO_POISSON",
         "production_status": "NOT_PRODUCTION",
-        "pit_status": pit,
+        "pit_status": pit_status,
         "source_available_at_utc": None,
         "source_available_lower_bound_utc": source_times.get("sofascore_live"),
         "source_retrieved_at_utc": max(source_times.values()),
-        "elo_source_url": ELO_URL,
+        "source_snapshot_hash": event_hash,
+        "source_snapshot_hashes": json.dumps(source_snapshot_hashes, sort_keys=True),
+        "config_sha256": config_hash,
+        "git_commit_sha": git_sha,
+        "experiment_fingerprint": fingerprint,
+        "elo_source_url": str(config["sources"]["elo_url"]),
         "event_source_url": f"https://www.sofascore.com/event/{event.get('id')}",
-        "calibration_method": "0.85_model_plus_0.15_uniform_shrink",
+        "calibration_method": "uniform_shrink_only_research_heuristic",
     }
 
 
-REQUIRED = {
-    "match_id", "kickoff_utc", "home_team", "away_team", "result_prediction",
-    "p_home", "p_draw", "p_away", "score_1", "score_1_probability",
-    "score_2", "score_2_probability", "score_3", "score_3_probability",
-    "prediction_state", "pit_status", "production_status",
-}
+def empty_output(path: str) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(columns=sorted(REQUIRED)).to_csv(path, index=False)
 
 
-def verify(path):
-    df = pd.read_csv(path)
-    missing = sorted(REQUIRED - set(df.columns))
-    if missing:
-        raise RuntimeError(f"missing fields: {missing}")
-    errors = []
-    for i, row in df.iterrows():
-        p = np.asarray([row.p_home, row.p_draw, row.p_away], dtype=float)
-        if not np.isfinite(p).all() or not np.isclose(p.sum(), 1.0, atol=1e-5):
-            errors.append(f"{i}: probability sum")
-        if row.production_status != "NOT_PRODUCTION":
-            errors.append(f"{i}: production flag")
-        if row.pit_status not in {"CURRENT_OBSERVED_BEFORE_CUTOFF", "CURRENT_OBSERVED_PRE_KICKOFF"}:
-            errors.append(f"{i}: PIT status")
-        for n in (1, 2, 3):
-            sp = float(row[f"score_{n}_probability"])
-            if "-" not in str(row[f"score_{n}"]) or not np.isfinite(sp) or not 0 <= sp <= 1:
-                errors.append(f"{i}: score top{n}")
-    if errors:
-        raise RuntimeError("; ".join(errors[:20]))
-    return {"status": "VERIFIED", "rows": int(len(df))}
-
-
-def run(output, status):
-    ts = now_utc()
+def run(output: str, status_path: str) -> dict[str, Any]:
+    prediction_time = now_utc()
     Path(output).parent.mkdir(parents=True, exist_ok=True)
-    Path(status).parent.mkdir(parents=True, exist_ok=True)
+    Path(status_path).parent.mkdir(parents=True, exist_ok=True)
     try:
-        ratings, elo_at = load_elo()
-        events, source_times = collect_events(ts)
+        config, config_hash = load_config()
+        ratings, elo_at, elo_hash = load_elo(config)
+        events, source_times, source_hashes = collect_events(prediction_time, config)
         source_times["eloratings_world_tsv"] = elo_at
-        rows, failures = [], []
+        source_hashes["eloratings_world_tsv"] = elo_hash
+
+        rows: list[dict[str, Any]] = []
+        failures: list[str] = []
         for event in events:
             try:
-                rows.append(predict(event, ratings, ts, source_times))
+                rows.append(
+                    predict(
+                        event,
+                        ratings,
+                        prediction_time,
+                        source_times,
+                        source_hashes,
+                        config,
+                        config_hash,
+                        elo_hash,
+                    )
+                )
             except Exception as exc:
                 failures.append(f"{type(exc).__name__}: {exc}")
-        frame = pd.DataFrame(rows)
-        if not frame.empty:
-            frame = frame.sort_values(["kickoff_utc", "home_team"], kind="mergesort")
+
+        if rows:
+            frame = pd.DataFrame(rows).sort_values(["kickoff_utc", "home_team"], kind="mergesort")
+        else:
+            frame = pd.DataFrame(columns=sorted(REQUIRED))
         frame.to_csv(output, index=False)
-        payload = {
+
+        status = {
             "status": "PREDICTED_LIVE_RESEARCH" if rows else "NO_TARGET_EVENT_OR_BLOCKED",
-            "prediction_time_utc": ts.isoformat(),
+            "prediction_time_utc": prediction_time.isoformat(),
             "rows": len(rows),
             "failures": failures,
             "model_status": "RESEARCH_ONLY_HEURISTIC_ELO_POISSON",
             "production_status": "NOT_PRODUCTION",
+            "decision_policy": "PREDICT_ONLY_WHEN_CURRENT_EVENT_AND_REQUIRED_STATE_ARE_OBSERVED; OTHERWISE_DEFER",
+            "config_sha256": config_hash,
+            "git_commit_sha": os.environ.get("GITHUB_SHA", "UNKNOWN"),
             "source_times": source_times,
-            "pit_note": "Retrieval is kept distinct from source availability; historical publication availability is not inferred.",
+            "source_hashes": source_hashes,
+            "pit_note": "Retrieval is not treated as historical publication availability; source_available_at_utc remains unknown.",
         }
-        Path(status).write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-        return payload
+        Path(status_path).write_text(
+            json.dumps(status, ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        return status
     except Exception as exc:
-        pd.DataFrame().to_csv(output, index=False)
-        payload = {"status": "FAILED_CLOSED", "prediction_time_utc": ts.isoformat(), "rows": 0, "error": f"{type(exc).__name__}: {exc}", "production_status": "NOT_PRODUCTION"}
-        Path(status).write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-        return payload
+        empty_output(output)
+        status = {
+            "status": "FAILED_CLOSED",
+            "prediction_time_utc": prediction_time.isoformat(),
+            "rows": 0,
+            "error": f"{type(exc).__name__}: {exc}",
+            "production_status": "NOT_PRODUCTION",
+        }
+        Path(status_path).write_text(
+            json.dumps(status, ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        return status
 
 
-def main():
+def verify(path: str) -> dict[str, Any]:
+    df = pd.read_csv(path)
+    missing = sorted(REQUIRED - set(df.columns))
+    if missing:
+        raise RuntimeError(f"missing fields: {missing}")
+    errors: list[str] = []
+    for idx, row in df.iterrows():
+        probs = np.asarray([row["p_home"], row["p_draw"], row["p_away"]], dtype=float)
+        if not np.isfinite(probs).all() or not np.isclose(probs.sum(), 1.0, atol=1e-5):
+            errors.append(f"{idx}: invalid 1X2 probability sum")
+        if str(row["production_status"]) != "NOT_PRODUCTION":
+            errors.append(f"{idx}: production flag must remain NOT_PRODUCTION")
+        if str(row["pit_status"]) not in {"CURRENT_OBSERVED_BEFORE_CUTOFF", "CURRENT_OBSERVED_PRE_KICKOFF"}:
+            errors.append(f"{idx}: invalid PIT status")
+        if not 0.0 <= float(row["uncertainty"]) <= 1.0:
+            errors.append(f"{idx}: uncertainty out of range")
+        if not 0.0 <= float(row["predictability"]) <= 1.0:
+            errors.append(f"{idx}: predictability out of range")
+        for rank in (1, 2, 3):
+            score = str(row[f"score_{rank}"])
+            probability = float(row[f"score_{rank}_probability"])
+            if "-" not in score or not np.isfinite(probability) or not 0.0 <= probability <= 1.0:
+                errors.append(f"{idx}: invalid score top{rank}")
+    if errors:
+        raise RuntimeError("; ".join(errors[:20]))
+    return {"status": "VERIFIED", "rows": int(len(df)), "empty_target_set": bool(df.empty)}
+
+
+def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", default="artifacts/live_research_predictions.csv")
     parser.add_argument("--status", default="artifacts/live_research_prediction_status.json")
     parser.add_argument("--verify", action="store_true")
     args = parser.parse_args()
-    result = run(args.output, args.status)
+
+    status = run(args.output, args.status)
     if args.verify:
-        result["output_contract_verification"] = verify(args.output)
-        result["output_contract_verified"] = True
-        Path(args.status).write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-    print(json.dumps(result, ensure_ascii=False))
-    return 0 if result.get("status") != "FAILED_CLOSED" else 1
+        verification = verify(args.output)
+        status["output_contract_verification"] = verification
+        status["output_contract_verified"] = verification.get("status") == "VERIFIED"
+        Path(args.status).write_text(
+            json.dumps(status, ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+    print(json.dumps(status, ensure_ascii=False))
+    return 0 if status.get("status") != "FAILED_CLOSED" else 1
 
 
 if __name__ == "__main__":
