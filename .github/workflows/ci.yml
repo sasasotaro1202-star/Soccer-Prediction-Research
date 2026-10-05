@@ -12,6 +12,11 @@ on:
       - "data/experience/**"
       - "data/raw/**"
       - ".github/automation/**"
+      # Machine-generated World Model evidence is validated by its own lanes.
+      # Avoid starting the full repository test suite for high-frequency data commits.
+      - "data/research/prospective_inplay/raw/**"
+      - "data/research/match_state_snapshots/**"
+      - "data/research/match_state_research_status.json"
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -54,10 +59,17 @@ jobs:
           done
           exit 1
 
+      - name: Validate workflow YAML syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e 'require "yaml"; Dir[".github/workflows/*.yml"].sort.each { |f| YAML.parse_file(f); puts "YAML_OK #{f}" }'
       - name: Compile Python sources
         run: python -m compileall -q src tests
 
       - name: Run deterministic test suite
         env:
           PYTHONHASHSEED: '0'
-        run: python -m pytest -q
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=30s 300             python -m pytest -q -vv --durations=20
