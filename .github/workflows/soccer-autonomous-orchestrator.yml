@@ -53,9 +53,9 @@ jobs:
           print(json.dumps(payload, ensure_ascii=False, indent=2))
           PY
 
-          active_run_count() {
-            gh run list --repo "${GH_REPO}" --limit 100 --json status \
-              --jq '[.[] | select(.status == "queued" or .status == "in_progress" or .status == "pending" or .status == "waiting" or .status == "requested")] | length'
+          active_current_main_count() {
+            gh run list --repo "${GH_REPO}" --limit 100 --json status,headSha \
+              --jq --arg main_sha "${MAIN_SHA}" '[.[] | select(.headSha == $main_sha) | select(.status == "queued" or .status == "in_progress" or .status == "pending" or .status == "waiting" or .status == "requested")] | length'
           }
 
           update_report() {
@@ -163,12 +163,12 @@ jobs:
                   update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"dispatch_budget_exhausted"},ensure_ascii=False))' "${workflow}")"
                   return
                 fi
-                if ! active_count="$(active_run_count)"; then
-                  update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"active_run_count_error"},ensure_ascii=False))' "${workflow}")"
+                if ! active_count="$(active_current_main_count)"; then
+                  update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"active_current_main_count_error"},ensure_ascii=False))' "${workflow}")"
                   return
                 fi
                 if [ "${active_count}" -ge "${max_active_runs}" ]; then
-                  update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"active_run_cap","active_run_count":int(sys.argv[2])},ensure_ascii=False))' "${workflow}" "${active_count}")"
+                  update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"active_current_main_cap","active_current_main_count":int(sys.argv[2])},ensure_ascii=False))' "${workflow}" "${active_count}")"
                   return
                 fi
                 if dispatch_workflow "${workflow}"; then
