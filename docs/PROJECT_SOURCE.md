@@ -236,3 +236,10 @@ The autonomous merge controller separately allowlists the orchestrator workflow 
 - PR #219 was closed without merge because its hardening changes were already promoted directly to the current main through controlled hardening commits. No research-performance claim was introduced by that promotion.
 - Current production/champion performance remains UNKNOWN/UNVERIFIABLE. The repository still has no newly verified OOS/WFO/calibration/robustness/frozen-holdout adoption evidence from this control-plane work.
 - The historical BLOCKED run artifacts remain preserved. They are not rewritten into PASS and do not count as new OOS evidence.
+
+## Current live-state reconciliation — 2026-10-05 (event-driven watchdog)
+
+- The control plane now has both scheduled and event-driven liveness checks. The 10-minute watchdog schedule remains active and the same watchdog also runs after completion of key orchestrator/research/PIT workflows.
+- Watchdog decisions are persisted as a 14-day Actions artifact. Current-main SHA is resolved live on every run; missing/stale orchestrator execution is recovered with bounded API retries.
+- Action Failure Recovery now includes timed-out control-plane runs in its one-time bounded recovery path. Deterministic failures and research quality gates remain authoritative.
+- No model, target, calibration, frozen-holdout or production performance evidence was changed by this hardening.
