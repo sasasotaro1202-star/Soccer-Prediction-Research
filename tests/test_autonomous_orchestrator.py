@@ -98,3 +98,11 @@ def test_failure_recovery_includes_watchdog_timeout():
     text = path.read_text(encoding="utf-8")
     assert "Soccer Control Plane Watchdog" in text
     assert "timed_out" in text
+
+
+def test_autonomous_controller_cancels_stale_reconciliations():
+    path = Path(".github/workflows/autonomous-github-controller.yml")
+    text = path.read_text(encoding="utf-8")
+    assert "group: soccer-autonomous-controller" in text
+    assert "cancel-in-progress: true" in text
+    assert ".github/workflows/soccer-control-plane-watchdog.yml" in text
