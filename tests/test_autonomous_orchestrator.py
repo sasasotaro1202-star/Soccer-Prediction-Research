@@ -102,12 +102,14 @@ def test_failure_recovery_includes_watchdog_timeout():
     assert "timed_out" in text
 
 
-def test_autonomous_controller_cancels_stale_reconciliations():
+def test_autonomous_controller_is_not_a_workflow_run_event_sink():
     path = Path(".github/workflows/autonomous-github-controller.yml")
     text = path.read_text(encoding="utf-8")
     assert "group: soccer-autonomous-controller" in text
     assert "cancel-in-progress: true" in text
-    assert ".github/workflows/soccer-control-plane-watchdog.yml" in text
+    assert "workflow_run:" not in text
+    assert "pull_request:" in text
+    assert 'cron: "17 */2 * * *"' in text
 
 
 def test_automation_heartbeat_is_long_term_and_bounded():

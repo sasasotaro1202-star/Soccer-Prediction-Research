@@ -2,16 +2,25 @@ name: Autonomous GitHub Controller
 
 on:
   schedule:
-    - cron: "7 */6 * * *"
+    # Periodic reconciliation is the fallback; PR events handle safe-hardening
+    # changes immediately without subscribing the controller to all workflow runs.
+    - cron: "17 */2 * * *"
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Soccer CI
-      - Soccer PIT Replay Audit
-      - Overnight Integrity
-      - Soccer Ultimate Experiment Matrix
-      - Soccer Feature Set Research
-    types: [completed]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - ".github/workflows/**"
+      - "scripts/experience_commit_guard.py"
+      - "src/research/adoption_gate.py"
+      - "src/research/stability_gate.py"
+      - "src/data/pit_source_adapter.py"
+      - "src/data/pit_source_adapter_v2.py"
+      - "src/data/pit_source_adapter_fast.py"
+      - "src/data/pit_archive_fallback.py"
+      - "src/data/pit_evidence.py"
+      - "tests/**"
+      - "docs/**"
 
 permissions:
   contents: write
@@ -19,8 +28,8 @@ permissions:
   actions: read
 
 concurrency:
-  # Keep only the newest reconciliation request. Older workflow_run events may
-  # arrive in bursts; cancelling a stale controller prevents queue accumulation.
+  # Coalesce overlapping PR/scheduled reconciliations. The controller is not a
+  # workflow_run event sink, so research workflow completions cannot create storms.
   group: soccer-autonomous-controller
   cancel-in-progress: true
 
