@@ -140,3 +140,38 @@ PROSPECTIVE OBSERVATION → LATER LABEL MATURITY → MATCH-LEVEL WFO/OOS → PRE
 For the World Model track, market odds are not consumed. They must not become hidden features through source payloads, generic feature selection, or diagnostic fusion.
 
 Prospective data acquisition is research evidence generation only. It cannot change target semantics, Champion, Production, frozen holdout or adoption authority.
+
+
+## Current-match live research lane
+
+A dedicated research-only current-match lane may serve explicitly requested live or imminent matches when the adopted Production bundle is unavailable or blocked. The lane must remain outside Production authority and must not relax PIT/OOS/holdout/adoption gates.
+
+The live lane should:
+- acquire a current public match snapshot;
+- preserve response hashes and retrieval timestamps;
+- keep retrieval time distinct from historical source publication/availability time;
+- resolve target identity conservatively without silent merging;
+- expose current score/status and elapsed time;
+- produce 1X2 probabilities and a Top-3 score distribution when the current state is sufficiently observed;
+- compute uncertainty and predictability separately;
+- persist Git SHA, configuration hash, experiment fingerprint and prediction revision;
+- publish to a dedicated research artifact and GitHub Actions summary;
+- fail closed when critical sources or contracts are invalid;
+- never label its own output PRODUCTION without passing the normal adoption contract.
+
+Current live research implementation:
+src/prediction/live_research_forecast.py
+
+Current configuration:
+config/live_research_forecast.json
+
+Current workflow:
+.github/workflows/soccer-live-research-forecast.yml
+
+Current documentation:
+docs/live-research-forecast.md
+
+The intended maturation path is:
+PROSPECTIVE SNAPSHOT → RESULT MATURITY → PIT/SCHEMA → CHRONOLOGICAL WFO/OOS → PREQUENTIAL CALIBRATION → ABLATION → ROBUSTNESS → INCUMBENT COMPARISON → FROZEN HOLDOUT → ADOPTION GATE → SHADOW → PROMOTION.
+
+The emergency/live lane must never be interpreted as evidence that the underlying heuristic is performance-verified merely because a current forecast was generated successfully.
