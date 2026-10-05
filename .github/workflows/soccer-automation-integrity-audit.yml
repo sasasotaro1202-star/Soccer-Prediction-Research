@@ -4,12 +4,14 @@ on:
   schedule:
     - cron: "13 */6 * * *"
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/**"
-      - "PROJECT_INSTRUCTIONS.md"
-      - "tests/test_autonomous_orchestrator.py"
+  workflow_run:
+    workflows:
+      - Soccer Autonomous Orchestrator
+      - Soccer Control Plane Watchdog
+      - Action Failure Recovery
+      - Autonomous GitHub Controller
+    types:
+      - completed
 
 permissions:
   actions: read
