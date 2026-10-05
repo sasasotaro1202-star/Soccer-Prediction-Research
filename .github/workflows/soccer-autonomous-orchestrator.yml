@@ -73,13 +73,41 @@ jobs:
             gh run list --repo "${GH_REPO}" --workflow "${workflow}" --limit 50               --json status,conclusion,createdAt,headSha,headBranch,databaseId
           }
 
+          dispatch_workflow() {
+            local workflow="$1"
+            for attempt in 1 2 3; do
+              if case "${workflow}" in
+                pit-replay-audit.yml)
+                  # This lane has required workflow_dispatch inputs; use only its
+                  # deterministic, audit-only defaults. No prediction is enabled.
+                  gh workflow run "${workflow}" --repo "${GH_REPO}" --ref main \
+                    -f competition=EPL \
+                    -f rows_per_season=1
+                  ;;
+                *)
+                  gh workflow run "${workflow}" --repo "${GH_REPO}" --ref main
+                  ;;
+              esac
+              then
+                return 0
+              fi
+              if [ "${attempt}" -lt 3 ]; then
+                sleep $((attempt * 5))
+              fi
+            done
+            return 1
+          }
+
           ensure_lane() {
             local workflow="$1"
             local cadence_minutes="$2"
             local min_gap_minutes="$3"
 
             local runs
-            runs="$(workflow_state "${workflow}")"
+            if ! runs="$(workflow_state "${workflow}")"; then
+              update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"workflow_state_error"},ensure_ascii=False))' "${workflow}")"
+              return
+            fi
 
             local decision
             decision="$(
@@ -135,24 +163,15 @@ jobs:
                   update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"dispatch_budget_exhausted"},ensure_ascii=False))' "${workflow}")"
                   return
                 fi
-                active_count="$(active_run_count)"
+                if ! active_count="$(active_run_count)"; then
+                  update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"active_run_count_error"},ensure_ascii=False))' "${workflow}")"
+                  return
+                fi
                 if [ "${active_count}" -ge "${max_active_runs}" ]; then
                   update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"active_run_cap","active_run_count":int(sys.argv[2])},ensure_ascii=False))' "${workflow}" "${active_count}")"
                   return
                 fi
-                if case "${workflow}" in
-                  pit-replay-audit.yml)
-                    # This lane has required workflow_dispatch inputs; use only its
-                    # deterministic, audit-only defaults. No prediction is enabled.
-                    gh workflow run "${workflow}" --repo "${GH_REPO}" --ref main \
-                      -f competition=EPL \
-                      -f rows_per_season=1
-                    ;;
-                  *)
-                    gh workflow run "${workflow}" --repo "${GH_REPO}" --ref main
-                    ;;
-                esac
-                then
+                if dispatch_workflow "${workflow}"; then
                   dispatched_count=$((dispatched_count + 1))
                   update_report dispatched "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":sys.argv[2],"dispatch_sequence":int(sys.argv[3])},ensure_ascii=False))' "${workflow}" "${decision}" "${dispatched_count}")"
                 else
