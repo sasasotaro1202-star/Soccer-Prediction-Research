@@ -162,3 +162,24 @@ def test_orchestrator_keeps_world_model_research_non_authoritative():
     assert "frozen_holdout_access_allowed" in text
     assert "performance_claim_allowed" in text
     assert "gh pr merge" not in text
+
+
+def test_automation_integrity_audit_is_required_and_fail_closed():
+    audit = Path(".github/workflows/soccer-automation-integrity-audit.yml").read_text(encoding="utf-8")
+    orchestrator = WORKFLOW.read_text(encoding="utf-8")
+    recovery = Path(".github/workflows/action-failure-recovery.yml").read_text(encoding="utf-8")
+    assert 'cron: "13 */6 * * *"' in audit
+    assert "workflow_dispatch:" in audit
+    assert "concurrency:" in audit
+    assert "actions: read" in audit
+    assert "contents: read" in audit
+    assert "ensure_lane" in audit
+    assert "gh pr merge" not in audit
+    assert "|| true" not in audit
+    assert "soccer-automation-integrity-audit.yml" in orchestrator
+    assert "Soccer Automation Integrity Audit" in recovery
+
+
+def test_control_plane_watchdog_does_not_mask_errors_with_or_true():
+    text = Path(".github/workflows/soccer-control-plane-watchdog.yml").read_text(encoding="utf-8")
+    assert "|| true" not in text
