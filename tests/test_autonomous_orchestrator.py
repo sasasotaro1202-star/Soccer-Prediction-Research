@@ -74,3 +74,10 @@ def test_orchestrator_has_bounded_dispatch_and_active_run_caps():
     assert "max_active_runs=10" in text
     assert "dispatch_budget_exhausted" in text
     assert "active_run_cap" in text
+
+
+def test_orchestrator_does_not_stop_on_single_dispatch_error():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert 'if case "${workflow}" in' in text
+    assert '"reason":"dispatch_error"' in text
+    assert "continue reconciliation" in text
