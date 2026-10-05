@@ -255,4 +255,4 @@ def test_maturity_pr_validation_checks_exact_pr_head() -> None:
         encoding="utf-8"
     )
     assert "github.event_name == 'pull_request'" in workflow
-    assert "ref: ${{ github.sha }}" in workflow
+    assert "ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main' }}" in workflow
