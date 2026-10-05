@@ -158,3 +158,10 @@ def test_failure_recovery_has_no_escaped_github_expressions() -> None:
     assert "${{ github.event_name == 'schedule' }}" in workflow
     assert "${{ github.token }}" in workflow
     assert "${{ github.repository }}" in workflow
+
+
+def test_controller_allowlists_world_model_supervisor_as_control_plane_hardening() -> None:
+    workflow = Path(".github/workflows/autonomous-github-controller.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "soccer-world-model-supervisor.yml" in workflow
