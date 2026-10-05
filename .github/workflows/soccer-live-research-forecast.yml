@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: soccer-live-research-forecast
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   forecast:
