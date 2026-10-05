@@ -234,3 +234,10 @@ def test_maturity_lane_pr_validation_cannot_write_main() -> None:
     assert "pull_request:" in workflow
     assert "github.event_name != 'pull_request'" in workflow
     assert "git push origin HEAD:main" in workflow
+
+
+def test_failure_recovery_declares_top_level_schedule_trigger() -> None:
+    workflow = Path(".github/workflows/action-failure-recovery.yml").read_text(
+        encoding="utf-8"
+    )
+    assert '\n  schedule:\n    - cron: "*/15 * * * *"\n' in workflow
