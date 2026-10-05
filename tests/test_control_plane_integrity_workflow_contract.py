@@ -102,3 +102,11 @@ def test_action_failure_recovery_lists_all_world_model_lanes() -> None:
     )
     for lane in required_lanes:
         assert lane in workflow
+
+
+def test_controller_reconciles_after_integrity_audit_completion() -> None:
+    workflow = Path(".github/workflows/autonomous-github-controller.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "Soccer Automation Integrity Audit" in workflow
+    assert "types: [completed]" in workflow
