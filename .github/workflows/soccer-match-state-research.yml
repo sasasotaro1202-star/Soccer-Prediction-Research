@@ -92,7 +92,26 @@ jobs:
           status="$(python -c "import json,sys; print(json.load(open(sys.argv[1], encoding=\"utf-8\")).get(\"status\",\"\"))" "$status_file")"
           case "$status" in
             WARMUP)
-              echo "Matured in-play evidence unavailable; HOLD and let the autonomous supervisor/data lanes continue."
+              echo "Matured in-play evidence unavailable; dispatching bounded source/acquisition catch-up."
+              for workflow in \
+                "adaptive_data_discovery.yml" \
+                "soccer-source-probe.yml"; do
+                dispatched=false
+                for attempt in 1 2 3; do
+                  if gh workflow run "$workflow" --repo "${GITHUB_REPOSITORY}" --ref main; then
+                    echo "Discovery dispatch requested: ${workflow}"
+                    dispatched=true
+                    break
+                  fi
+                  if [ "$attempt" -lt 3 ]; then
+                    sleep $((attempt * 5))
+                  fi
+                done
+                if [ "$dispatched" != true ]; then
+                  echo "Discovery dispatch failed for ${workflow}; preserving fail-closed state." >&2
+                  exit 1
+                fi
+              done
               ;;
             SCHEMA_VERIFIED|OOS_EVALUATED)
               echo "Match-state status=${status}; discovery catch-up not required."
