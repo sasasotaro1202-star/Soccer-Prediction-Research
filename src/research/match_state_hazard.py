@@ -546,6 +546,45 @@ def _safe_multiclass_logloss(y: Sequence[str], p: np.ndarray, classes: Sequence[
     return float(np.mean(-np.log(selected)))
 
 
+def _temperature_apply(probabilities: np.ndarray, temperature: float) -> np.ndarray:
+    """Apply multiclass temperature scaling in probability-logit space."""
+    p = np.asarray(probabilities, dtype=float)
+    if p.ndim != 2 or p.shape[1] != len(EVENT_TYPES) or not np.isfinite(p).all():
+        raise ValueError("temperature input probabilities are invalid")
+    if not np.isfinite(temperature) or temperature <= 0:
+        raise ValueError("temperature must be positive")
+    logits = np.log(np.clip(p, 1e-12, 1.0)) / float(temperature)
+    logits -= logits.max(axis=1, keepdims=True)
+    out = np.exp(logits)
+    out /= out.sum(axis=1, keepdims=True)
+    return out
+
+
+def fit_temperature(
+    probabilities: np.ndarray,
+    y: Sequence[str],
+    *,
+    min_rows: int = 50,
+) -> float:
+    """Choose temperature only from chronologically prior calibration observations."""
+    p = np.asarray(probabilities, dtype=float)
+    yy = np.asarray(y, dtype=str)
+    if len(yy) < min_rows:
+        return 1.0
+    if p.ndim != 2 or p.shape != (len(yy), len(EVENT_TYPES)):
+        raise ValueError("temperature fit shapes are invalid")
+    candidates = np.exp(np.linspace(np.log(0.5), np.log(3.0), 51))
+    best_t = 1.0
+    best_loss = float("inf")
+    for temperature in candidates:
+        calibrated = _temperature_apply(p, float(temperature))
+        loss = _safe_multiclass_logloss(yy, calibrated, EVENT_TYPES)
+        if loss < best_loss - 1e-12:
+            best_loss = loss
+            best_t = float(temperature)
+    return best_t
+
+
 def evaluate_hazard_chronological_oos(
     frame: pd.DataFrame,
     *,
@@ -553,11 +592,14 @@ def evaluate_hazard_chronological_oos(
     min_training_matches: int = 60,
     min_test_matches: int = 10,
     max_folds: int = 8,
+    feature_columns: Sequence[str] | None = None,
 ) -> dict[str, Any]:
-    """Prequential match-level OOS for next-event hazard.
+    """Prequential match-level OOS for next-event hazard and scenario-derived 1X2.
 
-    Each fold trains only on complete earlier matches. A later snapshot from the
-    same match can never enter training for an earlier snapshot test row.
+    Training, calibration and test observations are all chronological. The
+    calibrator for fold k may use only predictions/outcomes from earlier folds.
+    Scenario evaluation uses one latest snapshot per test match so multiple
+    snapshots from one match do not become multiple independent match forecasts.
     """
     d = build_state_features(validate_snapshot_contract(frame))
     folds = _chronological_match_blocks(
@@ -579,7 +621,10 @@ def evaluate_hazard_chronological_oos(
     }
     fold_metrics = []
     all_y = []
-    all_p = []
+    all_p_raw = []
+    all_p_cal = []
+    calibration_y: list[str] = []
+    calibration_p: list[list[float]] = []
 
     for fold_number, (train_ids, test_ids) in enumerate(folds, start=1):
         train = pd.concat([by_match[mid] for mid in train_ids], ignore_index=True)
@@ -587,10 +632,6 @@ def evaluate_hazard_chronological_oos(
         if len(train_ids) < min_training_matches:
             continue
 
-        # Strict prequential maturity boundary: every training label must have
-        # become available no later than the earliest prediction cutoff in the
-        # test block. This blocks leakage from simultaneous/overlapping matches
-        # whose final label matured after the test prediction point.
         test_start = pd.to_datetime(
             test["prediction_cutoff_utc"], utc=True
         ).min()
@@ -599,30 +640,42 @@ def evaluate_hazard_chronological_oos(
         ].copy()
         if mature_train["match_id"].nunique() < min_training_matches:
             continue
+
         as_of = test_start
         model = fit_hazard_model(
             mature_train,
             as_of_cutoff=as_of,
             method=method,
             min_rows=max(120, min_training_matches * 3),
+            feature_columns=feature_columns,
         )
         x = test[model["feature_columns"]]
-        probabilities = model["model"].predict_proba(x)
+        raw_probabilities = model["model"].predict_proba(x)
         model_classes = [str(v) for v in model["model"].classes_]
-        aligned = np.full(
+        aligned_raw = np.full(
             (len(test), len(EVENT_TYPES)),
             1e-9,
             dtype=float,
         )
         for idx, cls in enumerate(model_classes):
             if cls in _EVENT_SET:
-                aligned[:, EVENT_TYPES.index(cls)] = probabilities[:, idx]
-        aligned /= aligned.sum(axis=1, keepdims=True)
-        y = test["next_event_type"].astype(str).to_numpy()
+                aligned_raw[:, EVENT_TYPES.index(cls)] = raw_probabilities[:, idx]
+        aligned_raw /= aligned_raw.sum(axis=1, keepdims=True)
 
-        row_losses = -np.log(
+        temperature = fit_temperature(
+            np.asarray(calibration_p, dtype=float)
+            if calibration_p
+            else np.empty((0, len(EVENT_TYPES)), dtype=float),
+            calibration_y,
+        )
+        aligned_cal = _temperature_apply(aligned_raw, temperature)
+        model = dict(model)
+        model["temperature"] = float(temperature)
+
+        y = test["next_event_type"].astype(str).to_numpy()
+        raw_row_losses = -np.log(
             np.clip(
-                aligned[
+                aligned_raw[
                     np.arange(len(y)),
                     [EVENT_TYPES.index(v) for v in y],
                 ],
@@ -630,13 +683,61 @@ def evaluate_hazard_chronological_oos(
                 1.0,
             )
         )
-        per_match = (
+        cal_row_losses = -np.log(
+            np.clip(
+                aligned_cal[
+                    np.arange(len(y)),
+                    [EVENT_TYPES.index(v) for v in y],
+                ],
+                1e-12,
+                1.0,
+            )
+        )
+        raw_per_match = (
             pd.DataFrame(
-                {"match_id": test["match_id"].astype(str), "loss": row_losses}
+                {"match_id": test["match_id"].astype(str), "loss": raw_row_losses}
             )
             .groupby("match_id", sort=False)["loss"]
             .mean()
         )
+        cal_per_match = (
+            pd.DataFrame(
+                {"match_id": test["match_id"].astype(str), "loss": cal_row_losses}
+            )
+            .groupby("match_id", sort=False)["loss"]
+            .mean()
+        )
+
+        # One latest snapshot per match is used for terminal scenario evaluation.
+        latest = (
+            test.sort_values(
+                ["match_id", "prediction_cutoff_utc"], kind="mergesort"
+            )
+            .groupby("match_id", sort=False)
+            .tail(1)
+            .reset_index(drop=True)
+        )
+        scenario_probabilities = []
+        scenario_actuals = []
+        scenario_pruned = []
+        for _, row in latest.iterrows():
+            scenario = propagate_scenarios(model, row.to_dict())
+            outcome = scenario["outcome_probabilities"]
+            scenario_probabilities.append(
+                [float(outcome["home"]), float(outcome["draw"]), float(outcome["away"])]
+            )
+            scenario_actuals.append(
+                outcome_from_final_scores(
+                    float(row["final_home_goals"]),
+                    float(row["final_away_goals"]),
+                )
+            )
+            scenario_pruned.append(float(scenario["pruned_mass"]))
+        scenario_metrics = outcome_metrics(
+            scenario_actuals,
+            scenario_probabilities,
+        )
+
         fold_metrics.append({
             "fold": fold_number,
             "train_matches": int(mature_train["match_id"].nunique()),
@@ -644,19 +745,36 @@ def evaluate_hazard_chronological_oos(
             "train_snapshots": int(len(mature_train)),
             "test_snapshots": int(len(test)),
             "test_start_utc": str(test_start),
-            "test_end_utc": str(pd.to_datetime(test["prediction_cutoff_utc"], utc=True).max()),
+            "test_end_utc": str(
+                pd.to_datetime(test["prediction_cutoff_utc"], utc=True).max()
+            ),
             "training_label_cutoff_utc": str(
-                pd.to_datetime(mature_train["label_available_at_utc"], utc=True).max()
+                pd.to_datetime(
+                    mature_train["label_available_at_utc"], utc=True
+                ).max()
             ),
-            # Primary aggregate is equal-weighted by match, not by snapshot
-            # count. Snapshot-weighted loss is retained as a diagnostic only.
-            "next_event_logloss": float(per_match.mean()),
+            "next_event_logloss": float(raw_per_match.mean()),
+            "calibrated_next_event_logloss": float(cal_per_match.mean()),
             "snapshot_weighted_next_event_logloss": _safe_multiclass_logloss(
-                y, aligned, EVENT_TYPES
+                y, aligned_raw, EVENT_TYPES
             ),
+            "snapshot_weighted_calibrated_next_event_logloss": _safe_multiclass_logloss(
+                y, aligned_cal, EVENT_TYPES
+            ),
+            "calibration_temperature": float(temperature),
+            "scenario_outcome_logloss": float(scenario_metrics["logloss"]),
+            "scenario_outcome_brier": float(scenario_metrics["brier"]),
+            "scenario_outcome_accuracy": float(scenario_metrics["accuracy"]),
+            "scenario_match_count": int(scenario_metrics["n"]),
+            "scenario_mean_pruned_mass": float(np.mean(scenario_pruned))
+            if scenario_pruned
+            else 0.0,
         })
         all_y.extend(y.tolist())
-        all_p.extend(aligned.tolist())
+        all_p_raw.extend(aligned_raw.tolist())
+        all_p_cal.extend(aligned_cal.tolist())
+        calibration_y.extend(y.tolist())
+        calibration_p.extend(aligned_raw.tolist())
 
     if not fold_metrics:
         return {
@@ -666,27 +784,101 @@ def evaluate_hazard_chronological_oos(
             "folds": [],
         }
 
-    p = np.asarray(all_p, dtype=float)
     y = np.asarray(all_y, dtype=str)
-    ll_snapshot = _safe_multiclass_logloss(y, p, EVENT_TYPES)
-    ll_match = float(np.mean([f["next_event_logloss"] for f in fold_metrics]))
+    p_raw = np.asarray(all_p_raw, dtype=float)
+    p_cal = np.asarray(all_p_cal, dtype=float)
+    scenario_logloss = float(np.mean([f["scenario_outcome_logloss"] for f in fold_metrics]))
+    scenario_brier = float(np.mean([f["scenario_outcome_brier"] for f in fold_metrics]))
+    scenario_accuracy = float(np.mean([f["scenario_outcome_accuracy"] for f in fold_metrics]))
     return {
         "status": "EVALUATED",
         "method": method,
+        "feature_columns": list(feature_columns) if feature_columns is not None else None,
         "oos_claimed": True,
         "production_usable": False,
         "test_match_count_sum": int(sum(f["test_matches"] for f in fold_metrics)),
         "snapshot_rows": int(len(y)),
         "folds": fold_metrics,
-        # Primary: equal-weighted by match to avoid snapshot-count bias.
-        "overall_next_event_logloss": ll_match,
-        "snapshot_weighted_next_event_logloss": ll_snapshot,
+        "overall_next_event_logloss": float(
+            np.mean([f["next_event_logloss"] for f in fold_metrics])
+        ),
+        "overall_calibrated_next_event_logloss": float(
+            np.mean([f["calibrated_next_event_logloss"] for f in fold_metrics])
+        ),
+        "snapshot_weighted_next_event_logloss": _safe_multiclass_logloss(
+            y, p_raw, EVENT_TYPES
+        ),
+        "snapshot_weighted_calibrated_next_event_logloss": _safe_multiclass_logloss(
+            y, p_cal, EVENT_TYPES
+        ),
+        "scenario_outcome_logloss": scenario_logloss,
+        "scenario_outcome_brier": scenario_brier,
+        "scenario_outcome_accuracy": scenario_accuracy,
+        "scenario_is_match_level": True,
+        "calibration": {
+            "method": "prequential_temperature_grid",
+            "uses_only_prior_fold_predictions": True,
+            "min_rows": 50,
+        },
         "policy": (
             "match-level_expanding_chronological_OOS; same-match_snapshots_never_split; "
-            "training_labels_must_be_mature_by_test_cutoff"
+            "training_labels_must_be_mature_by_test_cutoff; calibration_uses_prior_folds_only"
         ),
     }
 
+
+def evaluate_hazard_robustness(
+    frame: pd.DataFrame,
+    *,
+    method: str = "logistic",
+    min_training_matches: int = 60,
+    min_test_matches: int = 10,
+    max_folds: int = 6,
+) -> dict[str, Any]:
+    """Run a bounded feature-family robustness/ablation comparison."""
+    full_features = select_model_features(frame)
+    base = evaluate_hazard_chronological_oos(
+        frame,
+        method=method,
+        min_training_matches=min_training_matches,
+        min_test_matches=min_test_matches,
+        max_folds=max_folds,
+        feature_columns=BASE_FEATURES,
+    )
+    full = evaluate_hazard_chronological_oos(
+        frame,
+        method=method,
+        min_training_matches=min_training_matches,
+        min_test_matches=min_test_matches,
+        max_folds=max_folds,
+        feature_columns=full_features,
+    )
+    if base.get("status") != "EVALUATED" or full.get("status") != "EVALUATED":
+        return {
+            "status": "INSUFFICIENT_EVIDENCE",
+            "production_usable": False,
+            "base": base,
+            "full": full,
+        }
+    return {
+        "status": "EVALUATED",
+        "production_usable": False,
+        "base_feature_count": int(len(BASE_FEATURES)),
+        "full_feature_count": int(len(full_features)),
+        "base_logloss": float(base["overall_calibrated_next_event_logloss"]),
+        "full_logloss": float(full["overall_calibrated_next_event_logloss"]),
+        "delta_full_minus_base": float(
+            full["overall_calibrated_next_event_logloss"]
+            - base["overall_calibrated_next_event_logloss"]
+        ),
+        "base_scenario_logloss": float(base["scenario_outcome_logloss"]),
+        "full_scenario_logloss": float(full["scenario_outcome_logloss"]),
+        "delta_full_minus_base_scenario": float(
+            full["scenario_outcome_logloss"] - base["scenario_outcome_logloss"]
+        ),
+        "same_chronological_policy": True,
+        "note": "robustness/ablation evidence only; no automatic adoption",
+    }
 
 def scenario_outcome_from_state_model(
     model: Mapping[str, Any],
@@ -757,14 +949,14 @@ def run_match_state_research(
     input_path: str | Path,
     artifact_dir: str | Path,
 ) -> dict[str, Any]:
-    """Run schema/PIT verification without inventing data or performance claims."""
+    """Run the staged PIT/OOS/calibration/robustness research controller."""
     path = Path(input_path)
     out = Path(artifact_dir)
     out.mkdir(parents=True, exist_ok=True)
 
     if not path.is_file():
         status = {
-            "schema_version": 1,
+            "schema_version": 2,
             "status": "WARMUP",
             "reason": "match_state_snapshot_dataset_missing",
             "input_path": str(path),
@@ -774,6 +966,8 @@ def run_match_state_research(
             "production_usable": False,
             "research_only": True,
             "pit_status": "NOT_EXECUTED",
+            "calibration_status": "NOT_EXECUTED",
+            "robustness_status": "NOT_EXECUTED",
             "next_step": "acquire_historical_PIT_verified_in_play_snapshots",
         }
         (out / "match_state_status.json").write_text(
@@ -788,7 +982,7 @@ def run_match_state_research(
     fingerprint = snapshot_fingerprint(enriched)
     enriched.to_csv(out / "validated_snapshots.csv", index=False)
 
-    oos_results = {}
+    oos_results: dict[str, Any] = {}
     for method in ("logistic", "histgb"):
         try:
             oos_results[method] = evaluate_hazard_chronological_oos(
@@ -806,13 +1000,43 @@ def run_match_state_research(
                 "error": f"{type(exc).__name__}: {exc}",
             }
 
+    robustness: dict[str, Any]
+    try:
+        robustness = evaluate_hazard_robustness(
+            enriched,
+            method="logistic",
+            min_training_matches=60,
+            min_test_matches=10,
+            max_folds=6,
+        )
+    except Exception as exc:
+        robustness = {
+            "status": "FAILED",
+            "production_usable": False,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
     evaluated = [
         v for v in oos_results.values()
         if isinstance(v, dict) and v.get("status") == "EVALUATED"
     ]
+    calibration_ready = any(
+        isinstance(v, dict)
+        and isinstance(v.get("calibration"), dict)
+        and v.get("calibration", {}).get("uses_only_prior_fold_predictions") is True
+        for v in evaluated
+    )
+    robustness_ready = robustness.get("status") == "EVALUATED"
+    status_name = (
+        "CALIBRATION_ROBUSTNESS_EVALUATED"
+        if evaluated and calibration_ready and robustness_ready
+        else "OOS_EVALUATED"
+        if evaluated
+        else "SCHEMA_VERIFIED"
+    )
     status = {
-        "schema_version": 1,
-        "status": "OOS_EVALUATED" if evaluated else "SCHEMA_VERIFIED",
+        "schema_version": 2,
+        "status": status_name,
         "rows": int(len(enriched)),
         "matches": int(enriched["match_id"].nunique()),
         "input_fingerprint": fingerprint,
@@ -822,8 +1046,21 @@ def run_match_state_research(
         "production_usable": False,
         "research_only": True,
         "pit_status": "PASS",
+        "calibration_status": "EVALUATED" if calibration_ready else "PENDING",
+        "robustness_status": "EVALUATED" if robustness_ready else "PENDING",
         "oos": oos_results,
-        "next_step": "calibration_and_robustness_required" if evaluated else "chronological_OOS_required",
+        "robustness": robustness,
+        "promotion_gate": {
+            "status": "HOLD",
+            "reason": "research_only_until_incumbent_comparison_robustness_holdout_release_gates",
+        },
+        "next_step": (
+            "incumbent_comparison_then_robustness_case_slices_frozen_holdout_release_gate"
+            if status_name == "CALIBRATION_ROBUSTNESS_EVALUATED"
+            else "calibration_and_robustness_required"
+            if status_name == "OOS_EVALUATED"
+            else "chronological_OOS_required"
+        ),
     }
     (out / "match_state_status.json").write_text(
         json.dumps(status, indent=2, ensure_ascii=False),
