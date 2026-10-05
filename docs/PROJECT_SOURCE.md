@@ -327,3 +327,13 @@ This remains research-only. Prospective observations are evidence-generation dat
 - Monthly mature partitions feed the dynamic hazard runner directly. The runner performs match-level expanding chronological OOS, prequential temperature calibration using prior folds only, scenario-derived match-level 1X2 evaluation, joint score-distribution output, and bounded feature-family robustness.
 - The autonomous orchestrator now reconciles prospective capture, maturity, dynamic simulator and World Model supervisor lanes. The supervisor separately catches stale current-main World Model lanes, while Action Failure Recovery provides bounded one-time recovery.
 - The new continuous data path has not established Production performance superiority. No Champion/Production adoption claim is authorized until incumbent comparison, case-level diagnostics, robustness, frozen holdout and release gates pass with zero PIT violations.
+
+
+## Current hardening reconciliation — 2026-10-05 (World Model control-plane depth)
+
+- The pending hardening branch extends the integrity audit beyond the core orchestrator/watchdog pair to the complete continuous World Model lane set: prospective capture, prospective maturity, World Model supervisor, dynamic simulator and match-state research.
+- Liveness is evaluated by current-main SHA. An active current-main run is healthy, a recent completed non-success run is explicitly unhealthy, and absent/stale current-main execution remains HOLD rather than being treated as healthy merely because a run exists.
+- The audit checks the exact workflow display identity as well as workflow file presence/state, reducing the risk that a renamed/replaced workflow silently satisfies a stale contract.
+- The weekly heartbeat is checked for explicit timestamp freshness after activation, with an eight-day tolerance; BOOTSTRAPPED remains an explicit non-failure initialization state until the first heartbeat is recorded.
+- Action Failure Recovery is required to cover every World Model research lane, including Match State Research. No automatic path converts a failed research lane into PASS or grants Production/frozen-holdout/performance authority.
+- These are control-plane hardening changes only. They do not introduce new OOS/WFO performance evidence, alter the Champion/Production state, or authorize promotion.
