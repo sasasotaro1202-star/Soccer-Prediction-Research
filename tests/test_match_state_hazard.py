@@ -6,7 +6,9 @@ from pathlib import Path
 from src.research.match_state_hazard import (
     EVENT_TYPES,
     build_state_features,
+    evaluate_hazard_robustness,
     fit_hazard_model,
+    fit_temperature,
     predict_hazard,
     propagate_scenarios,
     run_match_state_research,
@@ -208,3 +210,70 @@ def test_match_state_workflow_can_persist_research_state_but_not_pr_state():
     assert "contents: write" in workflow
     assert "github.event_name != 'pull_request'" in workflow
     assert "Persist research status on main" in workflow
+
+
+def test_temperature_calibration_is_prequential_helper_and_normalized():
+    p = np.tile(np.asarray([[0.70, 0.20, 0.10]]), (60, 1))
+    y = np.asarray(["HOME_GOAL"] * 60)
+    temperature = fit_temperature(p, y, min_rows=50)
+    assert np.isfinite(temperature)
+    assert temperature > 0
+    from src.research.match_state_hazard import _temperature_apply
+    calibrated = _temperature_apply(p, temperature)
+    assert calibrated.shape == p.shape
+    assert np.allclose(calibrated.sum(axis=1), 1.0)
+
+
+def test_oos_exposes_scenario_metrics_and_prequential_calibration():
+    frame = build_state_features(validate_snapshot_contract(_rows(150)))
+    from src.research.match_state_hazard import evaluate_hazard_chronological_oos
+    result = evaluate_hazard_chronological_oos(
+        frame,
+        method="logistic",
+        min_training_matches=60,
+        min_test_matches=10,
+        max_folds=2,
+    )
+    assert result["status"] == "EVALUATED"
+    assert np.isfinite(result["overall_calibrated_next_event_logloss"])
+    assert np.isfinite(result["scenario_outcome_logloss"])
+    assert np.isfinite(result["scenario_outcome_brier"])
+    assert np.isfinite(result["scenario_outcome_accuracy"])
+    assert result["scenario_is_match_level"] is True
+    assert result["calibration"]["uses_only_prior_fold_predictions"] is True
+    for fold in result["folds"]:
+        assert "calibration_temperature" in fold
+        assert "scenario_outcome_logloss" in fold
+
+
+def test_robustness_comparison_is_same_oos_policy():
+    frame = build_state_features(validate_snapshot_contract(_rows(150)))
+    result = evaluate_hazard_robustness(
+        frame,
+        method="logistic",
+        min_training_matches=60,
+        min_test_matches=10,
+        max_folds=2,
+    )
+    assert result["status"] == "EVALUATED"
+    assert result["production_usable"] is False
+    assert result["same_chronological_policy"] is True
+    assert np.isfinite(result["delta_full_minus_base"])
+
+
+def test_run_persists_calibration_and_robustness_state(tmp_path):
+    frame = _rows(150)
+    input_path = tmp_path / "snapshots.csv"
+    frame.to_csv(input_path, index=False)
+    status = run_match_state_research(
+        input_path,
+        tmp_path / "artifacts",
+    )
+    assert status["research_only"] is True
+    assert status["production_usable"] is False
+    assert status["performance_verified"] is False
+    assert status["promotion_candidate"] is False
+    assert status["status"] in {"OOS_EVALUATED", "CALIBRATION_ROBUSTNESS_EVALUATED"}
+    assert status["calibration_status"] in {"EVALUATED", "PENDING"}
+    assert status["robustness_status"] in {"EVALUATED", "PENDING"}
+    assert (tmp_path / "artifacts" / "match_state_status.json").is_file()
