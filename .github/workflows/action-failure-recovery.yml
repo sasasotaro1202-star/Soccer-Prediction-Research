@@ -20,35 +20,6 @@ env:
   GH_REPO: ${{ github.repository }}
 
 jobs:
-  event-recovery:
-    if: >-
-      github.event_name == 'workflow_run' &&
-      (github.event.workflow_run.conclusion == 'failure' ||
-       github.event.workflow_run.conclusion == 'timed_out') &&
-      github.event.workflow_run.run_attempt == 1
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Retry failed source workflow once
-        env:
-          RUN_ID: ${{ github.event.workflow_run.id }}
-          RUN_NAME: ${{ github.event.workflow_run.name }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Automatic one-time recovery for ${RUN_NAME} (${RUN_ID})."
-          for attempt in 1 2 3; do
-            if gh run rerun "${RUN_ID}" --failed --repo "${GH_REPO}"; then
-              echo "Recovery rerun requested on attempt ${attempt}."
-              exit 0
-            fi
-            if [ "${attempt}" -eq 3 ]; then
-              echo "Recovery request failed after bounded retries." >&2
-              exit 1
-            fi
-            sleep $((attempt * 10))
-          done
-
   scheduled-catchup:
     if: github.event_name == 'schedule'
     name: Catch missed failure-recovery events
