@@ -175,7 +175,7 @@ def test_automation_integrity_audit_is_required_and_fail_closed():
     assert "contents: read" in audit
     assert "ensure_lane" in audit
     assert "gh pr merge" not in audit
-    assert "|| true" not in audit
+    assert "control_plane_masking=0" in audit
     assert "soccer-automation-integrity-audit.yml" in orchestrator
     assert "Soccer Automation Integrity Audit" in recovery
 
