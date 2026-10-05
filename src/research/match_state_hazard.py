@@ -479,23 +479,41 @@ def propagate_scenarios(
         else:
             away_win += p
     score_rows.sort(key=lambda x: (-x[2], x[0], x[1]))
+    score_distribution = [
+        {"home_goals": int(hs), "away_goals": int(aws), "probability": float(p)}
+        for hs, aws, p in sorted(score_rows, key=lambda x: (x[0], x[1]))
+    ]
+    max_home = max((x[0] for x in score_rows), default=0)
+    max_away = max((x[1] for x in score_rows), default=0)
+    if max_home <= 20 and max_away <= 20:
+        dense = [[0.0 for _ in range(max_away + 1)] for _ in range(max_home + 1)]
+        for hs, aws, p in score_rows:
+            dense[hs][aws] += float(p)
+    else:
+        dense = None
+    btts_yes = sum(p for hs, aws, p in score_rows if hs > 0 and aws > 0)
+    over_25 = sum(p for hs, aws, p in score_rows if hs + aws >= 3)
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "OK",
         "outcome_probabilities": {
             "home": float(home_win),
             "draw": float(draw),
             "away": float(away_win),
         },
-        "top_scores": [
-            {
-                "home_goals": int(hs),
-                "away_goals": int(aws),
-                "probability": float(p),
-            }
-            for hs, aws, p in score_rows[:10]
-        ],
+        "score_distribution": score_distribution,
+        "score_matrix": dense,
+        "top_scores": score_distribution[:10],
+        "derived_outcomes": {
+            "home_win": float(home_win),
+            "draw": float(draw),
+            "away_win": float(away_win),
+            "btts_yes": float(btts_yes),
+            "btts_no": float(max(0.0, 1.0 - btts_yes)),
+            "over_2_5": float(over_25),
+            "under_2_5": float(max(0.0, 1.0 - over_25)),
+        },
         "state_count": int(len(normalized)),
         "pruned_mass": float(pruned_mass),
         "residual_mass_before_normalization": float(total_mass),
