@@ -220,7 +220,7 @@ def parse_live_snapshot(
     response_sha256: str,
 ) -> dict[str, Any] | None:
     state, clock_seconds, period = _status(event)
-    if state not in LIVE_STATES:
+    if state not in LIVE_STATES and state not in COMPLETED_STATES:
         return None
     home, away = _competitors(event)
     home_id, home_name = _team_info(home)
@@ -313,6 +313,15 @@ def capture_once(
     now = observed_at.astimezone(timezone.utc) if observed_at else utcnow()
     path = _daily_path(Path(output_root), now)
     existing = _existing_fingerprints(path)
+    existing_completed: set[str] = set()
+    if path.is_file():
+        for line in path.read_text(encoding="utf-8").splitlines()[-5000:]:
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if str(item.get("status_state", "")).lower() in COMPLETED_STATES:
+                existing_completed.add(str(item.get("event_id", "")))
     captured: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
 
@@ -330,8 +339,17 @@ def capture_once(
             if not isinstance(event, dict):
                 continue
             state, _, _ = _status(event)
-            if state not in LIVE_STATES:
+            if state not in LIVE_STATES and state not in COMPLETED_STATES:
                 continue
+            event_id = str(event.get("id", ""))
+            if state in COMPLETED_STATES and event_id in existing_completed:
+                continue
+            if state in COMPLETED_STATES:
+                kickoff_probe = _parse_time(
+                    _event_competition(event).get("startDate") or event.get("date")
+                )
+                if kickoff_probe is None or (now - kickoff_probe).total_seconds() > 135 * 60:
+                    continue
             summary_url = (
                 f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/summary"
                 f"?event={event.get('id', '')}"
