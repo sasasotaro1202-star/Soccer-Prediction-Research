@@ -71,6 +71,10 @@ jobs:
                   '"production_change_allowed": False',
                   '"performance_claim_allowed": False',
                   '"frozen_holdout_access_allowed": False',
+                  "Soccer Prospective In-Play PIT Capture",
+                  "Soccer Prospective In-Play Maturity",
+                  "Soccer World Model Supervisor",
+                  "Soccer Dynamic Simulator Research",
               ],
               ".github/workflows/soccer-control-plane-watchdog.yml": [
                   'cron: "*/10 * * * *"',
@@ -84,6 +88,11 @@ jobs:
                   "Soccer Control Plane Watchdog",
                   "Soccer Automation Heartbeat",
                   "Soccer Automation Integrity Audit",
+                  "Soccer Prospective In-Play PIT Capture",
+                  "Soccer Prospective In-Play Maturity",
+                  "Soccer World Model Supervisor",
+                  "Soccer Dynamic Simulator Research",
+                  "Soccer Match State Research",
                   "run_attempt == 1",
               ],
               ".github/workflows/autonomous-github-controller.yml": [
