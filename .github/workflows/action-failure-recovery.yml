@@ -16,9 +16,26 @@ on:
       - Soccer Prospective In-Play PIT Capture
       - Soccer Prospective In-Play Maturity
       - Soccer World Model Supervisor
+      - Soccer Match State Research
       - Soccer 9H Autonomous Research
+      - Soccer Daily Research Forecast
+      - Soccer Research Robust
+      - Soccer Predictability Research
+      - Soccer Historical Learning
+      - Soccer Experience Ledger
+      - Soccer Adaptive Data Discovery
+      - Soccer Scope Frontier Discovery
+      - Soccer Coverage PIT Audit
+      - Soccer Coverage Fixture PIT Audit
+      - Soccer Versioned Result PIT Research
+      - Soccer Global Data Lake Research
+      - Soccer MOM Research
+      - Full Competition Catalog Audit
+      - Soccer Opta-like Source Probe
+      - Soccer Research Cycle
       - Soccer Control Plane Watchdog
       - Soccer Automation Heartbeat
+      - Soccer Opta-like 24H Research Marathon
     types: [completed]
 
 permissions:
