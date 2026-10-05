@@ -87,7 +87,7 @@ jobs:
           main_sha="$(gh api "repos/${GH_REPO}/git/ref/heads/main" --jq '.object.sha')"
           now_epoch="$(date +%s)"
           min_age_seconds=300
-          max_age_seconds=1800
+          max_age_seconds=21600
           rerun_budget=4
           rerun_count=0
           failures=0
