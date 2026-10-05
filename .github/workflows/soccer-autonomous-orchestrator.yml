@@ -140,7 +140,7 @@ jobs:
                   update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"active_run_cap","active_run_count":int(sys.argv[2])},ensure_ascii=False))' "${workflow}" "${active_count}")"
                   return
                 fi
-                case "${workflow}" in
+                if case "${workflow}" in
                   pit-replay-audit.yml)
                     # This lane has required workflow_dispatch inputs; use only its
                     # deterministic, audit-only defaults. No prediction is enabled.
@@ -152,8 +152,15 @@ jobs:
                     gh workflow run "${workflow}" --repo "${GH_REPO}" --ref main
                     ;;
                 esac
-                dispatched_count=$((dispatched_count + 1))
-                update_report dispatched "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":sys.argv[2],"dispatch_sequence":int(sys.argv[3])},ensure_ascii=False))' "${workflow}" "${decision}" "${dispatched_count}")"
+                then
+                  dispatched_count=$((dispatched_count + 1))
+                  update_report dispatched "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":sys.argv[2],"dispatch_sequence":int(sys.argv[3])},ensure_ascii=False))' "${workflow}" "${decision}" "${dispatched_count}")"
+                else
+                  # One broken/disabled lane must not prevent later lanes from
+                  # receiving its own catch-up opportunity. Preserve the
+                  # dispatch failure as HOLD evidence and continue reconciliation.
+                  update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"dispatch_error"},ensure_ascii=False))' "${workflow}")"
+                fi
                 ;;
               *)
                 update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":sys.argv[2]},ensure_ascii=False))' "${workflow}" "${decision}")"
