@@ -39,3 +39,21 @@ A missing historical in-play dataset produces WARMUP and no performance claim.
 ## Hazard-label timing
 
 Each snapshot uses a bounded hazard window. `hazard_window_minutes` must be between 0 and 15 and is constant within one research dataset. For a non-NO_EVENT label, `next_event_time_utc` must be strictly after the prediction cutoff and no later than cutoff plus the hazard window. For NO_EVENT, `next_event_time_utc` must be missing. This prevents an event at the current cutoff from being accidentally treated as a future event.
+
+## Autonomous staged progression
+
+When a qualifying historical in-play dataset exists, the research workflow automatically advances through:
+
+PIT/schema verification
+→ match-level expanding chronological OOS
+→ prequential temperature calibration
+→ bounded feature-family robustness/ablation
+→ incumbent comparison / case-level diagnostics
+→ frozen-holdout review
+→ adoption/release decision
+
+Calibration uses only predictions from earlier chronological folds; it does not tune on the current outer test fold. Scenario evaluation uses the latest validated snapshot per test match to prevent snapshot multiplicity from masquerading as independent match evidence.
+
+The lane remains research-only and cannot self-promote: production_usable=false, performance_verified=false and promotion_candidate=false are enforced by both the Python status contract and GitHub Actions safety gates.
+
+When the historical snapshot dataset is absent, status remains WARMUP and the workflow dispatches existing acquisition/discovery lanes. Missing or unverifiable PIT evidence fails closed rather than being imputed.
