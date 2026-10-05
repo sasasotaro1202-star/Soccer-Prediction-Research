@@ -138,34 +138,41 @@ jobs:
           ]
           current_completed.sort(key=lambda r: r["createdAt"], reverse=True)
 
-          # Successful exact-main history provides normal cadence evidence.
-          successful = [
-              r for r in current_completed
-              if r.get("conclusion") == "success"
-          ]
-          if not successful:
-              # Avoid hammering a deterministically failing lane every 30 minutes.
-              # Consecutive failures get bounded exponential backoff, capped at 24h.
+          # Cadence evidence must come from the latest exact-main completed run.
+          # A newer failure must never be hidden by an older success.
+          latest_completed = current_completed[0] if current_completed else None
+          if latest_completed is None:
+              print("DISPATCH:no_current_main_history")
+              raise SystemExit
+
+          latest_conclusion = str(latest_completed.get("conclusion") or "").lower()
+          if latest_conclusion != "success":
               failures = []
               for r in current_completed:
-                  if r.get("conclusion") in {"failure", "timed_out", "cancelled"}:
+                  conclusion = str(r.get("conclusion") or "").lower()
+                  if conclusion in {"failure", "timed_out", "cancelled"}:
                       failures.append(r)
                   else:
                       break
+
               if not failures:
-                  print("DISPATCH:no_current_main_history")
-                  raise SystemExit
-              latest = datetime.fromisoformat(failures[0]["createdAt"].replace("Z", "+00:00"))
-              age_seconds = now - int(latest.timestamp())
-              cooldown = min(24 * 3600, 3600 * (2 ** min(len(failures) - 1, 5)))
-              if age_seconds < cooldown:
-                  print(f"HOLD:failure_backoff:{cooldown}")
-              else:
+                  # Unknown terminal outcomes are conservative failure evidence.
+                  failures = [latest_completed]
+
+              latest = datetime.fromisoformat(latest_completed["createdAt"].replace("Z", "+00:00"))
+              age_seconds = max(0, now - int(latest.timestamp()))
+              cooldown = min(
+                  24 * 3600,
+                  3600 * (2 ** min(max(0, len(failures) - 1), 5)),
+              )
+              if age_seconds >= cooldown:
                   print("DISPATCH:retry_after_failure_backoff")
+              else:
+                  print(f"HOLD:failure_backoff:{cooldown}")
               raise SystemExit
 
-          latest = datetime.fromisoformat(successful[0]["createdAt"].replace("Z", "+00:00"))
-          age = now - int(latest.timestamp())
+          latest = datetime.fromisoformat(latest_completed["createdAt"].replace("Z", "+00:00"))
+          age = max(0, now - int(latest.timestamp()))
           if age < min_gap:
               print("HOLD:recent")
           elif age >= cadence:
