@@ -948,6 +948,18 @@ def snapshot_fingerprint(frame: pd.DataFrame) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _load_snapshot_input(path: Path) -> pd.DataFrame:
+    if path.is_file():
+        return pd.read_csv(path)
+    if path.is_dir():
+        files = sorted(path.glob("*.csv"))
+        if not files:
+            raise FileNotFoundError(f"no CSV snapshot partitions found under {path}")
+        frames = [pd.read_csv(item) for item in files]
+        return pd.concat(frames, ignore_index=True)
+    raise FileNotFoundError(f"snapshot input not found: {path}")
+
+
 def run_match_state_research(
     input_path: str | Path,
     artifact_dir: str | Path,
@@ -979,7 +991,7 @@ def run_match_state_research(
         )
         return status
 
-    frame = pd.read_csv(path)
+    frame = _load_snapshot_input(path)
     validated = validate_snapshot_contract(frame)
     enriched = build_state_features(validated)
     fingerprint = snapshot_fingerprint(enriched)
