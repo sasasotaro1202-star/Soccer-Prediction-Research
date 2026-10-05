@@ -140,3 +140,7 @@ PROSPECTIVE OBSERVATION → LATER LABEL MATURITY → MATCH-LEVEL WFO/OOS → PRE
 For the World Model track, market odds are not consumed. They must not become hidden features through source payloads, generic feature selection, or diagnostic fusion.
 
 Prospective data acquisition is research evidence generation only. It cannot change target semantics, Champion, Production, frozen holdout or adoption authority.
+
+
+## Autonomous lane manifest integrity
+The GitHub-native autonomous scheduler is bound to `.github/automation/autonomous_lane_manifest.json`. This manifest is the single source of truth for routine research-lane cadence and is validated before dispatch. Each autonomous lane must expose workflow_dispatch and concurrency, and each must be covered by `action-failure-recovery.yml`. Missing or invalid lane contracts are treated as BLOCKED/HOLD evidence rather than silently skipped. The orchestrator treats the latest non-success current-main run as failure/backoff evidence instead of successful cadence evidence.
