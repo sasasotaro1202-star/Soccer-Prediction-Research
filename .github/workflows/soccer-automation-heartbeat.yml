@@ -57,7 +57,9 @@ jobs:
             "soccer-control-plane-watchdog.yml" \
             "action-failure-recovery.yml" \
             "autonomous-github-controller.yml"; do
-            reenable_core_workflow "${workflow}" || true
+            if ! reenable_core_workflow "${workflow}"; then
+              echo "Heartbeat recorded an unrecoverable core-workflow state: ${workflow}" >&2
+            fi
           done
 
           FILE_PATH=".github/automation/heartbeat.json"
