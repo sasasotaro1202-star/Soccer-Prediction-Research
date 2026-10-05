@@ -144,9 +144,17 @@ def test_chronological_hazard_oos_blocks_immature_labels_at_test_cutoff():
     kickoff_by_match = {
         f"m{i}": base + pd.Timedelta(minutes=2 * i) for i in range(150)
     }
-    frame["label_available_at_utc"] = frame["match_id"].map(
-        lambda mid: kickoff_by_match[str(mid)] + pd.Timedelta(minutes=120)
-    )
+    # Shift every time field consistently so the fixture remains contract-valid.
+    old_kickoff = frame["kickoff_utc"].copy()
+    cutoff_offset = frame["prediction_cutoff_utc"] - old_kickoff
+    event_offset = frame["event_time_utc"] - old_kickoff
+    next_event_offset = frame["next_event_time_utc"] - old_kickoff
+    frame["kickoff_utc"] = frame["match_id"].map(kickoff_by_match)
+    frame["prediction_cutoff_utc"] = frame["kickoff_utc"] + cutoff_offset
+    frame["event_time_utc"] = frame["kickoff_utc"] + event_offset
+    frame["next_event_time_utc"] = frame["kickoff_utc"] + next_event_offset
+    frame["source_available_at_utc"] = frame["prediction_cutoff_utc"] - pd.Timedelta(seconds=30)
+    frame["label_available_at_utc"] = frame["kickoff_utc"] + pd.Timedelta(minutes=120)
     result = __import__(
         "src.research.match_state_hazard",
         fromlist=["evaluate_hazard_chronological_oos"],
