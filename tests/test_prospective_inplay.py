@@ -117,10 +117,13 @@ def test_ambiguous_multi_event_transition_is_excluded_without_imputation():
     }
     rows = [
         dict(base, status_state="in", observed_at_utc="2026-10-05T18:05:00+00:00",
+             prediction_cutoff_utc="2026-10-05T18:05:00+00:00",
              home_score=0, away_score=0, home_red_cards=0, away_red_cards=0),
         dict(base, status_state="in", observed_at_utc="2026-10-05T18:10:00+00:00",
+             prediction_cutoff_utc="2026-10-05T18:10:00+00:00",
              home_score=1, away_score=1, home_red_cards=0, away_red_cards=0),
         dict(base, status_state="post", observed_at_utc="2026-10-05T18:15:00+00:00",
+             prediction_cutoff_utc="2026-10-05T18:15:00+00:00",
              home_score=1, away_score=1, home_red_cards=0, away_red_cards=0),
     ]
     mature = build_mature_rows(rows)
