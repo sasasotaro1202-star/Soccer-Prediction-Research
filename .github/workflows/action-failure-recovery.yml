@@ -69,15 +69,15 @@ jobs:
 
 
   scheduled-catchup:
-    if: \${{ github.event_name == 'schedule' }}
+    if: ${{ github.event_name == 'schedule' }}
     name: Catch missed failure-recovery events
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Reconcile recent failed current-main workflows
         env:
-          GH_TOKEN: \${{ github.token }}
-          GH_REPO: \${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
           set -euo pipefail
