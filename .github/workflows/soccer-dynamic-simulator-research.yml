@@ -35,7 +35,7 @@ jobs:
       - name: Checkout current event commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: ${ github.sha }
+          ref: ${{ github.sha }}
 
       - name: Setup Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
@@ -73,8 +73,8 @@ jobs:
       - name: Bridge research candidate PR #212
         if: github.event_name != 'pull_request'
         env:
-          GH_TOKEN: ${ github.token }
-          GH_REPO: ${ github.repository }
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
           set -euo pipefail
@@ -152,7 +152,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
-          name: soccer-dynamic-simulator-research-${ github.run_id }
+          name: soccer-dynamic-simulator-research-${{ github.run_id }}
           path: artifacts/dynamic_simulator_research/
           retention-days: 14
           if-no-files-found: error
