@@ -96,7 +96,10 @@ jobs:
           if current_pending:
               oldest = min(current_pending, key=ts)
               age_min = (now - ts(oldest)).total_seconds() / 60.0
-              print("RESTART" if age_min >= 20.0 else "WAIT")
+              # Hosted-runner incidents can legitimately leave accepted runs queued.
+              # Preserve a queued latest-main 9H run for two hours before considering
+              # it stale; do not churn the queue on every 5-minute watchdog tick.
+              print("RESTART_STALE_QUEUE" if age_min >= 120.0 else "WAIT")
               raise SystemExit(0)
 
           # Preserve an old immutable research snapshot, but immediately queue one
@@ -204,7 +207,7 @@ jobs:
             WAIT)
               echo "WATCHDOG: current-main 9H state is healthy or not yet stale."
               ;;
-            RESTART)
+            RESTART_STALE_QUEUE)
               while IFS= read -r RUN_ID; do
                 [ -z "${RUN_ID}" ] && continue
                 cancel_run "${RUN_ID}" "stuck current-main"
