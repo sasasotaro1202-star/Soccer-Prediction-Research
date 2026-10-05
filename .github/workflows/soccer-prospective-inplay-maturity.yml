@@ -1,6 +1,8 @@
 name: Soccer Prospective In-Play Maturity
 
 on:
+  pull_request:
+    branches: [main]
   schedule:
     - cron: "7,37 * * * *"
   workflow_dispatch:
@@ -32,11 +34,29 @@ jobs:
       MATCH_STATE_INPUT: data/research/match_state_snapshots
       MATCH_STATE_OUT: artifacts/match_state_research
     steps:
-      - name: Checkout current main
+      - name: Checkout current main or exact PR head
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: main
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main' }}
 
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies with bounded retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt; then
+              exit 0
+            fi
+            echo "dependency installation attempt ${attempt} failed; retrying..."
+            if [ "${attempt}" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 5))
+          done
       - name: Compile research modules
         run: python -m compileall -q src/research/prospective_inplay.py src/research/match_state_hazard.py
 
@@ -114,6 +134,10 @@ jobs:
           git config user.name "soccer-world-model-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/research/match_state_snapshots/ data/research/match_state_research_status.json
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            echo "PR validation only; main persistence disabled."
+            exit 0
+          fi
           if git diff --cached --quiet; then
             echo "No matured research state changes."
             exit 0
