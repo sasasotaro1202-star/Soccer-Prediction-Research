@@ -316,3 +316,14 @@ PROSPECTIVE CAPTURE
 A state transition is labeled only when a later snapshot proves a single unambiguous score/card transition within the bounded hazard window. Ambiguous multi-event transitions and missing red-card state are excluded rather than converted to zero.
 
 This remains research-only. Prospective observations are evidence-generation data, not proof of current Production superiority.
+
+## Current live-state reconciliation — 2026-10-05 (continuous World Model autopilot)
+
+- The authoritative live main HEAD is `f9df7c45203c1838df727934c644189cee5c1861`.
+- PR #221 was merged into main as research infrastructure only. PR #212 is closed as superseded; historical evidence was not rewritten.
+- The dynamic match-state research engine is now present on main but remains research-only. It cannot mark performance verified, become a promotion candidate, change Champion, alter Production probabilities, or access frozen holdout.
+- A prospective in-play PIT collector now records direct live observations from the project's already-registered free/public ESPN source family across configured competitions. It preserves observation/cutoff/availability/retrieval timestamps and source-response hashes and does not store or consume odds.
+- A maturity lane derives bounded next-event labels only from later prospective observations. Ambiguous multi-event transitions and unknown red-card state are excluded instead of imputed.
+- Monthly mature partitions feed the dynamic hazard runner directly. The runner performs match-level expanding chronological OOS, prequential temperature calibration using prior folds only, scenario-derived match-level 1X2 evaluation, joint score-distribution output, and bounded feature-family robustness.
+- The autonomous orchestrator now reconciles prospective capture, maturity, dynamic simulator and World Model supervisor lanes. The supervisor separately catches stale current-main World Model lanes, while Action Failure Recovery provides bounded one-time recovery.
+- The new continuous data path has not established Production performance superiority. No Champion/Production adoption claim is authorized until incumbent comparison, case-level diagnostics, robustness, frozen holdout and release gates pass with zero PIT violations.
