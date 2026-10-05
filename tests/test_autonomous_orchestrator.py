@@ -131,15 +131,17 @@ def test_heartbeat_path_is_ignored_by_heavy_push_checks():
     assert ".github/automation/**" in legacy
 
 
-def test_failure_recovery_includes_automation_heartbeat():
+def test_failure_recovery_excludes_non_source_control_plane_workflows():
     text = Path(".github/workflows/action-failure-recovery.yml").read_text(encoding="utf-8")
-    assert "Soccer Automation Heartbeat" in text
+    assert "Soccer Automation Heartbeat" not in text
+    assert "Soccer Automation Integrity Audit" not in text
 
 
 def test_failure_recovery_isolated_per_workflow_lane():
     text = Path(".github/workflows/action-failure-recovery.yml").read_text(encoding="utf-8")
     assert "group: action-failure-recovery" in text
     assert "cancel-in-progress: true" in text
+    assert 'cron: "*/10 * * * *"' in text
 
 
 def test_orchestrator_backs_off_repeated_failures():
@@ -220,3 +222,14 @@ def test_action_recovery_excludes_control_plane_event_sources():
     assert "Soccer Control Plane Watchdog" not in text
     assert "Soccer Automation Heartbeat" not in text
     assert "Soccer Automation Integrity Audit" not in text
+
+
+
+def test_completion_event_isolation_for_state_supervisors():
+    for relative in (
+        ".github/workflows/soccer-9h-recovery.yml",
+        ".github/workflows/soccer-world-model-supervisor.yml",
+        ".github/workflows/soccer-matchday-intelligence.yml",
+    ):
+        text = Path(relative).read_text(encoding="utf-8")
+        assert "workflow_run:" not in text
