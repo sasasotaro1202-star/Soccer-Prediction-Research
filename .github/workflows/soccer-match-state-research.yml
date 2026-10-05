@@ -9,6 +9,9 @@ on:
       - "docs/MATCH_STATE_RESEARCH.md"
       - "config/match_state_policy.json"
       - "data/research/README.md"
+      - "data/research/prospective_inplay/raw/**"
+      - "data/research/match_state_snapshots/**"
+      - "data/research/match_state_research_status.json"
       - ".github/workflows/soccer-match-state-research.yml"
   pull_request:
     branches: [main]
@@ -39,7 +42,7 @@ jobs:
     env:
       PYTHONPATH: .
       PYTHONHASHSEED: "0"
-      MATCH_STATE_INPUT: data/research/match_state_snapshots.csv
+      MATCH_STATE_INPUT: data/research/match_state_snapshots
       MATCH_STATE_OUT: artifacts/match_state_research
     steps:
       - name: Checkout
@@ -92,7 +95,9 @@ jobs:
           status="$(python -c "import json,sys; print(json.load(open(sys.argv[1], encoding=\"utf-8\")).get(\"status\",\"\"))" "$status_file")"
           case "$status" in
             WARMUP)
-              echo "Historical in-play snapshots unavailable; dispatching discovery lanes."
+              echo "Matured in-play evidence unavailable; keeping prospective capture and source discovery active."
+              gh workflow run "Soccer Prospective In-Play PIT Capture" --repo "${GITHUB_REPOSITORY}" --ref main
+              gh workflow run "Soccer Prospective In-Play Maturity" --repo "${GITHUB_REPOSITORY}" --ref main
               gh workflow run "adaptive_data_discovery.yml" --repo "${GITHUB_REPOSITORY}" --ref main
               gh workflow run "soccer-source-probe.yml" --repo "${GITHUB_REPOSITORY}" --ref main
               ;;
