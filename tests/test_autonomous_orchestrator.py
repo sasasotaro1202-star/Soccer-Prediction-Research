@@ -136,3 +136,10 @@ def test_failure_recovery_isolated_per_workflow_lane():
     text = Path(".github/workflows/action-failure-recovery.yml").read_text(encoding="utf-8")
     assert "group: action-failure-recovery-${{ github.event.workflow_run.name }}" in text
     assert "cancel-in-progress: true" in text
+
+
+def test_orchestrator_backs_off_repeated_failures():
+    text = Path(".github/workflows/soccer-autonomous-orchestrator.yml").read_text(encoding="utf-8")
+    assert "failure_backoff" in text
+    assert "retry_after_failure_backoff" in text
+    assert "24 * 3600" in text
