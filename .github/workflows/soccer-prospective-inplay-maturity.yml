@@ -37,6 +37,27 @@ jobs:
         with:
           ref: main
 
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies with bounded retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt; then
+              exit 0
+            fi
+            echo "dependency installation attempt ${attempt} failed; retrying..."
+            if [ "${attempt}" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+
       - name: Compile research modules
         run: python -m compileall -q src/research/prospective_inplay.py src/research/match_state_hazard.py
 
