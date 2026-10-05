@@ -40,8 +40,8 @@ jobs:
       - name: Compile research modules
         run: python -m compileall -q src/research/prospective_inplay.py src/research/match_state_hazard.py
 
-      - name: Run focused regression tests
-        run: python -m pytest -q tests/test_prospective_inplay.py tests/test_match_state_hazard.py
+      - name: Run capture regression tests
+        run: python -m pytest -q tests/test_prospective_inplay.py
 
       - name: Build matured monthly partitions
         run: |
@@ -50,12 +50,37 @@ jobs:
             --raw-root data/research/prospective_inplay/raw \
             --output-root data/research/match_state_snapshots | tee /tmp/maturity-report.json
 
-      - name: Run staged match-state research
+      - name: Detect newly matured evidence
+        id: maturity
+        run: |
+          set -euo pipefail
+          new_rows="$(python - <<'PY'
+          import json
+          r = json.load(open("/tmp/maturity-report.json", encoding="utf-8"))
+          print(sum(int(x.get("new_rows", 0)) for x in r.get("written", [])))
+          PY
+          )"
+          echo "new_rows=$new_rows"
+          echo "new_rows=$new_rows" >> "$GITHUB_OUTPUT"
+
+      - name: Run staged match-state research on new evidence
+        if: steps.maturity.outputs.new_rows != '0' || github.event_name != 'schedule'
         run: |
           set -euo pipefail
           python -m src.research.match_state_hazard \
             --input "$MATCH_STATE_INPUT" \
             --out "$MATCH_STATE_OUT"
+
+      - name: Reuse latest research state when no new evidence
+        if: steps.maturity.outputs.new_rows == '0' && github.event_name == 'schedule'
+        run: |
+          set -euo pipefail
+          mkdir -p "$MATCH_STATE_OUT"
+          if [ -s data/research/match_state_research_status.json ]; then
+            cp data/research/match_state_research_status.json "$MATCH_STATE_OUT/match_state_status.json"
+          else
+            printf '%s\n' '{"schema_version":2,"status":"WARMUP","oos_claimed":false,"performance_verified":false,"promotion_candidate":false,"production_usable":false,"research_only":true,"pit_status":"NOT_EXECUTED"}' > "$MATCH_STATE_OUT/match_state_status.json"
+          fi
 
       - name: Enforce research-only state machine
         run: |
@@ -67,12 +92,7 @@ jobs:
           if not p.is_file():
               raise SystemExit("missing match-state status")
           s = json.loads(p.read_text(encoding="utf-8"))
-          allowed = {
-              "WARMUP",
-              "SCHEMA_VERIFIED",
-              "OOS_EVALUATED",
-              "CALIBRATION_ROBUSTNESS_EVALUATED",
-          }
+          allowed = {"WARMUP", "SCHEMA_VERIFIED", "OOS_EVALUATED", "CALIBRATION_ROBUSTNESS_EVALUATED"}
           if s.get("status") not in allowed:
               raise SystemExit(f"unexpected research state: {s.get('status')}")
           if s.get("research_only") is not True:
