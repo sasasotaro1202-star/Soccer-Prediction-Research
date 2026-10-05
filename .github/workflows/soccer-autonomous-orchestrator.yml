@@ -223,7 +223,10 @@ jobs:
           }
 
           # Routine research scheduling is driven by the machine-readable manifest.
-          while IFS=
+          while IFS='|' read -r workflow cadence min_gap; do
+            [ -n "${workflow}" ] || continue
+            ensure_lane "${workflow}" "${cadence}" "${min_gap}"
+          done < autonomous-lanes.tsv
 
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
