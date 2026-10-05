@@ -202,3 +202,20 @@ def test_orchestrator_can_self_heal_disabled_lanes_with_bounded_retries():
     assert 'gh workflow enable "${workflow}" --repo "${GH_REPO}"' in text
     assert "workflow_inactive_unrecoverable" in text
     assert text.count("for attempt in 1 2 3;") >= 2
+
+def test_watchdog_can_reenable_core_control_plane_without_prediction_authority():
+    text = Path(".github/workflows/soccer-control-plane-watchdog.yml").read_text(encoding="utf-8")
+    required = (
+        "soccer-autonomous-orchestrator.yml",
+        "action-failure-recovery.yml",
+        "autonomous-github-controller.yml",
+        "soccer-automation-heartbeat.yml",
+    )
+    for workflow in required:
+        assert workflow in text
+    assert "ensure_core_control_plane_active" in text
+    assert "actions/workflows/${workflow}/enable" in text
+    assert "for attempt in 1 2 3; do" in text
+    assert "production_change_allowed" in text
+    assert "frozen_holdout_access_allowed" in text
+    assert "performance_claim_allowed" in text
