@@ -1,9 +1,6 @@
 name: Soccer Matchday Intelligence Refresh
 
 on:
-  workflow_run:
-    workflows: ["Soccer 9H Autonomous Research"]
-    types: [completed]
   workflow_dispatch:
     inputs:
       days:
@@ -32,13 +29,10 @@ concurrency:
 
 jobs:
   refresh:
-    if: >
-      github.event_name != 'workflow_run' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     # Manual/on-demand runs get the maximum GitHub-hosted job budget; scheduled
-    # and workflow_run refreshes keep the existing short operational bound.
+    # Scheduled refreshes keep the short operational bound; manual/on-demand
+    # runs retain the existing maximum budget.
     timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 20 }}
     steps:
       - name: Checkout
