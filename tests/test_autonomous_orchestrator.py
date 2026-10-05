@@ -249,3 +249,8 @@ def test_autonomous_controller_allowlists_heartbeat_as_safe_control_plane():
     text = Path(".github/workflows/autonomous-github-controller.yml").read_text(encoding="utf-8")
     assert ".github/workflows/soccer-automation-heartbeat.yml" in text
     assert "production/model/data/artifact mutation paths" not in text
+
+
+def test_autonomous_controller_allowlists_project_instruction_contract():
+    text = Path(".github/workflows/autonomous-github-controller.yml").read_text(encoding="utf-8")
+    assert "PROJECT_INSTRUCTIONS.md|tests/*|docs/*" in text
