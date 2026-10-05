@@ -81,7 +81,7 @@ jobs:
           required_control_schedules = {
               'soccer-autonomous-orchestrator.yml': 'cron: "*/30 * * * *"',
               'soccer-control-plane-watchdog.yml': 'cron: "*/10 * * * *"',
-              'action-failure-recovery.yml': 'cron: "*/15 * * * *"',
+              'action-failure-recovery.yml': 'cron: "7,37 * * * *"',
               'soccer-automation-heartbeat.yml': 'cron: "17 4 * * 0"',
           }
           for name in sorted(required_control):
