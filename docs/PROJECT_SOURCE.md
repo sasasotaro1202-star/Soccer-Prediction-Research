@@ -13,6 +13,16 @@
 - Reconcile code, config, tests, workflows, Actions, artifacts, registries, production/champion/challenger, research/OOS/holdout, failures and backlog against live GitHub state at the start of every run.
 - Do not rewrite historical evidence to make it consistent with current code.
 
+## Current reconciliation — 2026-10-05
+
+- Live GitHub `main` was re-read at the start of this run and is authoritative; current HEAD at reconciliation was `3cd59ec4f05a784a3e30f896fbf577af711d027c`.
+- The hierarchical dynamic simulator frontier is now wired into the autonomous control plane as a research-only lane. Its latest main run `37294660068` completed successfully with frontier status `DYNAMIC_MATCH_STATE_WAITING`; all production/promotion/performance/frozen-holdout flags remained false.
+- PR #212 remains research-only. Its corrected head `2f6f366275ccbd7621ffa6ffdb72d8dd4b184194` completed workflow run `37294699556` successfully. The run reached WARMUP because `data/research/match_state_snapshots.csv` is still unavailable; the existing free adaptive-discovery and source-probe lanes were dispatched successfully.
+- A prior PR #212 failure was traced to missing `GH_TOKEN` in the workflow discovery bridge. The workflow was corrected and the successful follow-up run verifies the repair; this is operational evidence only, not model-performance evidence.
+- Action Failure Recovery now includes the Dynamic Simulator Research workflow for one bounded failed-job retry; deterministic failures remain blocking and no research status is bypassed.
+- No current `models/current` bundle is present on main, and no new Champion, Production, frozen-holdout or performance-verified result is authorized by this reconciliation. Committed legacy artifacts remain historical unless their provenance matches the live code/run.
+- Open hardening PR #220 is explicitly marked `automation_policy: hardening-safe-v1` but currently reports `mergeable=false` / dirty; it is therefore not auto-merged. Research/performance PRs, including #212, remain outside automatic merge authority.
+
 
 ## Current run reconciliation — 2026-10-04
 
