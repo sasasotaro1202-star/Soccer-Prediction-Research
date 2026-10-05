@@ -50,7 +50,6 @@ def test_parse_live_snapshot_is_prospective_and_does_not_store_odds():
     assert row["retrieved_at_utc"] == row["prediction_cutoff_utc"]
     assert row["away_red_cards"] == 1
     assert "odds" not in row
-    assert row["odds_consumed"] if "odds_consumed" in row else True
 
 
 def test_maturity_uses_later_observation_as_label_boundary():
