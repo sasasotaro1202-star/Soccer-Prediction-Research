@@ -19,6 +19,9 @@ on:
       - Soccer 9H Autonomous Research
       - Soccer Control Plane Watchdog
       - Soccer Automation Heartbeat
+      - Soccer Automation Integrity Audit
+      - Soccer 9H Recovery
+      - Soccer 9H Queue Watchdog
     types: [completed]
 
 permissions:
