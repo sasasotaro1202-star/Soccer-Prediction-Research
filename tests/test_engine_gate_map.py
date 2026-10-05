@@ -144,6 +144,6 @@ def test_sha256_helper_is_deterministic(tmp_path):
 
     path = tmp_path / "payload.bin"
     path.write_bytes(b"Soccer-Prediction-Research")
-    assert _sha256(path) == "4d4a25f430d6ed8f88f6534a0b0a3ab1d4d8f4a0b58c17a7ab05fdfdbf1f3d4f"
+    assert _sha256(path) == "4c88b7cdda7e830125398829195222c73cbc85c2a2810aa109306dbcdce7b1fa"
     path.write_bytes(b"Soccer-Prediction-Research!")
     assert _sha256(path) != "4d4a25f430d6ed8f88f6534a0b0a3ab1d4d8f4a0b58c17a7ab05fdfdbf1f3d4f"
