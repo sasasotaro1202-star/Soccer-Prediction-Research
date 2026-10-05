@@ -198,8 +198,9 @@ def test_chronological_hazard_oos_is_match_level_and_research_only():
 def test_match_state_workflow_is_autonomous_but_non_production():
     workflow = Path(".github/workflows/soccer-match-state-research.yml").read_text(encoding="utf-8")
     assert "actions: write" in workflow
-    assert 'gh workflow run "adaptive_data_discovery.yml"' in workflow
-    assert 'gh workflow run "soccer-source-probe.yml"' in workflow
+    assert '"adaptive_data_discovery.yml"' in workflow
+    assert '"soccer-source-probe.yml"' in workflow
+    assert 'gh workflow run "$workflow" --repo "${GITHUB_REPOSITORY}" --ref main' in workflow
     assert "performance_verified_false" in workflow
     assert "promotion_candidate_false" in workflow
     assert "github.event_name != 'pull_request'" in workflow
@@ -264,7 +265,9 @@ def test_robustness_comparison_is_same_oos_policy():
 
 
 def test_run_persists_calibration_and_robustness_state(tmp_path):
-    frame = _rows(60)
+    # This end-to-end persistence contract needs enough distinct matches for
+    # the research runner's chronological training/evaluation stages.
+    frame = _rows(150)
     input_path = tmp_path / "snapshots.csv"
     frame.to_csv(input_path, index=False)
     status = run_match_state_research(
