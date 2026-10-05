@@ -256,3 +256,10 @@ def test_maturity_pr_validation_checks_exact_pr_head() -> None:
     )
     assert "github.event_name == 'pull_request'" in workflow
     assert "ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main' }}" in workflow
+
+
+def test_failure_recovery_catchup_window_survives_extended_event_delivery_delays() -> None:
+    workflow = Path(".github/workflows/action-failure-recovery.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "max_age_seconds=21600" in workflow
