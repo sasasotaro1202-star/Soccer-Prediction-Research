@@ -125,6 +125,8 @@ At minimum:
 - Model, feature, target, calibration, frozen-holdout and production changes remain outside autonomous hardening authority unless separately authorized by the adoption policy.
 
 Continuous operation means the repository can resume after missed schedules, transient API failures, runner delays, or stale queued runs without requiring a new chat message.
+- Control-plane self-healing: the Orchestrator and independent watchdog may re-enable inactive core control-plane or scheduled research workflows only through bounded retries, preserve HOLD/unknown evidence on failure, and never grant production/model/feature/calibration/target/frozen-holdout authority.
+
 
 ## Long-term GitHub schedule keepalive
 
