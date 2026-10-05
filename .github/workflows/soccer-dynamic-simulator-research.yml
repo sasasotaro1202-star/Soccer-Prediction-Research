@@ -17,6 +17,7 @@ permissions:
   actions: write
   contents: read
 
+# Main is authoritative; the orchestrator also catches up this lane when schedules are missed.
 concurrency:
   group: soccer-dynamic-simulator-research
   cancel-in-progress: false
