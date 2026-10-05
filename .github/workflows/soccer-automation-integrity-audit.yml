@@ -104,6 +104,31 @@ jobs:
               ],
               ".github/workflows/ci.yml": [".github/automation/**"],
               ".github/workflows/legacy-bridge-check.yml": [".github/automation/**"],
+              ".github/workflows/soccer-prospective-inplay-capture.yml": [
+                  'cron: "*/15 * * * *"',
+                  "contents: write",
+              ],
+              ".github/workflows/soccer-prospective-inplay-maturity.yml": [
+                  'cron: "7,37 * * * *"',
+                  "contents: write",
+                  "data/research/prospective_inplay/raw/**",
+              ],
+              ".github/workflows/soccer-world-model-supervisor.yml": [
+                  'cron: "23 */2 * * *"',
+                  "actions: write",
+                  "contents: read",
+              ],
+              ".github/workflows/soccer-dynamic-simulator-research.yml": [
+                  'cron: "43 */6 * * *"',
+                  "performance_verified",
+                  "production_usable",
+                  "frozen_holdout_access_allowed",
+              ],
+              ".github/workflows/soccer-match-state-research.yml": [
+                  '"production_usable") is not True',
+                  '"promotion_candidate") is not True',
+                  "frozen_holdout",
+              ],
           }
 
           failures = []
@@ -139,6 +164,11 @@ jobs:
               "soccer-control-plane-watchdog.yml",
               "soccer-automation-heartbeat.yml",
               "soccer-automation-integrity-audit.yml",
+              "soccer-prospective-inplay-capture.yml",
+              "soccer-prospective-inplay-maturity.yml",
+              "soccer-world-model-supervisor.yml",
+              "soccer-dynamic-simulator-research.yml",
+              "soccer-match-state-research.yml",
           ]
           workflow_state = {}
           for workflow_file in workflows:
@@ -148,11 +178,30 @@ jobs:
                   failures.append({"path": workflow_file, "reason": "workflow_not_active", "state": wf.get("state")})
 
           def recent_current_main(workflow_file: str, max_age_seconds: int):
-              runs = get_json(f"{api}/repos/{repo}/actions/workflows/{workflow_file}/runs?per_page=20").get("workflow_runs", [])
+              runs = get_json(
+                  f"{api}/repos/{repo}/actions/workflows/{workflow_file}/runs?per_page=20"
+              ).get("workflow_runs", [])
               current = [r for r in runs if r.get("head_sha") == main_sha]
               if not current:
                   return {"status": "HOLD", "reason": "no_current_main_run"}
-              latest = max(current, key=lambda r: r.get("created_at") or "")
+
+              active_states = {"queued", "in_progress", "pending", "waiting", "requested"}
+              active = [r for r in current if r.get("status") in active_states]
+              if active:
+                  latest = max(active, key=lambda r: r.get("created_at") or "")
+                  return {
+                      "status": "OK_ACTIVE",
+                      "age_seconds": None,
+                      "run_id": latest.get("id"),
+                      "status_raw": latest.get("status"),
+                      "conclusion": latest.get("conclusion"),
+                  }
+
+              completed = [r for r in current if r.get("status") == "completed"]
+              if not completed:
+                  return {"status": "HOLD", "reason": "no_completed_current_main_run"}
+
+              latest = max(completed, key=lambda r: r.get("created_at") or "")
               raw = latest.get("created_at")
               try:
                   created_at = (
@@ -167,8 +216,12 @@ jobs:
                   if created_at is not None
                   else None
               )
+              if latest.get("conclusion") != "success":
+                  status = "FAILED_RECENT" if age is not None and age <= max_age_seconds else "STALE"
+              else:
+                  status = "OK" if age is not None and age <= max_age_seconds else "STALE"
               return {
-                  "status": "OK" if age is not None and age <= max_age_seconds else "STALE",
+                  "status": status,
                   "age_seconds": None if age is None else round(age),
                   "run_id": latest.get("id"),
                   "status_raw": latest.get("status"),
@@ -178,16 +231,37 @@ jobs:
           liveness = {
               "orchestrator": recent_current_main("soccer-autonomous-orchestrator.yml", 2 * 3600),
               "watchdog": recent_current_main("soccer-control-plane-watchdog.yml", 60 * 60),
+              "prospective_capture": recent_current_main("soccer-prospective-inplay-capture.yml", 45 * 60),
+              "prospective_maturity": recent_current_main("soccer-prospective-inplay-maturity.yml", 90 * 60),
+              "world_model_supervisor": recent_current_main("soccer-world-model-supervisor.yml", 5 * 3600),
+              "dynamic_simulator": recent_current_main("soccer-dynamic-simulator-research.yml", 12 * 3600),
           }
           for name, state in liveness.items():
-              if state.get("status") != "OK":
-                  failures.append({"path": name, "reason": "stale_liveness", "evidence": state})
+              if state.get("status") not in {"OK", "OK_ACTIVE"}:
+                  failures.append({"path": name, "reason": "unhealthy_liveness", "evidence": state})
 
           heartbeat = get_json(f"{api}/repos/{repo}/contents/.github/automation/heartbeat.json?ref=main")
           heartbeat_payload = json.loads(base64.b64decode(heartbeat["content"]).decode("utf-8"))
           heartbeat_status = heartbeat_payload.get("status")
           if heartbeat_status not in {"BOOTSTRAPPED", "ACTIVE"}:
               failures.append({"path": ".github/automation/heartbeat.json", "reason": "unexpected_status", "status": heartbeat_status})
+          heartbeat_age_seconds = None
+          heartbeat_recorded = heartbeat_payload.get("recorded_at_utc")
+          if heartbeat_status == "ACTIVE":
+              try:
+                  heartbeat_time = datetime.fromisoformat(heartbeat_recorded.replace("Z", "+00:00"))
+                  heartbeat_age_seconds = max(
+                      0, round(time.time() - heartbeat_time.astimezone(timezone.utc).timestamp())
+                  )
+              except (AttributeError, TypeError, ValueError):
+                  failures.append({"path": ".github/automation/heartbeat.json", "reason": "invalid_recorded_at_utc"})
+              else:
+                  if heartbeat_age_seconds > 8 * 24 * 3600:
+                      failures.append({
+                          "path": ".github/automation/heartbeat.json",
+                          "reason": "heartbeat_stale",
+                          "age_seconds": heartbeat_age_seconds,
+                      })
 
           report = {
               "status": "PASS" if not failures else "HOLD",
@@ -196,6 +270,7 @@ jobs:
               "workflow_state": workflow_state,
               "liveness": liveness,
               "heartbeat_status": heartbeat_status,
+              "heartbeat_age_seconds": heartbeat_age_seconds,
               "failures": failures,
               "production_change_allowed": False,
               "performance_claim_allowed": False,
