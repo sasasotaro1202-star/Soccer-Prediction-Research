@@ -991,7 +991,30 @@ def run_match_state_research(
         )
         return status
 
-    frame = _load_snapshot_input(path)
+    try:
+        frame = _load_snapshot_input(path)
+    except FileNotFoundError:
+        status = {
+            "schema_version": 2,
+            "status": "WARMUP",
+            "reason": "mature_match_state_snapshot_partitions_missing",
+            "input_path": str(path),
+            "oos_claimed": False,
+            "performance_verified": False,
+            "promotion_candidate": False,
+            "production_usable": False,
+            "research_only": True,
+            "pit_status": "NOT_EXECUTED",
+            "calibration_status": "NOT_EXECUTED",
+            "robustness_status": "NOT_EXECUTED",
+            "next_step": "continue_prospective_capture_and_maturity",
+        }
+        (out / "match_state_status.json").write_text(
+            json.dumps(status, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        return status
+
     validated = validate_snapshot_contract(frame)
     enriched = build_state_features(validated)
     fingerprint = snapshot_fingerprint(enriched)
