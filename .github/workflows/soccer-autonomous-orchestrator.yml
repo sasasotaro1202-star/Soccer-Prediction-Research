@@ -236,6 +236,7 @@ jobs:
           ensure_lane "soccer-research-cycle.yml" 10080 240
           ensure_lane "overnight-integrity.yml" 1440 120
           ensure_lane "soccer-opta-like-24h.yml" 1440 180
+          ensure_lane "soccer-automation-integrity-audit.yml" 360 60
 
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
