@@ -3,9 +3,20 @@ name: Legacy V9/V12 Bridge Check
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "requests/**"
-      - ".github/automation/**"
+    # Legacy bridge verification is source-contract CI. Generated data,
+    # artifacts and research-state commits do not need to enqueue it.
+    paths:
+      - "src/data/**"
+      - "src/evaluation/**"
+      - "src/models/**"
+      - "src/prediction/**"
+      - "src/research/**"
+      - "tests/test_v9_v12_adapter.py"
+      - "tests/test_pit_source_adapter.py"
+      - "tests/test_pit_feature_replay.py"
+      - "tests/test_baseline_comparison.py"
+      - "requirements.txt"
+      - ".github/workflows/legacy-bridge-check.yml"
   workflow_dispatch:
 
 permissions:

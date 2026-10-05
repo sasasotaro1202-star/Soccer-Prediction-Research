@@ -72,3 +72,14 @@ def test_control_plane_event_graph_has_no_audit_recovery_controller_cycle() -> N
         ".github/workflows/soccer-matchday-intelligence.yml",
     ):
         assert "workflow_run:" not in _read(isolated)
+
+
+
+def test_legacy_bridge_is_source_scoped():
+    text = _read(".github/workflows/legacy-bridge-check.yml")
+    assert "paths:" in text
+    assert "paths-ignore:" not in text
+    assert "src/research/**" in text
+    assert "tests/test_baseline_comparison.py" in text
+    assert "data/experience/**" not in text
+    assert "artifacts/**" not in text
