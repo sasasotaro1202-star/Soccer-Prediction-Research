@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from src.prediction.live_research_forecast import lambdas, matrix, result_probs, verify
+from src.prediction.live_research_forecast import lambdas, matrix, parse_elo_tsv, result_probs, verify
 
 
 def test_lambdas_are_positive():
@@ -52,3 +52,9 @@ def test_verify_accepts_research_contract(tmp_path):
         "production_status":"NOT_PRODUCTION",
     }]).to_csv(path,index=False)
     assert verify(str(path))["status"] == "VERIFIED"
+
+
+def test_parse_elo_tsv_uses_world_tsv_x3_x4_columns():
+    text = "1\\tFrance\\tFR\\t2070\\n2\\tBelgium\\tBE\\t1947\\n3\\tItaly\\tIT\\t1869\\n4\\tTurkey\\tTR\\t1852\\n"
+    ratings = parse_elo_tsv(text)
+    assert ratings == {"france": 2070.0, "belgium": 1947.0, "italy": 1869.0, "turkey": 1852.0}
