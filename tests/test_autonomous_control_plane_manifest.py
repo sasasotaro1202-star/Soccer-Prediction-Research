@@ -13,3 +13,8 @@ def test_autonomous_lane_files_exist():
 def test_control_plane_has_no_failure_hiding():
     for name in ("soccer-autonomous-orchestrator.yml","action-failure-recovery.yml"):
         assert "|| true" not in (ROOT/".github"/"workflows"/name).read_text(encoding="utf-8")
+
+def test_orchestrator_treats_latest_failure_as_failure_evidence():
+    text=(ROOT/".github"/"workflows"/"soccer-autonomous-orchestrator.yml").read_text(encoding="utf-8")
+    assert "latest_conclusion" in text
+    assert "retry_after_failure_backoff" in text
