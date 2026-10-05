@@ -159,23 +159,33 @@ jobs:
                   if marker not in content:
                       failures.append({"path": path, "reason": "missing_marker", "marker": marker})
 
-          workflows = [
-              "soccer-autonomous-orchestrator.yml",
-              "soccer-control-plane-watchdog.yml",
-              "soccer-automation-heartbeat.yml",
-              "soccer-automation-integrity-audit.yml",
-              "soccer-prospective-inplay-capture.yml",
-              "soccer-prospective-inplay-maturity.yml",
-              "soccer-world-model-supervisor.yml",
-              "soccer-dynamic-simulator-research.yml",
-              "soccer-match-state-research.yml",
-          ]
+          workflow_contract = {
+              "soccer-autonomous-orchestrator.yml": "Soccer Autonomous Orchestrator",
+              "soccer-control-plane-watchdog.yml": "Soccer Control Plane Watchdog",
+              "soccer-automation-heartbeat.yml": "Soccer Automation Heartbeat",
+              "soccer-automation-integrity-audit.yml": "Soccer Automation Integrity Audit",
+              "soccer-prospective-inplay-capture.yml": "Soccer Prospective In-Play PIT Capture",
+              "soccer-prospective-inplay-maturity.yml": "Soccer Prospective In-Play Maturity",
+              "soccer-world-model-supervisor.yml": "Soccer World Model Supervisor",
+              "soccer-dynamic-simulator-research.yml": "Soccer Dynamic Simulator Research",
+              "soccer-match-state-research.yml": "Soccer Match State Research",
+          }
           workflow_state = {}
-          for workflow_file in workflows:
+          for workflow_file, expected_name in workflow_contract.items():
               wf = get_json(f"{api}/repos/{repo}/actions/workflows/{workflow_file}")
-              workflow_state[workflow_file] = wf.get("state")
+              workflow_state[workflow_file] = {
+                  "state": wf.get("state"),
+                  "name": wf.get("name"),
+              }
               if wf.get("state") != "active":
                   failures.append({"path": workflow_file, "reason": "workflow_not_active", "state": wf.get("state")})
+              if wf.get("name") != expected_name:
+                  failures.append({
+                      "path": workflow_file,
+                      "reason": "workflow_name_mismatch",
+                      "expected": expected_name,
+                      "actual": wf.get("name"),
+                  })
 
           def recent_current_main(workflow_file: str, max_age_seconds: int):
               runs = get_json(
