@@ -196,8 +196,9 @@ def test_failure_recovery_passes_actions_history_through_a_file_not_argv() -> No
     workflow = Path(".github/workflows/action-failure-recovery.yml").read_text(
         encoding="utf-8"
     )
-    assert 'all_runs="$(gh api "repos/${GH_REPO}/actions/runs?per_page=100")"' not in workflow
-    assert 'gh api "repos/${GH_REPO}/actions/runs?per_page=100" > /tmp/all-runs.json' in workflow
+    assert 'gh api "repos/${GH_REPO}/actions/runs?per_page=100" > /tmp/all-runs.json' not in workflow
+    assert 'gh api "repos/${GH_REPO}/actions/runs?per_page=100&page=${page}"' in workflow
+    assert 'Path("/tmp/all-runs.json").write_text(' in workflow
     assert 'Path(sys.argv[1]).read_text()' in workflow
 
 
