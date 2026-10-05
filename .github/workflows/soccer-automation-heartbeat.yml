@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: soccer-automation-heartbeat
@@ -29,6 +30,36 @@ jobs:
           set -euo pipefail
 
           CURL_ARGS=(--connect-timeout 20 --max-time 90 --retry 4 --retry-delay 2 --retry-all-errors -fsSL)
+          reenable_core_workflow() {
+            local workflow="$1"
+            local state
+            if ! state="$(gh api "repos/${GH_REPO}/actions/workflows/${workflow}" --jq ".state")"; then
+              return 1
+            fi
+            if [ "${state}" = "active" ]; then
+              return 0
+            fi
+            for attempt in 1 2 3; do
+              if gh workflow enable "${workflow}" --repo "${GH_REPO}" &&
+                 [ "$(gh api "repos/${GH_REPO}/actions/workflows/${workflow}" --jq ".state")" = "active" ]; then
+                return 0
+              fi
+              if [ "${attempt}" -lt 3 ]; then
+                sleep $((attempt * 5))
+              fi
+            done
+            echo "Heartbeat could not re-enable ${workflow}; preserving failure evidence." >&2
+            return 1
+          }
+
+          for workflow in \
+            "soccer-autonomous-orchestrator.yml" \
+            "soccer-control-plane-watchdog.yml" \
+            "action-failure-recovery.yml" \
+            "autonomous-github-controller.yml"; do
+            reenable_core_workflow "${workflow}" || true
+          done
+
           FILE_PATH=".github/automation/heartbeat.json"
           API_URL="${GH_API}/repos/${GH_REPO}/contents/${FILE_PATH}"
 
