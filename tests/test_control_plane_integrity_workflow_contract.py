@@ -190,3 +190,12 @@ def test_soccer_ci_ignores_machine_generated_world_model_evidence_pushes() -> No
     )
     for path in required_paths:
         assert path in workflow
+
+
+def test_failure_recovery_passes_actions_history_through_a_file_not_argv() -> None:
+    workflow = Path(".github/workflows/action-failure-recovery.yml").read_text(
+        encoding="utf-8"
+    )
+    assert 'all_runs="$(gh api "repos/${GH_REPO}/actions/runs?per_page=100")"' not in workflow
+    assert 'gh api "repos/${GH_REPO}/actions/runs?per_page=100" > /tmp/all-runs.json' in workflow
+    assert 'Path(sys.argv[1]).read_text()' in workflow
