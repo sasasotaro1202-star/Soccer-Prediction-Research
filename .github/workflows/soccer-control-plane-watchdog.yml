@@ -57,6 +57,64 @@ jobs:
             return 1
           }
 
+          workflow_state() {
+            local workflow="$1"
+            api_get "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}" |
+              python -c 'import json,sys; print(json.load(sys.stdin).get("state", ""))'
+          }
+
+          ensure_core_control_plane_active() {
+            local workflow="$1"
+            local state
+            if ! state="$(workflow_state "${workflow}")"; then
+              return 1
+            fi
+            if [ "${state}" = "active" ]; then
+              return 0
+            fi
+
+            echo "WATCHDOG: ${workflow} is ${state}; attempting bounded re-enable." >&2
+            for attempt in 1 2 3; do
+              response="/tmp/enable-${workflow//\//_}.json"
+              code="$(curl "${CURL_TIMEOUT_ARGS[@]}" -sS -o "${response}" -w "%{http_code}" -X PUT
+                -H "Authorization: Bearer ${GH_TOKEN}"
+                -H "Accept: application/vnd.github+json"
+                -H "X-GitHub-Api-Version: 2022-11-28"
+                "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/enable")"
+              case "${code}" in
+                204)
+                  state="$(workflow_state "${workflow}")" || return 1
+                  [ "${state}" = "active" ] && return 0
+                  ;;
+                409|429|500|502|503|504)
+                  ;;
+                *)
+                  cat "${response}" >&2
+                  return 1
+                  ;;
+              esac
+              if [ "${attempt}" -lt 3 ]; then
+                sleep $((attempt * 3))
+              fi
+            done
+            return 1
+          }
+
+          core_control_workflows=(
+            "soccer-autonomous-orchestrator.yml"
+            "soccer-control-plane-watchdog.yml"
+            "action-failure-recovery.yml"
+            "autonomous-github-controller.yml"
+            "soccer-automation-heartbeat.yml"
+          )
+          for workflow in "${core_control_workflows[@]}"; do
+            if [ "${workflow}" != "soccer-control-plane-watchdog.yml" ]; then
+              ensure_core_control_plane_active "${workflow}" || {
+                echo "WATCHDOG: core workflow could not be re-enabled: ${workflow}" >&2
+              }
+            fi
+          done
+
           MAIN_SHA="$(api_get "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/git/ref/heads/main" |
             python -c 'import json,sys; print(json.load(sys.stdin)["object"]["sha"])')"
           export MAIN_SHA
