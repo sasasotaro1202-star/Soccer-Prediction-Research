@@ -226,3 +226,13 @@ The autonomous merge controller separately allowlists the orchestrator workflow 
 - PR #212 adds dynamic match-state hazard research and remains research-only; its successful research workflow does not authorize performance adoption because qualifying historical in-play PIT evidence is absent.
 - Scope Frontier currently reports `PARTIAL`: the 2026-10-05 through 2026-10-18 discovery window contains zero newly discovered candidates and repeated HTTP 403 failures from the current SofaScore scheduled-events endpoint. This is acquisition/coverage evidence, not model-performance evidence.
 - No new OOS/WFO, calibration, robustness, frozen-holdout or adoption result was accepted during this reconciliation. No historical performance evidence was modified.
+
+## Current live-state reconciliation — 2026-10-05 (post control-plane hardening)
+
+- Live main was re-read after the latest control-plane changes. This section is a new reconciliation record; prior historical status statements are preserved unchanged.
+- The autonomous orchestrator on main now includes bounded dispatch retries, per-lane failure isolation, current-main-only active-run accounting, and a dispatch budget. A failed lane is recorded as HOLD and does not terminate the remaining reconciliation lanes.
+- Action Failure Recovery now includes the Soccer Autonomous Orchestrator workflow as a bounded one-time recovery target. Quality/PIT gates remain authoritative.
+- A separate .github/workflows/soccer-control-plane-watchdog.yml is active on a 10-minute schedule. It checks the latest main SHA, detects a missing/stale orchestrator run, restarts a stuck current-main orchestrator, and retries control-plane API dispatches with bounded backoff. It cannot modify models, targets, calibration or holdout evidence.
+- PR #219 was closed without merge because its hardening changes were already promoted directly to the current main through controlled hardening commits. No research-performance claim was introduced by that promotion.
+- Current production/champion performance remains UNKNOWN/UNVERIFIABLE. The repository still has no newly verified OOS/WFO/calibration/robustness/frozen-holdout adoption evidence from this control-plane work.
+- The historical BLOCKED run artifacts remain preserved. They are not rewritten into PASS and do not count as new OOS evidence.
