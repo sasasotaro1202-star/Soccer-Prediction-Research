@@ -335,6 +335,9 @@ def predict_hazard(model: Mapping[str, Any], state: Mapping[str, Any]) -> np.nda
         if name in _EVENT_SET:
             probs[EVENT_TYPES.index(name)] = max(raw[idx], 1e-9)
     probs /= probs.sum()
+    temperature = float(model.get("temperature", 1.0))
+    if temperature != 1.0:
+        probs = _temperature_apply(probs.reshape(1, -1), temperature)[0]
     return probs
 
 
