@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths-ignore:
       - "requests/**"
+      - ".github/automation/**"
   workflow_dispatch:
 
 permissions:
