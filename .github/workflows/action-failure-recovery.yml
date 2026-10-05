@@ -2,7 +2,7 @@ name: Action Failure Recovery
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "7,37 * * * *"
   workflow_run:
     workflows:
       - Soccer CI
@@ -12,18 +12,12 @@ on:
       - Overnight Integrity
       - Soccer Ultimate Experiment Matrix
       - Soccer Feature Set Research
-      - Autonomous GitHub Controller
-      - Soccer Autonomous Orchestrator
       - Soccer Dynamic Simulator Research
       - Soccer Prospective In-Play PIT Capture
       - Soccer Prospective In-Play Maturity
       - Soccer World Model Supervisor
       - Soccer 9H Autonomous Research
       - Soccer Match State Research
-      - Soccer Control Plane Watchdog
-      - Soccer Automation Heartbeat
-      - Soccer 9H Recovery
-      - Soccer 9H Queue Watchdog
     types:
       - completed
   workflow_dispatch:
@@ -82,7 +76,7 @@ jobs:
           now_epoch="$(date +%s)"
           min_age_seconds=300
           max_age_seconds=21600
-          rerun_budget=4
+          rerun_budget=2
           rerun_count=0
           failures=0
 
@@ -94,23 +88,19 @@ jobs:
             "Overnight Integrity"
             "Soccer Ultimate Experiment Matrix"
             "Soccer Feature Set Research"
-            "Autonomous GitHub Controller"
-            "Soccer Autonomous Orchestrator"
             "Soccer Dynamic Simulator Research"
             "Soccer Prospective In-Play PIT Capture"
             "Soccer Prospective In-Play Maturity"
             "Soccer World Model Supervisor"
             "Soccer 9H Autonomous Research"
             "Soccer Match State Research"
-            "Soccer Control Plane Watchdog"
-            "Soccer Automation Heartbeat"
-            "Soccer Automation Integrity Audit"
-            "Soccer 9H Recovery"
-            "Soccer 9H Queue Watchdog"
           )
 
           for workflow in "${workflows[@]}"; do
-            if ! candidates="$(gh run list --repo "${GH_REPO}" --workflow "${workflow}" --limit 100 --json databaseId,createdAt,status,conclusion,headSha --jq '.[] | select(.status == "completed" and (.conclusion == "failure" or .conclusion == "timed_out")) | [.databaseId, .createdAt, .headSha] | @tsv')"; then
+            if ! candidates="$(gh run list --repo "${GH_REPO}" --workflow "${workflow}" --limit 30 --json databaseId,createdAt,status,conclusion,headSha |
+              jq -r '[.[] | select(.status == "completed" and (.conclusion == "failure" or .conclusion == "timed_out"))] |
+                sort_by(.createdAt) | reverse | .[0] |
+                if . == null then empty else [.databaseId, .createdAt, .headSha] | @tsv end')"; then
               echo "Recovery query failed for workflow=${workflow}; preserving failure signal." >&2
               failures=$((failures + 1))
               continue

@@ -72,7 +72,7 @@ jobs:
 
           payload = json.loads(Path("/tmp/orchestrator-runs.json").read_text())
           main_sha = os.environ["MAIN_SHA"]
-          active_states = {"queued", "in_progress", "pending", "waiting", "requested"}
+          prestart = {"queued", "pending", "waiting", "requested"}
 
           def ts(run):
               raw = run.get("run_started_at") or run.get("updated_at") or run.get("created_at")
@@ -81,14 +81,26 @@ jobs:
               return datetime.fromisoformat(raw.replace("Z", "+00:00"))
 
           now = datetime.now(timezone.utc)
-          current_active = [
+          current_running = [
               r for r in payload.get("workflow_runs", [])
-              if r.get("head_sha") == main_sha and r.get("status") in active_states
+              if r.get("head_sha") == main_sha and r.get("status") == "in_progress"
           ]
-          if current_active:
-              oldest = min(current_active, key=ts)
+          current_prestart = [
+              r for r in payload.get("workflow_runs", [])
+              if r.get("head_sha") == main_sha and r.get("status") in prestart
+          ]
+
+          # Do not repeatedly cancel/requeue a queued control-plane run. A queued
+          # run is evidence that GitHub accepted the work; requeueing while the
+          # hosted runner pool is busy only creates additional queue churn.
+          if current_prestart:
+              print("QUEUED_WAIT")
+              raise SystemExit(0)
+
+          if current_running:
+              oldest = min(current_running, key=ts)
               age_min = (now - ts(oldest)).total_seconds() / 60.0
-              print("RESTART" if age_min >= 25 else "ACTIVE")
+              print("RUNNING_STALE" if age_min >= 25 else "ACTIVE")
               raise SystemExit(0)
 
           current_completed = [
@@ -123,7 +135,7 @@ jobs:
             ACTIVE)
               echo "WATCHDOG: current-main orchestrator is healthy."
               ;;
-            RESTART)
+            RUNNING_STALE)
               while IFS= read -r run_id; do
                 [ -n "${run_id}" ] || continue
                 cancel_run "${run_id}"
@@ -134,11 +146,14 @@ jobs:
           payload=json.loads(Path(sys.argv[1]).read_text())
           main_sha=sys.argv[2]
           for r in payload.get("workflow_runs", []):
-              if r.get("head_sha")==main_sha and r.get("status") in {"queued","pending","waiting","requested","in_progress"}:
+              if r.get("head_sha")==main_sha and r.get("status")=="in_progress":
                   print(r.get("id"))
           PY
               )
               dispatch_orchestrator
+              ;;
+            QUEUED_WAIT)
+              echo "WATCHDOG: current-main orchestrator is queued; preserve the accepted run and avoid requeue churn."
               ;;
             DISPATCH)
               dispatch_orchestrator
