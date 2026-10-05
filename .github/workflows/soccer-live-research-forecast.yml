@@ -1,6 +1,12 @@
 name: Soccer Live Research Forecast
 
 on:
+  push:
+    paths:
+      - "src/prediction/live_research_forecast.py"
+      - "tests/test_live_research_forecast.py"
+      - ".github/workflows/soccer-live-research-forecast.yml"
+      - "requirements.txt"
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch: {}
