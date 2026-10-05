@@ -77,6 +77,8 @@ jobs:
           }, indent=2))
           PY
 
+          dispatch_failures=0
+
           dispatch_if_idle() {
             local workflow="$1"
             local should_dispatch="$2"
@@ -90,8 +92,9 @@ jobs:
                 return
               fi
               if [ "$attempt" -eq 3 ]; then
-                echo "HOLD dispatch failure: $workflow" >&2
-                return 0
+                echo "DISPATCH FAILED: $workflow" >&2
+                dispatch_failures=$((dispatch_failures + 1))
+                return 1
               fi
               sleep $((attempt * 5))
             done
@@ -104,8 +107,14 @@ jobs:
           print(str(s["lane_state"][sys.argv[1]]["dispatch"]).lower())
           PY
             )"
-            dispatch_if_idle "$workflow" "$state"
+            if ! dispatch_if_idle "$workflow" "$state"; then
+              echo "World Model supervisor recorded dispatch failure for $workflow; continuing other lanes."
+            fi
           done
+
+          if [ "$dispatch_failures" -gt 0 ]; then
+            echo "World Model supervisor failed one or more dispatches; preserving failure signal." >&2
+          fi
 
           if [ -f data/research/match_state_research_status.json ]; then
             cp data/research/match_state_research_status.json artifacts/world_model_supervisor/latest_research.json
@@ -113,12 +122,13 @@ jobs:
             printf '%s\n' '{"status":"WARMUP","oos_claimed":false,"production_usable":false,"performance_verified":false,"promotion_candidate":false}' > artifacts/world_model_supervisor/latest_research.json
           fi
 
-          python - "$main_sha" <<'PY' >> artifacts/world_model_supervisor/decisions.json
+          python - "$main_sha" "$dispatch_failures" <<'PY' >> artifacts/world_model_supervisor/decisions.json
           import json, sys
           from pathlib import Path
           s = json.loads(Path("artifacts/world_model_supervisor/latest_research.json").read_text(encoding="utf-8"))
           print(json.dumps({
               "main_sha_at_reconciliation": sys.argv[1],
+              "dispatch_failures": int(sys.argv[2]),
               "latest_research_status": s.get("status"),
               "oos_claimed": s.get("oos_claimed", False),
               "calibration_status": s.get("calibration_status"),
@@ -137,3 +147,34 @@ jobs:
           name: soccer-world-model-supervisor
           path: artifacts/world_model_supervisor/
           retention-days: 14
+
+
+      - name: Fail closed on dispatch errors
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Re-run the bounded reconciliation result from the generated decision evidence.
+          # A dispatch failure must remain visible to GitHub Actions and trigger bounded recovery.
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          text = Path("artifacts/world_model_supervisor/decisions.json").read_text(encoding="utf-8")
+          decoder = json.JSONDecoder()
+          records = []
+          index = 0
+          while index < len(text):
+              while index < len(text) and text[index].isspace():
+                  index += 1
+              if index >= len(text):
+                  break
+              record, index = decoder.raw_decode(text, index)
+              records.append(record)
+          failures = [r for r in records if "dispatch_failures" in r]
+          count = failures[-1]["dispatch_failures"] if failures else 0
+          if int(count) > 0:
+              raise SystemExit(f"world_model_dispatch_failures={count}")
+          print("world_model_dispatch_failures: PASS")
+          PY
+
