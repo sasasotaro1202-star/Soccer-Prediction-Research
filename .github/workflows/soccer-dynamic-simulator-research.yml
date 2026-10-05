@@ -81,9 +81,11 @@ jobs:
           mkdir -p artifacts/dynamic_simulator_research
           bridge_status="HOLD"
           reason="candidate_pr_not_dispatched"
-          if pr_json="$(gh pr view 212 --repo "${GH_REPO}" --json state,headRefName,title 2>/dev/null)"; then
+          candidate_head_sha=""
+          if pr_json="$(gh pr view 212 --repo "${GH_REPO}" --json state,headRefName,headRefOid,title 2>/dev/null)"; then
             state="$(python -c 'import json,sys; print(json.load(sys.stdin)["state"])' <<<"${pr_json}")"
             head_ref="$(python -c 'import json,sys; print(json.load(sys.stdin)["headRefName"])' <<<"${pr_json}")"
+            head_sha="$(python -c 'import json,sys; print(json.load(sys.stdin)["headRefOid"])' <<<"${pr_json}")"
             if [ "${state}" = "OPEN" ] && [ -n "${head_ref}" ]; then
               if gh api "repos/${GH_REPO}/contents/.github/workflows/soccer-match-state-research.yml?ref=${head_ref}" >/dev/null 2>&1; then
                 dispatched=false
@@ -109,12 +111,13 @@ jobs:
           else
             reason="candidate_pr_lookup_failed"
           fi
-          python - "${bridge_status}" "${reason}" > artifacts/dynamic_simulator_research/candidate_bridge_status.json <<'PY'
+          python - "${bridge_status}" "${reason}" "${candidate_head_sha}" > artifacts/dynamic_simulator_research/candidate_bridge_status.json <<'PY'
           import json, sys
           print(json.dumps({
               "schema_version": 1,
               "status": sys.argv[1],
               "reason": sys.argv[2],
+              "candidate_head_sha": sys.argv[3],
               "research_only": True,
               "production_changed": False,
               "production_usable": False,
