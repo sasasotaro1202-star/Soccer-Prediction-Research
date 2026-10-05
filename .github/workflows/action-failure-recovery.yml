@@ -13,6 +13,9 @@ on:
       - Autonomous GitHub Controller
       - Soccer Autonomous Orchestrator
       - Soccer Dynamic Simulator Research
+      - Soccer Prospective In-Play PIT Capture
+      - Soccer Prospective In-Play Maturity
+      - Soccer World Model Supervisor
       - Soccer 9H Autonomous Research
       - Soccer Control Plane Watchdog
       - Soccer Automation Heartbeat
