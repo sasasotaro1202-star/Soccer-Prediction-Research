@@ -61,10 +61,10 @@ jobs:
           status_path = Path("artifacts/live_research_prediction_status.json")
           if status_path.exists():
               s = json.loads(status_path.read_text(encoding="utf-8"))
-              print(f"- Status: **${s.get('status')}**")
-              print(f"- Prediction time (UTC): `${s.get('prediction_time_utc')}`")
-              print(f"- Model: `${s.get('model_status')}`")
-              print(f"- Production: `${s.get('production_status')}`")
+              print(f"- Status: **{s.get('status')}**")
+              print(f"- Prediction time (UTC): `{s.get('prediction_time_utc')}`")
+              print(f"- Model: `{s.get('model_status')}`")
+              print(f"- Production: `{s.get('production_status')}`")
           path = Path("artifacts/live_research_predictions.csv")
           if not path.exists() or path.stat().st_size == 0:
               print("- No forecast rows.")
@@ -72,14 +72,14 @@ jobs:
           frame = pd.read_csv(path)
           for _, r in frame.iterrows():
               print("")
-              print(f"### ${r['home_team']} vs ${r['away_team']}")
-              print(f"- State: `${r['prediction_state']}` / match status `${r['match_status']}`")
+              print(f"### {r['home_team']} vs {r['away_team']}")
+              print(f"- State: `{r['prediction_state']}` / match status `{r['match_status']}`")
               print(f"- Current score: **{int(r['current_home_goals'])}-{int(r['current_away_goals'])}** at {r['elapsed_minutes']:.1f} min")
               print(f"- 1X2: Home {r['p_home']:.1%} / Draw {r['p_draw']:.1%} / Away {r['p_away']:.1%}")
-              print(f"- Pick: **${r['result_prediction']}**")
-              print(f"- Top scores: ${r['score_1']} ({r['score_1_probability']:.1%}), ${r['score_2']} ({r['score_2_probability']:.1%}), ${r['score_3']} ({r['score_3_probability']:.1%})")
+              print(f"- Pick: **{r['result_prediction']}**")
+              print(f"- Top scores: {r['score_1']} ({r['score_1_probability']:.1%}), {r['score_2']} ({r['score_2_probability']:.1%}), {r['score_3']} ({r['score_3_probability']:.1%})")
               print(f"- Predictability: {r['predictability']:.1%} / Uncertainty: {r['uncertainty']:.1%}")
-              print(f"- PIT: `${r['pit_status']}` / Production: `${r['production_status']}`")
+              print(f"- PIT: `{r['pit_status']}` / Production: `{r['production_status']}`")
           PY
 
       - name: Upload forecast artifact
