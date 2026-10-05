@@ -41,12 +41,11 @@ def test_phase3_never_persists_stale_research_to_newer_main():
     assert "latest_main_handoff.json" in text
 
 
-def test_recovery_workflow_has_watchdog_and_self_chaining_dispatch():
+def test_recovery_workflow_has_independent_watchdog_and_dispatch():
     text = RECOVERY.read_text(encoding="utf-8")
     assert 'cron: "13,28,43,58 * * * *"' in text
-    assert "workflow_run:" in text
-    assert 'workflows: ["Soccer 9H Autonomous Research"]' in text
-    assert "types: [completed]" in text
+    assert "workflow_run:" not in text
+    assert "5-minute queue watchdog" in text.lower()
     assert "actions: write" in text
     assert "contents: read" in text
     assert "group: soccer-9h-recovery-main" in text
