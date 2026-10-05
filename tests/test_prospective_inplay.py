@@ -105,7 +105,7 @@ def test_maturity_uses_later_observation_as_label_boundary():
     assert mature[0]["final_away_goals"] == 0.0
 
 
-def test_ambiguous_multi_event_transition_is_excluded():
+def test_ambiguous_multi_event_transition_is_excluded_without_imputation():
     base = {
         "event_id": "evt-2",
         "kickoff_utc": "2026-10-05T18:00:00+00:00",
@@ -124,4 +124,7 @@ def test_ambiguous_multi_event_transition_is_excluded():
              home_score=1, away_score=1, home_red_cards=0, away_red_cards=0),
     ]
     mature = build_mature_rows(rows)
-    assert mature == []
+    assert len(mature) == 1
+    assert mature[0]["prediction_cutoff_utc"] == "2026-10-05T18:10:00+00:00"
+    assert mature[0]["next_event_type"] == "NO_EVENT"
+    assert mature[0]["next_event_time_utc"] is None
