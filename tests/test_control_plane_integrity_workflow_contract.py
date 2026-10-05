@@ -137,3 +137,14 @@ def test_controller_allowlists_only_the_maturity_workflow_as_control_plane_harde
         encoding="utf-8"
     )
     assert "soccer-prospective-inplay-maturity.yml" in workflow
+
+
+def test_failure_recovery_has_scheduled_catchup_for_missed_workflow_events() -> None:
+    workflow = Path(".github/workflows/action-failure-recovery.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "schedule:" in workflow
+    assert 'cron: "*/15 * * * *"' in workflow
+    assert "gh run list" in workflow
+    assert "run_attempt" in workflow
+    assert "gh run rerun" in workflow
