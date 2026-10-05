@@ -16,7 +16,7 @@ jobs:
   capture:
     name: Capture prospective live-state snapshots
     runs-on: ubuntu-latest
-    timeout-minutes: 16
+    timeout-minutes: 20
     env:
       PYTHONHASHSEED: "0"
       PYTHONUNBUFFERED: "1"
@@ -31,7 +31,7 @@ jobs:
           set -euo pipefail
           python -m src.research.prospective_inplay capture \
             --output-root data/research/prospective_inplay/raw \
-            --loops 3 \
+            --loops 2 \
             --interval-seconds 240 | tee /tmp/capture-report.json
 
       - name: Persist prospective raw snapshots
