@@ -4,13 +4,19 @@ on:
   schedule:
     # Periodic reconciliation is the fallback; PR events handle safe-hardening
     # changes immediately without subscribing the controller to all workflow runs.
-    - cron: "17 */2 * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
-      - ".github/workflows/**"
+      - ".github/workflows/action-failure-recovery.yml"
+      - ".github/workflows/soccer-autonomous-orchestrator.yml"
+      - ".github/workflows/soccer-control-plane-watchdog.yml"
+      - ".github/workflows/soccer-9h-queue-watchdog.yml"
+      - ".github/workflows/soccer-automation-heartbeat.yml"
+      - ".github/workflows/soccer-automation-integrity-audit.yml"
+      - ".github/workflows/ci.yml"
       - "scripts/experience_commit_guard.py"
       - "src/research/adoption_gate.py"
       - "src/research/stability_gate.py"
@@ -19,8 +25,8 @@ on:
       - "src/data/pit_source_adapter_fast.py"
       - "src/data/pit_archive_fallback.py"
       - "src/data/pit_evidence.py"
-      - "tests/**"
-      - "docs/**"
+      - "tests/test_autonomous_orchestrator.py"
+      - "tests/test_9h_continuity_contract.py"
 
 permissions:
   contents: write

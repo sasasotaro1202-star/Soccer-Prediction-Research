@@ -109,7 +109,7 @@ def test_autonomous_controller_is_not_a_workflow_run_event_sink():
     assert "cancel-in-progress: true" in text
     assert "workflow_run:" not in text
     assert "pull_request:" in text
-    assert 'cron: "17 */2 * * *"' in text
+    assert 'cron: "17 * * * *"' in text
 
 
 def test_automation_heartbeat_is_long_term_and_bounded():
