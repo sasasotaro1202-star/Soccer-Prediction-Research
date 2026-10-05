@@ -81,7 +81,7 @@ jobs:
           required_control_schedules = {
               'soccer-autonomous-orchestrator.yml': 'cron: "*/30 * * * *"',
               'soccer-control-plane-watchdog.yml': 'cron: "*/10 * * * *"',
-              'action-failure-recovery.yml': 'cron: "7,37 * * * *"',
+              'action-failure-recovery.yml': 'cron: "*/10 * * * *"',
               'soccer-automation-heartbeat.yml': 'cron: "17 4 * * 0"',
           }
           for name in sorted(required_control):
@@ -101,6 +101,15 @@ jobs:
               raise SystemExit('Autonomous GitHub Controller must not subscribe to workflow_run events')
           if 'workflow_run:' in (workflow_dir / 'action-failure-recovery.yml').read_text(encoding='utf-8'):
               raise SystemExit('Action Failure Recovery must not subscribe to workflow_run events')
+          event_isolated_workflows = (
+              'soccer-9h-recovery.yml',
+              'soccer-world-model-supervisor.yml',
+              'soccer-matchday-intelligence.yml',
+          )
+          for name in event_isolated_workflows:
+              text = (workflow_dir / name).read_text(encoding='utf-8')
+              if 'workflow_run:' in text:
+                  raise SystemExit('State supervisor must not subscribe to workflow_run completion events: ' + name)
           recovery_text = (workflow_dir / 'action-failure-recovery.yml').read_text(encoding='utf-8')
           for forbidden_source in (
               'Soccer Control Plane Watchdog',
