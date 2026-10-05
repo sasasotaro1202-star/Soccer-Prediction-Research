@@ -218,6 +218,7 @@ def parse_live_snapshot(
     league: str,
     observed_at: datetime,
     response_sha256: str,
+    summary_response_sha256: str | None = None,
 ) -> dict[str, Any] | None:
     state, clock_seconds, period = _status(event)
     if state not in LIVE_STATES and state not in COMPLETED_STATES:
@@ -271,6 +272,8 @@ def parse_live_snapshot(
         "period": period,
         "hazard_window_minutes": HAZARD_WINDOW_MINUTES,
         "source_response_sha256": response_sha256,
+        "summary_response_sha256": summary_response_sha256,
+        "odds_consumed": False,
         "capture_slot_utc": observed_at.replace(second=0, microsecond=0, minute=(observed_at.minute // 2) * 2).isoformat(),
         "label_available_at_utc": None,
         "next_event_type": None,
@@ -355,13 +358,14 @@ def capture_once(
                 f"?event={event.get('id', '')}"
             )
             try:
-                summary, _ = _request_json(summary_url)
+                summary, summary_hash = _request_json(summary_url)
                 row = parse_live_snapshot(
                     event=event,
                     summary=summary,
                     league=league,
                     observed_at=now,
                     response_sha256=response_hash,
+                    summary_response_sha256=summary_hash,
                 )
             except Exception as exc:
                 errors.append({
@@ -381,7 +385,7 @@ def capture_once(
 
     return {
         "schema_version": 1,
-        "status": "CAPTURED",
+        "status": "PARTIAL" if errors else "CAPTURED",
         "observed_at_utc": now.isoformat(),
         "path": str(path),
         "captured_rows": len(captured),
