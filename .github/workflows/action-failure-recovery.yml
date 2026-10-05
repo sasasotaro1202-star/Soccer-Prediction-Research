@@ -14,6 +14,7 @@ on:
       - Soccer Autonomous Orchestrator
       - Soccer 9H Autonomous Research
       - Soccer Control Plane Watchdog
+      - Soccer Automation Heartbeat
     types: [completed]
 
 permissions:
