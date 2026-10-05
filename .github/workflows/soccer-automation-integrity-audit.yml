@@ -4,12 +4,6 @@ on:
   schedule:
     - cron: "13 */6 * * *"
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Soccer Autonomous Orchestrator
-      - Soccer Control Plane Watchdog
-    types:
-      - completed
 
 permissions:
   actions: read
