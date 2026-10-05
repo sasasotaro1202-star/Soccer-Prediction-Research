@@ -22,10 +22,20 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
+      - name: Checkout current-main control-plane contract
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: main
+          sparse-checkout: |
+            .github/automation/autonomous_lane_manifest.json
+            scripts/validate_autonomous_control_plane.py
+
       - name: Reconcile and catch up
         shell: bash
         run: |
           set -euo pipefail
+
+          python3 scripts/validate_autonomous_control_plane.py --emit-lanes > autonomous-lanes.tsv
 
           api() {
             gh api "$@"
@@ -45,6 +55,7 @@ jobs:
               "controller": "Soccer Autonomous Orchestrator",
               "main_sha": os.environ["MAIN_SHA"],
               "production_change_allowed": False,
+              "lane_manifest": ".github/automation/autonomous_lane_manifest.json",
               "frozen_holdout_access_allowed": False,
               "performance_claim_allowed": False,
               "dispatched": [],
@@ -139,33 +150,39 @@ jobs:
           current_completed.sort(key=lambda r: r["createdAt"], reverse=True)
 
           # Successful exact-main history provides normal cadence evidence.
-          successful = [
-              r for r in current_completed
-              if r.get("conclusion") == "success"
-          ]
-          if not successful:
-              # Avoid hammering a deterministically failing lane every 30 minutes.
-              # Consecutive failures get bounded exponential backoff, capped at 24h.
+          latest_completed = current_completed[0] if current_completed else None
+          if latest_completed is None:
+              print("DISPATCH:no_current_main_history")
+              raise SystemExit
+
+          latest_conclusion = str(latest_completed.get("conclusion") or "").lower()
+          if latest_conclusion != "success":
+              # A non-success latest run is failure/backoff evidence, never cadence success.
+              # Action Failure Recovery may already have performed the one permitted rerun.
               failures = []
               for r in current_completed:
-                  if r.get("conclusion") in {"failure", "timed_out", "cancelled"}:
+                  if str(r.get("conclusion") or "").lower() in {"failure", "timed_out", "cancelled"}:
                       failures.append(r)
                   else:
                       break
               if not failures:
-                  print("DISPATCH:no_current_main_history")
-                  raise SystemExit
-              latest = datetime.fromisoformat(failures[0]["createdAt"].replace("Z", "+00:00"))
-              age_seconds = now - int(latest.timestamp())
-              cooldown = min(24 * 3600, 3600 * (2 ** min(len(failures) - 1, 5)))
-              if age_seconds < cooldown:
-                  print(f"HOLD:failure_backoff:{cooldown}")
-              else:
+                  # Unknown terminal outcomes are treated conservatively to avoid silent starvation.
+                  failures = [latest_completed]
+
+              latest = datetime.fromisoformat(latest_completed["createdAt"].replace("Z", "+00:00"))
+              age_seconds = max(0, now - int(latest.timestamp()))
+              cooldown = min(
+                  24 * 3600,
+                  3600 * (2 ** min(max(0, len(failures) - 1), 5)),
+              )
+              if age_seconds >= cooldown:
                   print("DISPATCH:retry_after_failure_backoff")
+              else:
+                  print(f"HOLD:failure_backoff:{cooldown}")
               raise SystemExit
 
-          latest = datetime.fromisoformat(successful[0]["createdAt"].replace("Z", "+00:00"))
-          age = now - int(latest.timestamp())
+          latest = datetime.fromisoformat(latest_completed["createdAt"].replace("Z", "+00:00"))
+          age = max(0, now - int(latest.timestamp()))
           if age < min_gap:
               print("HOLD:recent")
           elif age >= cadence:
@@ -205,37 +222,31 @@ jobs:
             esac
           }
 
-          # High-frequency live lanes: these are catch-up guards only; their own schedules remain authoritative.
-          ensure_lane "soccer-matchday-intelligence.yml" 30 15
-          ensure_lane "soccer-daily-research-forecast.yml" 60 20
+          # Routine research scheduling is driven by the machine-readable manifest.\n          while IFS=
 
-          # Core research lanes.
-          ensure_lane "soccer-9h-autonomous.yml" 480 60
-          ensure_lane "soccer-research-robust.yml" 1440 120
-          ensure_lane "soccer-predictability-research.yml" 360 60
-          ensure_lane "soccer-dynamic-simulator-research.yml" 360 60
-          ensure_lane "soccer-prospective-inplay-capture.yml" 15 10
-          ensure_lane "soccer-prospective-inplay-maturity.yml" 30 15
-          ensure_lane "soccer-world-model-supervisor.yml" 120 30
-          ensure_lane "soccer-historical-learning.yml" 360 90
-          ensure_lane "soccer-experience-ledger.yml" 360 90
-          ensure_lane "adaptive_data_discovery.yml" 360 60
-          ensure_lane "soccer-scope-frontier.yml" 360 60
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          s = json.loads(Path("autonomous-orchestrator-report.json").read_text(encoding="utf-8"))
+          print("## Soccer Autonomous Orchestrator")
+          print(f"- main_sha: {s['main_sha']}")
+          print(f"- dispatched: {len(s['dispatched'])}")
+          print(f"- held: {len(s['held'])}")
+          print("- dispatch_budget: 6")
+          print("- max_active_runs: 10")
+          print("- production_change_allowed: false")
+          print("- frozen_holdout_access_allowed: false")
+          print("- performance_claim_allowed: false")
+          PY
 
-          # PIT/data integrity lanes.
-          ensure_lane "pit-replay-audit.yml" 1440 120
-          ensure_lane "soccer-coverage-pit-audit.yml" 1440 120
-          ensure_lane "soccer-audit.yml" 1440 120
-          ensure_lane "soccer-versioned-pit-research.yml" 720 120
-
-          # Lower-frequency research lanes.
-          ensure_lane "soccer-global-datalake.yml" 10080 240
-          ensure_lane "soccer-mom-research.yml" 10080 240
-          ensure_lane "full-catalog-audit.yml" 10080 240
-          ensure_lane "soccer-source-probe.yml" 10080 120
-          ensure_lane "soccer-research-cycle.yml" 10080 240
-          ensure_lane "overnight-integrity.yml" 1440 120
-          ensure_lane "soccer-opta-like-24h.yml" 1440 180
+      - name: Upload controller evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-autonomous-orchestrator-${{ github.run_id }}
+          path: autonomous-orchestrator-report.json
+          retention-days: 14
+\t' read -r workflow cadence min_gap; do\n            [ -n "${workflow}" ] || continue\n            ensure_lane "${workflow}" "${cadence}" "${min_gap}"\n          done < autonomous-lanes.tsv
 
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
