@@ -80,6 +80,8 @@ jobs:
       - name: Trigger source discovery when historical in-play data is unavailable
         if: always() && github.event_name != 'pull_request'
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           status_file="${MATCH_STATE_OUT}/match_state_status.json"
