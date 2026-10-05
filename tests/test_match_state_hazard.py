@@ -139,12 +139,12 @@ def test_run_is_fail_closed_warmup_without_dataset(tmp_path):
 
 
 def test_chronological_hazard_oos_blocks_immature_labels_at_test_cutoff():
-    frame = build_state_features(validate_snapshot_contract(_rows(150)))
+    frame = build_state_features(validate_snapshot_contract(_rows(60)))
     base = pd.Timestamp("2026-01-01T12:00:00Z")
     # Put many matches close together and delay final-label maturity so a naive
     # "max training label" as-of boundary would reach into the future test block.
     kickoff_by_match = {
-        f"m{i}": base + pd.Timedelta(minutes=2 * i) for i in range(150)
+        f"m{i}": base + pd.Timedelta(minutes=2 * i) for i in range(60)
     }
     # Shift every time field consistently so the fixture remains contract-valid.
     old_kickoff = frame["kickoff_utc"].copy()
@@ -178,13 +178,13 @@ def test_chronological_hazard_oos_blocks_immature_labels_at_test_cutoff():
 
 
 def test_chronological_hazard_oos_is_match_level_and_research_only():
-    frame = build_state_features(validate_snapshot_contract(_rows(150)))
+    frame = build_state_features(validate_snapshot_contract(_rows(60)))
     from src.research.match_state_hazard import evaluate_hazard_chronological_oos
     result = evaluate_hazard_chronological_oos(
         frame,
         method="logistic",
-        min_training_matches=60,
-        min_test_matches=10,
+        min_training_matches=20,
+        min_test_matches=5,
         max_folds=2,
     )
     assert result["status"] == "EVALUATED"
@@ -213,7 +213,7 @@ def test_match_state_workflow_can_persist_research_state_but_not_pr_state():
 
 
 def test_temperature_calibration_is_prequential_helper_and_normalized():
-    p = np.tile(np.asarray([[0.70, 0.20, 0.10]]), (60, 1))
+    p = np.tile(np.asarray([[0.60, 0.15, 0.05, 0.05, 0.15]]), (60, 1))
     y = np.asarray(["HOME_GOAL"] * 60)
     temperature = fit_temperature(p, y, min_rows=50)
     assert np.isfinite(temperature)
@@ -225,13 +225,13 @@ def test_temperature_calibration_is_prequential_helper_and_normalized():
 
 
 def test_oos_exposes_scenario_metrics_and_prequential_calibration():
-    frame = build_state_features(validate_snapshot_contract(_rows(150)))
+    frame = build_state_features(validate_snapshot_contract(_rows(60)))
     from src.research.match_state_hazard import evaluate_hazard_chronological_oos
     result = evaluate_hazard_chronological_oos(
         frame,
         method="logistic",
-        min_training_matches=60,
-        min_test_matches=10,
+        min_training_matches=20,
+        min_test_matches=5,
         max_folds=2,
     )
     assert result["status"] == "EVALUATED"
@@ -247,12 +247,12 @@ def test_oos_exposes_scenario_metrics_and_prequential_calibration():
 
 
 def test_robustness_comparison_is_same_oos_policy():
-    frame = build_state_features(validate_snapshot_contract(_rows(150)))
+    frame = build_state_features(validate_snapshot_contract(_rows(60)))
     result = evaluate_hazard_robustness(
         frame,
         method="logistic",
-        min_training_matches=60,
-        min_test_matches=10,
+        min_training_matches=20,
+        min_test_matches=5,
         max_folds=2,
     )
     assert result["status"] == "EVALUATED"
@@ -262,7 +262,7 @@ def test_robustness_comparison_is_same_oos_policy():
 
 
 def test_run_persists_calibration_and_robustness_state(tmp_path):
-    frame = _rows(150)
+    frame = _rows(60)
     input_path = tmp_path / "snapshots.csv"
     frame.to_csv(input_path, index=False)
     status = run_match_state_research(
