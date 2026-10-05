@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "config_version": "live-research-forecast-v1",
+  "target_teams": ["france", "belgium", "italy", "turkey"],
+  "target_pairs": {
+    "France-Belgium": ["France", "Belgium"],
+    "Italy-Turkey": ["Italy", "Turkey"]
+  },
+  "team_aliases": {
+    "elo_codes": {
+      "FR": "france",
+      "BE": "belgium",
+      "IT": "italy",
+      "TR": "turkey"
+    }
+  },
+  "sources": {
+    "sofascore_live_url": "https://www.sofascore.com/api/v1/sport/football/events/live",
+    "sofascore_scheduled_url": "https://www.sofascore.com/api/v1/sport/football/scheduled-events/{date}",
+    "elo_url": "https://www.eloratings.net/World.tsv"
+  },
+  "runtime": {
+    "request_timeout_seconds": 20,
+    "schedule_days": 2,
+    "schedule_past_tolerance_minutes": 5
+  },
+  "model": {
+    "home_advantage_elo": 80.0,
+    "base_total_goals": 2.45,
+    "probability_shrink": 0.85,
+    "max_goals": 8,
+    "top_scorelines": 3,
+    "tempo_ratio_min": 0.65,
+    "tempo_ratio_max": 1.55,
+    "tempo_multiplier_base": 0.70,
+    "tempo_multiplier_slope": 0.30,
+    "tempo_multiplier_min": 0.80,
+    "tempo_multiplier_max": 1.30,
+    "data_quality_uncertainty_penalty": 0.10
+  },
+  "safety": {
+    "production_status": "NOT_PRODUCTION",
+    "retrieval_is_not_source_available": true,
+    "unknown_source_availability_blocks_production": true,
+    "historical_backfill_from_current_page_forbidden": true,
+    "market_odds_used": false
+  }
+}
