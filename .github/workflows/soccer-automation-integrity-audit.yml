@@ -78,10 +78,19 @@ jobs:
           missing = sorted(name for name in required_control if not (workflow_dir / name).is_file())
           if missing:
               raise SystemExit('Required control-plane workflow missing: ' + ', '.join(missing))
+          required_control_schedules = {
+              'soccer-autonomous-orchestrator.yml': 'cron: "*/30 * * * *"',
+              'soccer-control-plane-watchdog.yml': 'cron: "*/10 * * * *"',
+              'action-failure-recovery.yml': 'cron: "*/15 * * * *"',
+              'soccer-automation-heartbeat.yml': 'cron: "17 4 * * 0"',
+          }
           for name in sorted(required_control):
               text = (workflow_dir / name).read_text(encoding='utf-8')
               if 'concurrency:' not in text:
                   raise SystemExit(f'Core control-plane workflow has no concurrency contract: {name}')
+              required_schedule = required_control_schedules.get(name)
+              if required_schedule and required_schedule not in text:
+                  raise SystemExit(f'Core control-plane workflow has no required recurring schedule: {name}')
               masking_token = '|' + '| true'
               if masking_token in text:
                   raise SystemExit(f'Error masking operator found in control-plane workflow: {name}')
