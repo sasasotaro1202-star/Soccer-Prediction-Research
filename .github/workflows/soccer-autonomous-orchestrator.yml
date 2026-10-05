@@ -166,7 +166,6 @@ jobs:
                   else:
                       break
               if not failures:
-                  # Unknown terminal outcomes are treated conservatively to avoid silent starvation.
                   failures = [latest_completed]
 
               latest = datetime.fromisoformat(latest_completed["createdAt"].replace("Z", "+00:00"))
@@ -224,33 +223,6 @@ jobs:
 
           # Routine research scheduling is driven by the machine-readable manifest.
           while IFS='|' read -r workflow cadence min_gap; do
-            [ -n "${workflow}" ] || continue
-            ensure_lane "${workflow}" "${cadence}" "${min_gap}"
-          done < autonomous-lanes.tsv
-
-          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import json
-          from pathlib import Path
-          s = json.loads(Path("autonomous-orchestrator-report.json").read_text(encoding="utf-8"))
-          print("## Soccer Autonomous Orchestrator")
-          print(f"- main_sha: {s['main_sha']}")
-          print(f"- dispatched: {len(s['dispatched'])}")
-          print(f"- held: {len(s['held'])}")
-          print("- dispatch_budget: 6")
-          print("- max_active_runs: 10")
-          print("- production_change_allowed: false")
-          print("- frozen_holdout_access_allowed: false")
-          print("- performance_claim_allowed: false")
-          PY
-
-      - name: Upload controller evidence
-        if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with:
-          name: soccer-autonomous-orchestrator-${{ github.run_id }}
-          path: autonomous-orchestrator-report.json
-          retention-days: 14
-\t' read -r workflow cadence min_gap; do
             [ -n "${workflow}" ] || continue
             ensure_lane "${workflow}" "${cadence}" "${min_gap}"
           done < autonomous-lanes.tsv
