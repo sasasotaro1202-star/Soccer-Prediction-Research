@@ -106,6 +106,7 @@ def test_autonomous_controller_cancels_stale_reconciliations():
     assert "group: soccer-autonomous-controller" in text
     assert "cancel-in-progress: true" in text
     assert ".github/workflows/soccer-control-plane-watchdog.yml" in text
+    assert ".github/workflows/soccer-automation-integrity-audit.yml" in text
 
 
 def test_automation_heartbeat_is_long_term_and_bounded():
