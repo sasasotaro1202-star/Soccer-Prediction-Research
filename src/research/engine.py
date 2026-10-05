@@ -155,6 +155,17 @@ def _build_stability_folds(development_oos: pd.DataFrame) -> list[dict]:
 
 
 
+def _sha256(path: Path, *, chunk_size: int = 1024 * 1024) -> str:
+    """Return a deterministic SHA-256 digest for a file on disk."""
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(chunk_size), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def snapshot_id(df: pd.DataFrame) -> str:
     excluded = {"retrieved_at_utc", "source_available_at_utc", "pit_evidence_url", "capture_digest"}
     stable = df[[c for c in df.columns if c not in excluded]].copy()
