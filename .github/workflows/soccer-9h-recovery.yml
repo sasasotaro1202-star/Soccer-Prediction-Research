@@ -1,15 +1,15 @@
 name: Soccer 9H Recovery Controller
 
-# Recovery is driven by main-push, workflow_run completion chaining, and the 15-minute watchdog. The controller
+# Recovery is driven by the independent 15-minute watchdog plus the separate 5-minute
+# queue watchdog. The controller always compares against the latest main SHA before
+# dispatching and never interrupts an active 9H snapshot.
 # always compares against the latest main SHA before dispatching and never interrupts an active 9H snapshot.
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Soccer 9H Autonomous Research"]
-    types: [completed]
   schedule:
-    # 15-minute watchdog: workflow_run completion chaining is the primary continuity path; this schedule is a secondary safety net with lower scheduler load.
+    # Independent 15-minute reconciliation. The separate 5-minute queue watchdog
+    # covers runner-queue continuity; no completion-event chain is required.
     - cron: "13,28,43,58 * * * *"
 
 permissions:
@@ -18,16 +18,12 @@ permissions:
 
 concurrency:
   # The controller is stateless and short-lived; keep only the newest watchdog decision.
-  # This prevents scheduled/workflow_run bursts from accumulating a controller queue.
   group: soccer-9h-recovery-main
   cancel-in-progress: true
 
 jobs:
   watchdog:
     name: Monitor and recover 9H research
-    # Controller-initiated cancellation also emits workflow_run(completed).
-    # Ignore that event to prevent a cancellation -> recovery -> redispatch loop.
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'cancelled' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
