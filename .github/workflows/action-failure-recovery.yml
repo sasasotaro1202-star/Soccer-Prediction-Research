@@ -1,25 +1,10 @@
 name: Action Failure Recovery
 
 on:
+  # Failure detection is schedule-based to avoid creating a run for every normal
+  # workflow completion. The scanner reconciles recent current-main failures.
   schedule:
-    - cron: "7,37 * * * *"
-  workflow_run:
-    workflows:
-      - Soccer CI
-      - Soccer PIT Replay Audit
-      - Soccer Matchday Intelligence Refresh
-      - Legacy V9/V12 Bridge Check
-      - Overnight Integrity
-      - Soccer Ultimate Experiment Matrix
-      - Soccer Feature Set Research
-      - Soccer Dynamic Simulator Research
-      - Soccer Prospective In-Play PIT Capture
-      - Soccer Prospective In-Play Maturity
-      - Soccer World Model Supervisor
-      - Soccer 9H Autonomous Research
-      - Soccer Match State Research
-    types:
-      - completed
+    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 permissions:

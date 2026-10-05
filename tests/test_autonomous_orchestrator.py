@@ -90,9 +90,11 @@ def test_control_plane_watchdog_is_independent_and_persists_evidence():
     assert "control_plane_watchdog.json" in text
 
 
-def test_failure_recovery_stays_source_focused_and_bounded():
+def test_failure_recovery_is_schedule_only_and_bounded():
     path = Path(".github/workflows/action-failure-recovery.yml")
     text = path.read_text(encoding="utf-8")
+    assert "workflow_run:" not in text
+    assert 'cron: "*/10 * * * *"' in text
     assert "Soccer Control Plane Watchdog" not in text
     assert "Soccer Automation Heartbeat" not in text
     assert "Soccer Automation Integrity Audit" not in text
@@ -136,7 +138,7 @@ def test_failure_recovery_includes_automation_heartbeat():
 
 def test_failure_recovery_isolated_per_workflow_lane():
     text = Path(".github/workflows/action-failure-recovery.yml").read_text(encoding="utf-8")
-    assert "group: action-failure-recovery-${{ github.event.workflow_run.name || 'scheduled' }}" in text
+    assert "group: action-failure-recovery" in text
     assert "cancel-in-progress: true" in text
 
 

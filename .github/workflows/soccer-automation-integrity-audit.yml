@@ -99,6 +99,8 @@ jobs:
               raise SystemExit('Autonomous orchestrator must not gain merge authority')
           if 'workflow_run:' in (workflow_dir / 'autonomous-github-controller.yml').read_text(encoding='utf-8'):
               raise SystemExit('Autonomous GitHub Controller must not subscribe to workflow_run events')
+          if 'workflow_run:' in (workflow_dir / 'action-failure-recovery.yml').read_text(encoding='utf-8'):
+              raise SystemExit('Action Failure Recovery must not subscribe to workflow_run events')
           recovery_text = (workflow_dir / 'action-failure-recovery.yml').read_text(encoding='utf-8')
           for forbidden_source in (
               'Soccer Control Plane Watchdog',
