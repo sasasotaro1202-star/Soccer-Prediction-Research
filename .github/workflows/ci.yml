@@ -12,6 +12,11 @@ on:
       - "data/experience/**"
       - "data/raw/**"
       - ".github/automation/**"
+      # Machine-generated World Model evidence is validated by its own lanes.
+      # Avoid starting the full repository test suite for high-frequency data commits.
+      - "data/research/prospective_inplay/raw/**"
+      - "data/research/match_state_snapshots/**"
+      - "data/research/match_state_research_status.json"
   pull_request:
     branches: [main]
   workflow_dispatch:
