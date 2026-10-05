@@ -148,12 +148,12 @@ jobs:
               "research_only_true": status.get("research_only") is True,
               "performance_verified_false": status.get("performance_verified") is False,
               "promotion_candidate_false": status.get("promotion_candidate") is False,
-              "status_allowed": status.get("status") in {"WARMUP", "SCHEMA_VERIFIED", "OOS_EVALUATED"},
+              "status_allowed": status.get("status") in {"WARMUP", "SCHEMA_VERIFIED", "OOS_EVALUATED", "CALIBRATION_ROBUSTNESS_EVALUATED"},
               "oos_consistent": (
-                  status.get("status") == "OOS_EVALUATED"
+                  status.get("status") in {"OOS_EVALUATED", "CALIBRATION_ROBUSTNESS_EVALUATED"}
                   and status.get("oos_claimed") is True
               ) or (
-                  status.get("status") != "OOS_EVALUATED"
+                  status.get("status") not in {"OOS_EVALUATED", "CALIBRATION_ROBUSTNESS_EVALUATED"}
                   and status.get("oos_claimed") is False
               ),
           }
