@@ -127,7 +127,6 @@ At minimum:
 Continuous operation means the repository can resume after missed schedules, transient API failures, runner delays, or stale queued runs without requiring a new chat message.
 - Control-plane self-healing: the Orchestrator and independent watchdog may re-enable inactive core control-plane or scheduled research workflows only through bounded retries, preserve HOLD/unknown evidence on failure, and never grant production/model/feature/calibration/target/frozen-holdout authority.
 
-
 ## Long-term GitHub schedule keepalive
 
 For public-repository long-term autonomy, maintain a low-frequency repository-activity heartbeat on GitHub Actions. The heartbeat may update only a dedicated automation-state file and must never touch model, feature, target, calibration, OOS, frozen-holdout or production evidence. Heartbeat commits should be excluded from heavy source/test workflows where safe, and heartbeat failures must use bounded recovery.
@@ -142,3 +141,38 @@ PROSPECTIVE OBSERVATION → LATER LABEL MATURITY → MATCH-LEVEL WFO/OOS → PRE
 For the World Model track, market odds are not consumed. They must not become hidden features through source payloads, generic feature selection, or diagnostic fusion.
 
 Prospective data acquisition is research evidence generation only. It cannot change target semantics, Champion, Production, frozen holdout or adoption authority.
+
+
+## Current-match live research lane
+
+A dedicated research-only current-match lane may serve explicitly requested live or imminent matches when the adopted Production bundle is unavailable or blocked. The lane must remain outside Production authority and must not relax PIT/OOS/holdout/adoption gates.
+
+The live lane should:
+- acquire a current public match snapshot;
+- preserve response hashes and retrieval timestamps;
+- keep retrieval time distinct from historical source publication/availability time;
+- resolve target identity conservatively without silent merging;
+- expose current score/status and elapsed time;
+- produce 1X2 probabilities and a Top-3 score distribution when the current state is sufficiently observed;
+- compute uncertainty and predictability separately;
+- persist Git SHA, configuration hash, experiment fingerprint and prediction revision;
+- publish to a dedicated research artifact and GitHub Actions summary;
+- fail closed when critical sources or contracts are invalid;
+- never label its own output PRODUCTION without passing the normal adoption contract.
+
+Current live research implementation:
+src/prediction/live_research_forecast.py
+
+Current configuration:
+config/live_research_forecast.json
+
+Current workflow:
+.github/workflows/soccer-live-research-forecast.yml
+
+Current documentation:
+docs/live-research-forecast.md
+
+The intended maturation path is:
+PROSPECTIVE SNAPSHOT → RESULT MATURITY → PIT/SCHEMA → CHRONOLOGICAL WFO/OOS → PREQUENTIAL CALIBRATION → ABLATION → ROBUSTNESS → INCUMBENT COMPARISON → FROZEN HOLDOUT → ADOPTION GATE → SHADOW → PROMOTION.
+
+The emergency/live lane must never be interpreted as evidence that the underlying heuristic is performance-verified merely because a current forecast was generated successfully.

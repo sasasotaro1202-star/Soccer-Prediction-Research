@@ -44,3 +44,23 @@ The prospective collector uses only free/public current soccer state and records
 GitHub Actions provides the persistent execution layer through the prospective capture, maturity, dynamic simulator, World Model supervisor, autonomous orchestrator, watchdog and bounded failure-recovery lanes. These lanes can catch up after missed schedules or transient failures, but research infrastructure cannot self-promote into Production.
 
 The dynamic simulator remains a research candidate until future chronological OOS, calibration, robustness, incumbent comparison and holdout evidence demonstrate incremental generalization.
+
+
+## Current-match live research forecast
+
+The repository also provides a separate current-match research lane:
+
+.github/workflows/soccer-live-research-forecast.yml
+
+It runs every five minutes and can be run manually. It targets the explicitly configured France–Belgium and Italy–Turkey/Türkiye pair identities, reads current public match state plus a current World Elo snapshot, and publishes a provenance-rich live research forecast.
+
+The lane writes:
+
+- artifacts/live_research_predictions.csv
+- artifacts/live_research_prediction_status.json
+
+The output includes 1X2 probabilities, Top-3 scorelines, current score/status, uncertainty, predictability, data completeness, PIT metadata, source hashes, configuration hash, Git SHA and experiment fingerprint.
+
+This lane is always NOT_PRODUCTION. It does not bypass the adopted-model registry, OOS, calibration, robustness, frozen-holdout or adoption gates.
+
+See docs/live-research-forecast.md for the complete contract.
