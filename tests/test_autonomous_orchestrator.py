@@ -210,3 +210,11 @@ def test_orchestrator_reacts_to_control_plane_changes():
 def test_automation_integrity_rejects_controller_event_sink():
     audit = Path(".github/workflows/soccer-automation-integrity-audit.yml").read_text(encoding="utf-8")
     assert "must not subscribe to workflow_run events" in audit
+
+ 
+ 
+def test_action_recovery_excludes_control_plane_event_sources():
+    text = Path(".github/workflows/action-failure-recovery.yml").read_text(encoding="utf-8")
+    assert "Soccer Control Plane Watchdog" not in text
+    assert "Soccer Automation Heartbeat" not in text
+    assert "Soccer Automation Integrity Audit" not in text
