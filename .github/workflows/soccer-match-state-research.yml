@@ -33,6 +33,9 @@ concurrency:
 
 jobs:
   match-state:
+    # Hardening-only PRs do not need to consume a runner on research-only
+    # maturation. The dedicated CI/control-plane checks remain authoritative.
+    if: ${{ github.event_name != 'pull_request' || !startsWith(github.event.pull_request.head.ref, 'hardening/') }}
     name: PIT-safe state -> hazard -> scenario research
     runs-on: ubuntu-latest
     timeout-minutes: 45
