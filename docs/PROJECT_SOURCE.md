@@ -272,3 +272,10 @@ The autonomous merge controller separately allowlists the orchestrator workflow 
 - The audit is fail-closed: missing markers, inactive control workflows or stale control-plane execution produce HOLD/failure evidence rather than silently passing. It does not modify model, feature, target, calibration, frozen-holdout or production state.
 - `Action Failure Recovery` now includes the integrity-audit lane for one bounded retry of workflow failure.
 - This change is hardening only. No model, feature, target, calibration, OOS, robustness, frozen-holdout, Champion or Production performance result is introduced or rewritten.
+
+
+## Current live-state reconciliation — 2026-10-05 (integrity-audit auto-merge boundary)
+
+- The hardening-safe autonomous merge controller allowlist now includes the control-plane integrity audit workflow.
+- This expands automation only for the read-only integrity/audit lane. It does not add model, feature, target, calibration, OOS, frozen-holdout or production changes to the auto-merge allowlist.
+- The audit workflow and its regression coverage remain subject to exact-head CI and the controller’s existing same-repository, non-draft, clean-state and evidence checks.
