@@ -201,16 +201,25 @@ def test_orchestrator_reaps_only_obsolete_prestart_runs():
     assert "obsolete_prestart_reap_budget_exhausted" in text
 
 
-def test_orchestrator_reacts_to_control_plane_changes():
+def test_orchestrator_reacts_only_to_control_plane_changes():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert 'push:' in text
     assert 'branches: [main]' in text
-    assert '".github/workflows/**"' in text
+    assert '".github/workflows/**"' not in text
+    for path in (
+        '".github/workflows/soccer-autonomous-orchestrator.yml"',
+        '".github/workflows/soccer-control-plane-watchdog.yml"',
+        '".github/workflows/action-failure-recovery.yml"',
+        '".github/workflows/soccer-9h-queue-watchdog.yml"',
+        '".github/workflows/soccer-9h-recovery.yml"',
+        '".github/workflows/soccer-automation-heartbeat.yml"',
+        '".github/workflows/soccer-automation-integrity-audit.yml"',
+        '".github/workflows/autonomous-github-controller.yml"',
+    ):
+        assert path in text
     assert '"PROJECT_INSTRUCTIONS.md"' in text
     assert '"docs/PROJECT_SOURCE.md"' in text
 
- 
- 
 def test_automation_integrity_rejects_controller_event_sink():
     audit = Path(".github/workflows/soccer-automation-integrity-audit.yml").read_text(encoding="utf-8")
     assert "must not subscribe to workflow_run events" in audit
