@@ -130,3 +130,10 @@ def test_world_model_maturity_installs_python_dependencies_before_pytest() -> No
     assert 'python-version: "3.12"' in workflow
     assert "python -m pip install" in workflow
     assert "requirements.txt" in workflow
+
+
+def test_controller_allowlists_only_the_maturity_workflow_as_control_plane_hardening() -> None:
+    workflow = Path(".github/workflows/autonomous-github-controller.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "soccer-prospective-inplay-maturity.yml" in workflow
