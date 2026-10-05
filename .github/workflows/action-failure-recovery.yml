@@ -66,3 +66,125 @@ jobs:
           done
 
           echo "No quality gate is bypassed; the original workflow remains authoritative."
+
+
+  scheduled-catchup:
+    if: \${{ github.event_name == 'schedule' }}
+    name: Catch missed failure-recovery events
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Reconcile recent failed current-main workflows
+        env:
+          GH_TOKEN: \${{ github.token }}
+          GH_REPO: \${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          main_sha="$(gh api "repos/\${GH_REPO}/git/ref/heads/main" --jq '.object.sha')"
+          now_epoch="$(date +%s)"
+          min_age_seconds=300
+          max_age_seconds=1800
+          rerun_budget=4
+          rerun_count=0
+          failures=0
+
+          workflows=(
+            "Soccer CI"
+            "Soccer PIT Replay Audit"
+            "Soccer Matchday Intelligence Refresh"
+            "Legacy V9/V12 Bridge Check"
+            "Overnight Integrity"
+            "Soccer Ultimate Experiment Matrix"
+            "Soccer Feature Set Research"
+            "Autonomous GitHub Controller"
+            "Soccer Autonomous Orchestrator"
+            "Soccer Dynamic Simulator Research"
+            "Soccer Prospective In-Play PIT Capture"
+            "Soccer Prospective In-Play Maturity"
+            "Soccer World Model Supervisor"
+            "Soccer Match State Research"
+            "Soccer 9H Autonomous Research"
+            "Soccer Control Plane Watchdog"
+            "Soccer Automation Heartbeat"
+            "Soccer Automation Integrity Audit"
+          )
+
+          all_runs="$(gh api "repos/\${GH_REPO}/actions/runs?per_page=100")"
+
+          for workflow in "\${workflows[@]}"; do
+            while IFS=$'\\t' read -r run_id created_at conclusion run_attempt; do
+              [ -n "\${run_id}" ] || continue
+
+              created_epoch="$(date -u -d "\${created_at}" +%s)"
+              age=$((now_epoch - created_epoch))
+              if [ "\${age}" -lt "\${min_age_seconds}" ] || [ "\${age}" -gt "\${max_age_seconds}" ]; then
+                continue
+              fi
+
+              if [ "\${rerun_count}" -ge "\${rerun_budget}" ]; then
+                echo "Recovery budget exhausted; remaining failed runs remain explicit."
+                failures=$((failures + 1))
+                break
+              fi
+
+              echo "Scheduled recovery candidate: workflow=\${workflow} run=\${run_id} age_seconds=\${age}"
+
+              recovered=false
+              for attempt in 1 2 3; do
+                if gh run rerun "\${run_id}" --failed --repo "\${GH_REPO}"; then
+                  echo "Scheduled recovery requested: \${workflow} run=\${run_id}"
+                  recovered=true
+                  rerun_count=$((rerun_count + 1))
+                  break
+                fi
+                if [ "\${attempt}" -lt 3 ]; then
+                  sleep $((attempt * 5))
+                fi
+              done
+
+              if [ "\${recovered}" != true ]; then
+                echo "Scheduled recovery failed after bounded retries: \${workflow} run=\${run_id}" >&2
+                failures=$((failures + 1))
+              fi
+            done < <(
+              python - "\${all_runs}" "\${main_sha}" "\${workflow}" <<'PY'
+          import json
+          import sys
+          from datetime import datetime, timezone
+
+          payload = json.loads(sys.argv[1])
+          main_sha = sys.argv[2]
+          workflow_name = sys.argv[3]
+          now = datetime.now(timezone.utc)
+          for run in payload.get("workflow_runs", []):
+              if run.get("name") != workflow_name:
+                  continue
+              if run.get("head_sha") != main_sha:
+                  continue
+              if run.get("status") != "completed":
+                  continue
+              if run.get("conclusion") not in {"failure", "timed_out"}:
+                  continue
+              if run.get("run_attempt") != 1:
+                  continue
+              created_at = run.get("created_at")
+              if not created_at:
+                  continue
+              print("\\t".join([
+                  str(run.get("id")),
+                  created_at,
+                  str(run.get("conclusion")),
+                  str(run.get("run_attempt")),
+              ]))
+          PY
+            )
+          done
+
+          if [ "\${failures}" -gt 0 ]; then
+            echo "Scheduled failure recovery completed with \${failures} unresolved recovery errors." >&2
+            exit 1
+          fi
+
+          echo "Scheduled failure recovery catch-up completed with \${rerun_count} rerun request(s)."
