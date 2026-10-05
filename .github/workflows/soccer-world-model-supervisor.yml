@@ -1,0 +1,139 @@
+name: Soccer World Model Supervisor
+
+on:
+  schedule:
+    - cron: "23 */2 * * *"
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Soccer Prospective In-Play PIT Capture
+      - Soccer Prospective In-Play Maturity
+      - Soccer Dynamic Simulator Research
+      - Soccer Research Robust
+    types: [completed]
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: soccer-world-model-supervisor
+  cancel-in-progress: true
+
+jobs:
+  supervise:
+    name: Reconcile world-model research progression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: main
+
+      - name: Reconcile current-main research state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/world_model_supervisor
+          main_sha="$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq '.object.sha')"
+
+          runs="$(gh run list --repo "$GH_REPO" --limit 100 --json name,status,conclusion,createdAt,headSha)"
+          
+          python - "$main_sha" "$runs" > artifacts/world_model_supervisor/decisions.json <<'PY'
+          import json, sys
+          from datetime import datetime, timezone
+          main_sha = sys.argv[1]
+          runs = json.loads(sys.argv[2])
+          now = datetime.now(timezone.utc)
+          lane_cfg = {
+              "Soccer Prospective In-Play PIT Capture": 15,
+              "Soccer Prospective In-Play Maturity": 30,
+              "Soccer Dynamic Simulator Research": 360,
+          }
+          lane_state = {}
+          for name, cadence in lane_cfg.items():
+              relevant = [r for r in runs if r.get("name") == name and r.get("headSha") == main_sha]
+              active = [r for r in relevant if r.get("status") in {"queued","in_progress","pending","waiting","requested"}]
+              completed = [r for r in relevant if r.get("status") == "completed" and r.get("createdAt")]
+              completed.sort(key=lambda x: x["createdAt"], reverse=True)
+              last_age = None
+              if completed:
+                  last = datetime.fromisoformat(completed[0]["createdAt"].replace("Z","+00:00"))
+                  last_age = max(0, int((now-last).total_seconds()/60))
+              lane_state[name] = {
+                  "active_current_main": bool(active),
+                  "last_successful_or_completed_age_minutes": last_age,
+                  "cadence_minutes": cadence,
+                  "dispatch": not bool(active) and (last_age is None or last_age >= cadence),
+              }
+          print(json.dumps({
+              "main_sha": main_sha,
+              "current_main_only": True,
+              "lane_state": lane_state,
+          }, indent=2))
+          PY
+
+          dispatch_if_idle() {
+            local workflow="$1"
+            local should_dispatch="$2"
+            if [ "$should_dispatch" != "true" ]; then
+              echo "HOLD not-stale-or-active: $workflow"
+              return
+            fi
+            for attempt in 1 2 3; do
+              if gh workflow run "$workflow" --repo "$GH_REPO" --ref main; then
+                echo "DISPATCH $workflow"
+                return
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                echo "HOLD dispatch failure: $workflow" >&2
+                return 0
+              fi
+              sleep $((attempt * 5))
+            done
+          }
+
+          for workflow in             "Soccer Prospective In-Play PIT Capture"             "Soccer Prospective In-Play Maturity"             "Soccer Dynamic Simulator Research"; do
+            state="$(python - "$workflow" <<'PY'
+          import json, sys
+          s=json.load(open("artifacts/world_model_supervisor/decisions.json"))
+          print(str(s["lane_state"][sys.argv[1]]["dispatch"]).lower())
+          PY
+            )"
+            dispatch_if_idle "$workflow" "$state"
+          done
+
+          if [ -f data/research/match_state_research_status.json ]; then
+            cp data/research/match_state_research_status.json artifacts/world_model_supervisor/latest_research.json
+          else
+            printf '%s\n' '{"status":"WARMUP","oos_claimed":false,"production_usable":false,"performance_verified":false,"promotion_candidate":false}' > artifacts/world_model_supervisor/latest_research.json
+          fi
+
+          python - "$main_sha" <<'PY' >> artifacts/world_model_supervisor/decisions.json
+          import json, sys
+          from pathlib import Path
+          s = json.loads(Path("artifacts/world_model_supervisor/latest_research.json").read_text(encoding="utf-8"))
+          print(json.dumps({
+              "main_sha_at_reconciliation": sys.argv[1],
+              "latest_research_status": s.get("status"),
+              "oos_claimed": s.get("oos_claimed", False),
+              "calibration_status": s.get("calibration_status"),
+              "robustness_status": s.get("robustness_status"),
+              "next_step": s.get("next_step"),
+              "production_usable": s.get("production_usable", False),
+              "performance_verified": s.get("performance_verified", False),
+              "promotion_candidate": s.get("promotion_candidate", False),
+          }, indent=2))
+          PY
+
+      - name: Upload supervisor evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-world-model-supervisor
+          path: artifacts/world_model_supervisor/
+          retention-days: 14

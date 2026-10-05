@@ -70,62 +70,28 @@ jobs:
           python -m src.research.dynamic_simulator_frontier --out artifacts/dynamic_simulator_research
           test -s artifacts/dynamic_simulator_research/dynamic_simulator_frontier_status.json
 
-      - name: Bridge research candidate PR #212
-        if: github.event_name != 'pull_request'
+      - name: Dispatch current-main match-state research when frontier is ready
+        if: success() && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts/dynamic_simulator_research
-          bridge_status="HOLD"
-          reason="candidate_pr_not_dispatched"
-          candidate_head_sha=""
-          if pr_json="$(gh pr view 212 --repo "${GH_REPO}" --json state,headRefName,headRefOid,title 2>/dev/null)"; then
-            state="$(python -c 'import json,sys; print(json.load(sys.stdin)["state"])' <<<"${pr_json}")"
-            head_ref="$(python -c 'import json,sys; print(json.load(sys.stdin)["headRefName"])' <<<"${pr_json}")"
-            head_sha="$(python -c 'import json,sys; print(json.load(sys.stdin)["headRefOid"])' <<<"${pr_json}")"
-            if [ "${state}" = "OPEN" ] && [ -n "${head_ref}" ]; then
-              if gh api "repos/${GH_REPO}/contents/.github/workflows/soccer-match-state-research.yml?ref=${head_ref}" >/dev/null 2>&1; then
-                dispatched=false
-                for attempt in 1 2 3; do
-                  if gh workflow run soccer-match-state-research.yml --repo "${GH_REPO}" --ref "${head_ref}"; then
-                    dispatched=true
-                    break
-                  fi
-                  sleep $((attempt * 5))
-                done
-                if [ "${dispatched}" = true ]; then
-                  bridge_status="DISPATCHED"
-                  reason="open_research_candidate_workflow_dispatched"
-                else
-                  reason="candidate_workflow_dispatch_failed"
-                fi
-              else
-                reason="candidate_workflow_not_present_on_pr_head"
-              fi
-            else
-              reason="candidate_pr_not_open"
-            fi
-          else
-            reason="candidate_pr_lookup_failed"
-          fi
-          python - "${bridge_status}" "${reason}" "${candidate_head_sha}" > artifacts/dynamic_simulator_research/candidate_bridge_status.json <<'PY'
-          import json, sys
-          print(json.dumps({
-              "schema_version": 1,
-              "status": sys.argv[1],
-              "reason": sys.argv[2],
-              "candidate_head_sha": sys.argv[3],
-              "research_only": True,
-              "production_changed": False,
-              "production_usable": False,
-              "promotion_allowed": False,
-              "pr_number": 212,
-              "workflow": "soccer-match-state-research.yml",
-          }, indent=2, ensure_ascii=False))
-          PY
+          status_file="artifacts/dynamic_simulator_research/dynamic_simulator_frontier_status.json"
+          status="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("status",""))' "$status_file")"
+          case "$status" in
+            DYNAMIC_MATCH_STATE_READY)
+              gh workflow run "soccer-match-state-research.yml" --repo "$GITHUB_REPOSITORY" --ref main
+              echo "DISPATCH current-main match-state research"
+              ;;
+            DYNAMIC_MATCH_STATE_WAITING|FOUNDATION_GAP|BLOCKED)
+              echo "HOLD frontier status=$status"
+              ;;
+            *)
+              echo "Unexpected frontier status=$status"
+              exit 1
+              ;;
+          esac
 
       - name: Verify safety contract
         shell: bash

@@ -1,5 +1,5 @@
 {
-  "schema_version": "hierarchical-dynamic-simulator-policy-v1",
+  "schema_version": "hierarchical-dynamic-simulator-policy-v2",
   "status": "RESEARCH_ONLY",
   "production_changed": false,
   "frozen_holdout_access_allowed": false,
@@ -44,15 +44,30 @@
     "production_promotion_allowed": false
   },
   "candidate_bridge": {
-    "enabled": true,
-    "pr_number": 212,
+    "enabled": false,
+    "mode": "main-embedded-current",
     "workflow": "soccer-match-state-research.yml",
-    "mode": "research-only"
+    "note": "Candidate research code is embedded on main as research-only infrastructure; no PR bridge is required."
   },
   "actions": {
     "missing_prerequisite": "HOLD",
     "missing_pit": "FAIL_CLOSED",
     "missing_data": "WARMUP",
     "performance_status": "UNVERIFIED"
-  }
+  },
+  "research_stages": [
+    "FOUNDATION",
+    "HIERARCHICAL_STRENGTH",
+    "DYNAMIC_MATCH_STATE",
+    "SCENARIO_PROPAGATION",
+    "LINEUP_DISTRIBUTION",
+    "PLAYER_ROLE_INTERACTION",
+    "FULL_EVENT_SIMULATOR",
+    "POSTERIOR_PREDICTIVE_VALIDATION",
+    "CALIBRATION",
+    "ROBUSTNESS",
+    "INCUMBENT_COMPARISON",
+    "FROZEN_HOLDOUT",
+    "RELEASE_GATE"
+  ]
 }

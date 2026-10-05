@@ -129,3 +129,14 @@ Continuous operation means the repository can resume after missed schedules, tra
 ## Long-term GitHub schedule keepalive
 
 For public-repository long-term autonomy, maintain a low-frequency repository-activity heartbeat on GitHub Actions. The heartbeat may update only a dedicated automation-state file and must never touch model, feature, target, calibration, OOS, frozen-holdout or production evidence. Heartbeat commits should be excluded from heavy source/test workflows where safe, and heartbeat failures must use bounded recovery.
+
+## Continuous prospective in-play research
+
+For dynamic match-state research, when qualifying historical PIT snapshots do not exist, the project may build a prospective PIT dataset from a free/public current live source. Each snapshot must preserve observation/cutoff/availability/retrieval timestamps and an immutable source-response hash. Source availability may only be asserted at the conservative direct-observation boundary; it must never be backdated from a later page.
+
+Prospective capture and label maturity are separate phases:
+PROSPECTIVE OBSERVATION → LATER LABEL MATURITY → MATCH-LEVEL WFO/OOS → PREQUENTIAL CALIBRATION → ROBUSTNESS → INCUMBENT COMPARISON → FROZEN HOLDOUT → RELEASE GATE.
+
+For the World Model track, market odds are not consumed. They must not become hidden features through source payloads, generic feature selection, or diagnostic fusion.
+
+Prospective data acquisition is research evidence generation only. It cannot change target semantics, Champion, Production, frozen holdout or adoption authority.
