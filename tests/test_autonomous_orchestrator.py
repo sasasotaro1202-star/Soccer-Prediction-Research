@@ -206,3 +206,9 @@ def test_orchestrator_reacts_to_control_plane_changes():
     assert '".github/workflows/**"' in text
     assert '"PROJECT_INSTRUCTIONS.md"' in text
     assert '"docs/PROJECT_SOURCE.md"' in text
+
+ 
+ 
+def test_automation_integrity_rejects_controller_event_sink():
+    audit = Path(".github/workflows/soccer-automation-integrity-audit.yml").read_text(encoding="utf-8")
+    assert "must not subscribe to workflow_run events" in audit

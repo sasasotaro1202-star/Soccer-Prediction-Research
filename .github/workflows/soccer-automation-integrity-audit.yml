@@ -97,6 +97,8 @@ jobs:
 
           if 'gh pr merge' in orchestrator:
               raise SystemExit('Autonomous orchestrator must not gain merge authority')
+          if 'workflow_run:' in (workflow_dir / 'autonomous-github-controller.yml').read_text(encoding='utf-8'):
+              raise SystemExit('Autonomous GitHub Controller must not subscribe to workflow_run events')
           for forbidden in (
               'production_change_allowed: True',
               'frozen_holdout_access_allowed: True',
