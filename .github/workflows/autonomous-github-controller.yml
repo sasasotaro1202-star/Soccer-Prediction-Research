@@ -11,6 +11,7 @@ on:
       - Overnight Integrity
       - Soccer Ultimate Experiment Matrix
       - Soccer Feature Set Research
+      - Soccer Automation Integrity Audit
     types: [completed]
 
 permissions:
@@ -96,8 +97,25 @@ jobs:
             if [ "${base_oid}" != "${main_sha}" ]; then
               gh api --method PATCH "repos/${GH_REPO}/pulls/${number}" \
                 -f base=main >/dev/null
+
+              branch_refreshed=false
+              for attempt in 1 2 3; do
+                if gh pr update-branch "${number}" --repo "${GH_REPO}" --rebase; then
+                  branch_refreshed=true
+                  break
+                fi
+                if [ "${attempt}" -lt 3 ]; then
+                  sleep $((attempt * 5))
+                fi
+              done
+              if [ "${branch_refreshed}" != true ]; then
+                echo "HOLD: safe hardening branch could not be rebased onto current main: PR #${number}" >&2
+                continue
+              fi
+
               pr_json="$(gh pr view "${number}" --repo "${GH_REPO}" --json number,title,body,isDraft,baseRefName,baseRefOid,headRefName,headRefOid,headRepository,mergeStateStatus)"
               base_oid="$(jq -r ".baseRefOid" <<<"${pr_json}")"
+              head_oid="$(jq -r ".headRefOid" <<<"${pr_json}")"
             fi
             [ "${base_oid}" = "${main_sha}" ] || continue
 
@@ -107,7 +125,7 @@ jobs:
             while IFS= read -r path; do
               [ -n "${path}" ] || continue
               case "${path}" in
-                src/research/adoption_gate.py|src/research/stability_gate.py|src/data/pit_source_adapter.py|src/data/pit_source_adapter_v2.py|src/data/pit_source_adapter_fast.py|src/data/pit_archive_fallback.py|src/data/pit_evidence.py|scripts/experience_commit_guard.py|.github/workflows/action-failure-recovery.yml|.github/workflows/pit-replay-audit.yml|.github/workflows/soccer-autonomous-orchestrator.yml|.github/workflows/soccer-control-plane-watchdog.yml|.github/workflows/ci.yml|.github/workflows/soccer-automation-integrity-audit.yml|.github/workflows/soccer-prospective-inplay-maturity.yml|.github/workflows/soccer-world-model-supervisor.yml)
+                src/research/adoption_gate.py|src/research/stability_gate.py|src/data/pit_source_adapter.py|src/data/pit_source_adapter_v2.py|src/data/pit_source_adapter_fast.py|src/data/pit_archive_fallback.py|src/data/pit_evidence.py|scripts/experience_commit_guard.py|.github/workflows/action-failure-recovery.yml|.github/workflows/pit-replay-audit.yml|.github/workflows/soccer-autonomous-orchestrator.yml|.github/workflows/soccer-control-plane-watchdog.yml|.github/workflows/soccer-automation-integrity-audit.yml|.github/workflows/soccer-prospective-inplay-maturity.yml|.github/workflows/soccer-world-model-supervisor.yml)
                   case "${path}" in
                     src/data/pit_*|.github/workflows/pit-replay-audit.yml)
                       pit_sensitive=1
