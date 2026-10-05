@@ -11,6 +11,7 @@ on:
       - "models/current/**"
       - "data/experience/**"
       - "data/raw/**"
+      - ".github/automation/**"
   pull_request:
     branches: [main]
   workflow_dispatch:
