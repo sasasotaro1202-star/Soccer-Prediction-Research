@@ -294,3 +294,25 @@ The GitHub lane `.github/workflows/soccer-dynamic-simulator-research.yml` runs o
 The lane may bridge the existing open dynamic match-state research candidate (PR #212) by dispatching its own research workflow when that branch contains the required workflow file. This is research execution only; it does not merge, promote, alter the Champion, or touch frozen holdout.
 
 The mathematical simulator remains staged. Complexity is added only when identical chronological OOS evidence demonstrates incremental value relative to the incumbent, with PIT, calibration, robustness, event dependence, reproducibility and holdout controls preserved.
+
+## Continuous prospective in-play evidence path — 2026-10-05
+
+A prospective in-play collection path is now part of the dynamic World Model research architecture. It uses free/public current soccer state from the existing ESPN source family already registered by the project, captures live observations directly, and stores a conservative point-in-time boundary plus source response hash. The collector does not store or consume betting odds.
+
+The research dataset is intentionally generated prospectively when historical in-play PIT evidence is unavailable. This avoids retroactively asserting that a current webpage was historically available at an earlier prediction cutoff.
+
+The pipeline is:
+
+PROSPECTIVE CAPTURE
+→ LATER STATE MATURITY
+→ PARTITIONED MATCH-LEVEL DATASET
+→ DYNAMIC HAZARD OOS
+→ PREQUENTIAL CALIBRATION
+→ ROBUSTNESS/ABLATION
+→ INCUMBENT COMPARISON
+→ FROZEN HOLDOUT
+→ RELEASE GATE.
+
+A state transition is labeled only when a later snapshot proves a single unambiguous score/card transition within the bounded hazard window. Ambiguous multi-event transitions and missing red-card state are excluded rather than converted to zero.
+
+This remains research-only. Prospective observations are evidence-generation data, not proof of current Production superiority.
