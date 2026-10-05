@@ -25,6 +25,9 @@ concurrency:
 
 jobs:
   mature-and-research:
+    # Research-only maturation is not a required gate for hardening-safe PRs.
+    # CI and control-plane audits remain authoritative for those changes.
+    if: ${{ github.event_name != 'pull_request' || !startsWith(github.event.pull_request.head.ref, 'hardening/') }}
     name: Mature PIT snapshots and advance research
     runs-on: ubuntu-latest
     timeout-minutes: 45
