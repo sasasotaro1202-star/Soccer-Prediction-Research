@@ -125,3 +125,7 @@ At minimum:
 - Model, feature, target, calibration, frozen-holdout and production changes remain outside autonomous hardening authority unless separately authorized by the adoption policy.
 
 Continuous operation means the repository can resume after missed schedules, transient API failures, runner delays, or stale queued runs without requiring a new chat message.
+
+## Long-term GitHub schedule keepalive
+
+For public-repository long-term autonomy, maintain a low-frequency repository-activity heartbeat on GitHub Actions. The heartbeat may update only a dedicated automation-state file and must never touch model, feature, target, calibration, OOS, frozen-holdout or production evidence. Heartbeat commits should be excluded from heavy source/test workflows where safe, and heartbeat failures must use bounded recovery.
