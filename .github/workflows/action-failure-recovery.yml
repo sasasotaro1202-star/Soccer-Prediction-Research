@@ -111,7 +111,7 @@ jobs:
             "Soccer Automation Integrity Audit"
           )
 
-          all_runs="$(gh api "repos/${GH_REPO}/actions/runs?per_page=100")"
+          gh api "repos/${GH_REPO}/actions/runs?per_page=100" > /tmp/all-runs.json
 
           for workflow in "${workflows[@]}"; do
             while IFS=$'\\t' read -r run_id created_at conclusion run_attempt; do
@@ -149,7 +149,7 @@ jobs:
                 failures=$((failures + 1))
               fi
             done < <(
-              python - "${all_runs}" "${main_sha}" "${workflow}" <<'PY'
+              python - /tmp/all-runs.json "${main_sha}" "${workflow}" <<'PY'
           import json
           import sys
           from datetime import datetime, timezone
