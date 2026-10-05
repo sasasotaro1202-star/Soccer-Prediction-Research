@@ -1,0 +1,205 @@
+name: Soccer Match State Research
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/research/match_state_hazard.py"
+      - "tests/test_match_state_hazard.py"
+      - "docs/MATCH_STATE_RESEARCH.md"
+      - "config/match_state_policy.json"
+      - "data/research/README.md"
+      - ".github/workflows/soccer-match-state-research.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/research/match_state_hazard.py"
+      - "tests/test_match_state_hazard.py"
+      - "docs/MATCH_STATE_RESEARCH.md"
+      - "config/match_state_policy.json"
+      - "data/research/README.md"
+      - ".github/workflows/soccer-match-state-research.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "43 */6 * * *"
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: soccer-match-state-research
+  cancel-in-progress: false
+
+jobs:
+  match-state:
+    name: PIT-safe state -> hazard -> scenario research
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: .
+      PYTHONHASHSEED: "0"
+      MATCH_STATE_INPUT: data/research/match_state_snapshots.csv
+      MATCH_STATE_OUT: artifacts/match_state_research
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies with bounded retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt; then
+              exit 0
+            fi
+            echo "dependency installation attempt ${attempt} failed; retrying..."
+            if [ "${attempt}" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+
+      - name: Compile research module
+        run: python -m compileall -q src/research/match_state_hazard.py tests/test_match_state_hazard.py
+
+      - name: Run match-state regression tests
+        run: python -m pytest -q tests/test_match_state_hazard.py
+
+      - name: Execute PIT/schema research gate
+        run: |
+          set -euo pipefail
+          python -m src.research.match_state_hazard --input "${MATCH_STATE_INPUT}" --out "${MATCH_STATE_OUT}"
+
+      - name: Trigger source discovery when historical in-play data is unavailable
+        if: always() && github.event_name != 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          status_file="${MATCH_STATE_OUT}/match_state_status.json"
+          if [ ! -s "$status_file" ]; then
+            echo "Missing match-state status artifact; downstream discovery is not safe to dispatch."
+            exit 1
+          fi
+          status="$(python -c "import json,sys; print(json.load(open(sys.argv[1], encoding=\"utf-8\")).get(\"status\",\"\"))" "$status_file")"
+          case "$status" in
+            WARMUP)
+              echo "Historical in-play snapshots unavailable; dispatching discovery lanes."
+              gh workflow run "adaptive_data_discovery.yml" --repo "${GITHUB_REPOSITORY}" --ref main
+              gh workflow run "soccer-source-probe.yml" --repo "${GITHUB_REPOSITORY}" --ref main
+              ;;
+            SCHEMA_VERIFIED|OOS_EVALUATED)
+              echo "Match-state status=${status}; discovery catch-up not required."
+              ;;
+            *)
+              echo "Unexpected match-state status=${status}; failing closed."
+              exit 1
+              ;;
+          esac
+
+      - name: Verify staged research evidence contract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          status_path = Path("artifacts/match_state_research/match_state_status.json")
+          status = json.loads(status_path.read_text(encoding="utf-8"))
+          allowed = {"WARMUP", "SCHEMA_VERIFIED", "OOS_EVALUATED", "CALIBRATION_ROBUSTNESS_EVALUATED"}
+          if status.get("status") not in allowed:
+              raise SystemExit(f"unexpected match-state stage: {status.get('status')}")
+          if status.get("research_only") is not True:
+              raise SystemExit("research-only contract missing")
+          if status.get("production_usable") is not False:
+              raise SystemExit("research lane must remain non-production")
+          if status.get("performance_verified") is not False:
+              raise SystemExit("research lane cannot mark performance verified")
+          if status.get("promotion_candidate") is not False:
+              raise SystemExit("research lane cannot self-promote")
+          if status.get("status") == "CALIBRATION_ROBUSTNESS_EVALUATED":
+              if status.get("calibration_status") != "EVALUATED":
+                  raise SystemExit("calibration status is inconsistent")
+              if status.get("robustness_status") != "EVALUATED":
+                  raise SystemExit("robustness status is inconsistent")
+          print("match_state_staged_evidence: PASS")
+          PY
+
+      - name: Verify research safety contract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("artifacts/match_state_research/match_state_status.json")
+          if not p.is_file() or p.stat().st_size <= 0:
+              raise SystemExit("MATCH STATE SAFETY GATE FAILED: missing status artifact")
+          status = json.loads(p.read_text(encoding="utf-8"))
+          checks = {
+              "production_usable_false": status.get("production_usable") is False,
+              "research_only_true": status.get("research_only") is True,
+              "performance_verified_false": status.get("performance_verified") is False,
+              "promotion_candidate_false": status.get("promotion_candidate") is False,
+              "status_allowed": status.get("status") in {"WARMUP", "SCHEMA_VERIFIED", "OOS_EVALUATED", "CALIBRATION_ROBUSTNESS_EVALUATED"},
+              "oos_consistent": (
+                  status.get("status") in {"OOS_EVALUATED", "CALIBRATION_ROBUSTNESS_EVALUATED"}
+                  and status.get("oos_claimed") is True
+              ) or (
+                  status.get("status") not in {"OOS_EVALUATED", "CALIBRATION_ROBUSTNESS_EVALUATED"}
+                  and status.get("oos_claimed") is False
+              ),
+          }
+          failures = [name for name, ok in checks.items() if not ok]
+          if failures:
+              raise SystemExit("MATCH STATE SAFETY GATE FAILED: " + ", ".join(failures))
+          print("match_state_safety: PASS")
+          PY
+
+      - name: Persist research status on main
+        if: success() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "soccer-match-state-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- artifacts/match_state_research/match_state_status.json
+          if git diff --cached --quiet; then
+            echo "No match-state status change to persist."
+            exit 0
+          fi
+          git commit -m "ops: persist match-state research state"
+          for attempt in 1 2 3; do
+            git fetch --prune origin main
+            if ! git rebase origin/main; then
+              if ! git rebase --abort; then
+                echo "Research status rebase abort failed; refusing automatic resolution."
+                exit 1
+              fi
+              echo "Research status rebase conflict; refusing automatic resolution."
+              exit 1
+            fi
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Status persistence attempt ${attempt} failed; retrying after refresh."
+            if [ "${attempt}" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+
+      - name: Upload research evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-match-state-research-${{ github.run_id }}
+          path: artifacts/match_state_research/
+          retention-days: 14
