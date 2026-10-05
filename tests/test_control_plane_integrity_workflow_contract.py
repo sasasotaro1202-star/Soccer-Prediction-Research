@@ -46,3 +46,28 @@ def test_integrity_audit_covers_all_continuous_world_model_lanes() -> None:
     )
     for workflow_file in required_schedules:
         assert workflow_file in workflow
+
+
+def test_integrity_audit_does_not_treat_recent_failed_runs_as_healthy() -> None:
+    workflow = Path(".github/workflows/soccer-automation-integrity-audit.yml").read_text(
+        encoding="utf-8"
+    )
+    assert '"FAILED_RECENT"' in workflow
+    assert '"OK_ACTIVE"' in workflow
+    assert 'status == "success"' in workflow
+    assert "status_raw" in workflow
+    assert "conclusion" in workflow
+
+
+def test_integrity_audit_checks_world_model_liveness_windows() -> None:
+    workflow = Path(".github/workflows/soccer-automation-integrity-audit.yml").read_text(
+        encoding="utf-8"
+    )
+    expected_windows = (
+        '"soccer-prospective-inplay-capture.yml": 45 * 60',
+        '"soccer-prospective-inplay-maturity.yml": 90 * 60',
+        '"soccer-world-model-supervisor.yml": 5 * 3600',
+        '"soccer-dynamic-simulator-research.yml": 12 * 3600',
+    )
+    for marker in expected_windows:
+        assert marker in workflow
