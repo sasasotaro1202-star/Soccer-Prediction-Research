@@ -32,3 +32,15 @@ On-demand/production predictions must use the freshest available matchday snapsh
 Performance monitoring is target-specific. Durable experience metrics are stored separately for 1X2, Score Top1/Top3, O/U, BTTS, and MOM Top1/Top4, with probability-quality metrics retained where the required probabilities are available.
 
 See `docs/MIGRATION_STATUS.md` for the legacy `soccer` repository migration classification.
+
+## Continuous World Model research
+
+The repository now contains a research-only continuous World Model path:
+
+Prospective In-Play Capture → Later Maturity → PIT/Schema → Match-Level WFO/OOS → Prequential Calibration → Robustness/Ablation → Incumbent Comparison → Frozen Holdout → Release Gate.
+
+The prospective collector uses only free/public current soccer state and records point-in-time provenance conservatively. It does not use betting odds. Missing or ambiguous observations are not converted to zero.
+
+GitHub Actions provides the persistent execution layer through the prospective capture, maturity, dynamic simulator, World Model supervisor, autonomous orchestrator, watchdog and bounded failure-recovery lanes. These lanes can catch up after missed schedules or transient failures, but research infrastructure cannot self-promote into Production.
+
+The dynamic simulator remains a research candidate until future chronological OOS, calibration, robustness, incumbent comparison and holdout evidence demonstrate incremental generalization.
