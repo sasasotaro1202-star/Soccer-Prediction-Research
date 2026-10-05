@@ -225,3 +225,9 @@ def test_research_maturity_skips_safe_hardening_prs():
     assert "github.event_name != 'pull_request'" in text
     assert "startsWith(github.event.pull_request.head.ref, 'hardening/')" in text
     assert "Research-only maturation is not a required gate for hardening-safe PRs." in text
+
+def test_ci_keeps_deterministic_suite_bounded_but_allows_slow_regressions():
+    text = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "timeout-minutes: 30" in text
+    assert "timeout --signal=TERM --kill-after=60s 900" in text
+    assert "python -m pytest -q -vv --durations=20" in text
