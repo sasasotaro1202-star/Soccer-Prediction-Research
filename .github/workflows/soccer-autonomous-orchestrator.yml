@@ -222,7 +222,8 @@ jobs:
             esac
           }
 
-          # Routine research scheduling is driven by the machine-readable manifest.\n          while IFS=
+          # Routine research scheduling is driven by the machine-readable manifest.
+          while IFS=
 
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
@@ -246,7 +247,10 @@ jobs:
           name: soccer-autonomous-orchestrator-${{ github.run_id }}
           path: autonomous-orchestrator-report.json
           retention-days: 14
-\t' read -r workflow cadence min_gap; do\n            [ -n "${workflow}" ] || continue\n            ensure_lane "${workflow}" "${cadence}" "${min_gap}"\n          done < autonomous-lanes.tsv
+\t' read -r workflow cadence min_gap; do
+            [ -n "${workflow}" ] || continue
+            ensure_lane "${workflow}" "${cadence}" "${min_gap}"
+          done < autonomous-lanes.tsv
 
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
