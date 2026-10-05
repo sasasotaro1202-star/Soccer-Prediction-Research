@@ -769,6 +769,8 @@ def run_match_state_research(
             "reason": "match_state_snapshot_dataset_missing",
             "input_path": str(path),
             "oos_claimed": False,
+            "performance_verified": False,
+            "promotion_candidate": False,
             "production_usable": False,
             "research_only": True,
             "pit_status": "NOT_EXECUTED",
