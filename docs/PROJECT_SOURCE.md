@@ -262,3 +262,25 @@ The autonomous merge controller separately allowlists the orchestrator workflow 
 - The autonomous orchestrator now applies bounded exponential backoff to consecutive exact-main failures/timed-out/cancelled executions of a lane. The cooldown grows up to 24 hours, while successful current-main history restores normal cadence evaluation.
 - This reduces deterministic-failure thrashing and protects GitHub runner/free-usage efficiency without converting failure evidence to PASS.
 - No model, feature, target, calibration, OOS, frozen-holdout or production evidence is modified by this control-plane hardening.
+
+## Hierarchical Dynamic Simulator frontier — 2026-10-05
+
+The supplied hierarchical Bayesian dynamic football simulator blueprint is registered as a research frontier at `docs/HIERARCHICAL_DYNAMIC_SIMULATOR.md` with machine-readable policy at `config/dynamic_simulator_policy.json`.
+
+The intended mathematical ladder is:
+
+- verified Score distribution foundation;
+- hierarchical latent team strength;
+- dynamic match-state hazard;
+- probability-tree/scenario propagation;
+- lineup distribution;
+- player/role interaction;
+- full posterior-predictive event simulation.
+
+The frontier runner is `src/research/dynamic_simulator_frontier.py`. It is research-only and fail-closed. It may report WARMUP/HOLD/READY states but cannot authorize Production, Champion, frozen-holdout access, or performance claims.
+
+The GitHub lane `.github/workflows/soccer-dynamic-simulator-research.yml` runs on a recurring six-hour schedule and is also caught up by the 30-minute autonomous orchestrator. It records research evidence as workflow artifacts and keeps Production immutable.
+
+The lane may bridge the existing open dynamic match-state research candidate (PR #212) by dispatching its own research workflow when that branch contains the required workflow file. This is research execution only; it does not merge, promote, alter the Champion, or touch frozen holdout.
+
+The mathematical simulator remains staged. Complexity is added only when identical chronological OOS evidence demonstrates incremental value relative to the incumbent, with PIT, calibration, robustness, event dependence, reproducibility and holdout controls preserved.
