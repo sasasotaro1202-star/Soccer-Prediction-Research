@@ -131,7 +131,7 @@ jobs:
                       ;;
                   esac
                   ;;
-                tests/*|docs/*)
+                PROJECT_INSTRUCTIONS.md|tests/*|docs/*)
                   ;;
                 *)
                   unsafe=1
