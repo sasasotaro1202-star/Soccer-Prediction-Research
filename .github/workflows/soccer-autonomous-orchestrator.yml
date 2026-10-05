@@ -34,6 +34,9 @@ jobs:
           now_epoch="$(date +%s)"
           main_sha="$(api "repos/${GH_REPO}/git/ref/heads/main" --jq '.object.sha')"
           export MAIN_SHA="${main_sha}"
+          dispatch_budget=6
+          dispatched_count=0
+          max_active_runs=10
           report="autonomous-orchestrator-report.json"
 
           python - <<'PY' > "$report"
@@ -50,6 +53,11 @@ jobs:
           print(json.dumps(payload, ensure_ascii=False, indent=2))
           PY
 
+          active_current_main_count() {
+            gh run list --repo "${GH_REPO}" --limit 100 --json status,headSha \
+              --jq --arg main_sha "${MAIN_SHA}" '[.[] | select(.headSha == $main_sha) | select(.status == "queued" or .status == "in_progress" or .status == "pending" or .status == "waiting" or .status == "requested")] | length'
+          }
+
           update_report() {
             python - "$report" "$1" "$2" <<'PY'
           import json, sys
@@ -65,13 +73,41 @@ jobs:
             gh run list --repo "${GH_REPO}" --workflow "${workflow}" --limit 50               --json status,conclusion,createdAt,headSha,headBranch,databaseId
           }
 
+          dispatch_workflow() {
+            local workflow="$1"
+            for attempt in 1 2 3; do
+              if case "${workflow}" in
+                pit-replay-audit.yml)
+                  # This lane has required workflow_dispatch inputs; use only its
+                  # deterministic, audit-only defaults. No prediction is enabled.
+                  gh workflow run "${workflow}" --repo "${GH_REPO}" --ref main \
+                    -f competition=EPL \
+                    -f rows_per_season=1
+                  ;;
+                *)
+                  gh workflow run "${workflow}" --repo "${GH_REPO}" --ref main
+                  ;;
+              esac
+              then
+                return 0
+              fi
+              if [ "${attempt}" -lt 3 ]; then
+                sleep $((attempt * 5))
+              fi
+            done
+            return 1
+          }
+
           ensure_lane() {
             local workflow="$1"
             local cadence_minutes="$2"
             local min_gap_minutes="$3"
 
             local runs
-            runs="$(workflow_state "${workflow}")"
+            if ! runs="$(workflow_state "${workflow}")"; then
+              update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"workflow_state_error"},ensure_ascii=False))' "${workflow}")"
+              return
+            fi
 
             local decision
             decision="$(
@@ -123,19 +159,27 @@ jobs:
 
             case "${decision}" in
               DISPATCH:*)
-                case "${workflow}" in
-                  pit-replay-audit.yml)
-                    # This lane has required workflow_dispatch inputs; use only its
-                    # deterministic, audit-only defaults. No prediction is enabled.
-                    gh workflow run "${workflow}" --repo "${GH_REPO}" --ref main \
-                      -f competition=EPL \
-                      -f rows_per_season=1
-                    ;;
-                  *)
-                    gh workflow run "${workflow}" --repo "${GH_REPO}" --ref main
-                    ;;
-                esac
-                update_report dispatched "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":sys.argv[2]},ensure_ascii=False))' "${workflow}" "${decision}")"
+                if [ "${dispatched_count}" -ge "${dispatch_budget}" ]; then
+                  update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"dispatch_budget_exhausted"},ensure_ascii=False))' "${workflow}")"
+                  return
+                fi
+                if ! active_count="$(active_current_main_count)"; then
+                  update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"active_current_main_count_error"},ensure_ascii=False))' "${workflow}")"
+                  return
+                fi
+                if [ "${active_count}" -ge "${max_active_runs}" ]; then
+                  update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"active_current_main_cap","active_current_main_count":int(sys.argv[2])},ensure_ascii=False))' "${workflow}" "${active_count}")"
+                  return
+                fi
+                if dispatch_workflow "${workflow}"; then
+                  dispatched_count=$((dispatched_count + 1))
+                  update_report dispatched "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":sys.argv[2],"dispatch_sequence":int(sys.argv[3])},ensure_ascii=False))' "${workflow}" "${decision}" "${dispatched_count}")"
+                else
+                  # One broken/disabled lane must not prevent later lanes from
+                  # receiving its own catch-up opportunity. Preserve the
+                  # dispatch failure as HOLD evidence and continue reconciliation.
+                  update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"dispatch_error"},ensure_ascii=False))' "${workflow}")"
+                fi
                 ;;
               *)
                 update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":sys.argv[2]},ensure_ascii=False))' "${workflow}" "${decision}")"
@@ -179,6 +223,8 @@ jobs:
           print(f"- main_sha: {s['main_sha']}")
           print(f"- dispatched: {len(s['dispatched'])}")
           print(f"- held: {len(s['held'])}")
+          print("- dispatch_budget: 6")
+          print("- max_active_runs: 10")
           print("- production_change_allowed: false")
           print("- frozen_holdout_access_allowed: false")
           print("- performance_claim_allowed: false")
