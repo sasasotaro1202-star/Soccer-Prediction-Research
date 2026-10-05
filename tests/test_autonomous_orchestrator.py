@@ -66,3 +66,14 @@ def test_orchestrator_supplies_required_pit_replay_inputs():
     assert "pit-replay-audit.yml)" in text
     assert "-f competition=EPL" in text
     assert "-f rows_per_season=1" in text
+
+
+def test_control_plane_watchdog_has_catchup_and_restart_guards():
+    path = Path(".github/workflows/soccer-control-plane-watchdog.yml")
+    text = path.read_text(encoding="utf-8")
+    assert 'cron: "*/10 * * * *"' in text
+    assert "RESTART" in text
+    assert "DISPATCH" in text
+    assert "ACTIVE" in text
+    assert "max-time 90" in text
+    assert "for attempt in 1 2 3 4" in text
