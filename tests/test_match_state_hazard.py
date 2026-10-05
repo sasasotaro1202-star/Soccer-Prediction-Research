@@ -202,6 +202,8 @@ def test_match_state_workflow_is_autonomous_but_non_production():
     assert 'gh workflow run "soccer-source-probe.yml"' in workflow
     assert "performance_verified_false" in workflow
     assert "promotion_candidate_false" in workflow
+    assert "github.event_name != 'pull_request'" in workflow
+    assert "startsWith(github.event.pull_request.head.ref, 'hardening/')" in workflow
     assert "|| true" not in workflow
 
 
