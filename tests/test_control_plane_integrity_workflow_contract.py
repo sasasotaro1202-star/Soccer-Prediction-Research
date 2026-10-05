@@ -208,3 +208,12 @@ def test_controller_rebases_safe_hardening_branches_after_main_moves() -> None:
     assert "gh pr update-branch" in workflow
     assert "--rebase" in workflow
     assert "HOLD" in workflow
+
+
+def test_failure_recovery_has_no_escaped_shell_variables() -> None:
+    workflow = Path(".github/workflows/action-failure-recovery.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "\\${" not in workflow
+    assert 'main_sha="$(gh api "repos/\\${GH_REPO}/git/ref/heads/main"' not in workflow
+    assert 'for workflow in "\\${workflows[@]}"' not in workflow
