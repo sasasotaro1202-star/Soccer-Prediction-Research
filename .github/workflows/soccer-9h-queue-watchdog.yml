@@ -96,7 +96,7 @@ jobs:
           if current_pending:
               oldest = min(current_pending, key=ts)
               age_min = (now - ts(oldest)).total_seconds() / 60.0
-              print("RESTART" if age_min >= 20.0 else "WAIT")
+              print("RESTART" if age_min >= 120.0 else "WAIT")
               raise SystemExit(0)
 
           # Preserve an old immutable research snapshot, but immediately queue one
