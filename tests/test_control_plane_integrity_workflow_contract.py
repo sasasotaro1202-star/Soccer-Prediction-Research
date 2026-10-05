@@ -56,3 +56,14 @@ def test_controller_self_advances_safe_hardening_prs() -> None:
     assert "hardening-safe-v1" in text
     assert "--match-head-commit" in text
     assert "[ \"${head_repo}\" = \"${GH_REPO}\" ]" in text
+
+def test_control_plane_event_graph_has_no_audit_recovery_controller_cycle() -> None:
+    audit = _read(".github/workflows/soccer-automation-integrity-audit.yml")
+    recovery = _read(".github/workflows/action-failure-recovery.yml")
+    controller = _read(".github/workflows/autonomous-github-controller.yml")
+    assert "Action Failure Recovery" not in audit
+    assert "Autonomous GitHub Controller" not in audit
+    assert "Soccer Automation Integrity Audit" not in recovery
+    assert "Soccer Automation Integrity Audit" not in controller
+    assert "Soccer Autonomous Orchestrator" in audit
+    assert "Soccer Control Plane Watchdog" in audit
