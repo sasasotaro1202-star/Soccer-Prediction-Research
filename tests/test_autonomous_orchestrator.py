@@ -233,3 +233,10 @@ def test_completion_event_isolation_for_state_supervisors():
     ):
         text = Path(relative).read_text(encoding="utf-8")
         assert "workflow_run:" not in text
+
+
+
+def test_24h_watchdog_bounds_control_plane_http():
+    text = Path(".github/workflows/soccer-opta-like-24h-watchdog.yml").read_text(encoding="utf-8")
+    assert "CURL_TIMEOUT_ARGS=(--connect-timeout 30 --max-time 120)" in text
+    assert "${CURL_TIMEOUT_ARGS[@]}" in text
