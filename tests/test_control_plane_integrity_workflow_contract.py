@@ -179,3 +179,14 @@ def test_world_model_supervisor_parses_multi_document_decision_evidence() -> Non
     )
     assert "JSONDecoder" in workflow
     assert "raw_decode" in workflow
+
+
+def test_soccer_ci_ignores_machine_generated_world_model_evidence_pushes() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    required_paths = (
+        '"data/research/prospective_inplay/raw/**"',
+        '"data/research/match_state_snapshots/**"',
+        '"data/research/match_state_research_status.json"',
+    )
+    for path in required_paths:
+        assert path in workflow
