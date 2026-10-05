@@ -213,6 +213,7 @@ jobs:
           ensure_lane "soccer-9h-autonomous.yml" 480 60
           ensure_lane "soccer-research-robust.yml" 1440 120
           ensure_lane "soccer-predictability-research.yml" 360 60
+          ensure_lane "soccer-dynamic-simulator-research.yml" 360 60
           ensure_lane "soccer-historical-learning.yml" 360 90
           ensure_lane "soccer-experience-ledger.yml" 360 90
           ensure_lane "adaptive_data_discovery.yml" 360 60
