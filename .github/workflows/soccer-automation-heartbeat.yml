@@ -1,0 +1,87 @@
+name: Soccer Automation Heartbeat
+
+on:
+  schedule:
+    # Run away from the top of the hour to reduce schedule-delay risk.
+    - cron: "17 4 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soccer-automation-heartbeat
+  cancel-in-progress: true
+
+jobs:
+  heartbeat:
+    name: Record repository automation activity
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Write deterministic heartbeat
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          GH_API: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CURL_ARGS=(--connect-timeout 20 --max-time 90 --retry 4 --retry-delay 2 --retry-all-errors -fsSL)
+          FILE_PATH=".github/automation/heartbeat.json"
+          API_URL="${GH_API}/repos/${GH_REPO}/contents/${FILE_PATH}"
+
+          current="$(curl "${CURL_ARGS[@]}"             -H "Authorization: Bearer ${GH_TOKEN}"             -H "Accept: application/vnd.github+json"             -H "X-GitHub-Api-Version: 2022-11-28"             "${API_URL}")"
+
+          current_sha="$(python -c 'import json,sys; print(json.load(sys.stdin)["sha"])' <<<"${current}")"
+
+          python - <<'PY' > /tmp/heartbeat.json
+          import json, os
+          from datetime import datetime, timezone
+
+          payload = {
+              "controller": "Soccer GitHub Automation Heartbeat",
+              "status": "ACTIVE",
+              "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
+              "workflow_run_id": os.environ["GITHUB_RUN_ID"],
+              "main_sha": os.environ["GITHUB_SHA"],
+              "purpose": "keep scheduled control-plane workflows active by creating periodic repository activity",
+              "production_change_allowed": False,
+              "performance_claim_allowed": False,
+              "frozen_holdout_access_allowed": False,
+          }
+          print(json.dumps(payload, ensure_ascii=False, indent=2))
+          PY
+
+          encoded="$(base64 -w0 /tmp/heartbeat.json)"
+
+          for attempt in 1 2 3 4; do
+            response="/tmp/heartbeat-response.json"
+            code="$(curl --connect-timeout 20 --max-time 90 -sS -o "${response}" -w "%{http_code}"               -X PUT               -H "Authorization: Bearer ${GH_TOKEN}"               -H "Accept: application/vnd.github+json"               -H "X-GitHub-Api-Version: 2022-11-28"               -d "$(python - <<'PY'
+          import json, os
+          print(json.dumps({
+              "message": "chore: automation heartbeat",
+              "content": os.environ["ENCODED"],
+              "sha": os.environ["CURRENT_SHA"],
+          }))
+          PY
+              )"               "${API_URL}")"
+            case "${code}" in
+              200|201)
+                echo "Heartbeat committed successfully."
+                exit 0
+                ;;
+              409|429|500|502|503|504)
+                echo "Transient heartbeat response HTTP ${code}; retrying."
+                sleep $((attempt * 5))
+                ;;
+              *)
+                cat "${response}" >&2
+                exit 1
+                ;;
+            esac
+          done
+
+          echo "Heartbeat commit failed after bounded retries." >&2
+          exit 1
