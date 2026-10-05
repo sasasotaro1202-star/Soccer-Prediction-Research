@@ -137,3 +137,13 @@ def test_stability_fold_builder_accepts_development_oos_only():
     assert folds[-1]["oos_end_utc"] == "2024-02-29"
     assert all(f["oos_start_utc"] != locked.iloc[0]["oos_start"] for f in folds)
     assert all(f["oos_end_utc"] != locked.iloc[0]["oos_end"] for f in folds)
+
+
+def test_sha256_helper_is_deterministic(tmp_path):
+    from src.research.engine import _sha256
+
+    path = tmp_path / "payload.bin"
+    path.write_bytes(b"Soccer-Prediction-Research")
+    assert _sha256(path) == "4d4a25f430d6ed8f88f6534a0b0a3ab1d4d8f4a0b58c17a7ab05fdfdbf1f3d4f"
+    path.write_bytes(b"Soccer-Prediction-Research!")
+    assert _sha256(path) != "4d4a25f430d6ed8f88f6534a0b0a3ab1d4d8f4a0b58c17a7ab05fdfdbf1f3d4f"
