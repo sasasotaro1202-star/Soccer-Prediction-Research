@@ -51,7 +51,7 @@ jobs:
               case "${code}" in
                 204|202) return 0 ;;
                 409|429|500|502|503|504) sleep $((attempt * 3)) ;;
-                *) cat "${output}" >&2 || true; return 1 ;;
+                *) cat "${output}" >&2; return 1 ;;
               esac
             done
             return 1
