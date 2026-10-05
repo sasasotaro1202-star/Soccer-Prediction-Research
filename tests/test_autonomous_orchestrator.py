@@ -66,3 +66,11 @@ def test_orchestrator_supplies_required_pit_replay_inputs():
     assert "pit-replay-audit.yml)" in text
     assert "-f competition=EPL" in text
     assert "-f rows_per_season=1" in text
+
+
+def test_orchestrator_has_bounded_dispatch_and_active_run_caps():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "dispatch_budget=6" in text
+    assert "max_active_runs=10" in text
+    assert "dispatch_budget_exhausted" in text
+    assert "active_run_cap" in text
