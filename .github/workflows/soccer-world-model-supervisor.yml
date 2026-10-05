@@ -14,7 +14,7 @@ on:
 
 permissions:
   actions: write
-  contents: write
+  contents: read
 
 concurrency:
   group: soccer-world-model-supervisor
@@ -117,29 +117,6 @@ jobs:
               "promotion_candidate": s.get("promotion_candidate", False),
           }, indent=2))
           PY
-
-      - name: Persist supervisor state
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "soccer-world-model-supervisor"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add artifacts/world_model_supervisor/
-          if git diff --cached --quiet; then
-            echo "No supervisor state changes."
-            exit 0
-          fi
-          git commit -m "ops: persist world-model supervisor state"
-          for attempt in 1 2 3; do
-            git fetch --prune origin main
-            git rebase origin/main
-            if git push origin HEAD:main; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 3 ]; then exit 1; fi
-            sleep $((attempt * 5))
-          done
 
       - name: Upload supervisor evidence
         if: always()
