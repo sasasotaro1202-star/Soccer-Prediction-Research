@@ -1,0 +1,8 @@
+{
+  "controller": "Soccer GitHub Automation Heartbeat",
+  "status": "BOOTSTRAPPED",
+  "purpose": "keep scheduled control-plane workflows active by creating periodic repository activity",
+  "production_change_allowed": false,
+  "performance_claim_allowed": false,
+  "frozen_holdout_access_allowed": false
+}
