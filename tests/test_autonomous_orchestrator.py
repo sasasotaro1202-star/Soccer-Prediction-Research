@@ -143,3 +143,22 @@ def test_orchestrator_backs_off_repeated_failures():
     assert "failure_backoff" in text
     assert "retry_after_failure_backoff" in text
     assert "24 * 3600" in text
+
+
+def test_orchestrator_includes_continuous_world_model_lanes():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    required = (
+        "soccer-prospective-inplay-capture.yml",
+        "soccer-prospective-inplay-maturity.yml",
+        "soccer-world-model-supervisor.yml",
+    )
+    for workflow in required:
+        assert workflow in text
+
+
+def test_orchestrator_keeps_world_model_research_non_authoritative():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "production_change_allowed" in text
+    assert "frozen_holdout_access_allowed" in text
+    assert "performance_claim_allowed" in text
+    assert "gh pr merge" not in text
