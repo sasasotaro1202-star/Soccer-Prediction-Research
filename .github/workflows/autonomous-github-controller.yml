@@ -11,7 +11,6 @@ on:
       - Overnight Integrity
       - Soccer Ultimate Experiment Matrix
       - Soccer Feature Set Research
-      - Soccer Automation Integrity Audit
     types: [completed]
 
 permissions:
