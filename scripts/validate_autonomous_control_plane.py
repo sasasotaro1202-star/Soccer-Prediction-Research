@@ -64,7 +64,7 @@ def main()->int:
     payload=load_manifest()
     if a.emit_lanes:
         for lane in payload["lanes"]:
-            print(f"{lane['workflow']}\t{lane['cadence_minutes']}\t{lane['min_gap_minutes']}")
+            print(f"{lane['workflow']}|{lane['cadence_minutes']}|{lane['min_gap_minutes']}")
     else:
         print(f"autonomous_control_plane: PASS lanes={len(payload['lanes'])}")
     return 0
