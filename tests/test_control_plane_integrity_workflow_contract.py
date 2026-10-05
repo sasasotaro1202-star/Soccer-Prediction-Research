@@ -120,3 +120,13 @@ def test_world_model_supervisor_does_not_hide_dispatch_failures() -> None:
     assert "dispatch_failures=$((dispatch_failures + 1))" in workflow
     assert 'if [ "$dispatch_failures" -gt 0 ]; then' in workflow
     assert "exit 1" in workflow
+
+
+def test_world_model_maturity_installs_python_dependencies_before_pytest() -> None:
+    workflow = Path(".github/workflows/soccer-prospective-inplay-maturity.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "actions/setup-python@" in workflow
+    assert 'python-version: "3.12"' in workflow
+    assert "python -m pip install" in workflow
+    assert "requirements.txt" in workflow
