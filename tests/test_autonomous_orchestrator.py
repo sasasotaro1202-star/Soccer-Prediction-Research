@@ -195,3 +195,12 @@ def test_orchestrator_reaps_only_obsolete_prestart_runs():
     assert '.headSha != $main_sha' in text
     assert 'gh run cancel "${run_id}" --repo "${GH_REPO}"' in text
     assert "obsolete_prestart_reap_budget_exhausted" in text
+
+
+def test_orchestrator_reacts_to_control_plane_changes():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert 'push:' in text
+    assert 'branches: [main]' in text
+    assert '".github/workflows/**"' in text
+    assert '"PROJECT_INSTRUCTIONS.md"' in text
+    assert '"docs/PROJECT_SOURCE.md"' in text

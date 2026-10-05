@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "*/30 * * * *"
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "PROJECT_INSTRUCTIONS.md"
+      - "docs/PROJECT_SOURCE.md"
 
 permissions:
   actions: write
