@@ -273,3 +273,23 @@ def test_failure_recovery_paginates_actions_history_for_extended_window() -> Non
     assert "per_page=100&page=" in workflow
     assert "oldest" in workflow
     assert "max_age_seconds" in workflow
+
+def test_failure_recovery_has_static_concurrency_across_all_trigger_types() -> None:
+    workflow = Path(".github/workflows/action-failure-recovery.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "group: action-failure-recovery" in workflow
+    assert "github.event.workflow_run.name" not in workflow
+
+def test_failure_recovery_uses_workflow_scoped_history_lookup() -> None:
+    workflow = Path(".github/workflows/action-failure-recovery.yml").read_text(
+        encoding="utf-8"
+    )
+    assert 'gh run list --repo "${GH_REPO}" --workflow "${workflow}"' in workflow
+    assert "actions/runs?per_page=100&page=" not in workflow
+
+def test_failure_recovery_has_no_push_trigger() -> None:
+    workflow = Path(".github/workflows/action-failure-recovery.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "\n  push:" not in workflow
