@@ -337,3 +337,12 @@ This remains research-only. Prospective observations are evidence-generation dat
 - Soccer Experience Ledger intentionally retains its workflow_run trigger for Matchday artifact lineage; this is data-consumption lineage rather than failure-recovery control and the ledger has its own scheduled catch-up path.
 - The Automation Integrity Audit and regression tests enforce these event-isolation invariants and the 10-minute Failure Recovery cadence. Historical reconciliation notes above remain preserved as historical evidence and are not rewritten.
 - These changes are control-plane hardening only. They do not establish new prediction performance evidence, change OOS/WFO results, alter frozen holdout evidence, or authorize Production adoption.
+
+
+## Current live-state reconciliation — 2026-10-06 (CI trigger minimization)
+
+- The live GitHub main HEAD at this reconciliation is c8115c4dd7b591d8e2951624e035a938fda5f594.
+- Legacy V9/V12 Bridge Check is now source-contract scoped: generated research data, artifacts, experience-ledger writes and automation-state writes no longer enqueue the legacy bridge check. Manual dispatch remains available.
+- Soccer CI continues to validate source/test changes broadly, while generated-data paths remain excluded where their owning research lane provides the relevant validation. This reduces runner load without weakening source-contract verification.
+- Combined with the earlier completion-event isolation, the autonomous control plane now favors periodic reconciliation for liveness and failure recovery, while workflow-specific schedules remain authoritative for high-frequency data/research collection.
+- No prediction probability, model identity, feature authorization, OOS result, calibration evidence, frozen holdout, or Production evidence was modified by this control-plane hardening.
