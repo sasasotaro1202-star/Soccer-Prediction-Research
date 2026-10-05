@@ -15,6 +15,7 @@ on:
       - Soccer 9H Autonomous Research
       - Soccer Control Plane Watchdog
       - Soccer Automation Heartbeat
+      - Soccer Automation Integrity Audit
     types: [completed]
 
 permissions:
