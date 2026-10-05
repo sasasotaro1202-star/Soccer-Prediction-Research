@@ -77,3 +77,24 @@ def test_control_plane_watchdog_has_catchup_and_restart_guards():
     assert "ACTIVE" in text
     assert "max-time 90" in text
     assert "for attempt in 1 2 3 4" in text
+
+
+def test_control_plane_watchdog_is_event_driven_and_persists_evidence():
+    path = Path(".github/workflows/soccer-control-plane-watchdog.yml")
+    text = path.read_text(encoding="utf-8")
+    assert "workflow_run:" in text
+    assert "Soccer Autonomous Orchestrator" in text
+    assert "Soccer Research Robust" in text
+    assert "Soccer 9H Autonomous Research" in text
+    assert "Soccer Research Cycle" in text
+    assert "Soccer PIT Replay Audit" in text
+    assert "export DECISION" in text
+    assert "upload-artifact@" in text
+    assert "control_plane_watchdog.json" in text
+
+
+def test_failure_recovery_includes_watchdog_timeout():
+    path = Path(".github/workflows/action-failure-recovery.yml")
+    text = path.read_text(encoding="utf-8")
+    assert "Soccer Control Plane Watchdog" in text
+    assert "timed_out" in text
