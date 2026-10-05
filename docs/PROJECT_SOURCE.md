@@ -249,3 +249,10 @@ The autonomous merge controller separately allowlists the orchestrator workflow 
 - Autonomous GitHub Controller now uses cancel-in-progress concurrency so bursts of workflow_run events do not accumulate stale controller executions. The newest reconciliation request supersedes older queued controller runs.
 - The hardening allowlist includes the independent control-plane watchdog, so future explicitly marked hardening-safe watchdog changes remain eligible for the same gated auto-merge path.
 - Current main remains authoritative and all hardening changes above are control-plane only; no prediction probabilities, feature selection, model identity, calibration, target definition or frozen-holdout evidence has been altered.
+
+## Current live-state reconciliation — 2026-10-05 (long-term schedule keepalive)
+
+- A dedicated weekly `Soccer Automation Heartbeat` workflow now creates deterministic activity under `.github/automation/heartbeat.json` using bounded GitHub API retries. This is a control-plane keepalive only and cannot change prediction/model/feature/target/calibration/frozen-holdout evidence.
+- Heartbeat-only commits are excluded from the heavy Soccer CI and Legacy V9/V12 Bridge push triggers, preventing the keepalive itself from creating unnecessary research execution load.
+- Heartbeat failures are included in bounded Action Failure Recovery.
+- GitHub documents that public-repository scheduled workflows can be automatically disabled after 60 days without repository activity; the weekly heartbeat is intended to maintain repository activity while the scheduled control plane remains enabled. GitHub also documents that scheduled events can be delayed under high load, so the independent watchdog remains the primary short-latency recovery layer.
