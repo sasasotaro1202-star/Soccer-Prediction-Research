@@ -256,3 +256,9 @@ The autonomous merge controller separately allowlists the orchestrator workflow 
 - Heartbeat-only commits are excluded from the heavy Soccer CI and Legacy V9/V12 Bridge push triggers, preventing the keepalive itself from creating unnecessary research execution load.
 - Heartbeat failures are included in bounded Action Failure Recovery.
 - GitHub documents that public-repository scheduled workflows can be automatically disabled after 60 days without repository activity; the weekly heartbeat is intended to maintain repository activity while the scheduled control plane remains enabled. GitHub also documents that scheduled events can be delayed under high load, so the independent watchdog remains the primary short-latency recovery layer.
+
+## Current live-state reconciliation — 2026-10-05 (failure backoff)
+
+- The autonomous orchestrator now applies bounded exponential backoff to consecutive exact-main failures/timed-out/cancelled executions of a lane. The cooldown grows up to 24 hours, while successful current-main history restores normal cadence evaluation.
+- This reduces deterministic-failure thrashing and protects GitHub runner/free-usage efficiency without converting failure evidence to PASS.
+- No model, feature, target, calibration, OOS, frozen-holdout or production evidence is modified by this control-plane hardening.
