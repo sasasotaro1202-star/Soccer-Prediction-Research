@@ -243,3 +243,9 @@ The autonomous merge controller separately allowlists the orchestrator workflow 
 - Watchdog decisions are persisted as a 14-day Actions artifact. Current-main SHA is resolved live on every run; missing/stale orchestrator execution is recovered with bounded API retries.
 - Action Failure Recovery now includes timed-out control-plane runs in its one-time bounded recovery path. Deterministic failures and research quality gates remain authoritative.
 - No model, target, calibration, frozen-holdout or production performance evidence was changed by this hardening.
+
+## Current live-state reconciliation — 2026-10-05 (controller queue hardening)
+
+- Autonomous GitHub Controller now uses cancel-in-progress concurrency so bursts of workflow_run events do not accumulate stale controller executions. The newest reconciliation request supersedes older queued controller runs.
+- The hardening allowlist includes the independent control-plane watchdog, so future explicitly marked hardening-safe watchdog changes remain eligible for the same gated auto-merge path.
+- Current main remains authoritative and all hardening changes above are control-plane only; no prediction probabilities, feature selection, model identity, calibration, target definition or frozen-holdout evidence has been altered.
