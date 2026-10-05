@@ -172,7 +172,7 @@ jobs:
               created_at = run.get("created_at")
               if not created_at:
                   continue
-              print("\\t".join([
+              print("\t".join([
                   str(run.get("id")),
                   created_at,
                   str(run.get("conclusion")),
