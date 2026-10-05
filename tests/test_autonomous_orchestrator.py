@@ -80,26 +80,24 @@ def test_control_plane_watchdog_has_catchup_and_restart_guards():
     assert "for attempt in 1 2 3 4" in text
 
 
-def test_control_plane_watchdog_is_event_driven_and_persists_evidence():
+def test_control_plane_watchdog_is_independent_and_persists_evidence():
     path = Path(".github/workflows/soccer-control-plane-watchdog.yml")
     text = path.read_text(encoding="utf-8")
-    assert "workflow_run:" in text
-    assert "Soccer Autonomous Orchestrator" in text
-    assert "Soccer Research Robust" in text
-    assert "Soccer 9H Autonomous Research" in text
-    assert "Soccer Research Cycle" in text
-    assert "Soccer PIT Replay Audit" in text
+    assert "workflow_run:" not in text
+    assert 'cron: "*/10 * * * *"' in text
     assert "export DECISION" in text
     assert "upload-artifact@" in text
     assert "control_plane_watchdog.json" in text
 
 
-def test_failure_recovery_includes_watchdog_timeout():
+def test_failure_recovery_stays_source_focused_and_bounded():
     path = Path(".github/workflows/action-failure-recovery.yml")
     text = path.read_text(encoding="utf-8")
     assert "Soccer Control Plane Watchdog" not in text
-    assert "Soccer Automation Heartbeat" in text
+    assert "Soccer Automation Heartbeat" not in text
+    assert "Soccer Automation Integrity Audit" not in text
     assert "timed_out" in text
+    assert "rerun_budget=2" in text
 
 
 def test_autonomous_controller_is_not_a_workflow_run_event_sink():

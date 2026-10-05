@@ -18,8 +18,6 @@ on:
       - Soccer World Model Supervisor
       - Soccer 9H Autonomous Research
       - Soccer Match State Research
-      - Soccer Automation Heartbeat
-      - Soccer Automation Integrity Audit
     types:
       - completed
   workflow_dispatch:
