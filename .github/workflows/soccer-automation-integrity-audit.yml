@@ -1,0 +1,132 @@
+name: Soccer Automation Integrity Audit
+
+on:
+  schedule:
+    - cron: "13 */6 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "PROJECT_INSTRUCTIONS.md"
+      - "tests/test_autonomous_orchestrator.py"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: soccer-automation-integrity-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Verify autonomous control-plane invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30de803
+        with:
+          ref: main
+
+      - name: Audit orchestrator lane inventory and control-plane contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          workflow_dir = Path('.github/workflows')
+          orchestrator = (workflow_dir / 'soccer-autonomous-orchestrator.yml').read_text(encoding='utf-8')
+          lane_matches = re.findall(r'ensure_lane\s+"([^"]+)"\s+(\d+)\s+(\d+)', orchestrator)
+          if not lane_matches:
+              raise SystemExit('No ensure_lane inventory found in orchestrator')
+          names = [name for name, _, _ in lane_matches]
+          if len(names) != len(set(names)):
+              raise SystemExit('Duplicate orchestrator lane detected')
+          for name, cadence, min_gap in lane_matches:
+              path = workflow_dir / name
+              if not path.is_file():
+                  raise SystemExit(f'Orchestrator lane file missing: {name}')
+              if int(cadence) <= 0 or int(min_gap) <= 0 or int(min_gap) > int(cadence):
+                  raise SystemExit(f'Invalid lane cadence contract: {name}')
+              text = path.read_text(encoding='utf-8')
+              if 'workflow_dispatch:' not in text:
+                  raise SystemExit(f'Lane is not workflow-dispatchable: {name}')
+              if 'concurrency:' not in text:
+                  raise SystemExit(f'Lane has no concurrency contract: {name}')
+
+          required_control = {
+              'soccer-autonomous-orchestrator.yml',
+              'soccer-control-plane-watchdog.yml',
+              'action-failure-recovery.yml',
+              'autonomous-github-controller.yml',
+              'soccer-9h-queue-watchdog.yml',
+              'soccer-9h-recovery.yml',
+              'soccer-automation-heartbeat.yml',
+          }
+          missing = sorted(name for name in required_control if not (workflow_dir / name).is_file())
+          if missing:
+              raise SystemExit('Required control-plane workflow missing: ' + ', '.join(missing))
+          for name in sorted(required_control):
+              text = (workflow_dir / name).read_text(encoding='utf-8')
+              if '|| true' in text:
+                  raise SystemExit(f'Error masking operator found in control-plane workflow: {name}')
+
+          if 'gh pr merge' in orchestrator:
+              raise SystemExit('Autonomous orchestrator must not gain merge authority')
+          for forbidden in (
+              'production_change_allowed: True',
+              'frozen_holdout_access_allowed: True',
+              'performance_claim_allowed: True',
+          ):
+              if forbidden in orchestrator:
+                  raise SystemExit(f'Unsafe orchestrator authority detected: {forbidden}')
+
+          instructions = Path('PROJECT_INSTRUCTIONS.md').read_text(encoding='utf-8')
+          for phrase in (
+              'GitHub-native continuous control-plane requirement',
+              'Continuous operation means the repository can resume',
+              'Model, feature, target, calibration, frozen-holdout and production changes remain outside autonomous hardening authority',
+          ):
+              if phrase not in instructions:
+                  raise SystemExit(f'Autonomy contract missing from PROJECT_INSTRUCTIONS.md: {phrase}')
+
+          print('AUTOMATION_INTEGRITY: PASS')
+          print(f'orchestrator_lanes={len(names)}')
+          print('control_plane_masking=0')
+          print('merge_authority=0')
+          PY
+
+      - name: Write auditable integrity report
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/automation_integrity
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          payload = {
+              'controller': 'Soccer Automation Integrity Audit',
+              'status': 'VERIFIED',
+              'run_id': os.environ.get('GITHUB_RUN_ID'),
+              'head_sha': os.environ.get('GITHUB_SHA'),
+              'production_change_allowed': False,
+              'frozen_holdout_access_allowed': False,
+              'performance_claim_allowed': False,
+          }
+          Path('artifacts/automation_integrity/status.json').write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8'
+          )
+          PY
+
+      - name: Upload integrity evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-automation-integrity-${{ github.run_id }}
+          path: artifacts/automation_integrity/
+          retention-days: 14
+          if-no-files-found: error
