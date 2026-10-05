@@ -217,3 +217,11 @@ def test_failure_recovery_has_no_escaped_shell_variables() -> None:
     assert "\\${" not in workflow
     assert 'main_sha="$(gh api "repos/\\${GH_REPO}/git/ref/heads/main"' not in workflow
     assert 'for workflow in "\\${workflows[@]}"' not in workflow
+
+
+def test_failure_recovery_emits_real_tab_delimiters() -> None:
+    workflow = Path(".github/workflows/action-failure-recovery.yml").read_text(
+        encoding="utf-8"
+    )
+    assert 'print("\\t".join([' in workflow
+    assert 'print("\\\\t".join([' not in workflow
