@@ -107,3 +107,7 @@ Automatic merge is limited to explicitly marked `automation_policy: hardening-sa
 Routine execution must not depend on an exact cron tick. The `Soccer Autonomous Orchestrator` runs every 30 minutes, reads the current `main` SHA, checks active/current-main and completed/current-main history, and dispatches only stale/missing lanes on `main`. It covers prediction refresh, matchday intelligence, experience settlement, research, discovery, PIT and coverage audits, scope, source probing, catalog, robustness and integrity lanes. Duplicate active runs are held. Every decision is persisted as an auditable Actions artifact.
 
 This control plane cannot authorize production/model/feature/calibration/target changes, frozen-holdout access or performance claims. Automatic merging remains limited to hardening-safe control-plane paths with completed successful verification and final SHA race checks.
+
+
+## Autonomous dispatch backpressure
+The 30-minute state-based orchestrator is continuously catch-up capable but must not flood Actions. Each reconciliation may dispatch at most 6 new lanes and refuses further dispatch while repository-wide active runs reach 10. Rejected dispatches are recorded as HOLD and retried by later cycles. This is operational hardening only and has no authority over model, feature, PIT, OOS, calibration, holdout, Champion or Production state.
