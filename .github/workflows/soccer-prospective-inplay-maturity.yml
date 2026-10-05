@@ -1,0 +1,122 @@
+name: Soccer Prospective In-Play Maturity
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "data/research/prospective_inplay/raw/**"
+      - "src/research/prospective_inplay.py"
+      - "src/research/match_state_hazard.py"
+      - "tests/test_prospective_inplay.py"
+      - "tests/test_match_state_hazard.py"
+      - ".github/workflows/soccer-prospective-inplay-maturity.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soccer-prospective-inplay-maturity
+  cancel-in-progress: false
+
+jobs:
+  mature-and-research:
+    name: Mature PIT snapshots and advance research
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONHASHSEED: "0"
+      PYTHONPATH: .
+      MATCH_STATE_INPUT: data/research/match_state_snapshots
+      MATCH_STATE_OUT: artifacts/match_state_research
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: main
+
+      - name: Compile research modules
+        run: python -m compileall -q src/research/prospective_inplay.py src/research/match_state_hazard.py
+
+      - name: Run focused regression tests
+        run: python -m pytest -q tests/test_prospective_inplay.py tests/test_match_state_hazard.py
+
+      - name: Build matured monthly partitions
+        run: |
+          set -euo pipefail
+          python -m src.research.prospective_inplay mature \
+            --raw-root data/research/prospective_inplay/raw \
+            --output-root data/research/match_state_snapshots | tee /tmp/maturity-report.json
+
+      - name: Run staged match-state research
+        run: |
+          set -euo pipefail
+          python -m src.research.match_state_hazard \
+            --input "$MATCH_STATE_INPUT" \
+            --out "$MATCH_STATE_OUT"
+
+      - name: Enforce research-only state machine
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("artifacts/match_state_research/match_state_status.json")
+          if not p.is_file():
+              raise SystemExit("missing match-state status")
+          s = json.loads(p.read_text(encoding="utf-8"))
+          allowed = {
+              "WARMUP",
+              "SCHEMA_VERIFIED",
+              "OOS_EVALUATED",
+              "CALIBRATION_ROBUSTNESS_EVALUATED",
+          }
+          if s.get("status") not in allowed:
+              raise SystemExit(f"unexpected research state: {s.get('status')}")
+          if s.get("research_only") is not True:
+              raise SystemExit("research_only must remain true")
+          for key in ("production_usable", "performance_verified", "promotion_candidate"):
+              if s.get(key) is not False:
+                  raise SystemExit(f"{key} must remain false")
+          if s.get("pit_status") not in {"PASS", "NOT_EXECUTED"}:
+              raise SystemExit("invalid PIT status")
+          print("staged_research_state: PASS")
+          PY
+
+      - name: Persist matured data and latest research state
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp artifacts/match_state_research/match_state_status.json data/research/match_state_research_status.json
+          git config user.name "soccer-world-model-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/research/match_state_snapshots/ data/research/match_state_research_status.json
+          if git diff --cached --quiet; then
+            echo "No matured research state changes."
+            exit 0
+          fi
+          git commit -m "data: persist matured in-play research state"
+          for attempt in 1 2 3; do
+            git fetch --prune origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "maturity push attempt $attempt failed"
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 5))
+          done
+
+      - name: Upload maturity and research evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-prospective-inplay-maturity
+          path: |
+            /tmp/maturity-report.json
+            artifacts/match_state_research/
+          if-no-files-found: warn
+          retention-days: 14
