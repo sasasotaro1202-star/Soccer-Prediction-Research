@@ -3,7 +3,7 @@ import json, subprocess, sys
 ROOT=Path(__file__).resolve().parents[1]
 def test_autonomous_lane_manifest_is_valid():
     result=subprocess.run([sys.executable,"scripts/validate_autonomous_control_plane.py","--emit-lanes"],cwd=ROOT,check=True,capture_output=True,text=True)
-    rows=[x.split("\t") for x in result.stdout.splitlines() if x.strip()]
+    rows=[x.split("|") for x in result.stdout.splitlines() if x.strip()]
     payload=json.loads((ROOT/".github"/"automation"/"autonomous_lane_manifest.json").read_text(encoding="utf-8"))
     assert len(rows)==len(payload["lanes"])
     assert {r[0] for r in rows}=={lane["workflow"] for lane in payload["lanes"]}
