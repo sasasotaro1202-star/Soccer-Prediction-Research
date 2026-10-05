@@ -107,3 +107,21 @@ Automatic merge is limited to explicitly marked `automation_policy: hardening-sa
 Routine execution must not depend on an exact cron tick. The `Soccer Autonomous Orchestrator` runs every 30 minutes, reads the current `main` SHA, checks active/current-main and completed/current-main history, and dispatches only stale/missing lanes on `main`. It covers prediction refresh, matchday intelligence, experience settlement, research, discovery, PIT and coverage audits, scope, source probing, catalog, robustness and integrity lanes. Duplicate active runs are held. Every decision is persisted as an auditable Actions artifact.
 
 This control plane cannot authorize production/model/feature/calibration/target changes, frozen-holdout access or performance claims. Automatic merging remains limited to hardening-safe control-plane paths with completed successful verification and final SHA race checks.
+
+## GitHub-native continuous control-plane requirement
+
+GitHub Actions is the persistent execution layer. Routine operation must remain autonomous after a chat session ends.
+
+Required control-plane layers:
+MONITOR → WATCHDOG → RECONCILE → BOUNDED RECOVERY → PIT/TEST → RESEARCH/OOS → CALIBRATION/ROBUSTNESS → ADOPTION GATE → SAFE RELEASE.
+
+At minimum:
+- Soccer Autonomous Orchestrator runs on a recurring schedule and performs state-based catch-up against the live main SHA.
+- A separate control-plane watchdog independently detects missing/stale orchestrator execution and can restart it with bounded retries.
+- Action Failure Recovery may retry transient workflow failures once, but never bypasses deterministic gates or changes evidence status.
+- Legacy/old-SHA runs must not consume current-main dispatch capacity or suppress catch-up decisions for the current main branch.
+- A single failed dispatch/state query must be recorded as HOLD and must not terminate reconciliation of later lanes.
+- Every autonomous controller must use bounded API timeouts/retries, concurrency control, auditable decision artifacts, and fail-closed behavior.
+- Model, feature, target, calibration, frozen-holdout and production changes remain outside autonomous hardening authority unless separately authorized by the adoption policy.
+
+Continuous operation means the repository can resume after missed schedules, transient API failures, runner delays, or stale queued runs without requiring a new chat message.
