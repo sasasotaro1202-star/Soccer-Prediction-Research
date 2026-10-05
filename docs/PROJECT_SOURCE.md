@@ -226,3 +226,7 @@ The autonomous merge controller separately allowlists the orchestrator workflow 
 - PR #212 adds dynamic match-state hazard research and has a successful research workflow, but it remains research-only and blocked from performance adoption because qualifying historical in-play PIT evidence is absent.
 - Scope Frontier currently reports `PARTIAL`: the 2026-10-05 through 2026-10-18 discovery window contains zero newly discovered candidates and repeated HTTP 403 failures from the current SofaScore scheduled-events endpoint. This is acquisition/coverage evidence, not model-performance evidence.
 - No new OOS/WFO, calibration, robustness, frozen-holdout or adoption result was accepted during this reconciliation. No historical performance evidence was modified.
+
+
+## Autonomous dispatch backpressure — 2026-10-05
+The autonomous orchestrator uses bounded execution pressure: at most 6 new dispatches per reconciliation and a repository-wide active-run cap of 10. When either limit is reached the lane is recorded as HOLD for a later reconciliation. This prevents queue saturation while preserving eventual catch-up behavior. No model, feature, PIT, OOS, calibration, holdout, registry or production authority is changed.
