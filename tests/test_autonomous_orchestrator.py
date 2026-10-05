@@ -130,3 +130,9 @@ def test_heartbeat_path_is_ignored_by_heavy_push_checks():
 def test_failure_recovery_includes_automation_heartbeat():
     text = Path(".github/workflows/action-failure-recovery.yml").read_text(encoding="utf-8")
     assert "Soccer Automation Heartbeat" in text
+
+
+def test_failure_recovery_isolated_per_workflow_lane():
+    text = Path(".github/workflows/action-failure-recovery.yml").read_text(encoding="utf-8")
+    assert "group: action-failure-recovery-${{ github.event.workflow_run.name }}" in text
+    assert "cancel-in-progress: true" in text
