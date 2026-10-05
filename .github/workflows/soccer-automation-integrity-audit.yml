@@ -8,8 +8,6 @@ on:
     workflows:
       - Soccer Autonomous Orchestrator
       - Soccer Control Plane Watchdog
-      - Action Failure Recovery
-      - Autonomous GitHub Controller
     types:
       - completed
 
