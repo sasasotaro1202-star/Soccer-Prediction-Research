@@ -123,6 +123,28 @@ jobs:
             done <<< "${changed}"
             [ "${unsafe}" -eq 0 ] || continue
 
+            # Base retargets and branch updates can leave a hardening PR without
+            # a fresh exact-head CI run. Start the workflow_dispatch entrypoint
+            # once so no safe hardening PR is approved without current verification.
+            ci_runs="$(gh run list --repo "${GH_REPO}" --workflow "ci.yml" --commit "${head_oid}" --limit 20 --json status,conclusion,databaseId)"
+            ci_success_count="$(jq '[.[]? | select(.status == "completed" and .conclusion == "success")] | length' <<<"${ci_runs}")"
+            ci_active_count="$(jq '[.[]? | select(.status == "queued" or .status == "in_progress" or .status == "pending" or .status == "waiting" or .status == "requested")] | length' <<<"${ci_runs}")"
+            if [ "${ci_success_count}" -eq 0 ] && [ "${ci_active_count}" -eq 0 ]; then
+              dispatched=false
+              for attempt in 1 2 3; do
+                if gh workflow run ci.yml --repo "${GH_REPO}" --ref "${head_ref}"; then
+                  dispatched=true
+                  break
+                fi
+                if [ "${attempt}" -lt 3 ]; then
+                  sleep $((attempt * 5))
+                fi
+              done
+              if [ "${dispatched}" != true ]; then
+                continue
+              fi
+            fi
+
             checks="$(api "repos/${GH_REPO}/commits/${head_oid}/check-runs?per_page=100")"
             statuses="$(api "repos/${GH_REPO}/commits/${head_oid}/status?per_page=100")"
 
