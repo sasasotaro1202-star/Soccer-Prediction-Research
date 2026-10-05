@@ -71,3 +71,18 @@ def test_integrity_audit_checks_world_model_liveness_windows() -> None:
     )
     for marker in expected_windows:
         assert marker in workflow
+
+
+def test_integrity_audit_covers_recovery_for_each_world_model_lane() -> None:
+    workflow = Path(".github/workflows/soccer-automation-integrity-audit.yml").read_text(
+        encoding="utf-8"
+    )
+    recovery_markers = (
+        "Soccer Prospective In-Play PIT Capture",
+        "Soccer Prospective In-Play Maturity",
+        "Soccer World Model Supervisor",
+        "Soccer Dynamic Simulator Research",
+        "Soccer Match State Research",
+    )
+    for marker in recovery_markers:
+        assert marker in workflow
