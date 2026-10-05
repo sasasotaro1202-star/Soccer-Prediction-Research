@@ -1,0 +1,58 @@
+{
+  "schema_version": "hierarchical-dynamic-simulator-policy-v1",
+  "status": "RESEARCH_ONLY",
+  "production_changed": false,
+  "frozen_holdout_access_allowed": false,
+  "performance_claim_allowed": false,
+  "stages": [
+    "FOUNDATION",
+    "HIERARCHICAL_STRENGTH",
+    "DYNAMIC_MATCH_STATE",
+    "SCENARIO_PROPAGATION",
+    "LINEUP_DISTRIBUTION",
+    "PLAYER_ROLE_INTERACTION",
+    "FULL_EVENT_SIMULATOR"
+  ],
+  "prerequisites": {
+    "pit_contract": [
+      "src/core/pit.py",
+      "src/core/source_availability.py",
+      "src/data/versioned_result_pit.py"
+    ],
+    "score_distribution": [
+      "src/prediction/secondary_outputs.py",
+      "src/models/dixon_coles.py",
+      "src/models/negative_binomial.py"
+    ],
+    "oos": [
+      "src/evaluation/walk_forward.py",
+      "src/evaluation/score_walk_forward.py"
+    ],
+    "calibration": "src/research/predictability_calibration.py",
+    "uncertainty": [
+      "src/research/predictability_map.py",
+      "src/research/future_model_failure_oos.py"
+    ],
+    "routing": "src/monitoring/dynamic_routing.py",
+    "matchday": "src/prediction/matchday_intelligence.py",
+    "candidate_dynamic_hazard": "src/research/match_state_hazard.py"
+  },
+  "gates": {
+    "pit_violations_allowed": 0,
+    "required_evaluation": "chronological_wfo",
+    "frozen_holdout_tuning_allowed": false,
+    "production_promotion_allowed": false
+  },
+  "candidate_bridge": {
+    "enabled": true,
+    "pr_number": 212,
+    "workflow": "soccer-match-state-research.yml",
+    "mode": "research-only"
+  },
+  "actions": {
+    "missing_prerequisite": "HOLD",
+    "missing_pit": "FAIL_CLOSED",
+    "missing_data": "WARMUP",
+    "performance_status": "UNVERIFIED"
+  }
+}
