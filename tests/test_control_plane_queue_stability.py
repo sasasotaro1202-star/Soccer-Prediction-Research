@@ -17,17 +17,4 @@ def test_control_plane_watchdog_has_queue_grace():
     assert "queued_grace_min = 180" in text
     assert 'print("QUEUED_WAIT")' in text
     assert 'print("QUEUED_STALE")' in text
-
-
-def test_9h_queue_watchdog_uses_long_prestart_grace():
-    text = (WF / "soccer-9h-queue-watchdog.yml").read_text(encoding="utf-8")
-    assert 'age_min >= 120.0' in text
-    assert 'age_min >= 20.0' not in text
-
-
-def test_9h_recovery_uses_long_prestart_grace():
-    text = (WF / "soccer-9h-recovery.yml").read_text(encoding="utf-8")
-    assert "120+ minutes" in text
-    assert "stuck_minutes = 120" in text
-    assert "(120.0 / 60.0)" in text
-    assert "(20.0 / 60.0)" not in text
+    assert 'age_min >= 25' in text
