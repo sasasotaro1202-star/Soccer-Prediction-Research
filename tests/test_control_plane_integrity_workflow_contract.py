@@ -110,3 +110,13 @@ def test_controller_reconciles_after_integrity_audit_completion() -> None:
     )
     assert "Soccer Automation Integrity Audit" in workflow
     assert "types: [completed]" in workflow
+
+
+def test_world_model_supervisor_does_not_hide_dispatch_failures() -> None:
+    workflow = Path(".github/workflows/soccer-world-model-supervisor.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "dispatch_failures=0" in workflow
+    assert "dispatch_failures=$((dispatch_failures + 1))" in workflow
+    assert 'if [ "$dispatch_failures" -gt 0 ]; then' in workflow
+    assert "exit 1" in workflow
