@@ -19,8 +19,10 @@ permissions:
   actions: read
 
 concurrency:
+  # Keep only the newest reconciliation request. Older workflow_run events may
+  # arrive in bursts; cancelling a stale controller prevents queue accumulation.
   group: soccer-autonomous-controller
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   reconcile:
@@ -105,7 +107,7 @@ jobs:
             while IFS= read -r path; do
               [ -n "${path}" ] || continue
               case "${path}" in
-                src/research/adoption_gate.py|src/research/stability_gate.py|src/data/pit_source_adapter.py|src/data/pit_source_adapter_v2.py|src/data/pit_source_adapter_fast.py|src/data/pit_archive_fallback.py|src/data/pit_evidence.py|scripts/experience_commit_guard.py|.github/workflows/action-failure-recovery.yml|.github/workflows/pit-replay-audit.yml|.github/workflows/soccer-autonomous-orchestrator.yml)
+                src/research/adoption_gate.py|src/research/stability_gate.py|src/data/pit_source_adapter.py|src/data/pit_source_adapter_v2.py|src/data/pit_source_adapter_fast.py|src/data/pit_archive_fallback.py|src/data/pit_evidence.py|scripts/experience_commit_guard.py|.github/workflows/action-failure-recovery.yml|.github/workflows/pit-replay-audit.yml|.github/workflows/soccer-autonomous-orchestrator.yml|.github/workflows/soccer-control-plane-watchdog.yml)
                   case "${path}" in
                     src/data/pit_*|.github/workflows/pit-replay-audit.yml)
                       pit_sensitive=1
@@ -170,6 +172,6 @@ jobs:
           retention-days: 14
 
 # Automatic merging is restricted to explicitly marked, same-repository hardening PRs.
-# The state-based orchestrator and narrowly scoped experience guard are allowlisted here.
+# The state-based orchestrator, independent control-plane watchdog and narrowly scoped experience guard are allowlisted here.
 # Research-engine/data-pipeline/feature/model/calibration/target/controller changes are not in the auto-merge allowlist.
 # Any missing, pending, failed, stale, or ambiguous evidence results in HOLD.
