@@ -184,3 +184,11 @@ def test_automation_integrity_audit_is_required_and_fail_closed():
 def test_control_plane_watchdog_does_not_mask_errors_with_or_true():
     text = Path(".github/workflows/soccer-control-plane-watchdog.yml").read_text(encoding="utf-8")
     assert "|| true" not in text
+
+
+def test_orchestrator_latest_non_success_cannot_be_hidden_by_older_success():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert 'latest_completed = current_completed[0] if current_completed else None' in text
+    assert 'latest_conclusion = str(latest_completed.get("conclusion") or "").lower()' in text
+    assert 'if latest_conclusion != "success":' in text
+    assert 'latest = datetime.fromisoformat(latest_completed["createdAt"]' in text
