@@ -106,3 +106,27 @@ def test_autonomous_controller_cancels_stale_reconciliations():
     assert "group: soccer-autonomous-controller" in text
     assert "cancel-in-progress: true" in text
     assert ".github/workflows/soccer-control-plane-watchdog.yml" in text
+
+
+def test_automation_heartbeat_is_long_term_and_bounded():
+    path = Path(".github/workflows/soccer-automation-heartbeat.yml")
+    text = path.read_text(encoding="utf-8")
+    assert 'cron: "17 4 * * 0"' in text
+    assert "contents: write" in text
+    assert "chore: automation heartbeat" in text
+    assert "for attempt in 1 2 3 4" in text
+    assert "--max-time 90" in text
+    assert "production_change_allowed" in text
+    assert "frozen_holdout_access_allowed" in text
+
+
+def test_heartbeat_path_is_ignored_by_heavy_push_checks():
+    ci = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    legacy = Path(".github/workflows/legacy-bridge-check.yml").read_text(encoding="utf-8")
+    assert ".github/automation/**" in ci
+    assert ".github/automation/**" in legacy
+
+
+def test_failure_recovery_includes_automation_heartbeat():
+    text = Path(".github/workflows/action-failure-recovery.yml").read_text(encoding="utf-8")
+    assert "Soccer Automation Heartbeat" in text
