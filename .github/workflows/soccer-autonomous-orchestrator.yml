@@ -34,9 +34,9 @@ jobs:
           now_epoch="$(date +%s)"
           main_sha="$(api "repos/${GH_REPO}/git/ref/heads/main" --jq '.object.sha')"
           export MAIN_SHA="${main_sha}"
-          dispatch_budget=6
+          dispatch_budget=4
           dispatched_count=0
-          max_active_runs=10
+          max_active_runs=4
           report="autonomous-orchestrator-report.json"
 
           python - <<'PY' > "$report"
@@ -246,8 +246,8 @@ jobs:
           print(f"- main_sha: {s['main_sha']}")
           print(f"- dispatched: {len(s['dispatched'])}")
           print(f"- held: {len(s['held'])}")
-          print("- dispatch_budget: 6")
-          print("- max_active_runs: 10")
+          print("- dispatch_budget: 4")
+          print("- max_active_runs: 4")
           print("- production_change_allowed: false")
           print("- frozen_holdout_access_allowed: false")
           print("- performance_claim_allowed: false")
