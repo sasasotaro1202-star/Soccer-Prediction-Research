@@ -72,7 +72,8 @@ def test_control_plane_watchdog_has_catchup_and_restart_guards():
     path = Path(".github/workflows/soccer-control-plane-watchdog.yml")
     text = path.read_text(encoding="utf-8")
     assert 'cron: "*/10 * * * *"' in text
-    assert "RESTART" in text
+    assert "RUNNING_STALE" in text
+    assert "QUEUED_WAIT" in text
     assert "DISPATCH" in text
     assert "ACTIVE" in text
     assert "max-time 90" in text
@@ -96,7 +97,8 @@ def test_control_plane_watchdog_is_event_driven_and_persists_evidence():
 def test_failure_recovery_includes_watchdog_timeout():
     path = Path(".github/workflows/action-failure-recovery.yml")
     text = path.read_text(encoding="utf-8")
-    assert "Soccer Control Plane Watchdog" in text
+    assert "Soccer Control Plane Watchdog" not in text
+    assert "Soccer Automation Heartbeat" in text
     assert "timed_out" in text
 
 
@@ -134,7 +136,7 @@ def test_failure_recovery_includes_automation_heartbeat():
 
 def test_failure_recovery_isolated_per_workflow_lane():
     text = Path(".github/workflows/action-failure-recovery.yml").read_text(encoding="utf-8")
-    assert "group: action-failure-recovery-${{ github.event.workflow_run.name }}" in text
+    assert "group: action-failure-recovery-${{ github.event.workflow_run.name || 'scheduled' }}" in text
     assert "cancel-in-progress: true" in text
 
 
@@ -184,3 +186,12 @@ def test_automation_integrity_audit_is_required_and_fail_closed():
 def test_control_plane_watchdog_does_not_mask_errors_with_or_true():
     text = Path(".github/workflows/soccer-control-plane-watchdog.yml").read_text(encoding="utf-8")
     assert "|| true" not in text
+
+
+def test_orchestrator_reaps_only_obsolete_prestart_runs():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "cancel_obsolete_prestart_runs" in text
+    assert '.status == "queued" or .status == "pending" or .status == "waiting" or .status == "requested"' in text
+    assert '.headSha != $main_sha' in text
+    assert 'gh run cancel "${run_id}" --repo "${GH_REPO}"' in text
+    assert "obsolete_prestart_reap_budget_exhausted" in text

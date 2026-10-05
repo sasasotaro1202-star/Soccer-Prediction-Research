@@ -49,6 +49,7 @@ jobs:
               "performance_claim_allowed": False,
               "dispatched": [],
               "held": [],
+              "reaped": [],
           }
           print(json.dumps(payload, ensure_ascii=False, indent=2))
           PY
@@ -71,6 +72,49 @@ jobs:
           workflow_state() {
             local workflow="$1"
             gh run list --repo "${GH_REPO}" --workflow "${workflow}" --limit 50               --json status,conclusion,createdAt,headSha,headBranch,databaseId
+          }
+
+          cancel_obsolete_prestart_runs() {
+            # Only queued/pre-start runs on main whose SHA is no longer current
+            # are obsolete. Actively executing old-SHA research snapshots remain
+            # untouched so immutable evidence is not interrupted.
+            local budget=20
+            local count=0
+            local candidates
+            candidates="$(gh run list --repo "${GH_REPO}" --branch main --limit 100 \
+              --json databaseId,status,headSha,headBranch |
+              jq -r --arg main_sha "${MAIN_SHA}" '
+                .[]
+                | select(.headBranch == "main")
+                | select(.headSha != $main_sha)
+                | select(.status == "queued" or .status == "pending" or .status == "waiting" or .status == "requested")
+                | .databaseId')"
+
+            while IFS= read -r run_id; do
+              [ -n "${run_id}" ] || continue
+              if [ "${count}" -ge "${budget}" ]; then
+                update_report held "$(python -c 'import json,sys; print(json.dumps({"reason":"obsolete_prestart_reap_budget_exhausted","budget":int(sys.argv[1])},ensure_ascii=False))' "${budget}")"
+                break
+              fi
+
+              cancelled=false
+              for attempt in 1 2 3; do
+                if gh run cancel "${run_id}" --repo "${GH_REPO}"; then
+                  cancelled=true
+                  break
+                fi
+                if [ "${attempt}" -lt 3 ]; then
+                  sleep $((attempt * 3))
+                fi
+              done
+
+              if [ "${cancelled}" = true ]; then
+                count=$((count + 1))
+                update_report reaped "$(python -c 'import json,sys; print(json.dumps({"run_id":int(sys.argv[1]),"reason":"obsolete_head_sha_prestart"},ensure_ascii=False))' "${run_id}")"
+              else
+                update_report held "$(python -c 'import json,sys; print(json.dumps({"run_id":int(sys.argv[1]),"reason":"obsolete_prestart_cancel_error"},ensure_ascii=False))' "${run_id}")"
+              fi
+            done <<< "${candidates}"
           }
 
           dispatch_workflow() {
@@ -205,6 +249,8 @@ jobs:
             esac
           }
 
+          cancel_obsolete_prestart_runs
+
           # High-frequency live lanes: these are catch-up guards only; their own schedules remain authoritative.
           ensure_lane "soccer-matchday-intelligence.yml" 30 15
           ensure_lane "soccer-daily-research-forecast.yml" 60 20
@@ -246,6 +292,7 @@ jobs:
           print(f"- main_sha: {s['main_sha']}")
           print(f"- dispatched: {len(s['dispatched'])}")
           print(f"- held: {len(s['held'])}")
+          print(f"- obsolete_prestart_reaped: {len(s['reaped'])}")
           print("- dispatch_budget: 6")
           print("- max_active_runs: 10")
           print("- production_change_allowed: false")

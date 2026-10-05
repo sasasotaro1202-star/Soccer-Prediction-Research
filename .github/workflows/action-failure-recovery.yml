@@ -18,6 +18,8 @@ on:
       - Soccer World Model Supervisor
       - Soccer 9H Autonomous Research
       - Soccer Match State Research
+      - Soccer Automation Heartbeat
+      - Soccer Automation Integrity Audit
     types:
       - completed
   workflow_dispatch:
@@ -26,8 +28,10 @@ permissions:
   actions: write
 
 concurrency:
-  group: action-failure-recovery
-  cancel-in-progress: false
+  # Failure events can arrive in bursts. Coalesce each source workflow's recovery
+  # and keep scheduled catch-up in one shared lane.
+  group: action-failure-recovery-${{ github.event.workflow_run.name || 'scheduled' }}
+  cancel-in-progress: true
 
 env:
   GH_REPO: ${{ github.repository }}
