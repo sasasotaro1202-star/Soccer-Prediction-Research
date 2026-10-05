@@ -219,3 +219,9 @@ def test_watchdog_can_reenable_core_control_plane_without_prediction_authority()
     assert "production_change_allowed" in text
     assert "frozen_holdout_access_allowed" in text
     assert "performance_claim_allowed" in text
+
+def test_research_maturity_skips_safe_hardening_prs():
+    text = Path(".github/workflows/soccer-prospective-inplay-maturity.yml").read_text(encoding="utf-8")
+    assert "github.event_name != 'pull_request'" in text
+    assert "startsWith(github.event.pull_request.head.ref, 'hardening/')" in text
+    assert "Research-only maturation is not a required gate for hardening-safe PRs." in text
