@@ -17,6 +17,8 @@ on:
       - Soccer Prospective In-Play Maturity
       - Soccer World Model Supervisor
       - Soccer 9H Autonomous Research
+      - Soccer Match State Research
+      - Soccer Automation Integrity Audit
       - Soccer Control Plane Watchdog
       - Soccer Automation Heartbeat
     types: [completed]
