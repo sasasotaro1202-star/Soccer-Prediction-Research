@@ -60,6 +60,7 @@ jobs:
           MAIN_SHA="$(api_get "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/git/ref/heads/main" |
             python -c 'import json,sys; print(json.load(sys.stdin)["object"]["sha"])')"
           export MAIN_SHA
+          export DECISION
 
           api_get "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/soccer-autonomous-orchestrator.yml/runs?per_page=30" > /tmp/orchestrator-runs.json
 
@@ -150,3 +151,31 @@ jobs:
               exit 1
               ;;
           esac
+
+          mkdir -p watchdog-evidence
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          payload = {
+              "controller": "Soccer Control Plane Watchdog",
+              "run_id": os.environ.get("GITHUB_RUN_ID"),
+              "trigger": os.environ.get("GITHUB_EVENT_NAME"),
+              "main_sha": os.environ["MAIN_SHA"],
+              "decision": os.environ.get("DECISION", "unknown"),
+              "production_change_allowed": False,
+              "frozen_holdout_access_allowed": False,
+              "performance_claim_allowed": False,
+          }
+          Path("watchdog-evidence/control_plane_watchdog.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+          )
+          PY
+
+      - name: Upload watchdog evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-control-plane-watchdog-${{ github.run_id }}
+          path: watchdog-evidence/
+          retention-days: 14
+          if-no-files-found: warn
