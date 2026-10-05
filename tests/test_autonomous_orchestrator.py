@@ -89,3 +89,11 @@ def test_orchestrator_retries_dispatch_and_isolates_state_query_errors():
     assert "for attempt in 1 2 3" in text
     assert '"reason":"workflow_state_error"' in text
     assert '"reason":"active_run_count_error"' in text
+
+
+def test_orchestrator_caps_current_main_runs_without_legacy_blocking():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "active_current_main_count()" in text
+    assert "headSha == $main_sha" in text
+    assert "active_current_main_cap" in text
+    assert "max_active_current_main_runs: 10" in text
