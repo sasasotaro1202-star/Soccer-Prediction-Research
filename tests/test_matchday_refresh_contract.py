@@ -11,8 +11,8 @@ def test_matchday_refresh_contract_is_read_only_and_quarter_hourly():
     content = Path(".github/workflows/soccer-matchday-intelligence.yml").read_text(encoding="utf-8")
     assert 'cron: "7,22,37,52 * * * *"' in content
     assert "push:" not in content
-    assert "workflow_run:" in content
-    assert 'workflows: ["Soccer 9H Autonomous Research"]' in content
+    assert "workflow_run:" not in content
+    assert "workflow_dispatch:" in content
     assert "contents: read" in content
     assert "cancel-in-progress: false" in content
     assert _has_immutable_action_pin(content, "actions/upload-artifact")

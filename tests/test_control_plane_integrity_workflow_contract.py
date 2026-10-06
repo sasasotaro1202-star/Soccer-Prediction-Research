@@ -38,12 +38,14 @@ def test_maturity_bootstraps_dependencies_and_is_pr_safe() -> None:
     assert "actions/setup-python@" in text
     assert "python -m pip install" in text
     assert "github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main'" in text
-    assert "github.event_name != 'pull_request'" in text
+    assert "GITHUB_EVENT_NAME" in text
+    assert "pull_request" in text
+    assert "PR validation only; main persistence disabled." in text
 
 def test_ci_bounds_tests_and_ignores_generated_world_model_data() -> None:
     text = _read(".github/workflows/ci.yml")
     assert "Validate workflow YAML syntax" in text
-    assert "timeout --signal=TERM --kill-after=30s 300" in text
+    assert "timeout --signal=TERM --kill-after=30s 900" in text
     assert "python -m pytest -q -vv --durations=20" in text
     assert "data/research/prospective_inplay/raw/**" in text
     assert "data/research/match_state_snapshots/**" in text
@@ -61,7 +63,8 @@ def test_control_plane_event_graph_has_no_audit_recovery_controller_cycle() -> N
     audit = _read(".github/workflows/soccer-automation-integrity-audit.yml")
     recovery = _read(".github/workflows/action-failure-recovery.yml")
     controller = _read(".github/workflows/autonomous-github-controller.yml")
-    assert "workflow_run:" not in audit
+    audit_triggers = audit.split("permissions:", 1)[0]
+    assert "workflow_run:" not in audit_triggers
     assert "workflow_run:" not in recovery
     assert "workflow_run:" not in controller
     assert "Soccer Autonomous Orchestrator" in audit

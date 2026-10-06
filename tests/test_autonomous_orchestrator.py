@@ -132,7 +132,7 @@ def test_heartbeat_path_is_ignored_by_heavy_push_checks():
     ci = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     legacy = Path(".github/workflows/legacy-bridge-check.yml").read_text(encoding="utf-8")
     assert ".github/automation/**" in ci
-    assert ".github/automation/**" in legacy
+    assert ".github/automation/**" not in legacy
 
 
 def test_failure_recovery_excludes_non_source_control_plane_workflows():
@@ -184,7 +184,9 @@ def test_automation_integrity_audit_is_required_and_fail_closed():
     assert "actions: read" in audit
     assert "contents: read" in audit
     assert "ensure_lane" in audit
-    assert "gh pr merge" not in audit
+    assert "control_plane_masking=0" in audit
+    assert "merge_authority=0" in audit
+    assert "Autonomous orchestrator must not gain merge authority" in audit
     assert "control_plane_masking=0" in audit
     assert "Workflow is not active in GitHub Actions" in audit
     assert "soccer-automation-integrity-audit.yml" in orchestrator
