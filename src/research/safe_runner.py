@@ -176,7 +176,7 @@ def run_with_retries() -> int:
             "completion_gate_passed": True,
             "audit_gate_passed": True,
         },
-        "retry_policy": "transient_only",
+        "retry_policy": "transient_only_bounded",
         "runner": {"status": "STARTED"},
         "oos_claimed": False,
     })
@@ -216,7 +216,7 @@ def run_with_retries() -> int:
         "reason": "Research engine failed after a bounded retry policy; no OOS result was claimed."
         if errors
         else "Research engine did not produce a result; no OOS result was claimed.",
-        "retry_policy": "transient_only",
+        "retry_policy": "transient_only_bounded",
         "retry_history": retry_history,
         "runner": {
             "attempts": len(retry_history),
