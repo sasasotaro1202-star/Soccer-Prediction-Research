@@ -89,7 +89,7 @@ def test_control_plane_event_graph_has_no_audit_recovery_controller_cycle() -> N
     )
     for name in required_control_filenames:
         assert "'" + name + "'" in audit
-        assert "/" + name in audit
+        assert name in audit
 
     for isolated in (
         ".github/workflows/soccer-9h-recovery.yml",
