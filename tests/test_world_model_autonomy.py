@@ -29,7 +29,7 @@ def test_match_state_lane_does_not_consume_market_odds():
 def test_control_plane_keeps_promotion_outside_supervisor():
     supervisor = read('.github/workflows/soccer-world-model-supervisor.yml')
     assert 'contents: read' in supervisor
-    assert 'production_usable": false' in supervisor
-    assert 'performance_verified": false' in supervisor
-    assert 'promotion_candidate": false' in supervisor
+    assert 'production_usable":false' in supervisor
+    assert 'performance_verified":false' in supervisor
+    assert 'promotion_candidate":false' in supervisor
     assert 'gh pr merge' not in supervisor
