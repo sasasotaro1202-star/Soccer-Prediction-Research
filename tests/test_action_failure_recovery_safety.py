@@ -1,5 +1,3 @@
-import json
-
 from scripts.action_failure_recovery import classify_recovery
 
 
@@ -66,3 +64,21 @@ def test_recovery_workflow_requires_classifier_before_rerun():
     assert classify_pos < rerun_pos
     assert "retryable" in text
     assert "deterministic/unknown failure remains blocking" in text
+
+
+def test_incomplete_job_details_are_not_retryable():
+    jobs = {
+        "total_count": 101,
+        "jobs": [
+            {"steps": [{"name": "Checkout", "conclusion": "failure"}]}
+        ],
+    }
+    decision = classify_recovery(conclusion="failure", run_attempt=1, jobs_payload=jobs)
+    assert decision["retryable"] is False
+    assert decision["reason"] == "job_detail_incomplete"
+
+
+def test_empty_job_details_are_not_retryable():
+    decision = classify_recovery(conclusion="failure", run_attempt=1, jobs_payload={"jobs": []})
+    assert decision["retryable"] is False
+    assert decision["reason"] == "job_detail_empty_or_invalid"
