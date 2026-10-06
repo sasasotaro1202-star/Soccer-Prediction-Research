@@ -53,7 +53,7 @@ def test_maturity_bootstraps_dependencies_and_is_pr_safe() -> None:
 def test_ci_bounds_tests_and_ignores_generated_world_model_data() -> None:
     text = _read(".github/workflows/ci.yml")
     assert "Validate workflow YAML syntax" in text
-    assert "timeout --signal=TERM --kill-after=30s 2400" in text
+    assert "timeout --signal=TERM --kill-after=30s 3600" in text
     assert "python -m pytest -q -vv --durations=20" in text
     assert "data/research/prospective_inplay/raw/**" in text
     assert "data/research/match_state_snapshots/**" in text
