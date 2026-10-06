@@ -47,7 +47,7 @@ def test_maturity_bootstraps_dependencies_and_is_pr_safe() -> None:
 def test_ci_bounds_tests_and_ignores_generated_world_model_data() -> None:
     text = _read(".github/workflows/ci.yml")
     assert "Validate workflow YAML syntax" in text
-    assert "timeout --signal=TERM --kill-after=30s 900" in text
+    assert "timeout --signal=TERM --kill-after=30s 2400" in text
     assert "python -m pytest -q -vv --durations=20" in text
     assert "data/research/prospective_inplay/raw/**" in text
     assert "data/research/match_state_snapshots/**" in text
@@ -69,8 +69,18 @@ def test_control_plane_event_graph_has_no_audit_recovery_controller_cycle() -> N
     assert "workflow_run:" not in audit_triggers
     assert "workflow_run:" not in recovery
     assert "workflow_run:" not in controller
-    assert "Soccer Autonomous Orchestrator" in audit
-    assert "Soccer Control Plane Watchdog" in audit
+    required_control_filenames = (
+        "soccer-autonomous-orchestrator.yml",
+        "soccer-control-plane-watchdog.yml",
+        "action-failure-recovery.yml",
+        "autonomous-github-controller.yml",
+        "soccer-9h-queue-watchdog.yml",
+        "soccer-9h-recovery.yml",
+        "soccer-automation-heartbeat.yml",
+    )
+    for name in required_control_filenames:
+        assert f"'{name{'}'}'" in audit
+        assert f"/{name{'}'}" in audit
     for isolated in (
         ".github/workflows/soccer-9h-recovery.yml",
         ".github/workflows/soccer-world-model-supervisor.yml",
@@ -86,3 +96,8 @@ def test_legacy_bridge_is_source_scoped():
     assert "tests/test_baseline_comparison.py" in text
     assert "data/experience/**" not in text
     assert "artifacts/**" not in text
+
+
+def test_legacy_research_cycle_is_not_orchestrated() -> None:
+    orchestrator = _read(".github/workflows/soccer-autonomous-orchestrator.yml")
+    assert 'ensure_lane "soccer-research-cycle.yml"' not in orchestrator
