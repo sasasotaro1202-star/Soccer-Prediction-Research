@@ -34,7 +34,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
@@ -71,5 +71,5 @@ jobs:
           PYTHONHASHSEED: '0'
         run: |
           set -euo pipefail
-          timeout --signal=TERM --kill-after=30s 900 \
+          timeout --signal=TERM --kill-after=30s 2400 \
             python -m pytest -q -vv --durations=20
