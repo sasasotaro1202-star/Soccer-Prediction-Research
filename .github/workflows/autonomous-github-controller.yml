@@ -17,6 +17,8 @@ on:
       - ".github/workflows/soccer-automation-heartbeat.yml"
       - ".github/workflows/soccer-automation-integrity-audit.yml"
       - ".github/workflows/ci.yml"
+      - ".github/workflows/soccer-research-cycle.yml"
+      - "scripts/action_failure_recovery.py"
       - "scripts/experience_commit_guard.py"
       - "src/research/adoption_gate.py"
       - "src/research/stability_gate.py"
