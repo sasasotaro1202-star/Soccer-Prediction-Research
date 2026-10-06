@@ -186,7 +186,7 @@ def run_with_retries() -> int:
     for attempt in range(1, attempts + 1):
         try:
             report = run(str(out))
-            report["retry_policy"] = "transient_only"
+            report["retry_policy"] = "transient_only_bounded"
             report["runner"] = {
                 "attempt": attempt,
                 "max_attempts": attempts,
