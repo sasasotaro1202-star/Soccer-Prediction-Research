@@ -91,16 +91,8 @@ No domain-specific feature, model, metric result, threshold or production claim 
 ## GitHub-side autonomous operation contract
 GitHub Actions should perform the routine control loop without requiring a new chat instruction each cycle:
 MONITOR → RECONCILE → RETRY_TRANSIENT_FAILURE_ONCE → PIT_AUDIT → TEST → OOS/WFO → CALIBRATION/ROBUSTNESS → ADOPTION_GATE → SAFE_RELEASE.
-Automatic merge is permitted only for an explicitly marked `automation_policy: hardening-safe-v1` PR whose merge state is CLEAN, every reported check is completed successfully, and the changed-file allowlist contains no production/model/data/artifact mutation paths. Automatic merge must use a final head-SHA recheck. Model, feature, calibration, target, production bundle, frozen holdout and performance-affecting research changes are never auto-merged by the controller unless a future policy explicitly authorizes them after separate evidence.
+Automatic merge is permitted only for an explicitly marked `automation_policy: hardening-safe-v1` hardening PR whose base is the current `main`, whose merge state is CLEAN, whose diff stays inside the hardening allowlist, whose checks are complete and successful, and whose final head-SHA race check remains clean. Production/model/feature/calibration/target/production-bundle/frozen-holdout/performance-affecting research changes remain outside automatic-merge authority unless a future policy explicitly authorizes them after separate evidence.
 PIT replay remains scheduled and diagnostic; BLOCKED evidence is never promoted to PASS. Transient Action failures may receive one bounded failed-job rerun, but deterministic failures remain authoritative and blocking.
-
-
-## GitHub-side autonomous operation contract
-
-Routine repository operation is expected to run from GitHub Actions without requiring a new chat instruction each cycle:
-MONITOR → RECONCILE → RETRY_TRANSIENT_FAILURE_ONCE → PIT_AUDIT → TEST → OOS/WFO → CALIBRATION/ROBUSTNESS → ADOPTION_GATE → SAFE_RELEASE.
-Automatic merge is limited to explicitly marked `automation_policy: hardening-safe-v1` hardening PRs whose base is the current `main`, whose diff stays inside the hardening allowlist, whose checks are complete and successful, and whose final head-SHA race check remains clean. Model, feature, calibration, target, frozen-holdout, production-bundle and performance-affecting research changes remain outside the automatic-merge policy.
-
 
 ## GitHub-side state-based autonomy
 
