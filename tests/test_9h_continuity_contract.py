@@ -10,6 +10,9 @@ def test_autonomous_workflow_has_continuous_9h_cycle_and_strict_concurrency():
     assert "schedule:" in text
     assert 'cron: "15 0,8,16 * * *"' in text
     assert "workflow_dispatch:" in text
+    # The 9H workflow is schedule/dispatch driven; recovery is outside its trigger graph.
+    trigger_and_preamble = text.split("jobs:", 1)[0]
+    assert "workflow_run" not in trigger_and_preamble
     assert "recovery controller" in text.lower()
     assert "group: soccer-9h-autonomous-main" in text
     assert "cancel-in-progress: false" in text
