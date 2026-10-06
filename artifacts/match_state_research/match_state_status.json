@@ -1,0 +1,15 @@
+{
+  "schema_version": 2,
+  "status": "WARMUP",
+  "reason": "match_state_snapshot_dataset_missing",
+  "input_path": "data/research/match_state_snapshots",
+  "oos_claimed": false,
+  "performance_verified": false,
+  "promotion_candidate": false,
+  "production_usable": false,
+  "research_only": true,
+  "pit_status": "NOT_EXECUTED",
+  "calibration_status": "NOT_EXECUTED",
+  "robustness_status": "NOT_EXECUTED",
+  "next_step": "acquire_historical_PIT_verified_in_play_snapshots"
+}
