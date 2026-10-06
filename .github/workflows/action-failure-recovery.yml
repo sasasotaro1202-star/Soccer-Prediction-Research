@@ -91,7 +91,7 @@ jobs:
                 continue
               fi
 
-              decision="$(printf '%s' "${jobs_payload}" | python scripts/action_failure_recovery.py "${conclusion}" "${attempt}")" || {
+              decision="$(printf '%s' "${jobs_payload}" | python3 scripts/action_failure_recovery.py "${conclusion}" "${attempt}")" || {
                 echo "Recovery classifier failed for workflow=${workflow} run=${run_id}; preserving failure signal." >&2
                 failures=$((failures + 1))
                 continue
