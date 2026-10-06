@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import requests
 import time
@@ -64,6 +65,28 @@ def _is_retryable_exception(exc: Exception) -> bool:
     return isinstance(exc, transient_types)
 
 
+def _read_bounded_retry_config() -> tuple[int, float]:
+    """Read retry settings without allowing malformed or unbounded values."""
+    attempts_raw = os.getenv("RESEARCH_ATTEMPTS", "2").strip()
+    backoff_raw = os.getenv("RESEARCH_RETRY_BACKOFF", "15").strip()
+    try:
+        attempts = int(attempts_raw)
+    except ValueError as exc:
+        raise ValueError("RESEARCH_ATTEMPTS must be an integer") from exc
+    try:
+        backoff = float(backoff_raw)
+    except ValueError as exc:
+        raise ValueError("RESEARCH_RETRY_BACKOFF must be a finite number") from exc
+
+    # Keep the operational recovery policy bounded even when the runner is
+    # invoked outside the checked-in GitHub workflow.
+    if not 1 <= attempts <= 3:
+        raise ValueError("RESEARCH_ATTEMPTS must be between 1 and 3")
+    if not math.isfinite(backoff) or backoff < 0 or backoff > 300:
+        raise ValueError("RESEARCH_RETRY_BACKOFF must be finite and between 0 and 300 seconds")
+    return attempts, backoff
+
+
 def run_with_retries() -> int:
     """Run research only when every mandatory safety gate agrees.
 
@@ -72,10 +95,24 @@ def run_with_retries() -> int:
     Operational failures are recorded explicitly, and an exhausted engine retry
     returns a non-zero exit code so GitHub Actions can recover the failed run.
     """
-    attempts = max(1, int(os.getenv("RESEARCH_ATTEMPTS", "2")))
-    backoff = max(0.0, float(os.getenv("RESEARCH_RETRY_BACKOFF", "15")))
     out = Path(os.getenv("RESEARCH_OUTPUT_DIR", "artifacts"))
     out.mkdir(parents=True, exist_ok=True)
+
+    try:
+        attempts, backoff = _read_bounded_retry_config()
+    except ValueError as exc:
+        _write_status(out, {
+            "status": "FAILED",
+            "reason": "Research retry configuration is invalid; execution was fail-closed before preflight.",
+            "errors": [f"{type(exc).__name__}: {exc}"],
+            "retry_policy": "transient_only_bounded",
+            "runner": {
+                "status": "CONFIG_ERROR",
+                "exit_code": 1,
+            },
+            "oos_claimed": False,
+        })
+        return 1
 
     tests_passed, tests_env_error = _read_required_bool_env("TESTS_PASSED")
     audit_passed, audit_env_error = _read_required_bool_env("AUDIT_PASSED")
