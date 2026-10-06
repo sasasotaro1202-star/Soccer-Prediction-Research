@@ -18,7 +18,7 @@ concurrency:
 # The historical workflow name remains 9H for compatibility; the research phase uses the full
 # GitHub-hosted runner limit so long OOS runs are not cut off at the previous 180-minute boundary.
 # Scheduled starts provide a baseline; the recovery controller chains successful/completed cycles
-# through workflow_run and also provides a 15-minute watchdog for missed/stale/cancelled runs.
+# through the recovery controller and its independent watchdog, including missed/stale/cancelled-run recovery.
 # Source-code pushes do not restart/cancel a long research cycle; the recovery controller observes main
 # and dispatches the newest main SHA only when no current-main cycle is active.
 # No production/PIT gate is weakened to keep the workflow green.
