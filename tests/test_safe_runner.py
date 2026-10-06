@@ -55,7 +55,7 @@ def test_transient_engine_failure_retries_with_bounded_history(tmp_path, monkeyp
     assert safe_runner.run_with_retries() == 0
     payload = json.loads((out / "run_status.json").read_text(encoding="utf-8"))
     assert calls["count"] == 2
-    assert payload["retry_policy"] == "transient_only"
+    assert payload["retry_policy"] == "transient_only_bounded"
     assert payload["runner"]["status"] == "COMPLETED"
     assert payload["runner"]["retry_history"][0]["retryable"] is True
 
