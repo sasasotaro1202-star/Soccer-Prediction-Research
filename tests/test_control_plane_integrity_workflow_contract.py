@@ -20,6 +20,8 @@ def test_failure_recovery_is_scheduled_and_covers_world_model() -> None:
     assert "Soccer Prospective In-Play Maturity" in text
     assert "Soccer World Model Supervisor" in text
     assert "Soccer Match State Research" in text
+    assert "Soccer Daily Research Forecast" in text
+    assert "Soccer Live Research Forecast" in text
     assert "max_age_seconds=21600" in text
     assert "run_attempt" in text
     assert "exit 1" in text

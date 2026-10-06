@@ -52,6 +52,8 @@ jobs:
             "Soccer World Model Supervisor"
             "Soccer 9H Autonomous Research"
             "Soccer Match State Research"
+            "Soccer Daily Research Forecast"
+            "Soccer Live Research Forecast"
           )
 
           for workflow in "${workflows[@]}"; do
