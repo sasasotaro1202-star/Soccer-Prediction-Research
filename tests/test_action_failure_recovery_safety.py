@@ -82,3 +82,19 @@ def test_empty_job_details_are_not_retryable():
     decision = classify_recovery(conclusion="failure", run_attempt=1, jobs_payload={"jobs": []})
     assert decision["retryable"] is False
     assert decision["reason"] == "job_detail_empty_or_invalid"
+
+
+def test_failure_with_no_failed_step_is_not_retryable():
+    jobs = {
+        "jobs": [
+            {
+                "steps": [
+                    {"name": "Set up job", "conclusion": "success"},
+                    {"name": "Checkout", "conclusion": "cancelled"},
+                ]
+            }
+        ]
+    }
+    decision = classify_recovery(conclusion="failure", run_attempt=1, jobs_payload=jobs)
+    assert decision["retryable"] is False
+    assert decision["reason"] == "job_detail_has_no_failed_step"
