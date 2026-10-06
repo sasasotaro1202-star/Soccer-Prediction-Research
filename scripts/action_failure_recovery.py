@@ -95,8 +95,14 @@ def classify_recovery(*, conclusion: str, run_attempt: int, jobs_payload: dict[s
             if name not in TRANSIENT_FAILURE_STEPS:
                 blocked_steps.append(name)
 
-    # A failed workflow with no failed step is treated as a runner/control-plane
-    # failure rather than as a deterministic research failure.
+    if not failed_steps:
+        return {
+            "retryable": False,
+            "reason": "job_detail_has_no_failed_step",
+            "failed_steps": [],
+            "blocked_steps": [],
+        }
+
     retryable = not blocked_steps
     reason = "transient_setup_failure" if retryable else "deterministic_or_unknown_failure"
     return {
