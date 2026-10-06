@@ -1,7 +1,9 @@
 from pathlib import Path
 
+
 def _read(path: str) -> str:
     return Path(path).read_text(encoding="utf-8")
+
 
 def test_integrity_audit_is_read_only_and_fail_closed() -> None:
     text = _read(".github/workflows/soccer-automation-integrity-audit.yml")
@@ -11,6 +13,7 @@ def test_integrity_audit_is_read_only_and_fail_closed() -> None:
     assert "'frozen_holdout_access_allowed': False" in text
     assert "'performance_claim_allowed': False" in text
     assert "AUTOMATION_INTEGRITY: PASS" in text
+
 
 def test_failure_recovery_is_scheduled_and_covers_world_model() -> None:
     text = _read(".github/workflows/action-failure-recovery.yml")
@@ -26,6 +29,7 @@ def test_failure_recovery_is_scheduled_and_covers_world_model() -> None:
     assert "run_attempt" in text
     assert "exit 1" in text
 
+
 def test_world_model_supervisor_fails_closed_on_dispatch_failure() -> None:
     text = _read(".github/workflows/soccer-world-model-supervisor.yml")
     assert "dispatch_failures=0" in text
@@ -34,6 +38,7 @@ def test_world_model_supervisor_fails_closed_on_dispatch_failure() -> None:
     assert "world_model_dispatch_failures" in text
     assert "JSONDecoder" in text
     assert "raw_decode" in text
+
 
 def test_maturity_bootstraps_dependencies_and_is_pr_safe() -> None:
     text = _read(".github/workflows/soccer-prospective-inplay-maturity.yml")
@@ -44,6 +49,7 @@ def test_maturity_bootstraps_dependencies_and_is_pr_safe() -> None:
     assert "pull_request" in text
     assert "PR validation only; main persistence disabled." in text
 
+
 def test_ci_bounds_tests_and_ignores_generated_world_model_data() -> None:
     text = _read(".github/workflows/ci.yml")
     assert "Validate workflow YAML syntax" in text
@@ -52,6 +58,7 @@ def test_ci_bounds_tests_and_ignores_generated_world_model_data() -> None:
     assert "data/research/prospective_inplay/raw/**" in text
     assert "data/research/match_state_snapshots/**" in text
 
+
 def test_controller_self_advances_safe_hardening_prs() -> None:
     text = _read(".github/workflows/autonomous-github-controller.yml")
     assert "pull_request:" in text
@@ -59,7 +66,8 @@ def test_controller_self_advances_safe_hardening_prs() -> None:
     assert "--rebase" in text
     assert "hardening-safe-v1" in text
     assert "--match-head-commit" in text
-    assert "[ \"${head_repo}\" = \"${GH_REPO}\" ]" in text
+    assert '[ "${head_repo}" = "${GH_REPO}" ]' in text
+
 
 def test_control_plane_event_graph_has_no_audit_recovery_controller_cycle() -> None:
     audit = _read(".github/workflows/soccer-automation-integrity-audit.yml")
@@ -69,6 +77,7 @@ def test_control_plane_event_graph_has_no_audit_recovery_controller_cycle() -> N
     assert "workflow_run:" not in audit_triggers
     assert "workflow_run:" not in recovery
     assert "workflow_run:" not in controller
+
     required_control_filenames = (
         "soccer-autonomous-orchestrator.yml",
         "soccer-control-plane-watchdog.yml",
@@ -79,14 +88,16 @@ def test_control_plane_event_graph_has_no_audit_recovery_controller_cycle() -> N
         "soccer-automation-heartbeat.yml",
     )
     for name in required_control_filenames:
-        assert f"'{name{'}'}'" in audit
-        assert f"/{name{'}'}" in audit
+        assert "'" + name + "'" in audit
+        assert "/" + name in audit
+
     for isolated in (
         ".github/workflows/soccer-9h-recovery.yml",
         ".github/workflows/soccer-world-model-supervisor.yml",
         ".github/workflows/soccer-matchday-intelligence.yml",
     ):
         assert "workflow_run:" not in _read(isolated)
+
 
 def test_legacy_bridge_is_source_scoped():
     text = _read(".github/workflows/legacy-bridge-check.yml")
