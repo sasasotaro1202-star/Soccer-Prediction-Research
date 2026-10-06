@@ -124,3 +124,11 @@ def test_retry_configuration_is_strictly_bounded(monkeypatch):
         assert "between 0 and 300" in str(exc)
     else:
         raise AssertionError("unbounded retry backoff was accepted")
+
+    monkeypatch.setenv("RESEARCH_RETRY_BACKOFF", "nan")
+    try:
+        safe_runner._read_bounded_retry_config()
+    except ValueError as exc:
+        assert "finite" in str(exc)
+    else:
+        raise AssertionError("non-finite retry backoff was accepted")
