@@ -35,7 +35,7 @@ jobs:
       MATCH_STATE_OUT: artifacts/match_state_research
     steps:
       - name: Checkout current main or exact PR head
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main' }}
 
