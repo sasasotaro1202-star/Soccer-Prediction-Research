@@ -16,7 +16,7 @@ def test_manual_user_facing_workflows_use_full_job_budget():
         "innovative-control-v13.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 300 }}",
         "innovative-control-v2.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 180 }}",
         "soccer-global-datalake.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 30 }}",
-        "soccer-research-cycle.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 120 }}",
+        "soccer-research-cycle.yml": "timeout-minutes: 360",
         "soccer-experience-ledger.yml": "timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 45 }}",
     }
     for name, line in expected.items():
@@ -59,11 +59,13 @@ def test_predictability_never_cancels_inflight_manual_work():
 
 def test_research_cycle_artifact_persistence_is_bounded_and_explicit():
     text = (WORKFLOWS / "soccer-research-cycle.yml").read_text(encoding="utf-8")
-    assert "for attempt in 1 2 3; do" in text
-    assert "git fetch --prune origin main" in text
-    assert "git push origin HEAD:main" in text
-    assert "git rebase origin/main" in text
-    assert "sleep $((attempt * 5))" in text
+    assert "workflow_dispatch:" in text
+    assert "python -m src.research.safe_runner" in text
+    assert "actions/upload-artifact@" in text
+    assert "retention-days: 7" in text
+    assert "git push" not in text
+    assert "git commit" not in text
+    assert "git rebase" not in text
     assert "|| true" not in text
 
 def test_chat_gateway_stays_short_only_for_acknowledgement():

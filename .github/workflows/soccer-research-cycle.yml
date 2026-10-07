@@ -1,89 +1,170 @@
 name: Soccer Research Cycle
 
+# Legacy compatibility lane.
+# Routine autonomous research is owned by the state-based control plane.
+# Keeping this workflow manual-only prevents duplicate weekly research
+# executions while preserving an explicit recovery/debug entry point.
+
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "17 3 * * 1"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: soccer-research-cycle
+  group: soccer-research-cycle-manual
   cancel-in-progress: false
+
+env:
+  PYTHONPATH: .
+  PYTHONHASHSEED: "0"
+  PIT_ENABLE_ARCHIVE_AUDIT: "1"
+  PIT_ENABLE_SECONDARY_ARCHIVE: "1"
+  PIT_REPLAY_ROWS_PER_GROUP: "1"
+  RESEARCH_ATTEMPTS: "2"
+  RESEARCH_RETRY_BACKOFF: "10"
 
 jobs:
   research:
+    name: Manual safe research compatibility run
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 120 }}
-    env:
-      PYTHONPATH: .
-      # Archive replay is a sampled reproducibility audit. It is independent of
-      # the deterministic feature-PIT gate and never blocks legal result features
-      # merely because a historical archive provider cannot replay a page today.
-      PIT_REPLAY_ROWS_PER_GROUP: "1"
+    timeout-minutes: 360
+
     steps:
-      - name: Checkout
+      - name: Checkout exact trigger commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+
       - name: Setup Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.12"
           cache: pip
-      - name: Cache raw soccer data
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
-        with:
-          path: data/raw
-          key: soccer-raw-${{ runner.os }}-${{ hashFiles('src/data/football_data.py') }}
-          restore-keys: soccer-raw-${{ runner.os }}-
-      - name: Install dependencies
-        run: python -m pip install -r requirements.txt
-      - name: Run tests
+
+      - name: Install dependencies with bounded retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt; then
+              exit 0
+            fi
+            echo "dependency install attempt ${attempt} failed" >&2
+            if [ "${attempt}" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+
+      - name: Compile source and tests
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: python -m compileall -q src tests
+
+      - name: Run deterministic tests
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
         run: python -m pytest -q
-      - name: Run research engine
-        run: python -m src.research.engine
-      - name: Upload research artifacts
+
+      - name: Run structural audit
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: python -m src.data.fixture_field_audit
+
+      - name: Persist preflight audit status
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary_path = Path("artifacts/audit_summary.json")
+          if not summary_path.exists():
+              raise SystemExit("audit_summary.json missing after fixture audit")
+          summary = json.loads(summary_path.read_text(encoding="utf-8"))
+          passed = bool(summary.get("audit_execution_ok") is True)
+          Path("artifacts/audit_status.json").write_text(
+              json.dumps(
+                  {"exit_code": 0 if passed else 1, "passed": passed},
+                  ensure_ascii=False,
+              ),
+              encoding="utf-8",
+          )
+          if not passed:
+              raise SystemExit("structural audit execution failed")
+          PY
+
+      - name: Run strict completion/PIT gate
+        id: completion
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: python -m src.data.completion_gate
+
+      - name: Verify gate handoff
+        id: handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          gate = json.loads(Path("artifacts/completion_gate.json").read_text(encoding="utf-8"))
+          audit = json.loads(Path("artifacts/audit_gate.json").read_text(encoding="utf-8"))
+          print(json.dumps({
+              "completion_full_gate_passed": gate.get("full_gate_passed"),
+              "audit_full_gate_passed": audit.get("full_gate_passed"),
+              "pit_publication_time_gate": gate.get("pit_publication_time_gate"),
+              "blocking_reasons": gate.get("blocking_reasons") or [],
+          }, ensure_ascii=False))
+          if gate.get("full_gate_passed") is not True:
+              raise SystemExit("completion gate did not pass; research must remain blocked")
+          if audit.get("full_gate_passed") is not True:
+              raise SystemExit("audit gate did not pass; research must remain blocked")
+          PY
+
+      - name: Run research through fail-closed runner
+        id: safe_runner
+        env:
+          TESTS_PASSED: "true"
+          AUDIT_PASSED: ${{ steps.handoff.outcome == 'success' }}
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: python -m src.research.safe_runner
+
+      - name: Publish research safety summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Soccer Research Cycle"
+            echo "- Manual compatibility lane: true"
+            echo "- Autonomous scheduled owner: Soccer Autonomous Orchestrator"
+            if [ -s artifacts/run_status.json ]; then
+              python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path("artifacts/run_status.json").read_text(encoding="utf-8"))
+          print(f"- Status={s.get('status')}")
+          print(f"- OOS claimed={s.get('oos_claimed', False)}")
+          print(f"- Production mutation claimed={s.get('production_changed', False)}")
+          PY
+            else
+              echo "- run_status.json unavailable"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload diagnostic research artifacts
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
-          name: soccer-research-artifacts-${{ github.run_id }}
+          name: soccer-research-cycle-manual-${{ github.run_id }}
           path: artifacts/
-          retention-days: 3
-      - name: Commit research artifacts
-        if: success()
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          set -euo pipefail
-          git add artifacts/
-          if git diff --cached --quiet; then
-            echo "No research artifact changes to commit."
-            exit 0
-          fi
-
-          git commit -m "Update soccer research artifacts"
-
-          # Artifact persistence is a control-plane write. Reconcile with the
-          # current main tip before pushing so another safe workflow update does
-          # not turn a valid research result into a lost-artifact failure.
-          for attempt in 1 2 3; do
-            git fetch --prune origin main
-            if git rebase origin/main; then
-              if git push origin HEAD:main; then
-                exit 0
-              fi
-            else
-              if ! git rebase --abort; then
-                echo "Rebase abort could not be completed cleanly."
-              fi
-              echo "Rebase conflict detected; refusing to auto-resolve research artifacts."
-              exit 1
-            fi
-            echo "Artifact push attempt ${attempt} failed; retrying after refresh..."
-            if [ "${attempt}" -lt 3 ]; then
-              sleep $((attempt * 5))
-            fi
-          done
-          echo "Failed to persist research artifacts after bounded retries."
-          exit 1
+          retention-days: 7
+          if-no-files-found: warn
