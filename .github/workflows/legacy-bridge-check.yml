@@ -32,10 +32,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Research Engine
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Checkout legacy soccer repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: sasasotaro1202-star/soccer
           path: legacy/soccer
