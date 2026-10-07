@@ -49,6 +49,60 @@ jobs:
             return 1
           }
 
+          workflow_state() {
+            local workflow="$1"
+            api_get "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}" |
+              python -c 'import json,sys; print(json.load(sys.stdin).get("state", ""))'
+          }
+
+          ensure_core_workflow_active() {
+            local workflow="$1"
+            local state
+            if ! state="$(workflow_state "${workflow}")"; then
+              return 1
+            fi
+            if [ "${state}" = "active" ]; then
+              return 0
+            fi
+
+            echo "WATCHDOG: ${workflow} is ${state}; attempting bounded re-enable." >&2
+            for attempt in 1 2 3; do
+              response="/tmp/enable-${workflow//\//_}.json"
+              code="$(curl "${CURL_TIMEOUT_ARGS[@]}" -sS -o "${response}" -w "%{http_code}" -X PUT \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/enable")"
+              case "${code}" in
+                204)
+                  state="$(workflow_state "${workflow}")" || return 1
+                  [ "${state}" = "active" ] && return 0
+                  ;;
+                409|429|500|502|503|504)
+                  ;;
+                *)
+                  cat "${response}" >&2
+                  return 1
+                  ;;
+              esac
+              if [ "${attempt}" -lt 3 ]; then
+                sleep $((attempt * 3))
+              fi
+            done
+            return 1
+          }
+
+          # Re-enable only the other core control-plane workflows; this watchdog is already running.
+          for workflow in \
+            "soccer-autonomous-orchestrator.yml" \
+            "action-failure-recovery.yml" \
+            "autonomous-github-controller.yml" \
+            "soccer-automation-heartbeat.yml"; do
+            if ! ensure_core_workflow_active "${workflow}"; then
+              echo "WATCHDOG: unable to re-enable core workflow ${workflow}; preserving failure signal." >&2
+            fi
+          done
+
           MAIN_SHA="$(api_get "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/git/ref/heads/main" |
             python -c 'import json,sys; print(json.load(sys.stdin)["object"]["sha"])')"
           export MAIN_SHA
@@ -81,12 +135,14 @@ jobs:
               r for r in payload.get("workflow_runs", [])
               if r.get("head_sha") == main_sha and r.get("status") in prestart
           ]
+          queued_grace_min = 180
 
-          # Do not repeatedly cancel/requeue a queued control-plane run. A queued
-          # run is evidence that GitHub accepted the work; requeueing while the
-          # hosted runner pool is busy only creates additional queue churn.
+          # Preserve a healthy queued run, but recover a control-plane run that
+          # has remained pre-started for more than three hours.
           if current_prestart:
-              print("QUEUED_WAIT")
+              oldest = min(current_prestart, key=ts)
+              age_min = (now - ts(oldest)).total_seconds() / 60.0
+              print("QUEUED_WAIT" if age_min < queued_grace_min else "QUEUED_STALE")
               raise SystemExit(0)
 
           if current_running:
@@ -178,6 +234,99 @@ jobs:
           )
           PY
 
+      - name: Reconcile stale safe-hardening CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Only explicitly marked, same-repository hardening PRs may receive
+          # bounded stale-CI recovery. Production/model/holdout changes never do.
+          stale_after_seconds=4500
+          max_recoveries=2
+          recovery_count=0
+          now_epoch="$(date +%s)"
+          main_sha="$(gh api "repos/${GH_REPO}/git/ref/heads/main" --jq '.object.sha')"
+
+          mapfile -t pr_rows < <(
+            gh pr list --repo "${GH_REPO}" --state open --base main --limit 50 \
+              --json number,isDraft,baseRefOid,headRefName,headRefOid,headRepository,body \
+              --jq '.[] | @base64'
+          )
+
+          for encoded in "${pr_rows[@]:-}"; do
+            [ -n "${encoded}" ] || continue
+            pr_json="$(printf "%s" "${encoded}" | base64 -d)"
+            draft="$(jq -r '.isDraft' <<<"${pr_json}")"
+            base_oid="$(jq -r '.baseRefOid' <<<"${pr_json}")"
+            head_ref="$(jq -r '.headRefName' <<<"${pr_json}")"
+            head_sha="$(jq -r '.headRefOid' <<<"${pr_json}")"
+            head_repo="$(jq -r '.headRepository.nameWithOwner // ""' <<<"${pr_json}")"
+            body="$(jq -r '.body // ""' <<<"${pr_json}")"
+            number="$(jq -r '.number' <<<"${pr_json}")"
+
+            [ "${draft}" = "false" ] || continue
+            [ "${base_oid}" = "${main_sha}" ] || continue
+            [ "${head_repo}" = "${GH_REPO}" ] || continue
+            [[ "${head_ref}" == hardening/* ]] || continue
+            grep -Fq "automation_policy: hardening-safe-v1" <<<"${body}" || continue
+            grep -Fq "Production changed=False" <<<"${body}" || continue
+            grep -Fq "No OOS tuning or holdout access" <<<"${body}" || continue
+            grep -Fq "Candidate remains non-production" <<<"${body}" || continue
+            grep -Fq "No model, feature, calibration, target, or production bundle change." <<<"${body}" || continue
+
+            mapfile -t stale_runs < <(
+              gh run list --repo "${GH_REPO}" --workflow ci.yml --limit 20 \
+                --json databaseId,status,headSha,updatedAt,createdAt \
+                --jq --arg head_sha "${head_sha}" --argjson now "${now_epoch}" --argjson stale "${stale_after_seconds}" \
+                '[.[] | select(.headSha == $head_sha) | select(.status == "in_progress") | select((($now) - (.updatedAt | fromdateiso8601)) >= $stale) | .databaseId] | .[]'
+            )
+
+            for run_id in "${stale_runs[@]:-}"; do
+              [ -n "${run_id}" ] || continue
+              if [ "${recovery_count}" -ge "${max_recoveries}" ]; then
+                echo "CI liveness recovery budget exhausted; preserving remaining stale runs." >&2
+                break 2
+              fi
+
+              echo "Detected stale safe-hardening CI: PR #${number} run=${run_id} head=${head_sha}"
+              cancelled=false
+              for attempt in 1 2 3; do
+                if gh run cancel "${run_id}" --repo "${GH_REPO}"; then
+                  cancelled=true
+                  break
+                fi
+                if [ "${attempt}" -lt 3 ]; then
+                  sleep $((attempt * 5))
+                fi
+              done
+              if [ "${cancelled}" != true ]; then
+                echo "Could not cancel stale CI run ${run_id}; no rerun requested." >&2
+                continue
+              fi
+
+              rerun=false
+              for attempt in 1 2 3; do
+                if gh run rerun "${run_id}" --repo "${GH_REPO}"; then
+                  rerun=true
+                  break
+                fi
+                if [ "${attempt}" -lt 3 ]; then
+                  sleep $((attempt * 5))
+                fi
+              done
+              if [ "${rerun}" = true ]; then
+                recovery_count=$((recovery_count + 1))
+                echo "Bounded CI liveness recovery requested for PR #${number} run=${run_id}."
+              else
+                echo "Stale CI cancelled but rerun request failed for PR #${number}; preserving failure signal." >&2
+              fi
+            done
+          done
+
+          echo "CI liveness recovery requests: ${recovery_count}/${max_recoveries}"
       - name: Upload watchdog evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
