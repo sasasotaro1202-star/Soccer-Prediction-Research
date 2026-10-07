@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 3
     steps:
       - name: Checkout request snapshot
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}
 
