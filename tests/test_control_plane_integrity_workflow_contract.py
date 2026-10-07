@@ -121,7 +121,7 @@ def test_workflow_checkout_actions_are_pinned_to_verified_commit():
     refs = []
     for path in sorted(Path(".github/workflows").glob("*.yml")):
         text = path.read_text(encoding="utf-8")
-        refs.extend((str(path), ref) for ref in re.findall(r"actions/checkout@([^\\s#]+)", text))
+        refs.extend((str(path), ref) for ref in re.findall(r"actions/checkout@([A-Za-z0-9._-]+)", text))
     bad = [(path, ref) for path, ref in refs if ref != expected]
     assert not bad, bad
 
