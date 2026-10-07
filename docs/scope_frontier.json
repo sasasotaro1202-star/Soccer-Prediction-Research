@@ -2,10 +2,6 @@
   "discovered_candidates": [],
   "errors": [
     {
-      "date": "2026-10-06",
-      "error": "HTTPError: 403 Client Error: Forbidden for url: https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-10-06"
-    },
-    {
       "date": "2026-10-07",
       "error": "HTTPError: 403 Client Error: Forbidden for url: https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-10-07"
     },
@@ -56,6 +52,10 @@
     {
       "date": "2026-10-19",
       "error": "HTTPError: 403 Client Error: Forbidden for url: https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-10-19"
+    },
+    {
+      "date": "2026-10-20",
+      "error": "HTTPError: 403 Client Error: Forbidden for url: https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-10-20"
     }
   ],
   "fail_closed_on_unknown_pit": true,
@@ -63,8 +63,8 @@
   "new_candidates_this_run": 0,
   "production_auto_promotion": false,
   "scanned_calendar_days": 14,
-  "scanned_from_utc_date": "2026-10-06",
-  "scanned_to_utc_date": "2026-10-19",
+  "scanned_from_utc_date": "2026-10-07",
+  "scanned_to_utc_date": "2026-10-20",
   "schema_version": 1,
   "status": "PARTIAL"
 }
