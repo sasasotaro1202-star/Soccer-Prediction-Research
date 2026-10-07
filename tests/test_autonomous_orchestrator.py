@@ -36,7 +36,6 @@ def test_orchestrator_has_pit_and_research_reconciliation_lanes():
         "soccer-versioned-pit-research.yml",
         "soccer-daily-research-forecast.yml",
         "soccer-matchday-intelligence.yml",
-        "soccer-research-cycle.yml",
         "overnight-integrity.yml",
         "soccer-opta-like-24h.yml",
     )
@@ -255,3 +254,8 @@ def test_24h_watchdog_bounds_control_plane_http():
     text = Path(".github/workflows/soccer-opta-like-24h-watchdog.yml").read_text(encoding="utf-8")
     assert "CURL_TIMEOUT_ARGS=(--connect-timeout 30 --max-time 120)" in text
     assert "${CURL_TIMEOUT_ARGS[@]}" in text
+
+
+def test_orchestrator_does_not_dispatch_manual_compatibility_research_cycle():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert 'ensure_lane "soccer-research-cycle.yml"' not in text

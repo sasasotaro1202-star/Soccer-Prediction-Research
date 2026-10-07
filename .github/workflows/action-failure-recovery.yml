@@ -77,8 +77,34 @@ jobs:
               if [ "${age}" -lt "${min_age_seconds}" ] || [ "${age}" -gt "${max_age_seconds}" ]; then
                 continue
               fi
-              attempt="$(gh api "repos/${GH_REPO}/actions/runs/${run_id}" --jq '.run_attempt')"
-              [ "${attempt}" -eq 1 ] || continue
+              run_payload="$(gh api "repos/${GH_REPO}/actions/runs/${run_id}")" || {
+                echo "Recovery run metadata query failed for workflow=${workflow} run=${run_id}; preserving failure signal." >&2
+                failures=$((failures + 1))
+                continue
+              }
+              attempt="$(jq -r '.run_attempt // 0' <<< "${run_payload}")"
+              conclusion="$(jq -r '.conclusion // ""' <<< "${run_payload}")"
+
+              if ! jobs_payload="$(gh api "repos/${GH_REPO}/actions/runs/${run_id}/jobs?per_page=100")"; then
+                echo "Recovery job-detail query failed for workflow=${workflow} run=${run_id}; preserving failure signal." >&2
+                failures=$((failures + 1))
+                continue
+              fi
+
+              decision="$(printf '%s' "${jobs_payload}" | python3 scripts/action_failure_recovery.py "${conclusion}" "${attempt}")" || {
+                echo "Recovery classifier failed for workflow=${workflow} run=${run_id}; preserving failure signal." >&2
+                failures=$((failures + 1))
+                continue
+              }
+              retryable="$(jq -r '.retryable' <<< "${decision}")"
+              reason="$(jq -r '.reason' <<< "${decision}")"
+              echo "Recovery classification: workflow=${workflow} run=${run_id} retryable=${retryable} reason=${reason}"
+              if [ "${retryable}" != "true" ]; then
+                echo "Automatic rerun withheld; deterministic/unknown failure remains blocking." >&2
+                failures=$((failures + 1))
+                continue
+              fi
+
               if [ "${rerun_count}" -ge "${rerun_budget}" ]; then
                 echo "Recovery budget exhausted; leaving remaining failures explicit." >&2
                 failures=$((failures + 1))
