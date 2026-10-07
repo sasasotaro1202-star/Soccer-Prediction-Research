@@ -259,3 +259,14 @@ def test_24h_watchdog_bounds_control_plane_http():
 def test_orchestrator_does_not_dispatch_manual_compatibility_research_cycle():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert 'ensure_lane "soccer-research-cycle.yml"' not in text
+
+
+def test_control_plane_watchdog_recovers_only_stale_safe_hardening_ci():
+    text = Path(".github/workflows/soccer-control-plane-watchdog.yml").read_text(encoding="utf-8")
+    assert "Reconcile stale safe-hardening CI" in text
+    assert "stale_after_seconds=4500" in text
+    assert "max_recoveries=2" in text
+    assert "gh run cancel" in text
+    assert "gh run rerun" in text
+    assert "automation_policy: hardening-safe-v1" in text
+

@@ -178,6 +178,99 @@ jobs:
           )
           PY
 
+      - name: Reconcile stale safe-hardening CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Only explicitly marked, same-repository hardening PRs may receive
+          # bounded stale-CI recovery. Production/model/holdout changes never do.
+          stale_after_seconds=4500
+          max_recoveries=2
+          recovery_count=0
+          now_epoch="$(date +%s)"
+          main_sha="$(gh api "repos/${GH_REPO}/git/ref/heads/main" --jq '.object.sha')"
+
+          mapfile -t pr_rows < <(
+            gh pr list --repo "${GH_REPO}" --state open --base main --limit 50 \
+              --json number,isDraft,baseRefOid,headRefName,headRefOid,headRepository,body \
+              --jq '.[] | @base64'
+          )
+
+          for encoded in "${pr_rows[@]:-}"; do
+            [ -n "${encoded}" ] || continue
+            pr_json="$(printf "%s" "${encoded}" | base64 -d)"
+            draft="$(jq -r '.isDraft' <<<"${pr_json}")"
+            base_oid="$(jq -r '.baseRefOid' <<<"${pr_json}")"
+            head_ref="$(jq -r '.headRefName' <<<"${pr_json}")"
+            head_sha="$(jq -r '.headRefOid' <<<"${pr_json}")"
+            head_repo="$(jq -r '.headRepository.nameWithOwner // ""' <<<"${pr_json}")"
+            body="$(jq -r '.body // ""' <<<"${pr_json}")"
+            number="$(jq -r '.number' <<<"${pr_json}")"
+
+            [ "${draft}" = "false" ] || continue
+            [ "${base_oid}" = "${main_sha}" ] || continue
+            [ "${head_repo}" = "${GH_REPO}" ] || continue
+            [[ "${head_ref}" == hardening/* ]] || continue
+            grep -Fq "automation_policy: hardening-safe-v1" <<<"${body}" || continue
+            grep -Fq "Production changed=False" <<<"${body}" || continue
+            grep -Fq "No OOS tuning or holdout access" <<<"${body}" || continue
+            grep -Fq "Candidate remains non-production" <<<"${body}" || continue
+            grep -Fq "No model, feature, calibration, target, or production bundle change." <<<"${body}" || continue
+
+            mapfile -t stale_runs < <(
+              gh run list --repo "${GH_REPO}" --workflow ci.yml --limit 20 \
+                --json databaseId,status,headSha,updatedAt,createdAt \
+                --jq --arg head_sha "${head_sha}" --argjson now "${now_epoch}" --argjson stale "${stale_after_seconds}" \
+                '[.[] | select(.headSha == $head_sha) | select(.status == "in_progress") | select((($now) - (.updatedAt | fromdateiso8601)) >= $stale) | .databaseId] | .[]'
+            )
+
+            for run_id in "${stale_runs[@]:-}"; do
+              [ -n "${run_id}" ] || continue
+              if [ "${recovery_count}" -ge "${max_recoveries}" ]; then
+                echo "CI liveness recovery budget exhausted; preserving remaining stale runs." >&2
+                break 2
+              fi
+
+              echo "Detected stale safe-hardening CI: PR #${number} run=${run_id} head=${head_sha}"
+              cancelled=false
+              for attempt in 1 2 3; do
+                if gh run cancel "${run_id}" --repo "${GH_REPO}"; then
+                  cancelled=true
+                  break
+                fi
+                if [ "${attempt}" -lt 3 ]; then
+                  sleep $((attempt * 5))
+                fi
+              done
+              if [ "${cancelled}" != true ]; then
+                echo "Could not cancel stale CI run ${run_id}; no rerun requested." >&2
+                continue
+              fi
+
+              rerun=false
+              for attempt in 1 2 3; do
+                if gh run rerun "${run_id}" --repo "${GH_REPO}"; then
+                  rerun=true
+                  break
+                fi
+                if [ "${attempt}" -lt 3 ]; then
+                  sleep $((attempt * 5))
+                fi
+              done
+              if [ "${rerun}" = true ]; then
+                recovery_count=$((recovery_count + 1))
+                echo "Bounded CI liveness recovery requested for PR #${number} run=${run_id}."
+              else
+                echo "Stale CI cancelled but rerun request failed for PR #${number}; preserving failure signal." >&2
+              fi
+            done
+          done
+
+          echo "CI liveness recovery requests: ${recovery_count}/${max_recoveries}"
       - name: Upload watchdog evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
