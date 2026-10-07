@@ -49,6 +49,60 @@ jobs:
             return 1
           }
 
+          workflow_state() {
+            local workflow="$1"
+            api_get "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}" |
+              python -c 'import json,sys; print(json.load(sys.stdin).get("state", ""))'
+          }
+
+          ensure_core_workflow_active() {
+            local workflow="$1"
+            local state
+            if ! state="$(workflow_state "${workflow}")"; then
+              return 1
+            fi
+            if [ "${state}" = "active" ]; then
+              return 0
+            fi
+
+            echo "WATCHDOG: ${workflow} is ${state}; attempting bounded re-enable." >&2
+            for attempt in 1 2 3; do
+              response="/tmp/enable-${workflow//\//_}.json"
+              code="$(curl "${CURL_TIMEOUT_ARGS[@]}" -sS -o "${response}" -w "%{http_code}" -X PUT \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/enable")"
+              case "${code}" in
+                204)
+                  state="$(workflow_state "${workflow}")" || return 1
+                  [ "${state}" = "active" ] && return 0
+                  ;;
+                409|429|500|502|503|504)
+                  ;;
+                *)
+                  cat "${response}" >&2
+                  return 1
+                  ;;
+              esac
+              if [ "${attempt}" -lt 3 ]; then
+                sleep $((attempt * 3))
+              fi
+            done
+            return 1
+          }
+
+          # Re-enable only the other core control-plane workflows; this watchdog is already running.
+          for workflow in \
+            "soccer-autonomous-orchestrator.yml" \
+            "action-failure-recovery.yml" \
+            "autonomous-github-controller.yml" \
+            "soccer-automation-heartbeat.yml"; do
+            if ! ensure_core_workflow_active "${workflow}"; then
+              echo "WATCHDOG: unable to re-enable core workflow ${workflow}; preserving failure signal." >&2
+            fi
+          done
+
           MAIN_SHA="$(api_get "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/git/ref/heads/main" |
             python -c 'import json,sys; print(json.load(sys.stdin)["object"]["sha"])')"
           export MAIN_SHA
@@ -81,12 +135,14 @@ jobs:
               r for r in payload.get("workflow_runs", [])
               if r.get("head_sha") == main_sha and r.get("status") in prestart
           ]
+          queued_grace_min = 180
 
-          # Do not repeatedly cancel/requeue a queued control-plane run. A queued
-          # run is evidence that GitHub accepted the work; requeueing while the
-          # hosted runner pool is busy only creates additional queue churn.
+          # Preserve a healthy queued run, but recover a control-plane run that
+          # has remained pre-started for more than three hours.
           if current_prestart:
-              print("QUEUED_WAIT")
+              oldest = min(current_prestart, key=ts)
+              age_min = (now - ts(oldest)).total_seconds() / 60.0
+              print("QUEUED_WAIT" if age_min < queued_grace_min else "QUEUED_STALE")
               raise SystemExit(0)
 
           if current_running:

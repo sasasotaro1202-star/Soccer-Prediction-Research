@@ -270,3 +270,20 @@ def test_control_plane_watchdog_recovers_only_stale_safe_hardening_ci():
     assert "gh run rerun" in text
     assert "automation_policy: hardening-safe-v1" in text
 
+
+def test_watchdog_can_reenable_core_workflows():
+    text = Path(".github/workflows/soccer-control-plane-watchdog.yml").read_text(encoding="utf-8")
+    assert "ensure_core_workflow_active" in text
+    assert "soccer-autonomous-orchestrator.yml" in text
+    assert "action-failure-recovery.yml" in text
+    assert "autonomous-github-controller.yml" in text
+    assert "soccer-automation-heartbeat.yml" in text
+    assert "actions/workflows/${workflow}/enable" in text
+    assert "bounded re-enable" in text
+
+
+def test_watchdog_recovers_only_after_long_prestart_grace():
+    text = Path(".github/workflows/soccer-control-plane-watchdog.yml").read_text(encoding="utf-8")
+    assert "queued_grace_min = 180" in text
+    assert 'print("QUEUED_WAIT" if age_min < queued_grace_min else "QUEUED_STALE")' in text
+    assert "QUEUED_STALE" in text
