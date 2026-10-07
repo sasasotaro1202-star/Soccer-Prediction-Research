@@ -112,3 +112,21 @@ def test_legacy_bridge_is_source_scoped():
 def test_legacy_research_cycle_is_not_orchestrated() -> None:
     orchestrator = _read(".github/workflows/soccer-autonomous-orchestrator.yml")
     assert 'ensure_lane "soccer-research-cycle.yml"' not in orchestrator
+
+def test_workflow_checkout_actions_are_pinned_to_verified_commit():
+    import re
+    from pathlib import Path
+
+    expected = "3d3c42e5aac5ba805825da76410c181273ba90b1"
+    refs = []
+    for path in sorted(Path(".github/workflows").glob("*.yml")):
+        text = path.read_text(encoding="utf-8")
+        refs.extend((str(path), ref) for ref in re.findall(r"actions/checkout@([A-Za-z0-9._-]+)", text))
+    bad = [(path, ref) for path, ref in refs if ref != expected]
+    assert not bad, bad
+
+
+def test_opta_watchdog_uses_gh_api_for_github_endpoints():
+    text = Path(".github/workflows/soccer-opta-like-24h-watchdog.yml").read_text(encoding="utf-8")
+    assert "gh api \\\"repos/${REPO}/actions/workflows/soccer-opta-like-24h.yml/runs?per_page=50\\\"" in text
+    assert "gh api \\\"repos/${REPO}/git/ref/heads/main\\\" --jq '.object.sha'" in text
