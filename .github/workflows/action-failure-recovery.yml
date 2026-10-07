@@ -18,6 +18,7 @@ concurrency:
 
 env:
   GH_REPO: ${{ github.repository }}
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   scheduled-catchup:
