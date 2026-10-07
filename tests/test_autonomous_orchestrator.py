@@ -287,3 +287,21 @@ def test_watchdog_recovers_only_after_long_prestart_grace():
     assert "queued_grace_min = 180" in text
     assert 'print("QUEUED_WAIT" if age_min < queued_grace_min else "QUEUED_STALE")' in text
     assert "QUEUED_STALE" in text
+
+def test_opta_like_watchdog_uses_gh_api_for_repo_calls():
+    text = Path(".github/workflows/soccer-opta-like-24h-watchdog.yml").read_text(encoding="utf-8")
+    assert 'gh api "repos/${REPO}/actions/workflows/soccer-opta-like-24h.yml/runs?per_page=50"' in text
+    assert 'MAIN_SHA="$(gh api "repos/${REPO}/git/ref/heads/main" --jq' in text
+    assert "${GH_API}" not in text
+
+
+def test_checkout_pins_use_verified_actions_checkout_commit():
+    import re
+    workflows = Path(".github/workflows")
+    bad = []
+    for path in workflows.glob("*.yml"):
+        body = path.read_text(encoding="utf-8")
+        for ref in re.findall(r"actions/checkout@([0-9a-f]+)", body):
+            if ref != "df4cb1c069e1874edd31b4311f1884172cec0e10":
+                bad.append((str(path), ref))
+    assert not bad, bad
