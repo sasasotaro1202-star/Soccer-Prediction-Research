@@ -73,6 +73,7 @@ def _distribution_metrics(
         raise ValueError("score metric block is empty")
 
     exact_losses: list[float] = []
+    score_briers: list[float] = []
     top1_hits = 0
     top3_hits = 0
     top4_hits = 0
@@ -97,6 +98,14 @@ def _distribution_metrics(
         lookup = {(int(h), int(a)): float(p) for h, a, p in dist}
         actual_prob = float(np.clip(lookup.get(actual, 0.0), 1e-12, 1.0))
         exact_losses.append(-math.log(actual_prob))
+        score_briers.append(
+            float(
+                sum(
+                    (float(p) - (1.0 if (int(h), int(a)) == actual else 0.0)) ** 2
+                    for h, a, p in dist
+                )
+            )
+        )
 
         top1_hits += int(actual == (int(dist[0][0]), int(dist[0][1])))
         top3_hits += int(actual in {(int(h), int(a)) for h, a, _ in dist[:3]})
@@ -130,6 +139,7 @@ def _distribution_metrics(
     return {
         "n": float(n),
         "score_logloss": float(np.mean(exact_losses)),
+        "score_brier": float(np.mean(score_briers)),
         "score_top1": float(top1_hits / n),
         "score_top3": float(top3_hits / n),
         "score_top4": float(top4_hits / n),
@@ -623,6 +633,8 @@ def run_statsmodels_score_oos(
         "selection_performed": False,
         "frozen_holdout_used": False,
         "production_usable": False,
+        "target_contract": "Score",
+        "feature_set_id": "statsmodels_score_formula_home_away_competition_v1",
     }
 
     return {
