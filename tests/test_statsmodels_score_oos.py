@@ -117,7 +117,7 @@ def test_missing_gate_handoff_is_blocked():
 
 def test_case_level_oos_pit_is_enforced():
     history = _history()
-    history.loc[250, "source_available_at_utc"] = history.loc[250, "kickoff_utc"] + pd.Timedelta(hours=2)
+    history.loc[250, "feature_source_max_available_at_utc"] = history.loc[250, "kickoff_utc"] + pd.Timedelta(hours=2)
     with pytest.raises(ValueError, match="case-level predictor PIT"):
         run_statsmodels_score_oos(
             history, min_train=200, oos_block=50, cutoff_buffer_minutes=1,
