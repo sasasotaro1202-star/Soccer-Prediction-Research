@@ -16,6 +16,7 @@ def _safe_rows(n: int = 3000) -> pd.DataFrame:
             "kickoff_utc": cutoff + pd.Timedelta(minutes=60),
             "prediction_cutoff_at_utc": cutoff,
             "feature_source_max_available_at_utc": cutoff - pd.Timedelta(minutes=5),
+            "source_available_at_utc": cutoff + pd.Timedelta(minutes=180),
             "pit_verified": True,
             "home_goals": 1,
             "away_goals": 0,
@@ -54,3 +55,22 @@ def test_validate_replay_input_excludes_unverified_rows(tmp_path):
     assert report["input_rows"] == 3001
     assert report["pit_verified_rows"] == 3000
     assert report["non_verified_rows_excluded"] == 1
+
+
+
+def test_validate_replay_input_rejects_outcome_availability_before_kickoff(tmp_path):
+    p = tmp_path / "replay.csv"
+    df = _safe_rows()
+    df.loc[0, "source_available_at_utc"] = df.loc[0, "kickoff_utc"] - pd.Timedelta(minutes=1)
+    df.to_csv(p, index=False)
+    with pytest.raises(ValueError, match="outcome availability before kickoff"):
+        validate_replay_input(p)
+
+
+def test_validate_replay_input_rejects_missing_outcome_availability(tmp_path):
+    p = tmp_path / "replay.csv"
+    df = _safe_rows()
+    df.loc[0, "source_available_at_utc"] = pd.NaT
+    df.to_csv(p, index=False)
+    with pytest.raises(ValueError, match="missing outcome availability timestamps"):
+        validate_replay_input(p)
