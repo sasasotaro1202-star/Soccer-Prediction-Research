@@ -18,6 +18,8 @@ def _base_row(**extra):
         "p_draw": 0.25,
         "p_away": 0.25,
         "model_version": "v1",
+        "source_available_at_utc": "2026-09-26T07:00:00Z",
+        "pit_verified": True,
     }
     row.update(extra)
     return row
@@ -69,3 +71,50 @@ def test_settlement_requires_pit_validated_prediction():
         prediction_pit_cutoff_utc="2026-09-26T08:00:00+00:00",
     ))
     assert mod._settle_row(row, {}, {}) == {}
+
+
+def test_record_requires_explicit_source_pit_metadata(tmp_path: Path, monkeypatch):
+    ledger = tmp_path / "ledger.csv"
+    snapshots = tmp_path / "snapshots.jsonl"
+    predictions = tmp_path / "predictions.csv"
+    monkeypatch.setattr(mod, "LEDGER", ledger)
+    monkeypatch.setattr(mod, "PREDICTION_SNAPSHOTS", snapshots)
+    row = _base_row(
+        prediction_time_utc="2026-09-26T08:00:00Z",
+    )
+    row.pop("source_available_at_utc")
+    pd.DataFrame([row]).to_csv(predictions, index=False)
+    with pytest.raises(RuntimeError, match="source_available_at_utc"):
+        mod.record_prediction_file(str(predictions))
+
+
+def test_record_rejects_source_availability_after_cutoff(tmp_path: Path, monkeypatch):
+    ledger = tmp_path / "ledger.csv"
+    snapshots = tmp_path / "snapshots.jsonl"
+    predictions = tmp_path / "predictions.csv"
+    monkeypatch.setattr(mod, "LEDGER", ledger)
+    monkeypatch.setattr(mod, "PREDICTION_SNAPSHOTS", snapshots)
+    row = _base_row(
+        prediction_time_utc="2026-09-26T08:00:00Z",
+        source_available_at_utc="2026-09-26T08:01:00Z",
+        pit_verified=True,
+    )
+    pd.DataFrame([row]).to_csv(predictions, index=False)
+    with pytest.raises(RuntimeError, match="availability after prediction cutoff"):
+        mod.record_prediction_file(str(predictions))
+
+
+def test_record_rejects_false_pit_verified(tmp_path: Path, monkeypatch):
+    ledger = tmp_path / "ledger.csv"
+    snapshots = tmp_path / "snapshots.jsonl"
+    predictions = tmp_path / "predictions.csv"
+    monkeypatch.setattr(mod, "LEDGER", ledger)
+    monkeypatch.setattr(mod, "PREDICTION_SNAPSHOTS", snapshots)
+    row = _base_row(
+        prediction_time_utc="2026-09-26T08:00:00Z",
+        source_available_at_utc="2026-09-26T07:00:00Z",
+        pit_verified=False,
+    )
+    pd.DataFrame([row]).to_csv(predictions, index=False)
+    with pytest.raises(RuntimeError, match="pit_verified=false"):
+        mod.record_prediction_file(str(predictions))
