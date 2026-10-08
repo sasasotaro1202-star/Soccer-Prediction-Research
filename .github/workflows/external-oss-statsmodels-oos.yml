@@ -116,6 +116,31 @@ jobs:
 
           rows = pd.DataFrame(result["rows"])
           numeric = rows.select_dtypes(include="number")
+          git_sha = os.getenv("GITHUB_SHA", "unknown")
+          experiment_identity = {
+              "research_id": "statsmodels_poisson_score_v2",
+              "repository": "statsmodels/statsmodels",
+              "adapter": "src/research/external_oss/statsmodels_poisson.py",
+              "target": "Score",
+              "dependency_pin": "statsmodels==0.15.0",
+              "regularization_alpha": 0.1,
+              "calibration_method": "joint_score_temperature_scaling",
+              "oos_protocol": {
+                  "min_train": 1000,
+                  "oos_block": 2000,
+                  "cutoff_buffer_minutes": 60
+              },
+              "data_snapshot_sha256": data_hash,
+              "git_sha": git_sha
+          }
+          experiment_fingerprint = hashlib.sha256(
+              json.dumps(
+                  experiment_identity,
+                  sort_keys=True,
+                  separators=(",", ":"),
+              ).encode("utf-8")
+          ).hexdigest()
+
           summary = {
               "research_id": "statsmodels_poisson_score_v2",
               "status": result["status"],
@@ -127,7 +152,9 @@ jobs:
               "audit_passed": audit_passed,
               "experiment_config": result.get("experiment_config"),
               "experiment_config_fingerprint": result.get("experiment_config_fingerprint"),
-              "git_sha": os.getenv("GITHUB_SHA", "unknown"),
+              "experiment_identity": experiment_identity,
+              "experiment_fingerprint": experiment_fingerprint,
+              "git_sha": git_sha,
               "dataset_path": str(path),
               "dataset_sha256": data_hash,
               "fold_count": int(result["fold_count"]),
@@ -152,6 +179,7 @@ jobs:
               "selection_performed": False,
               "frozen_holdout_used": False,
               "experiment_config_fingerprint": summary["experiment_config_fingerprint"],
+              "experiment_fingerprint": summary["experiment_fingerprint"],
           }, ensure_ascii=False))
           PY
 
