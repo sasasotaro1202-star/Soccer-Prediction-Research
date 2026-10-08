@@ -87,7 +87,31 @@ jobs:
             gh run list --repo "${GH_REPO}" --workflow "${workflow}" --limit 50               --json status,conclusion,createdAt,headSha,headBranch,databaseId
           }
 
+          refresh_main_sha() {
+            local latest_sha
+            if ! latest_sha="$(api "repos/${GH_REPO}/git/ref/heads/main" --jq '.object.sha')"; then
+              return 1
+            fi
+            if [ "${latest_sha}" != "${MAIN_SHA}" ]; then
+              main_sha="${latest_sha}"
+              export MAIN_SHA="${latest_sha}"
+              python - "${report}" "${latest_sha}" <<'PY'
+          import json, sys
+          path, sha = sys.argv[1:]
+          data = json.load(open(path, encoding="utf-8"))
+          data["main_sha"] = sha
+          data.setdefault("main_sha_refreshes", []).append(sha)
+          json.dump(data, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+          PY
+            fi
+            return 0
+          }
+
           cancel_obsolete_prestart_runs() {
+            if ! refresh_main_sha; then
+              update_report held '{"reason":"main_sha_refresh_error","phase":"prestart_reap"}'
+              return
+            fi
             # Only queued/pre-start runs on main whose SHA is no longer current
             # are obsolete. Actively executing old-SHA research snapshots remain
             # untouched so immutable evidence is not interrupted.
@@ -132,6 +156,12 @@ jobs:
 
           dispatch_workflow() {
             local workflow="$1"
+            # Re-read main immediately before dispatch so an automation-generated
+            # commit cannot leave a stale-SHA workflow scheduled as current.
+            if ! refresh_main_sha; then
+              echo "current main SHA refresh failed before workflow=${workflow}" >&2
+              return 1
+            fi
             for attempt in 1 2 3; do
               if case "${workflow}" in
                 pit-replay-audit.yml)
@@ -159,6 +189,11 @@ jobs:
             local workflow="$1"
             local cadence_minutes="$2"
             local min_gap_minutes="$3"
+
+            if ! refresh_main_sha; then
+              update_report held "$(python -c 'import json,sys; print(json.dumps({"workflow":sys.argv[1],"reason":"main_sha_refresh_error"},ensure_ascii=False))' "${workflow}")"
+              return
+            fi
 
             local runs
             if ! runs="$(workflow_state "${workflow}")"; then
