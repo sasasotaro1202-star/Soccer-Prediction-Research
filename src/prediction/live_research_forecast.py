@@ -497,7 +497,8 @@ def predict(
         "production_status": "NOT_PRODUCTION",
         "pit_status": pit_status,
         "source_available_at_utc": None,
-        "source_available_lower_bound_utc": source_times.get("sofascore_live"),
+        # Retrieval proves only that the snapshot was observed at this time; it does not prove public availability time.
+        "source_available_lower_bound_utc": None,
         "source_retrieved_at_utc": max(source_times.values()),
         "source_snapshot_hash": event_hash,
         "source_snapshot_hashes": json.dumps(source_snapshot_hashes, sort_keys=True),
