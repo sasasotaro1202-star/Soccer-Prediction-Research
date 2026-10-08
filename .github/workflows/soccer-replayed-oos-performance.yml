@@ -55,7 +55,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p workspace
+          mkdir -p workspace artifacts/replayed_oos
           python - <<'PY'
           import json, os, urllib.request
           from pathlib import Path
@@ -84,14 +84,45 @@ jobs:
                   return None
               artifact, workflow_run = sorted(candidates, key=lambda item: str(item[0].get('created_at', '')), reverse=True)[0]
               return {'run_id': workflow_run.get('id'), 'run_sha': str(workflow_run.get('head_sha', '')), 'artifact_id': artifact['id'], 'artifact_name': str(artifact.get('name', '')), 'run_status': workflow_run.get('status'), 'run_conclusion': workflow_run.get('conclusion')}
+
+          def hold(reason):
+              payload = {
+                  'status': 'HOLD_NO_SUCCESSFUL_ROBUST_EVIDENCE',
+                  'source_available': False,
+                  'reason': reason,
+              }
+              Path('workspace/replay_gate.json').write_text(
+                  json.dumps(payload, indent=2),
+                  encoding='utf-8',
+              )
+              Path(os.environ['GITHUB_OUTPUT']).write_text(
+                  'source_available=false\n',
+                  encoding='utf-8',
+              )
+              print(json.dumps(payload))
+              raise SystemExit(0)
+
+          def select_ready(selected):
+              Path('workspace/replay_gate.json').write_text(
+                  json.dumps({
+                      'status': 'SOURCE_SELECTED',
+                      'source_available': True,
+                      'source': selected,
+                  }, indent=2),
+                  encoding='utf-8',
+              )
+              Path(os.environ['GITHUB_OUTPUT']).write_text(
+                  'source_available=true\n',
+                  encoding='utf-8',
+              )
           selected = None
           if event_name == 'workflow_run':
               if not event_run_id or event_conclusion != 'success':
-                  raise SystemExit('Workflow-run replay requires a successful Soccer Research Robust completion.')
+                  hold('workflow_run replay requires a successful Soccer Research Robust completion')
               data = get(f'https://api.github.com/repos/{repo}/actions/runs/{event_run_id}/artifacts?per_page=100')
               selected = choose(data.get('artifacts', []))
               if not selected:
-                  raise SystemExit(f'No unexpired Soccer Research Robust artifact exists for completed run {event_run_id}.')
+                  hold(f'no unexpired successful Soccer Research Robust artifact exists for completed run {event_run_id}')
           else:
               for page in range(1, 31):
                   data = get(f'https://api.github.com/repos/{repo}/actions/artifacts?per_page=100&page={page}')
@@ -115,11 +146,13 @@ jobs:
                   if len(artifacts) < 100:
                       break
           if not selected:
-              raise SystemExit('No unexpired Soccer Research Robust artifact is available for replay.')
+              hold('no unexpired successful Soccer Research Robust artifact is available for replay')
           Path('workspace/artifacts_source.json').write_text(json.dumps(selected, indent=2), encoding='utf-8')
+          select_ready(selected)
           print(json.dumps(selected))
           PY
       - name: Download PIT replay artifact
+        if: steps.locate.outputs.source_available == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -131,6 +164,7 @@ jobs:
           unzip -q -o workspace/replay.zip -d workspace/replay_source
 
       - name: Validate source artifact
+        if: steps.locate.outputs.source_available == 'true'
         env:
           PYTHONPATH: .
         run: |
@@ -157,6 +191,7 @@ jobs:
           PY
 
       - name: Run current-code chronological OOS replay
+        if: steps.locate.outputs.source_available == 'true'
         env:
           PYTHONPATH: .
         run: |
@@ -180,6 +215,7 @@ jobs:
           name: soccer-replayed-oos-performance-${{ github.run_id }}
           path: |
             workspace/artifacts_source.json
+            workspace/replay_gate.json
             workspace/replay_source_status.json
             artifacts/replayed_oos/
           retention-days: 7
