@@ -82,7 +82,8 @@ def test_pit_availability_filter_does_not_lower_training_requirement():
         "2030-01-01T00:00:00Z"
     )
     result = run_statsmodels_score_oos(
-        history, min_train=24, oos_block=8, cutoff_buffer_minutes=1
+        history, min_train=24, oos_block=8, cutoff_buffer_minutes=1,
+        calibration_min_rows=10, tests_passed=True, audit_passed=True
     )
     assert result["status"] == "RESEARCH_OOS_READY"
     assert result["rows"][0]["training_rows"] >= 24
@@ -118,5 +119,5 @@ def test_case_level_oos_pit_is_enforced():
     with pytest.raises(ValueError, match="case-level predictor PIT"):
         run_statsmodels_score_oos(
             history, min_train=24, oos_block=8, cutoff_buffer_minutes=1,
-            tests_passed=True, audit_passed=True
+            calibration_min_rows=10, tests_passed=True, audit_passed=True
         )
