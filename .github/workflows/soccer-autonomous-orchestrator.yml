@@ -264,6 +264,12 @@ jobs:
 
           cancel_obsolete_prestart_runs
 
+          # Main-branch CI must also be state-reconciled because commits created
+          # with the Actions GITHUB_TOKEN do not reliably retrigger push workflows.
+          # Missing exact-main CI history is dispatched immediately; later cycles
+          # follow the same bounded cadence/backoff rules as every other lane.
+          ensure_lane "ci.yml" 360 10
+
           # High-frequency live lanes: these are catch-up guards only; their own schedules remain authoritative.
           ensure_lane "soccer-matchday-intelligence.yml" 30 15
           ensure_lane "soccer-daily-research-forecast.yml" 60 20
