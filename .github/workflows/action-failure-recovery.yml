@@ -9,6 +9,7 @@ on:
 
 permissions:
   actions: write
+  contents: read
 
 concurrency:
   # One recovery scan runs to completion. A later tick may replace only
@@ -18,6 +19,7 @@ concurrency:
 
 env:
   GH_REPO: ${{ github.repository }}
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   scheduled-catchup:
