@@ -118,6 +118,17 @@ def _distribution_metrics(
     }
 
 
+def _advance_past_same_kickoff(df: pd.DataFrame, index: int) -> int:
+    """Move a boundary past all rows sharing the same kickoff timestamp."""
+    boundary = int(index)
+    if boundary <= 0 or boundary >= len(df):
+        return boundary
+    kickoff = df.iloc[boundary - 1]["kickoff_utc"]
+    while boundary < len(df) and df.iloc[boundary]["kickoff_utc"] == kickoff:
+        boundary += 1
+    return boundary
+
+
 def run_statsmodels_score_oos(
     history: pd.DataFrame,
     *,
@@ -228,15 +239,14 @@ def run_statsmodels_score_oos(
         )
 
     rows: list[dict[str, Any]] = []
-    start = int(min_train)
+    start = _advance_past_same_kickoff(d, int(min_train))
     fold = 0
     while start < len(d):
-        end = min(start + int(oos_block), len(d))
-        oos = d.iloc[start:end].copy()
-        if oos.empty:
-            break
-
-        prediction_cutoff = oos["kickoff_utc"].min() - pd.Timedelta(
+        # Derive the cutoff from the first OOS event, then verify the training
+        # prefix after applying the same PIT boundary. If availability filtering
+        # removes one or more rows, move the OOS boundary forward rather than
+        # lowering the minimum training requirement.
+        prediction_cutoff = d.iloc[start]["kickoff_utc"] - pd.Timedelta(
             minutes=int(cutoff_buffer_minutes)
         )
         train = d.iloc[:start].copy()
@@ -246,10 +256,21 @@ def run_statsmodels_score_oos(
         ].copy()
 
         if len(train) < int(min_train):
-            raise ValueError(
-                f"Fold {fold}: PIT-safe training prefix has {len(train)} rows; "
-                f"need at least {int(min_train)}"
-            )
+            next_start = _advance_past_same_kickoff(d, start + 1)
+            if next_start <= start:
+                raise ValueError(
+                    f"Fold {fold}: unable to establish a PIT-safe training prefix "
+                    f"with at least {int(min_train)} rows"
+                )
+            start = next_start
+            continue
+
+        end = _advance_past_same_kickoff(
+            d, min(start + int(oos_block), len(d))
+        )
+        oos = d.iloc[start:end].copy()
+        if oos.empty:
+            break
 
         incumbent = fit_score_rate_model(train)
         challenger = fit_statsmodels_poisson_score_model(
@@ -294,6 +315,13 @@ def run_statsmodels_score_oos(
                 "selection_performed": False,
                 "frozen_holdout_used": False,
                 "production_usable": False,
+                "pit_training_boundary_valid": bool(
+                    (train["kickoff_utc"] < prediction_cutoff).all()
+                    and (train["source_available_at_utc"] <= prediction_cutoff).all()
+                ),
+                "same_kickoff_split_avoided": bool(
+                    train["kickoff_utc"].max() < oos["kickoff_utc"].min()
+                ),
             }
         )
         fold += 1
