@@ -31,7 +31,7 @@ jobs:
           set -euo pipefail
           python -m src.research.prospective_inplay capture \
             --output-root data/research/prospective_inplay/raw \
-            --loops 2 \
+            --loops 3 \
             --interval-seconds 240 | tee /tmp/capture-report.json
 
       - name: Persist prospective raw snapshots
