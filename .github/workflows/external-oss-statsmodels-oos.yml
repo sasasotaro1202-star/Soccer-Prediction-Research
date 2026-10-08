@@ -115,16 +115,36 @@ jobs:
           audit_passed = os.getenv("AUDIT_PASSED", "false").lower() == "true"
           head_sha = os.getenv("PR_HEAD_SHA", "unknown")
           merge_sha = os.getenv("GITHUB_SHA", "unknown")
-          result = run_statsmodels_score_oos(
-              df,
-              min_train=1000,
-              oos_block=2000,
-              cutoff_buffer_minutes=60,
-              calibration_fraction=0.20,
-              calibration_min_rows=100,
-              tests_passed=tests_passed,
-              audit_passed=audit_passed,
-          )
+          try:
+              result = run_statsmodels_score_oos(
+                  df,
+                  min_train=1000,
+                  oos_block=2000,
+                  cutoff_buffer_minutes=60,
+                  calibration_fraction=0.20,
+                  calibration_min_rows=100,
+                  tests_passed=tests_passed,
+                  audit_passed=audit_passed,
+              )
+          except Exception as exc:
+              failure_report = {
+                  "research_id": "statsmodels_poisson_score_v2",
+                  "status": "FAILED",
+                  "reason": f"{type(exc).__name__}: {exc}",
+                  "production_usable": False,
+                  "selection_performed": False,
+                  "frozen_holdout_used": False,
+                  "head_sha": head_sha,
+                  "merge_sha": merge_sha,
+                  "dataset_sha256": data_hash,
+                  "environment_sha256": environment_hash,
+              }
+              Path("statsmodels_score_oos_report.json").write_text(
+                  json.dumps(failure_report, ensure_ascii=False, indent=2),
+                  encoding="utf-8",
+              )
+              print(json.dumps(failure_report, ensure_ascii=False))
+              raise SystemExit(0)
 
           if result.get("status") != "RESEARCH_OOS_READY":
               failure_report = {
