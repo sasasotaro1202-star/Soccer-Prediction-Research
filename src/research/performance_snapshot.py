@@ -126,6 +126,13 @@ def _task_record(root: Path, task: str, gate_state: str, gate_reasons: list[str]
         record["blocking_reasons"] = gate_reasons
         return record
 
+    integrity_name = "oos_temporal_integrity.json" if task == "1X2" else "score_oos_temporal_integrity.json"
+    integrity = _json(root / integrity_name)
+    if integrity.get("status") != "PASS":
+        record["reason"] = f"Chronological OOS integrity not verified: {integrity_name}"
+        record["integrity_status"] = str(integrity.get("status") or "UNKNOWN")
+        return record
+
     # O/U and BTTS must be independently evidenced. Score-model-derived fields
     # are intentionally not relabeled as standalone target performance.
     for filename in TASK_FILES[task]:
