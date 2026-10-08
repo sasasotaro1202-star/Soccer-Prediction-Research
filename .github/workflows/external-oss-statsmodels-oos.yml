@@ -75,14 +75,36 @@ jobs:
           missing = sorted(required - set(df.columns))
           if missing:
               raise SystemExit(f"missing required PIT/OOS columns: {missing}")
-          if "source_available_at_utc" not in df.columns and "feature_source_max_available_at_utc" not in df.columns:
-              raise SystemExit("missing explicit predictor-side availability timestamp")
+          if "feature_source_max_available_at_utc" not in df.columns:
+              raise SystemExit(
+                  "missing feature_source_max_available_at_utc; "
+                  "source_available_at_utc is not an accepted predictor-PIT authority"
+              )
           if df["match_id"].astype(str).str.strip().eq("").any() or df["match_id"].duplicated().any():
               raise SystemExit("invalid or duplicate match_id")
           pit = df["pit_verified"].astype("boolean")
           if not pit.eq(True).any():
               raise SystemExit("no PIT-verified rows available")
           print(f"PIT replay rows={len(df)} PIT-verified={int(pit.eq(True).sum())}")
+          feature_available = pd.to_datetime(
+              df["feature_source_max_available_at_utc"],
+              utc=True,
+              errors="coerce",
+          )
+          kickoff = pd.to_datetime(df["kickoff_utc"], utc=True, errors="coerce")
+          pit = df["pit_verified"].astype("boolean")
+          case_cutoff = kickoff - pd.Timedelta(minutes=60)
+          if feature_available.loc[pit.eq(True)].isna().any():
+              raise SystemExit("PIT-verified rows contain unknown feature-source availability")
+          if (
+              feature_available.loc[pit.eq(True)]
+              > case_cutoff.loc[pit.eq(True)]
+          ).any():
+              raise SystemExit(
+                  "PIT-verified rows contain feature data available after their "
+                  "historical prediction cutoff"
+              )
+          print("feature_pit_authority=feature_source_max_available_at_utc")
           print("frozen_holdout_read=false")
           print("selection_performed=false")
           print("production_usable=false")
