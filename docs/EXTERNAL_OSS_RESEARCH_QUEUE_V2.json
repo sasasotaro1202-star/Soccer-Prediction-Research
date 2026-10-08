@@ -107,7 +107,15 @@
       "layer": "Statistics",
       "research_role": "Classical statistical modeling",
       "priority": "HIGH",
-      "next_evidence": "Baseline/statistical challenger candidate; chronological OOS required."
+      "next_evidence": "E4_CHRONOLOGICAL_OOS_WFO",
+      "source_verification": {
+        "official_repository": "https://github.com/statsmodels/statsmodels",
+        "official_release": "https://www.statsmodels.org/stable/release/index.html",
+        "pinned_release": "0.15.0",
+        "license": "BSD-3-Clause",
+        "verified_date": "2026-10-08"
+      },
+      "research_status": "E2_LOCAL_IMPLEMENTATION_AND_TESTS"
     },
     {
       "repository": "unit8co/darts",
@@ -189,5 +197,7 @@
       "priority": "MEDIUM",
       "next_evidence": "Strong retrieval candidate; AGPL-3.0 and security/cost must be reviewed before adoption."
     }
-  ]
+  ],
+  "registry_version": "v2.1",
+  "last_verified_date": "2026-10-08"
 }
