@@ -84,3 +84,14 @@ def test_pit_availability_filter_does_not_lower_training_requirement():
     assert result["rows"][0]["training_rows"] >= 24
     assert all(row["pit_training_boundary_valid"] for row in result["rows"])
     assert all(row["same_kickoff_split_avoided"] for row in result["rows"])
+
+
+def test_unsupported_oos_team_is_explicitly_excluded_not_imputed():
+    history = _history(60)
+    history.loc[50, "home_team"] = "UNSEEN"
+    result = run_statsmodels_score_oos(
+        history, min_train=24, oos_block=12, cutoff_buffer_minutes=1
+    )
+    assert result["status"] == "RESEARCH_OOS_READY"
+    assert sum(row["unsupported_rows"] for row in result["rows"]) >= 1
+    assert all(row["common_evaluable_rows"] + row["unsupported_rows"] == row["oos_rows"] for row in result["rows"])
