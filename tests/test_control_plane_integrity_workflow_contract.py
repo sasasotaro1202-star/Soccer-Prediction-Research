@@ -99,6 +99,13 @@ def test_control_plane_event_graph_has_no_audit_recovery_controller_cycle() -> N
         assert "workflow_run:" not in _read(isolated)
 
 
+def test_prospective_capture_collects_three_spaced_observations():
+    text = _read(".github/workflows/soccer-prospective-inplay-capture.yml")
+    assert "--loops 3" in text
+    assert "--interval-seconds 240" in text
+    assert "No new prospective in-play snapshots." in text
+
+
 def test_replayed_oos_selects_only_successful_robust_artifacts():
     text = _read(".github/workflows/soccer-replayed-oos-performance.yml")
     assert "workflow_run.get('status') != 'completed'" in text
