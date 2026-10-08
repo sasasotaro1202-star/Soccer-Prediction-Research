@@ -29,6 +29,8 @@ def _history() -> pd.DataFrame:
         rows.append(
             {
                 "match_id": f"m{i}",
+                "kickoff_utc": f"2026-01-{i + 1:02d}T12:00:00Z",
+                "source_available_at_utc": f"2026-01-{i + 1:02d}T13:00:00Z",
                 "home_team": home,
                 "away_team": away,
                 "competition": "TEST",
@@ -41,7 +43,9 @@ def _history() -> pd.DataFrame:
 
 
 def test_fit_and_distribution_are_finite_and_normalized():
-    model = fit_statsmodels_poisson_score_model(_history())
+    model = fit_statsmodels_poisson_score_model(
+        _history(), prediction_cutoff_utc="2026-02-01T00:00:00Z"
+    )
     distribution = predict_statsmodels_poisson_distribution(
         model, "A", "B", "TEST", max_goals=8
     )
@@ -53,7 +57,9 @@ def test_fit_and_distribution_are_finite_and_normalized():
 
 
 def test_unknown_team_fails_closed():
-    model = fit_statsmodels_poisson_score_model(_history())
+    model = fit_statsmodels_poisson_score_model(
+        _history(), prediction_cutoff_utc="2026-02-01T00:00:00Z"
+    )
     with pytest.raises(RuntimeError, match="lacks PIT-trained"):
         predict_statsmodels_poisson_distribution(
             model, "UNKNOWN", "B", "TEST", max_goals=8
@@ -63,5 +69,23 @@ def test_unknown_team_fails_closed():
 def test_unverified_rows_do_not_enter_training():
     history = _history()
     history.loc[0, "pit_verified"] = False
-    model = fit_statsmodels_poisson_score_model(history)
+    model = fit_statsmodels_poisson_score_model(
+        history, prediction_cutoff_utc="2026-02-01T00:00:00Z"
+    )
+    assert model.training_rows == 11
+
+
+def test_cutoff_and_unknown_timestamps_fail_closed():
+    history = _history()
+    history.loc[0, "source_available_at_utc"] = "2026-02-02T00:00:00Z"
+    model = fit_statsmodels_poisson_score_model(
+        history, prediction_cutoff_utc="2026-02-01T00:00:00Z"
+    )
+    assert model.training_rows == 11
+
+    broken = _history()
+    broken.loc[0, "source_available_at_utc"] = None
+    model = fit_statsmodels_poisson_score_model(
+        broken, prediction_cutoff_utc="2026-02-01T00:00:00Z"
+    )
     assert model.training_rows == 11
