@@ -128,5 +128,5 @@ def test_live_research_uses_resolvable_checkout_pin():
 def test_opta_watchdog_uses_authenticated_gh_api():
     text = _read(".github/workflows/soccer-opta-like-24h-watchdog.yml")
     assert 'gh api "repos/${REPO}/actions/workflows/soccer-opta-like-24h.yml/runs?per_page=50"' in text
-    assert 'gh api "repos/${REPO}/git/ref/heads/main" --jq '.object.sha'' in text
+    assert "gh api \"repos/${REPO}/git/ref/heads/main\" --jq '.object.sha'" in text
     assert 'curl "${CURL_TIMEOUT_ARGS[@]}"' not in text
