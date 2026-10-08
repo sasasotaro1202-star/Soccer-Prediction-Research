@@ -85,10 +85,10 @@ def test_cutoff_and_unknown_timestamps_fail_closed():
 
     broken = _history()
     broken.loc[0, "source_available_at_utc"] = None
-    model = fit_statsmodels_poisson_score_model(
-        broken, prediction_cutoff_utc="2026-02-01T00:00:00Z"
-    )
-    assert model.training_rows == 11
+    with pytest.raises(ValueError, match="missing required field"):
+        fit_statsmodels_poisson_score_model(
+            broken, prediction_cutoff_utc="2026-02-01T00:00:00Z"
+        )
 
 
 def test_regularization_is_explicit_and_positive():
