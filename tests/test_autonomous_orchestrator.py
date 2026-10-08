@@ -20,6 +20,17 @@ def test_orchestrator_is_fail_closed_and_main_pinned():
     assert '"performance_claim_allowed": False' in text
 
 
+def test_orchestrator_refreshes_main_before_dispatch():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    refresh_pos = text.index("refresh_main_sha()")
+    dispatch_pos = text.index("dispatch_workflow()")
+    ensure_pos = text.index("ensure_lane()")
+    assert refresh_pos < dispatch_pos
+    assert refresh_pos < ensure_pos
+    assert 'if ! refresh_main_sha; then' in text
+    assert 'Re-read main immediately before dispatch' in text
+
+
 def test_orchestrator_reconciles_current_main_ci():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert 'ensure_lane "ci.yml" 360 10' in text
