@@ -59,7 +59,8 @@
       "avoid_same_kickoff_split",
       "common_model_support_filtering"
     ],
-    "re_verification": "PENDING"
+    "re_verification": "PENDING",
+    "evaluated_head_sha": "a866f0ad106624bc6e2b7fc531261132a2829266"
   },
   "failure_memory": "docs/EXTERNAL_OSS_STATSModels_FAILURE_MEMORY_V1.md",
   "production_gate": "BLOCKED_UNTIL_E4_E5_E6_E7",
@@ -89,7 +90,7 @@
     "production_adoption": false
   },
   "latest_verification": {
-    "head_sha": "6ba72bdce211b11dd6894330e6bced3d2d0b57f9",
+    "head_sha": "a866f0ad106624bc6e2b7fc531261132a2829266",
     "latest_test_failure": {
       "workflow": "External OSS Statsmodels Research",
       "run_number": 52,
