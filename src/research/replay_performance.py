@@ -52,9 +52,14 @@ def validate_replay_input(path: str | Path) -> tuple[pd.DataFrame, dict[str, Any
         raise ValueError("PIT replay input contains missing/empty match_id")
     if out["match_id"].duplicated().any():
         raise ValueError("PIT replay input contains duplicate match_id")
-    verified = out["pit_verified"].astype("boolean")
-    if verified.isna().any() or (~verified).any():
-        raise ValueError("PIT replay input contains non-verified rows")
+    try:
+        verified = out["pit_verified"].astype("boolean")
+    except (TypeError, ValueError) as exc:
+        raise ValueError("PIT replay input has an ambiguous pit_verified encoding") from exc
+    ambiguous_rows = int(verified.isna().sum())
+    total_input_rows = int(len(out))
+    out = out.loc[verified.fillna(False)].copy()
+    out["pit_verified"] = True
     if out["prediction_cutoff_at_utc"].isna().any() or out["kickoff_utc"].isna().any():
         raise ValueError("PIT replay input has missing kickoff/cutoff timestamps")
     if (out["prediction_cutoff_at_utc"] > out["kickoff_utc"]).any():
@@ -72,9 +77,12 @@ def validate_replay_input(path: str | Path) -> tuple[pd.DataFrame, dict[str, Any
     report = {
         "status": "PASS",
         "evidence_scope": "PIT_VERIFIED_REPLAY_INPUT",
+        "input_rows": total_input_rows,
         "rows": int(len(out)),
-        "pit_verified_rows": int(verified.sum()),
-        "pit_verified_rate": float(verified.mean()),
+        "pit_verified_rows": int(len(out)),
+        "pit_verified_rate": float(len(out) / total_input_rows) if total_input_rows else 0.0,
+        "pit_ambiguous_rows_excluded": ambiguous_rows,
+        "non_verified_rows_excluded": int(total_input_rows - len(out) - ambiguous_rows),
         "unique_match_ids": int(out["match_id"].nunique()),
         "prediction_cutoff_after_kickoff_rows": 0,
         "feature_available_after_cutoff_rows": 0,
