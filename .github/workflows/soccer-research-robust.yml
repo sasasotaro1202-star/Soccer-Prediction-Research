@@ -150,6 +150,18 @@ jobs:
             --json-output artifacts/performance_snapshot.json \
             --csv-output artifacts/performance_snapshot.csv \
             --markdown-output artifacts/performance_snapshot.md
+      - name: Publish performance snapshot to Step Summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f artifacts/performance_snapshot.md ]; then
+            cat artifacts/performance_snapshot.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Soccer Performance Snapshot" >> "$GITHUB_STEP_SUMMARY"
+            echo "Performance snapshot was not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Prepare future fixtures when supplied
         id: prepare_future
         env:
