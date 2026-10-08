@@ -62,5 +62,15 @@
     "re_verification": "PENDING"
   },
   "failure_memory": "docs/EXTERNAL_OSS_STATSModels_FAILURE_MEMORY_V1.md",
-  "production_gate": "BLOCKED_UNTIL_E4_E5_E6_E7"
+  "production_gate": "BLOCKED_UNTIL_E4_E5_E6_E7",
+  "source_verification": {
+    "verified_at_utc": "2026-10-08T14:34:00+09:00",
+    "official_repository": "https://github.com/statsmodels/statsmodels",
+    "official_release": "https://www.statsmodels.org/stable/release/index.html",
+    "pinned_release": "0.15.0",
+    "release_date": "2026-08-27",
+    "license": "BSD-3-Clause",
+    "cost_model": "open_source_package_no_runtime_service_dependency",
+    "evidence_role": "SOURCE_VERIFICATION_ONLY_NOT_PERFORMANCE_EVIDENCE"
+  }
 }
