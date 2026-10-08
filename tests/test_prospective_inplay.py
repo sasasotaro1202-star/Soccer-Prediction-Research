@@ -52,6 +52,21 @@ def test_parse_live_snapshot_is_prospective_and_does_not_store_odds():
     assert "odds" not in row
 
 
+def test_parse_live_snapshot_rejects_future_kickoff():
+    observed = datetime(2026, 10, 5, 18, 30, tzinfo=timezone.utc)
+    future_event = _event()
+    future_event["date"] = "2026-10-05T19:00:00Z"
+    future_event["competitions"][0]["startDate"] = "2026-10-05T19:00:00Z"
+    row = parse_live_snapshot(
+        event=future_event,
+        summary={"plays": []},
+        league="eng.1",
+        observed_at=observed,
+        response_sha256="abc",
+    )
+    assert row is None
+
+
 def test_maturity_uses_later_observation_as_label_boundary():
     t0 = "2026-10-05T18:05:00+00:00"
     t1 = "2026-10-05T18:10:00+00:00"
