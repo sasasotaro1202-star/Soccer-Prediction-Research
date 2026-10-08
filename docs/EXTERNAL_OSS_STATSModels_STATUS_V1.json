@@ -60,7 +60,7 @@
       "common_model_support_filtering"
     ],
     "re_verification": "PENDING",
-    "evaluated_head_sha": "a866f0ad106624bc6e2b7fc531261132a2829266"
+    "evaluated_head_sha": "1a1d6fcf59a26d52707033f39126f9f09e2e5f9a"
   },
   "failure_memory": "docs/EXTERNAL_OSS_STATSModels_FAILURE_MEMORY_V1.md",
   "production_gate": "BLOCKED_UNTIL_E4_E5_E6_E7",
@@ -90,15 +90,16 @@
     "production_adoption": false
   },
   "latest_verification": {
-    "head_sha": "a866f0ad106624bc6e2b7fc531261132a2829266",
+    "head_sha": "1a1d6fcf59a26d52707033f39126f9f09e2e5f9a",
     "latest_test_failure": {
       "workflow": "External OSS Statsmodels Research",
-      "run_number": 52,
-      "failed_tests": 7,
-      "passed_tests": 12,
+      "run_number": 72,
+      "failed_tests": 3,
+      "passed_tests": 19,
       "root_causes": [
-        "synthetic tests still used pre-hardening min_train assumptions",
-        "synthetic robustness fixture lacked a distinct second competition"
+        "adapter row-level feature-PIT regression test was not enforced fail-closed",
+        "OOS runner retained residual legacy source-availability reference",
+        "case-level PIT test mutated non-authoritative legacy source timestamp"
       ],
       "status": "REPAIRED_PENDING_REVERIFICATION"
     },
