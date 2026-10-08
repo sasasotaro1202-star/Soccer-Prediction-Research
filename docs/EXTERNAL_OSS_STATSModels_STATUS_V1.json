@@ -87,5 +87,23 @@
     "selection_during_oos": false,
     "frozen_holdout_access": false,
     "production_adoption": false
+  },
+  "latest_verification": {
+    "head_sha": "6ba72bdce211b11dd6894330e6bced3d2d0b57f9",
+    "latest_test_failure": {
+      "workflow": "External OSS Statsmodels Research",
+      "run_number": 52,
+      "failed_tests": 7,
+      "passed_tests": 12,
+      "root_causes": [
+        "synthetic tests still used pre-hardening min_train assumptions",
+        "synthetic robustness fixture lacked a distinct second competition"
+      ],
+      "status": "REPAIRED_PENDING_REVERIFICATION"
+    },
+    "current_actions_state": "REVERIFICATION_QUEUED",
+    "performance_claim": false,
+    "production_adoption": false,
+    "frozen_holdout_access": false
   }
 }
