@@ -39,3 +39,26 @@ Failures remain immutable research knowledge. A failed experiment is not convert
 - interpretation: unsupported/OOD coverage is separate from model accuracy and is itself monitored evidence
 - verification required: fresh Research tests and real-data OOS on the repaired HEAD
 - current state: `REPAIR_APPLIED_PENDING_REVERIFICATION`
+
+
+
+## Failure F4
+- failure_type: `RESEARCH_TEST_THRESHOLD_DRIFT`
+- observed_at: `2026-10-08`
+- workflow: `External OSS Statsmodels Research`
+- symptom: latest strengthened OOS contract caused 7 synthetic tests to fail before exercising the intended assertions
+- root_cause: test fixtures still used the earlier `min_train=24` / small calibration assumptions while the locked research runner requires `min_train>=200` and `calibration_min_rows>=50`
+- unsafe repair rejected: weakening the research runner thresholds
+- repair: enlarge synthetic fixtures and explicitly pass the test-only calibration window while preserving the real-data thresholds
+- additional repair: robustness synthetic coverage now requires distinct competition identities, matching the multi-competition robustness contract
+- current state: `REPAIR_APPLIED_PENDING_REVERIFICATION`
+
+## Failure F5
+- failure_type: `ACTIONS_CANCELLATION_DUE_TO_PR_CHURN`
+- observed_at: `2026-10-08`
+- workflow: `Soccer CI / External OSS Statsmodels Research / External OSS Statsmodels Soccer OOS / Soccer Prospective In-Play Maturity`
+- symptom: multiple runs for the same PR head were cancelled as the branch was updated repeatedly
+- root_cause: PR-scoped concurrency and rapid sequential commits created overlapping verification runs
+- interpretation: cancellation is an operational verification failure, not prediction-performance evidence
+- repair: stop code churn before final verification; directly re-run the latest cancelled research jobs rather than treating cancellation as success
+- current state: `REVERIFICATION_IN_PROGRESS`
