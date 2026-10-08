@@ -22,6 +22,13 @@ import requests
 
 DEFAULT_CONFIG_PATH = Path("config/live_research_forecast.json")
 
+ESPN_FALLBACK_LEAGUES = (
+    "fifa.friendly",
+    "fifa.worldq.uefa",
+    "uefa.nations",
+    "fifa.world",
+)
+
 REQUIRED = {
     "match_id",
     "prediction_revision_id",
@@ -142,46 +149,124 @@ def find_target(event: dict[str, Any], config: dict[str, Any]) -> str | None:
     return None
 
 
+def _espn_event_adapter(event: dict[str, Any], league: str) -> dict[str, Any] | None:
+    competitions = event.get("competitions") or []
+    competition = competitions[0] if competitions and isinstance(competitions[0], dict) else {}
+    competitors = competition.get("competitors") or []
+    home = next((c for c in competitors if c.get("homeAway") == "home"), None)
+    away = next((c for c in competitors if c.get("homeAway") == "away"), None)
+    if not isinstance(home, dict) or not isinstance(away, dict):
+        return None
+    home_team = (home.get("team") or {}) if isinstance(home.get("team"), dict) else {}
+    away_team = (away.get("team") or {}) if isinstance(away.get("team"), dict) else {}
+    home_name = str(home_team.get("displayName") or home_team.get("name") or "").strip()
+    away_name = str(away_team.get("displayName") or away_team.get("name") or "").strip()
+    kickoff = pd.to_datetime(event.get("date"), utc=True, errors="coerce")
+    if not home_name or not away_name or pd.isna(kickoff) or event.get("id") is None:
+        return None
+    def score_of(item: dict[str, Any]) -> int:
+        value = item.get("score")
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return 0
+    status_type = (event.get("status") or {}).get("type") or {}
+    state = str(status_type.get("state") or "").strip().lower()
+    name = str(status_type.get("name") or "").strip().lower()
+    if state in {"in", "inprogress"} or "halftime" in name:
+        status = "inprogress" if "halftime" not in name else "halftime"
+    elif state in {"post", "postponed", "canceled"}:
+        status = state
+    else:
+        status = "scheduled"
+    return {
+        "id": f"espn:{league}:{event.get('id')}",
+        "startTimestamp": int(kickoff.timestamp()),
+        "homeTeam": {"name": home_name},
+        "awayTeam": {"name": away_name},
+        "status": {"type": status},
+        "homeScore": {"current": score_of(home)},
+        "awayScore": {"current": score_of(away)},
+        "tournament": {"uniqueTournament": {"name": league}},
+    }
+
+
 def collect_events(
     prediction_time: pd.Timestamp,
     config: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], dict[str, str], dict[str, str]]:
     timeout = float(config["runtime"]["request_timeout_seconds"])
-    found: dict[str, dict[str, Any]] = {}
+    found: dict[str, tuple[dict[str, Any], str]] = {}
     source_times: dict[str, str] = {}
     source_hashes: dict[str, str] = {}
+    sofascore_failed = False
 
-    live, observed, digest = _get_json(str(config["sources"]["sofascore_live_url"]), timeout)
-    source_times["sofascore_live"] = observed
-    source_hashes["sofascore_live"] = digest
-    for event in live.get("events", []) or []:
-        if not isinstance(event, dict):
-            continue
-        label = find_target(event, config)
-        if label:
-            found[label] = event
+    try:
+        live, observed, digest = _get_json(str(config["sources"]["sofascore_live_url"]), timeout)
+        source_times["sofascore_live"] = observed
+        source_hashes["sofascore_live"] = digest
+        for event in live.get("events", []) or []:
+            if not isinstance(event, dict):
+                continue
+            label = find_target(event, config)
+            if label:
+                found[label] = (event, "sofascore")
+    except Exception as exc:
+        sofascore_failed = True
+        source_times["sofascore_live_error"] = now_utc().isoformat()
+        source_hashes["sofascore_live_error"] = f"{type(exc).__name__}:{exc}"
 
     schedule_template = str(config["sources"]["sofascore_scheduled_url"])
     schedule_days = max(int(config["runtime"]["schedule_days"]), 1)
     for offset in range(schedule_days):
         day = (prediction_time + pd.Timedelta(days=offset)).date()
         key = f"sofascore_scheduled_{day.isoformat()}"
-        payload, observed, digest = _get_json(schedule_template.format(date=day.isoformat()), timeout)
-        source_times[key] = observed
-        source_hashes[key] = digest
-        for event in payload.get("events", []) or []:
-            if not isinstance(event, dict):
-                continue
-            label = find_target(event, config)
-            if not label:
-                continue
-            kickoff = pd.to_datetime(event.get("startTimestamp"), unit="s", utc=True, errors="coerce")
-            if pd.isna(kickoff):
-                continue
-            if kickoff >= prediction_time - pd.Timedelta(minutes=float(config["runtime"]["schedule_past_tolerance_minutes"])):
-                found.setdefault(label, event)
+        try:
+            payload, observed, digest = _get_json(schedule_template.format(date=day.isoformat()), timeout)
+            source_times[key] = observed
+            source_hashes[key] = digest
+            for event in payload.get("events", []) or []:
+                if not isinstance(event, dict):
+                    continue
+                label = find_target(event, config)
+                if not label:
+                    continue
+                kickoff = pd.to_datetime(event.get("startTimestamp"), unit="s", utc=True, errors="coerce")
+                if pd.isna(kickoff):
+                    continue
+                if kickoff >= prediction_time - pd.Timedelta(minutes=float(config["runtime"]["schedule_past_tolerance_minutes"])):
+                    found.setdefault(label, (event, "sofascore"))
+        except Exception:
+            source_times[f"{key}_error"] = now_utc().isoformat()
 
-    return list(found.values()), source_times, source_hashes
+    if sofascore_failed or not found:
+        for league in config.get("sources", {}).get("espn_fallback_leagues", list(ESPN_FALLBACK_LEAGUES)):
+            for offset in range(min(schedule_days, 2)):
+                day = (prediction_time + pd.Timedelta(days=offset)).strftime("%Y%m%d")
+                key = f"espn_{league}_{day}"
+                url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard?dates={day}"
+                try:
+                    payload, observed, digest = _get_json(url, timeout)
+                    source_times[key] = observed
+                    source_hashes[key] = digest
+                    for raw_event in payload.get("events", []) or []:
+                        if not isinstance(raw_event, dict):
+                            continue
+                        event = _espn_event_adapter(raw_event, league)
+                        if not event:
+                            continue
+                        label = find_target(event, config)
+                        if not label:
+                            continue
+                        kickoff = pd.to_datetime(event.get("startTimestamp"), unit="s", utc=True, errors="coerce")
+                        if pd.isna(kickoff) or kickoff < prediction_time - pd.Timedelta(minutes=float(config["runtime"]["schedule_past_tolerance_minutes"])):
+                            continue
+                        found.setdefault(label, (event, "espn"))
+                except Exception as exc:
+                    source_times[f"{key}_error"] = now_utc().isoformat()
+                    source_hashes[f"{key}_error"] = f"{type(exc).__name__}:{exc}"
+
+    return [event for event, _ in found.values()], source_times, source_hashes
 
 
 def poisson(lam: float, max_goals: int) -> np.ndarray:
@@ -303,6 +388,7 @@ def predict(
     config: dict[str, Any],
     config_hash: str,
     elo_hash: str,
+    event_source: str = "sofascore",
 ) -> dict[str, Any]:
     home = str((event.get("homeTeam") or {}).get("name") or "").strip()
     away = str((event.get("awayTeam") or {}).get("name") or "").strip()
@@ -377,9 +463,9 @@ def predict(
 
     source_snapshot_hashes = dict(source_hashes)
     return {
-        "match_id": f"sofascore:{event.get('id')}",
+        "match_id": f"{event_source}:{event.get('id')}",
         "prediction_revision_id": revision_id,
-        "event_source": "sofascore",
+        "event_source": event_source,
         "source_event_id": str(event.get("id") or ""),
         "kickoff_utc": pd.Timestamp(kickoff).isoformat(),
         "prediction_time_utc": prediction_time.isoformat(),
@@ -419,7 +505,7 @@ def predict(
         "git_commit_sha": git_sha,
         "experiment_fingerprint": fingerprint,
         "elo_source_url": str(config["sources"]["elo_url"]),
-        "event_source_url": f"https://www.sofascore.com/event/{event.get('id')}",
+        "event_source_url": (f"https://www.sofascore.com/event/{event.get('id')}" if event_source == "sofascore" else f"https://www.espn.com/soccer/match/_/gameId/{event.get('id')}"),
         "calibration_method": "uniform_shrink_only_research_heuristic",
     }
 
@@ -444,6 +530,7 @@ def run(output: str, status_path: str) -> dict[str, Any]:
         failures: list[str] = []
         for event in events:
             try:
+                source = "espn" if str(event.get("id", "")).startswith("espn:") else "sofascore"
                 rows.append(
                     predict(
                         event,
@@ -454,6 +541,7 @@ def run(output: str, status_path: str) -> dict[str, Any]:
                         config,
                         config_hash,
                         elo_hash,
+                        event_source=source,
                     )
                 )
             except Exception as exc:
