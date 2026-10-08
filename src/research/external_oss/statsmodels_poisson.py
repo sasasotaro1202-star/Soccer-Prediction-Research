@@ -40,7 +40,7 @@ _REQUIRED = {
     "away_goals",
     "pit_verified",
     "kickoff_utc",
-    "source_available_at_utc",
+    "feature_source_max_available_at_utc",
 }
 
 
@@ -70,8 +70,10 @@ def _prepare(history: pd.DataFrame, *, prediction_cutoff_utc: str | pd.Timestamp
     d["away_team"] = d["away_team"].astype("string").str.strip()
     d["competition"] = d["competition"].astype("string").str.strip()
     d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
-    d["source_available_at_utc"] = pd.to_datetime(
-        d["source_available_at_utc"], utc=True, errors="coerce"
+    d["feature_source_max_available_at_utc"] = pd.to_datetime(
+        d["feature_source_max_available_at_utc"],
+        utc=True,
+        errors="coerce",
     )
     d["home_goals"] = pd.to_numeric(d["home_goals"], errors="coerce")
     d["away_goals"] = pd.to_numeric(d["away_goals"], errors="coerce")
@@ -81,7 +83,7 @@ def _prepare(history: pd.DataFrame, *, prediction_cutoff_utc: str | pd.Timestamp
     if pit_rows.empty:
         raise ValueError("No PIT-verified rows available for statsmodels challenger")
 
-    required_pit_fields = ["home_team", "away_team", "competition", "kickoff_utc", "source_available_at_utc", "home_goals", "away_goals"]
+    required_pit_fields = ["home_team", "away_team", "competition", "kickoff_utc", "feature_source_max_available_at_utc", "home_goals", "away_goals"]
     for field in required_pit_fields:
         if field in {"home_team", "away_team", "competition"}:
             invalid = pit_rows[field].isna() | pit_rows[field].astype("string").str.strip().eq("")
@@ -95,14 +97,17 @@ def _prepare(history: pd.DataFrame, *, prediction_cutoff_utc: str | pd.Timestamp
     if (pit_rows[["home_goals", "away_goals"]] < 0).any().any():
         raise ValueError("Goal labels must be non-negative")
 
-    # Fail closed on unknown timing. Both the event and predictor-side source
-    # availability must precede the prediction cutoff.
+    # Fail closed on unknown timing. The feature-source maximum availability must
+    # precede both the row's own historical prediction cutoff and this model's
+    # locked evaluation cutoff.
+    own_prediction_cutoff = d["kickoff_utc"] - pd.Timedelta(minutes=60)
     d = d[
         d["pit_verified"].eq(True)
         & d["kickoff_utc"].notna()
-        & d["source_available_at_utc"].notna()
+        & d["feature_source_max_available_at_utc"].notna()
         & (d["kickoff_utc"] < cutoff)
-        & (d["source_available_at_utc"] <= cutoff)
+        & (d["feature_source_max_available_at_utc"] <= own_prediction_cutoff)
+        & (d["feature_source_max_available_at_utc"] <= cutoff)
         & d["home_goals"].notna()
         & d["away_goals"].notna()
         & d["home_team"].ne("")
