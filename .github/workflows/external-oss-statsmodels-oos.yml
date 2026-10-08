@@ -126,8 +126,6 @@ jobs:
               audit_passed=audit_passed,
           )
 
-          rows = pd.DataFrame(result["rows"])
-          numeric = rows.select_dtypes(include="number")
           if result.get("status") != "RESEARCH_OOS_READY":
               failure_report = {
                   "research_id": "statsmodels_poisson_score_v2",
@@ -148,6 +146,9 @@ jobs:
               )
               print(json.dumps(failure_report, ensure_ascii=False))
               raise SystemExit(0)
+
+          rows = pd.DataFrame(result["rows"])
+          numeric = rows.select_dtypes(include="number")
 
           experiment_identity = {
               "research_id": "statsmodels_poisson_score_v2",
@@ -188,7 +189,7 @@ jobs:
               "experiment_config_fingerprint": result.get("experiment_config_fingerprint"),
               "experiment_identity": experiment_identity,
               "experiment_fingerprint": experiment_fingerprint,
-              "git_sha": git_sha,
+              "git_sha": head_sha,
               "dataset_path": str(path),
               "dataset_sha256": data_hash,
               "fold_count": int(result["fold_count"]),
