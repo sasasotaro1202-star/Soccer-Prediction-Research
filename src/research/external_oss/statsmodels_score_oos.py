@@ -138,18 +138,6 @@ def run_statsmodels_score_oos(
 
     d = history.copy()
     d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
-    availability_column = "source_available_at_utc"
-    if availability_column not in d.columns:
-        if "feature_source_max_available_at_utc" not in d.columns:
-            raise ValueError(
-                "statsmodels OOS data requires source_available_at_utc or "
-                "feature_source_max_available_at_utc"
-            )
-        availability_column = "feature_source_max_available_at_utc"
-    d[availability_column] = pd.to_datetime(
-        d[availability_column], utc=True, errors="coerce"
-    )
-    d["source_available_at_utc"] = d[availability_column]
     d["home_goals"] = pd.to_numeric(d["home_goals"], errors="coerce")
     d["away_goals"] = pd.to_numeric(d["away_goals"], errors="coerce")
     d["pit_verified"] = d["pit_verified"].astype("boolean")
@@ -159,15 +147,66 @@ def run_statsmodels_score_oos(
         raise ValueError("statsmodels OOS data contains empty/missing match_id")
     if d["match_id"].duplicated().any():
         raise ValueError("statsmodels OOS data contains duplicate match_id")
-    if d["kickoff_utc"].isna().any() or d["source_available_at_utc"].isna().any():
-        raise ValueError("statsmodels OOS data contains unknown timestamps")
-    if d["competition"].astype(str).str.strip().eq("").any():
-        raise ValueError("statsmodels OOS data contains empty competition")
-    if (d[["home_goals", "away_goals"]] < 0).any().any():
-        raise ValueError("statsmodels OOS goal labels must be non-negative")
+
+    pit_mask = d["pit_verified"].eq(True)
+
+    # Prefer a complete predictor-side replay boundary. Some historical artifacts
+    # retain source_available_at_utc as NaT while feature replay has the explicit
+    # feature_source_max_available_at_utc populated.
+    availability_candidates: list[tuple[str, pd.Series]] = []
+    if "feature_source_max_available_at_utc" in d.columns:
+        availability_candidates.append(
+            (
+                "feature_source_max_available_at_utc",
+                pd.to_datetime(
+                    d["feature_source_max_available_at_utc"],
+                    utc=True,
+                    errors="coerce",
+                ),
+            )
+        )
+    if "source_available_at_utc" in d.columns:
+        availability_candidates.append(
+            (
+                "source_available_at_utc",
+                pd.to_datetime(
+                    d["source_available_at_utc"],
+                    utc=True,
+                    errors="coerce",
+                ),
+            )
+        )
+
+    availability_series = None
+    availability_name = None
+    for name, series in availability_candidates:
+        if pit_mask.any() and bool(series.loc[pit_mask].notna().all()):
+            availability_name = name
+            availability_series = series
+            break
+    if availability_series is None:
+        raise ValueError(
+            "statsmodels OOS data has no complete explicit predictor-side availability "
+            "timestamp for all PIT-verified rows"
+        )
+
+    d["source_available_at_utc"] = availability_series
+
+    if d.loc[pit_mask, "kickoff_utc"].isna().any() or d.loc[pit_mask, "source_available_at_utc"].isna().any():
+        raise ValueError(
+            "statsmodels OOS data contains unknown timestamps in PIT-verified rows"
+        )
+    if d.loc[pit_mask, "competition"].astype(str).str.strip().eq("").any():
+        raise ValueError(
+            "statsmodels OOS data contains empty competition in PIT-verified rows"
+        )
+    if (d.loc[pit_mask, ["home_goals", "away_goals"]] < 0).any().any():
+        raise ValueError(
+            "statsmodels OOS goal labels must be non-negative in PIT-verified rows"
+        )
 
     d = d[
-        d["pit_verified"].eq(True)
+        pit_mask
         & d["kickoff_utc"].notna()
         & d["source_available_at_utc"].notna()
         & d["home_goals"].notna()
