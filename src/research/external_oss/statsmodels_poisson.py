@@ -56,11 +56,18 @@ class StatsmodelsPoissonScoreModel:
     method: str = "statsmodels_poisson_glm_score_v1"
 
 
-def _prepare(history: pd.DataFrame, *, prediction_cutoff_utc: str | pd.Timestamp) -> pd.DataFrame:
+def _prepare(
+    history: pd.DataFrame,
+    *,
+    prediction_cutoff_utc: str | pd.Timestamp,
+    cutoff_buffer_minutes: int,
+) -> pd.DataFrame:
     missing = sorted(_REQUIRED - set(history.columns))
     if missing:
         raise ValueError(f"statsmodels score training data missing columns: {missing}")
 
+    if int(cutoff_buffer_minutes) < 0:
+        raise ValueError("cutoff_buffer_minutes must be non-negative")
     d = history.copy()
     cutoff = pd.to_datetime(prediction_cutoff_utc, utc=True, errors="coerce")
     if pd.isna(cutoff):
@@ -100,7 +107,9 @@ def _prepare(history: pd.DataFrame, *, prediction_cutoff_utc: str | pd.Timestamp
     # Fail closed on unknown timing. The feature-source maximum availability must
     # precede both the row's own historical prediction cutoff and this model's
     # locked evaluation cutoff.
-    own_prediction_cutoff = d["kickoff_utc"] - pd.Timedelta(minutes=60)
+    own_prediction_cutoff = d["kickoff_utc"] - pd.Timedelta(
+        minutes=int(cutoff_buffer_minutes)
+    )
     d = d[
         d["pit_verified"].eq(True)
         & d["kickoff_utc"].notna()
@@ -129,11 +138,16 @@ def fit_statsmodels_poisson_score_model(
     *,
     prediction_cutoff_utc: str | pd.Timestamp,
     regularization_alpha: float = 0.1,
+    cutoff_buffer_minutes: int = 60,
 ) -> StatsmodelsPoissonScoreModel:
     """Fit a bounded ridge-regularized Poisson challenger on PIT-safe history."""
     if not np.isfinite(float(regularization_alpha)) or float(regularization_alpha) <= 0:
         raise ValueError("regularization_alpha must be finite and positive")
-    d = _prepare(history, prediction_cutoff_utc=prediction_cutoff_utc)
+    d = _prepare(
+        history,
+        prediction_cutoff_utc=prediction_cutoff_utc,
+        cutoff_buffer_minutes=int(cutoff_buffer_minutes),
+    )
 
     # Categorical terms make team/competition effects explicit while keeping the
     # challenger compact. Statsmodels handles the reference levels internally.
