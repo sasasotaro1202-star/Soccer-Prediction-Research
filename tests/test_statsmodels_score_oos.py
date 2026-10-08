@@ -70,3 +70,17 @@ def test_feature_replay_availability_is_used_when_legacy_source_time_is_missing(
     )
     assert result["status"] == "RESEARCH_OOS_READY"
     assert result["fold_count"] == 3
+
+
+def test_pit_availability_filter_does_not_lower_training_requirement():
+    history = _history()
+    history.loc[0, "source_available_at_utc"] = pd.Timestamp(
+        "2030-01-01T00:00:00Z"
+    )
+    result = run_statsmodels_score_oos(
+        history, min_train=24, oos_block=8, cutoff_buffer_minutes=1
+    )
+    assert result["status"] == "RESEARCH_OOS_READY"
+    assert result["rows"][0]["training_rows"] >= 24
+    assert all(row["pit_training_boundary_valid"] for row in result["rows"])
+    assert all(row["same_kickoff_split_avoided"] for row in result["rows"])
