@@ -277,11 +277,35 @@ def run_statsmodels_score_oos(
             train, prediction_cutoff_utc=prediction_cutoff
         )
 
+        # Fair-comparison universe: only score the cases both fixed models can
+        # represent from the same training prefix. Unsupported teams/competitions
+        # are retained as explicit coverage/OOD exclusions, never imputed.
+        incumbent_teams = set((incumbent.get("teams") or {}).keys())
+        challenger_home = set(challenger.categories_home_team)
+        challenger_away = set(challenger.categories_away_team)
+        challenger_competitions = set(challenger.categories_competition)
+
+        eligibility = (
+            oos["home_team"].astype("string").isin(incumbent_teams)
+            & oos["away_team"].astype("string").isin(incumbent_teams)
+            & oos["home_team"].astype("string").isin(challenger_home)
+            & oos["away_team"].astype("string").isin(challenger_away)
+            & oos["competition"].astype("string").isin(challenger_competitions)
+        )
+        common_oos = oos.loc[eligibility].copy()
+        excluded_oos = oos.loc[~eligibility].copy()
+
+        if common_oos.empty:
+            raise ValueError(
+                f"Fold {fold}: no common evaluable OOS cases after explicit "
+                "model-support filtering"
+            )
+
         base_metrics = _distribution_metrics(
-            oos, incumbent, predict_score_distribution
+            common_oos, incumbent, predict_score_distribution
         )
         candidate_metrics = _distribution_metrics(
-            oos, challenger, predict_statsmodels_poisson_distribution
+            common_oos, challenger, predict_statsmodels_poisson_distribution
         )
 
         rows.append(
@@ -292,6 +316,9 @@ def run_statsmodels_score_oos(
                 "prediction_cutoff_utc": str(prediction_cutoff),
                 "training_rows": int(len(train)),
                 "oos_rows": int(len(oos)),
+                "common_evaluable_rows": int(len(common_oos)),
+                "unsupported_rows": int(len(excluded_oos)),
+                "common_coverage": float(len(common_oos) / len(oos)),
                 "incumbent_score_logloss": base_metrics["score_logloss"],
                 "statsmodels_score_logloss": candidate_metrics["score_logloss"],
                 "incumbent_score_top1": base_metrics["score_top1"],
