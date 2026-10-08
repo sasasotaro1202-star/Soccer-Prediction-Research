@@ -261,14 +261,14 @@ def run_statsmodels_score_oos(
             "handoff": handoff,
         }
 
-    if int(min_train) < 200:
-        raise ValueError("min_train must be at least 200")
-    if int(oos_block) < 100:
-        raise ValueError("oos_block must be at least 100")
+    if int(min_train) < 20:
+        raise ValueError("min_train must be at least 20")
+    if int(oos_block) < 8:
+        raise ValueError("oos_block must be at least 8")
     if not 0.10 <= float(calibration_fraction) <= 0.40:
         raise ValueError("calibration_fraction must be between 0.10 and 0.40")
-    if int(calibration_min_rows) < 50:
-        raise ValueError("calibration_min_rows must be at least 50")
+    if int(calibration_min_rows) < 10:
+        raise ValueError("calibration_min_rows must be at least 10")
 
     missing = sorted(REQUIRED_COLUMNS - set(history.columns))
     if missing:
