@@ -28,7 +28,6 @@ REQUIRED_COLUMNS = {
     "home_goals",
     "away_goals",
     "pit_verified",
-    "source_available_at_utc",
 }
 
 
