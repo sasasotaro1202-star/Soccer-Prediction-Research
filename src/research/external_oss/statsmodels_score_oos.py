@@ -139,9 +139,18 @@ def run_statsmodels_score_oos(
 
     d = history.copy()
     d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
-    d["source_available_at_utc"] = pd.to_datetime(
-        d["source_available_at_utc"], utc=True, errors="coerce"
+    availability_column = "source_available_at_utc"
+    if availability_column not in d.columns:
+        if "feature_source_max_available_at_utc" not in d.columns:
+            raise ValueError(
+                "statsmodels OOS data requires source_available_at_utc or "
+                "feature_source_max_available_at_utc"
+            )
+        availability_column = "feature_source_max_available_at_utc"
+    d[availability_column] = pd.to_datetime(
+        d[availability_column], utc=True, errors="coerce"
     )
+    d["source_available_at_utc"] = d[availability_column]
     d["home_goals"] = pd.to_numeric(d["home_goals"], errors="coerce")
     d["away_goals"] = pd.to_numeric(d["away_goals"], errors="coerce")
     d["pit_verified"] = d["pit_verified"].astype("boolean")
