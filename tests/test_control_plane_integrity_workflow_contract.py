@@ -111,6 +111,8 @@ def test_replayed_oos_selects_only_successful_robust_artifacts():
     assert "workflow_run.get('status') != 'completed'" in text
     assert "workflow_run.get('conclusion') != 'success'" in text
     assert "Workflow-run replay requires a successful Soccer Research Robust completion." in text
+    assert "HOLD_NO_SUCCESSFUL_ROBUST_EVIDENCE" in text
+    assert "steps.locate.outputs.source_available == 'true'" in text
 
 
 def test_legacy_bridge_is_source_scoped():
