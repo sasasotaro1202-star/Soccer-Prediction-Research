@@ -329,7 +329,7 @@ def run_statsmodels_score_oos(
     d = d[
         pit_mask
         & d["kickoff_utc"].notna()
-        & d["source_available_at_utc"].notna()
+        & d["feature_source_max_available_at_utc"].notna()
         & d["home_goals"].notna()
         & d["away_goals"].notna()
     ].sort_values(["kickoff_utc", "match_id"], kind="mergesort").reset_index(drop=True)
@@ -587,7 +587,7 @@ def run_statsmodels_score_oos(
                 "production_usable": False,
                 "pit_training_boundary_valid": bool(
                     (train["kickoff_utc"] < prediction_cutoff).all()
-                    and (train["source_available_at_utc"] <= prediction_cutoff).all()
+                    and (train["feature_source_max_available_at_utc"] <= prediction_cutoff).all()
                 ),
                 "pit_oos_case_valid": bool(oos_pit_valid.all()),
                 "same_kickoff_split_avoided": bool(
