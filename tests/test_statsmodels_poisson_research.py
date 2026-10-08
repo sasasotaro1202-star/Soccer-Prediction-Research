@@ -89,3 +89,19 @@ def test_cutoff_and_unknown_timestamps_fail_closed():
         broken, prediction_cutoff_utc="2026-02-01T00:00:00Z"
     )
     assert model.training_rows == 11
+
+
+def test_regularization_is_explicit_and_positive():
+    with pytest.raises(ValueError, match="regularization_alpha"):
+        fit_statsmodels_poisson_score_model(
+            _history(),
+            prediction_cutoff_utc="2026-02-01T00:00:00Z",
+            regularization_alpha=0,
+        )
+
+    model = fit_statsmodels_poisson_score_model(
+        _history(),
+        prediction_cutoff_utc="2026-02-01T00:00:00Z",
+        regularization_alpha=0.1,
+    )
+    assert model.regularization_alpha == pytest.approx(0.1)
