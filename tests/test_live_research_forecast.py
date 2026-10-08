@@ -9,6 +9,7 @@ from src.prediction.live_research_forecast import (
     load_config,
     pre_match_lambdas,
     parse_elo_tsv,
+    parse_elo_team_name_tsv,
     result_probs,
     score_matrix,
     verify,
@@ -230,3 +231,65 @@ def test_live_provenance_does_not_promote_retrieval_to_availability():
     assert row["source_available_lower_bound_utc"] is None
     assert row["source_retrieved_at_utc"] == "2026-10-08T17:00:00Z"
     assert row["event_source"] == "espn"
+
+
+def test_parse_world_elo_name_mode():
+    text = (
+        "101\tKashiwa Reysol\tKR\t1580\n"
+        "102\tVissel Kobe\tVK\t1605\n"
+        "103\tKashima Antlers\tKA\t1630\n"
+    )
+    ratings = parse_elo_team_name_tsv(text)
+    assert ratings["kashiwa reysol"] == 1580.0
+    assert ratings["vissel kobe"] == 1605.0
+    assert ratings["kashima antlers"] == 1630.0
+
+
+def test_competition_scope_matches_j1_event(monkeypatch):
+    monkeypatch.setenv("LIVE_FORECAST_CONFIG", "config/j1_imminent_research_forecast.json")
+    config, _ = load_config()
+    event = {
+        "id": "401877609",
+        "startTimestamp": int(pd.Timestamp("2026-10-09T10:00:00Z").timestamp()),
+        "homeTeam": {"name": "Kashiwa Reysol"},
+        "awayTeam": {"name": "Vissel Kobe"},
+        "status": {"type": "scheduled"},
+        "homeScore": {"current": 0},
+        "awayScore": {"current": 0},
+        "tournament": {"uniqueTournament": {"name": "jpn.1"}},
+    }
+    label = __import__("src.prediction.live_research_forecast", fromlist=["find_target"]).find_target(event, config)
+    assert label == "competition:jpn.1:401877609"
+
+
+def test_competition_scope_uses_pre_kickoff_state():
+    from src.prediction.live_research_forecast import predict
+
+    config_path = Path("config/j1_imminent_research_forecast.json")
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    config_hash = __import__("hashlib").sha256(config_path.read_bytes()).hexdigest()
+    event = {
+        "id": "401877609",
+        "startTimestamp": int(pd.Timestamp("2026-10-09T10:00:00Z").timestamp()),
+        "homeTeam": {"name": "Kashiwa Reysol"},
+        "awayTeam": {"name": "Vissel Kobe"},
+        "status": {"type": "scheduled"},
+        "homeScore": {"current": 0},
+        "awayScore": {"current": 0},
+        "tournament": {"uniqueTournament": {"name": "jpn.1"}},
+    }
+    row = predict(
+        event,
+        {"kashiwa reysol": 1580.0, "vissel kobe": 1605.0},
+        pd.Timestamp("2026-10-09T08:00:00Z"),
+        {"espn_jpn.1_20261009": "2026-10-09T08:00:00Z"},
+        {"espn_jpn.1_20261009": "digest"},
+        payload,
+        config_hash,
+        "elo-digest",
+        event_source="espn",
+    )
+    assert row["prediction_state"] == "PREMATCH_RESEARCH_FORECAST"
+    assert row["pit_status"] == "CURRENT_OBSERVED_PRE_KICKOFF"
+    assert row["production_status"] == "NOT_PRODUCTION"
+    assert np.isclose(float(row["p_home"]) + float(row["p_draw"]) + float(row["p_away"]), 1.0)
