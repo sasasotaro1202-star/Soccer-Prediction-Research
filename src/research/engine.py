@@ -477,6 +477,7 @@ def run(out_dir: str = "artifacts") -> dict:
     primary_finite = False
     score_block_rows = pd.Series(dtype=float)
     score_block_rows_ok = False
+    target_oos_status = {"status": "NOT_RUN"}
     try:
         score_oos = run_score_walk_forward(
             feats,
@@ -485,8 +486,9 @@ def run(out_dir: str = "artifacts") -> dict:
         )
         score_oos.to_csv(out / "score_oos_metrics.csv", index=False)
         target_oos_status = write_target_oos_artifacts(score_oos, out)
-        (out / "target_oos_status.json").write_text(\
-            json.dumps(target_oos_status, indent=2, ensure_ascii=False, default=str), encoding="utf-8"\
+        (out / "target_oos_status.json").write_text(
+            json.dumps(target_oos_status, indent=2, ensure_ascii=False, default=str),
+            encoding="utf-8",
         )
         primary_finite = _primary_score_metrics_finite(score_oos)
         enough_score_blocks = len(score_oos) >= minimum_score_blocks
@@ -513,6 +515,13 @@ def run(out_dir: str = "artifacts") -> dict:
         }
     except Exception as exc:
         score_oos = pd.DataFrame()
+        target_oos_status = write_target_oos_artifacts(score_oos, out)
+        target_oos_status["status"] = "SCORE_OOS_FAILED"
+        target_oos_status["error"] = f"{type(exc).__name__}: {exc}"
+        (out / "target_oos_status.json").write_text(
+            json.dumps(target_oos_status, indent=2, ensure_ascii=False, default=str),
+            encoding="utf-8",
+        )
         primary_finite = False
         score_block_rows = pd.Series(dtype=float)
         score_block_rows_ok = False
@@ -879,6 +888,7 @@ def run(out_dir: str = "artifacts") -> dict:
             "temporal_integrity": oos_temporal,
             "score_temporal_integrity": score_temporal,
         },
+        "target_oos": target_oos_status,
         "score_by_competition": {
             "selection": competition_score_selection,
             "locked_verification": competition_score_locked_gate,
