@@ -39,5 +39,11 @@
     "REJECT"
   ],
   "automatic_production_adoption": false,
-  "frozen_holdout_access": false
+  "frozen_holdout_access": false,
+  "model_parameters": {
+    "regularization_alpha": 0.1,
+    "regularization": "ridge_L2",
+    "fit_solver": "statsmodels_GLM_fit_regularized"
+  },
+  "notes": "Parameterization is research-locked for reproducible comparison; changes require a new experiment identity."
 }
