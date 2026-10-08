@@ -11,6 +11,11 @@ on:
       - ".github/workflows/external-oss-statsmodels-oos.yml"
   workflow_dispatch:
 
+
+concurrency:
+  group: external-oss-statsmodels-oos-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
