@@ -68,7 +68,7 @@ jobs:
 
           print("## J1 Imminent Research Forecast")
           print("")
-          print("Research-only Elo + Poisson heuristic. This lane is not Production and does not establish OOS, calibration, robustness, or adoption evidence.")
+          print("Research-only current J1 standings strength + Poisson heuristic. This lane is not Production and does not establish OOS, calibration, robustness, or adoption evidence.")
           status_path = Path("artifacts/j1_imminent_research_prediction_status.json")
           if status_path.exists():
               s = json.loads(status_path.read_text(encoding="utf-8"))
@@ -88,6 +88,9 @@ jobs:
               print("- 1X2: Home {:.1%} / Draw {:.1%} / Away {:.1%}".format(r["p_home"], r["p_draw"], r["p_away"]))
               print("- Pick: **{}**".format(r["result_prediction"]))
               print("- Score Top3: {} ({:.1%}), {} ({:.1%}), {} ({:.1%})".format(r["score_1"], r["score_1_probability"], r["score_2"], r["score_2_probability"], r["score_3"], r["score_3_probability"]))
+              print("- O/U 2.5: Over {:.1%} / Under {:.1%}".format(r["over_2_5_probability"], r["under_2_5_probability"]))
+              print("- BTTS: Yes {:.1%} / No {:.1%}".format(r["btts_yes_probability"], r["btts_no_probability"]))
+              print("- MOM: ABSTAIN (no PIT-verified player model)")
               print("- Predictability: {:.1%} / Uncertainty: {:.1%}".format(r["predictability"], r["uncertainty"]))
               print("- PIT: `{}` / Production: `{}`".format(r["pit_status"], r["production_status"]))
           PY
