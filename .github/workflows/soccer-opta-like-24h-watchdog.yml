@@ -31,7 +31,7 @@ jobs:
           CURL_TIMEOUT_ARGS=(--connect-timeout 30 --max-time 120)
 
           api_runs() {
-            curl "${CURL_TIMEOUT_ARGS[@]}" --retry 5 --retry-delay 2 --retry-all-errors -fsSL \\
+            curl "${CURL_TIMEOUT_ARGS[@]}" --retry 5 --retry-delay 2 --retry-all-errors -fsSL \
               -H "Authorization: Bearer ${GH_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
