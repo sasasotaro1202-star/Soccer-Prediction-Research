@@ -57,7 +57,7 @@ def test_chronological_oos_runner_is_selection_free_and_production_blocked():
 def test_unknown_source_timestamp_fails_closed():
     history = _history()
     history.loc[0, "source_available_at_utc"] = None
-    with pytest.raises(ValueError, match="unknown timestamps"):
+    with pytest.raises(ValueError, match="availability"):
         run_statsmodels_score_oos(history, min_train=24, oos_block=8, cutoff_buffer_minutes=1)
 
 
