@@ -1,6 +1,29 @@
 name: Soccer Research Robust
 
 on:
+  push:
+    paths:
+      - "src/data/completion_gate.py"
+      - "src/data/pit_source_adapter_fast.py"
+      - "src/data/pit_source_adapter_v2.py"
+      - "src/data/pit_archive_fallback.py"
+      - "src/data/pit_openfootball_github.py"
+      - "src/data/pit_openfootball_history.py"
+      - "src/data/pit_openfootball_country.py"
+      - "src/data/pit_jleague_2020_github.py"
+      - "src/data/pit_footballcsv_espana.py"
+      - "src/data/pit_footballcsv_weekly.py"
+      - "src/data/pit_footballcsv_italy.py"
+      - "src/data/pit_engsoccerdata.py"
+      - "src/evaluation/walk_forward.py"
+      - "src/evaluation/score_walk_forward.py"
+      - "src/research/engine.py"
+      - "src/research/adoption_gate.py"
+      - "src/research/stability_gate.py"
+      - "src/research/performance_snapshot.py"
+      - "src/research/target_oos.py"
+      - ".github/workflows/soccer-research-robust.yml"
+      - "requirements.txt"
   workflow_dispatch:
     inputs:
       run_prediction:
