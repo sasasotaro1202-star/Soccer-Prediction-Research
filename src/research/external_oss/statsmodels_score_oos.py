@@ -141,7 +141,7 @@ def run_statsmodels_score_oos(
     d["home_goals"] = pd.to_numeric(d["home_goals"], errors="coerce")
     d["away_goals"] = pd.to_numeric(d["away_goals"], errors="coerce")
     d["pit_verified"] = d["pit_verified"].astype("boolean")
-    d["match_id"] = d["match_id"].astype(str).str.strip()
+    d["match_id"] = d["match_id"].astype("string").str.strip()
 
     if d["match_id"].eq("").any() or d["match_id"].isna().any():
         raise ValueError("statsmodels OOS data contains empty/missing match_id")
