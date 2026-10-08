@@ -293,3 +293,45 @@ def test_competition_scope_uses_pre_kickoff_state():
     assert row["pit_status"] == "CURRENT_OBSERVED_PRE_KICKOFF"
     assert row["production_status"] == "NOT_PRODUCTION"
     assert np.isclose(float(row["p_home"]) + float(row["p_draw"]) + float(row["p_away"]), 1.0)
+
+
+def test_parse_espn_standings_strength():
+    from src.prediction.live_research_forecast import parse_espn_standings_strength
+
+    payload = {
+        "children": [
+            {
+                "standings": {
+                    "entries": [
+                        {
+                            "team": {"displayName": "Kashiwa Reysol"},
+                            "stats": [
+                                {"name": "gamesPlayed", "value": 8},
+                                {"name": "wins", "value": 6},
+                                {"name": "ties", "value": 0},
+                                {"name": "losses", "value": 2},
+                                {"name": "points", "value": 18},
+                                {"name": "pointsFor", "value": 17},
+                                {"name": "pointsAgainst", "value": 12},
+                            ],
+                        },
+                        {
+                            "team": {"displayName": "Vissel Kobe"},
+                            "stats": [
+                                {"name": "gamesPlayed", "value": 8},
+                                {"name": "wins", "value": 6},
+                                {"name": "ties", "value": 1},
+                                {"name": "losses", "value": 1},
+                                {"name": "points", "value": 19},
+                                {"name": "pointsFor", "value": 12},
+                                {"name": "pointsAgainst", "value": 5},
+                            ],
+                        },
+                    ]
+                }
+            }
+        ]
+    }
+    strengths = parse_espn_standings_strength(payload)
+    assert strengths["kashiwa reysol"]["ppg"] == 18 / 8
+    assert strengths["vissel kobe"]["gd_per_game"] == 7 / 8
