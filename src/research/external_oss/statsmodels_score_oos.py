@@ -413,6 +413,7 @@ def run_statsmodels_score_oos(
             model_fit,
             prediction_cutoff_utc=prediction_cutoff,
             regularization_alpha=0.1,
+            cutoff_buffer_minutes=int(cutoff_buffer_minutes),
         )
 
         calibration_common = calibration.loc[
