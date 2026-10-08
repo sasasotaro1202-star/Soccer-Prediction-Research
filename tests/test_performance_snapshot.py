@@ -75,8 +75,22 @@ def test_score_derived_ou_btts_do_not_count_as_standalone_targets(tmp_path):
 def test_csv_output_preserves_target_rows(tmp_path):
     _write_json(tmp_path, "completion_gate.json", {"full_gate_passed": True})
     _write_json(tmp_path, "audit_gate.json", {"full_gate_passed": True})
+    _write_json(tmp_path, "oos_temporal_integrity.json", {"status": "PASS"})
+    _write_json(tmp_path, "score_oos_temporal_integrity.json", {"status": "PASS"})
     snapshot = build_snapshot(tmp_path)
     out = tmp_path / "out.csv"
     write_csv(snapshot, out)
     rows = list(csv.DictReader(out.read_text(encoding="utf-8").splitlines()))
     assert {row["task"] for row in rows} == {"1X2", "Score", "O/U", "BTTS", "MOM"}
+
+def test_metrics_without_temporal_integrity_remain_unverified(tmp_path):
+    _write_json(tmp_path, "completion_gate.json", {"full_gate_passed": True})
+    _write_json(tmp_path, "audit_gate.json", {"full_gate_passed": True})
+    _write_csv(tmp_path, "locked_oos_metrics.csv", [
+        {"n": "100", "logloss": "0.50", "accuracy": "0.65", "brier": "0.18", "ece": "0.03"},
+    ])
+    snapshot = build_snapshot(tmp_path)
+    one_x_two = next(item for item in snapshot["targets"] if item["task"] == "1X2")
+    assert one_x_two["status"] == "UNVERIFIED"
+    assert "Chronological OOS integrity" in one_x_two["reason"]
+
