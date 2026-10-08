@@ -20,6 +20,7 @@ REQUIRED = {
     "kickoff_utc",
     "prediction_cutoff_at_utc",
     "feature_source_max_available_at_utc",
+    "source_available_at_utc",
     "pit_verified",
     "home_goals",
     "away_goals",
@@ -45,7 +46,7 @@ def validate_replay_input(path: str | Path) -> tuple[pd.DataFrame, dict[str, Any
         raise ValueError(f"PIT replay input missing required columns: {missing}")
 
     out = df.copy()
-    for col in ("kickoff_utc", "prediction_cutoff_at_utc", "feature_source_max_available_at_utc"):
+    for col in ("kickoff_utc", "prediction_cutoff_at_utc", "feature_source_max_available_at_utc", "source_available_at_utc"):
         out[col] = pd.to_datetime(out[col], utc=True, errors="coerce")
 
     if out["match_id"].isna().any() or out["match_id"].astype(str).str.strip().eq("").any():
@@ -66,6 +67,10 @@ def validate_replay_input(path: str | Path) -> tuple[pd.DataFrame, dict[str, Any
         raise ValueError("PIT replay input contains prediction cutoff after kickoff")
     if out["feature_source_max_available_at_utc"].isna().any():
         raise ValueError("PIT replay input has missing feature availability timestamps")
+    if out["source_available_at_utc"].isna().any():
+        raise ValueError("PIT replay input has missing outcome availability timestamps")
+    if (out["source_available_at_utc"] < out["kickoff_utc"]).any():
+        raise ValueError("PIT replay input contains outcome availability before kickoff")
     if (out["feature_source_max_available_at_utc"] > out["prediction_cutoff_at_utc"]).any():
         raise ValueError("PIT replay input contains feature availability after prediction cutoff")
     if out[["home_goals", "away_goals", "target"]].isna().any().any():
