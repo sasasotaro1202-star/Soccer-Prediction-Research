@@ -35,9 +35,12 @@ except ImportError as exc:  # pragma: no cover - exercised by isolated envs
 _REQUIRED = {
     "home_team",
     "away_team",
+    "competition",
     "home_goals",
     "away_goals",
     "pit_verified",
+    "kickoff_utc",
+    "source_available_at_utc",
 }
 
 
@@ -52,23 +55,35 @@ class StatsmodelsPoissonScoreModel:
     method: str = "statsmodels_poisson_glm_score_v1"
 
 
-def _prepare(history: pd.DataFrame) -> pd.DataFrame:
+def _prepare(history: pd.DataFrame, *, prediction_cutoff_utc: str | pd.Timestamp) -> pd.DataFrame:
     missing = sorted(_REQUIRED - set(history.columns))
     if missing:
         raise ValueError(f"statsmodels score training data missing columns: {missing}")
 
     d = history.copy()
+    cutoff = pd.to_datetime(prediction_cutoff_utc, utc=True, errors="coerce")
+    if pd.isna(cutoff):
+        raise ValueError("prediction_cutoff_utc must be a valid timezone-aware timestamp")
+
     d["home_team"] = d["home_team"].astype(str).str.strip()
     d["away_team"] = d["away_team"].astype(str).str.strip()
-    if "competition" not in d.columns:
-        d["competition"] = "UNKNOWN"
     d["competition"] = d["competition"].astype(str).str.strip()
+    d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
+    d["source_available_at_utc"] = pd.to_datetime(
+        d["source_available_at_utc"], utc=True, errors="coerce"
+    )
     d["home_goals"] = pd.to_numeric(d["home_goals"], errors="coerce")
     d["away_goals"] = pd.to_numeric(d["away_goals"], errors="coerce")
     d["pit_verified"] = d["pit_verified"].astype("boolean")
 
+    # Fail closed on unknown timing. Both the event and the predictor-side source
+    # availability must precede the prediction cutoff.
     d = d[
         d["pit_verified"].eq(True)
+        & d["kickoff_utc"].notna()
+        & d["source_available_at_utc"].notna()
+        & (d["kickoff_utc"] < cutoff)
+        & (d["source_available_at_utc"] <= cutoff)
         & d["home_goals"].notna()
         & d["away_goals"].notna()
         & d["home_team"].ne("")
@@ -85,8 +100,13 @@ def _prepare(history: pd.DataFrame) -> pd.DataFrame:
     return d.reset_index(drop=True)
 
 
-def fit_statsmodels_poisson_score_model(history: pd.DataFrame) -> StatsmodelsPoissonScoreModel:
-    d = _prepare(history)
+def fit_statsmodels_poisson_score_model(
+    history: pd.DataFrame,
+    *,
+    prediction_cutoff_utc: str | pd.Timestamp,
+) -> StatsmodelsPoissonScoreModel:
+    """Fit only on PIT-verified observations strictly before the locked cutoff."""
+    d = _prepare(history, prediction_cutoff_utc=prediction_cutoff_utc)
 
     # Categorical terms make team/competition effects explicit while keeping the
     # challenger compact. Statsmodels handles the reference levels internally.
@@ -157,7 +177,9 @@ def predict_statsmodels_poisson_distribution(
 ) -> list[tuple[int, int, float]]:
     if max_goals < 1:
         raise ValueError("max_goals must be at least 1")
-    competition_value = "UNKNOWN" if competition is None else str(competition)
+    if competition is None or str(competition).strip() == "":
+        raise RuntimeError("competition is required; unknown competition fails closed")
+    competition_value = str(competition).strip()
     _check_categories(model, home_team, away_team, competition_value)
 
     home_lambda = _predict_mean(
