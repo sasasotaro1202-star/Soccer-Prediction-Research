@@ -77,7 +77,25 @@ def _prepare(history: pd.DataFrame, *, prediction_cutoff_utc: str | pd.Timestamp
     d["away_goals"] = pd.to_numeric(d["away_goals"], errors="coerce")
     d["pit_verified"] = d["pit_verified"].astype("boolean")
 
-    # Fail closed on unknown timing. Both the event and the predictor-side source
+    pit_rows = d[d["pit_verified"].eq(True)].copy()
+    if pit_rows.empty:
+        raise ValueError("No PIT-verified rows available for statsmodels challenger")
+
+    required_pit_fields = ["home_team", "away_team", "competition", "kickoff_utc", "source_available_at_utc", "home_goals", "away_goals"]
+    for field in required_pit_fields:
+        if field in {"home_team", "away_team", "competition"}:
+            invalid = pit_rows[field].isna() | pit_rows[field].astype("string").str.strip().eq("")
+        else:
+            invalid = pit_rows[field].isna()
+        if invalid.any():
+            raise ValueError(
+                f"PIT-verified rows contain missing required field: {field}"
+            )
+
+    if (pit_rows[["home_goals", "away_goals"]] < 0).any().any():
+        raise ValueError("Goal labels must be non-negative")
+
+    # Fail closed on unknown timing. Both the event and predictor-side source
     # availability must precede the prediction cutoff.
     d = d[
         d["pit_verified"].eq(True)
