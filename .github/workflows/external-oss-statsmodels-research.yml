@@ -36,4 +36,6 @@ jobs:
         env:
           PYTHONHASHSEED: "0"
         run: |
-          python -m pytest -q tests/test_statsmodels_poisson_research.py
+          python -m pytest -q \
+            tests/test_statsmodels_poisson_research.py \
+            tests/test_statsmodels_score_oos.py
