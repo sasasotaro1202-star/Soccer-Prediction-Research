@@ -76,4 +76,12 @@ Gate: license review, security review, PIT/provenance validation, cost confirmat
 
 ## Adoption status
 
-All entries in this file are currently **RESEARCH CANDIDATES** only. No repository is promoted to Production by this registry.
+All entries in this file remain **RESEARCH CANDIDATES** for Production purposes. `statsmodels/statsmodels` has reached **E2_LOCAL_IMPLEMENTATION_AND_TESTS** only; it has not reached OOS-performance verification, robustness, Frozen Holdout, Shadow, or Production adoption. No repository is promoted to Production by this registry.
+
+### Verified metadata for statsmodels
+
+- official repository: `statsmodels/statsmodels`
+- pinned release: `0.15.0`
+- official license: BSD-3-Clause
+- source verification: official statsmodels repository/release documentation reviewed 2026-10-08
+- cost model: OSS package; no runtime SaaS/API dependency
