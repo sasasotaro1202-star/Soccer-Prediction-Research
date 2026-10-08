@@ -59,3 +59,14 @@ def test_unknown_source_timestamp_fails_closed():
     history.loc[0, "source_available_at_utc"] = None
     with pytest.raises(ValueError, match="unknown timestamps"):
         run_statsmodels_score_oos(history, min_train=24, oos_block=8, cutoff_buffer_minutes=1)
+
+
+def test_feature_replay_availability_is_used_when_legacy_source_time_is_missing():
+    history = _history()
+    history["feature_source_max_available_at_utc"] = history["kickoff_utc"] - pd.Timedelta(minutes=30)
+    history["source_available_at_utc"] = None
+    result = run_statsmodels_score_oos(
+        history, min_train=24, oos_block=8, cutoff_buffer_minutes=1
+    )
+    assert result["status"] == "RESEARCH_OOS_READY"
+    assert result["fold_count"] == 3
