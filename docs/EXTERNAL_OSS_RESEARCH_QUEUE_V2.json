@@ -1,0 +1,193 @@
+{
+  "catalog_version": "v2",
+  "snapshot_date": "2026-10-08",
+  "repository": "sasasotaro1202-star/Soccer-Prediction-Research",
+  "main_sha": "c6440d9b850bd99f91b066378ff2ef66312ca9fd",
+  "purpose": "Research-only external OSS discovery catalog for prediction-system capability expansion.",
+  "authority": "NON_PRODUCTION_RESEARCH_ONLY",
+  "evidence_rules": {
+    "current_github_state": "authoritative for repository state at snapshot time",
+    "external_oss_claims": "discovery/input only",
+    "pit": "unknown_or_unverifiable_is_fail_closed",
+    "production_adoption": "requires_local_reproduction, chronological_oos_wfo, calibration, robustness, frozen_holdout, shadow",
+    "protected_assets": [
+      "production_model",
+      "production_features",
+      "target_definition",
+      "calibration",
+      "frozen_holdout",
+      "production_evidence"
+    ]
+  },
+  "scoring_note": "research_priority_score is a heuristic prioritization aid, not measured prediction performance.",
+  "fields": [
+    "repository",
+    "stars",
+    "layer",
+    "research_role",
+    "priority",
+    "next_evidence"
+  ],
+  "entries": [
+    {
+      "repository": "google-research/timesfm",
+      "stars": 34154,
+      "layer": "Forecasting",
+      "research_role": "Time-series foundation model",
+      "priority": "HIGH",
+      "next_evidence": "Model candidate only; requires local chronological OOS/WFO + calibration."
+    },
+    {
+      "repository": "Panniantong/Agent-Reach",
+      "stars": 93460,
+      "layer": "Retrieval / Agent",
+      "research_role": "External information acquisition",
+      "priority": "HIGH",
+      "next_evidence": "Research retrieval candidate; PIT/provenance/security must be proven locally."
+    },
+    {
+      "repository": "microsoft/qlib",
+      "stars": 49210,
+      "layer": "Research / Quant",
+      "research_role": "Research pipeline / model experimentation",
+      "priority": "HIGH",
+      "next_evidence": "Mechanism-transfer candidate; local soccer adaptation and OOS required."
+    },
+    {
+      "repository": "obra/superpowers",
+      "stars": 296447,
+      "layer": "Agent / Skills",
+      "research_role": "Research engineering workflow",
+      "priority": "MEDIUM",
+      "next_evidence": "Tooling candidate; no prediction-performance claim."
+    },
+    {
+      "repository": "mattpocock/skills",
+      "stars": 279882,
+      "layer": "Agent / Skills",
+      "research_role": "Reusable skill orchestration",
+      "priority": "MEDIUM",
+      "next_evidence": "Tooling candidate; must remain separate from Production prediction logic."
+    },
+    {
+      "repository": "pymc-devs/pymc",
+      "stars": 9796,
+      "layer": "Probabilistic",
+      "research_role": "Bayesian / hierarchical modeling",
+      "priority": "HIGH",
+      "next_evidence": "Probabilistic modeling candidate; compare against current models on chronological OOS."
+    },
+    {
+      "repository": "openclaw/openclaw",
+      "stars": 391611,
+      "layer": "Agent / Automation",
+      "research_role": "Autonomous orchestration",
+      "priority": "MEDIUM",
+      "next_evidence": "Control/research automation candidate; security and authority boundaries required."
+    },
+    {
+      "repository": "sktime/sktime",
+      "stars": 10060,
+      "layer": "Time Series",
+      "research_role": "Forecasting / time-series research",
+      "priority": "HIGH",
+      "next_evidence": "Benchmarking candidate; target-specific local validation required."
+    },
+    {
+      "repository": "NousResearch/hermes-agent",
+      "stars": 251990,
+      "layer": "Agent",
+      "research_role": "Autonomous research agent",
+      "priority": "MEDIUM",
+      "next_evidence": "Research automation candidate; no automatic production authority."
+    },
+    {
+      "repository": "statsmodels/statsmodels",
+      "stars": 11678,
+      "layer": "Statistics",
+      "research_role": "Classical statistical modeling",
+      "priority": "HIGH",
+      "next_evidence": "Baseline/statistical challenger candidate; chronological OOS required."
+    },
+    {
+      "repository": "unit8co/darts",
+      "stars": 9537,
+      "layer": "Time Series",
+      "research_role": "Forecasting model zoo",
+      "priority": "HIGH",
+      "next_evidence": "Model-family benchmark candidate; complexity budget required."
+    },
+    {
+      "repository": "pyro-ppl/pyro",
+      "stars": 9063,
+      "layer": "Probabilistic",
+      "research_role": "Probabilistic programming",
+      "priority": "HIGH",
+      "next_evidence": "Uncertainty/modeling candidate; local reproduction and OOS required."
+    },
+    {
+      "repository": "Nixtla/statsforecast",
+      "stars": 4922,
+      "layer": "Forecasting",
+      "research_role": "Statistical forecasting baselines",
+      "priority": "HIGH",
+      "next_evidence": "Cheap baseline benchmark candidate; target-specific evidence required."
+    },
+    {
+      "repository": "Nixtla/neuralforecast",
+      "stars": 4279,
+      "layer": "Forecasting",
+      "research_role": "Neural forecasting",
+      "priority": "HIGH",
+      "next_evidence": "Neural challenger candidate; robustness/calibration required."
+    },
+    {
+      "repository": "mlflow/mlflow",
+      "stars": 28308,
+      "layer": "MLOps",
+      "research_role": "Experiment/model lineage",
+      "priority": "MEDIUM",
+      "next_evidence": "Research infrastructure candidate; not a model-performance claim."
+    },
+    {
+      "repository": "feast-dev/feast",
+      "stars": 7323,
+      "layer": "MLOps",
+      "research_role": "Feature store / lineage",
+      "priority": "MEDIUM",
+      "next_evidence": "Feature lifecycle candidate; PIT and online/offline parity required."
+    },
+    {
+      "repository": "Arize-ai/phoenix",
+      "stars": 11744,
+      "layer": "Evaluation",
+      "research_role": "Evaluation / observability",
+      "priority": "MEDIUM",
+      "next_evidence": "Evaluation tooling candidate; external claims remain non-production."
+    },
+    {
+      "repository": "theDotmack/claude-mem",
+      "stars": 97844,
+      "layer": "Memory",
+      "research_role": "Long-term agent memory",
+      "priority": "MEDIUM",
+      "next_evidence": "Failure/research memory candidate; provenance and contamination controls required."
+    },
+    {
+      "repository": "Graphify-Labs/graphify",
+      "stars": 124724,
+      "layer": "Knowledge",
+      "research_role": "Graph / knowledge context",
+      "priority": "MEDIUM",
+      "next_evidence": "Knowledge layer candidate; information independence and leakage must be audited."
+    },
+    {
+      "repository": "firecrawl/firecrawl",
+      "stars": 189554,
+      "layer": "Retrieval",
+      "research_role": "Web crawling / extraction",
+      "priority": "MEDIUM",
+      "next_evidence": "Strong retrieval candidate; AGPL-3.0 and security/cost must be reviewed before adoption."
+    }
+  ]
+}
