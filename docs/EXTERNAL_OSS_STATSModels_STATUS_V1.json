@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "research_id": "statsmodels_poisson_score_v1",
+  "research_id": "statsmodels_poisson_score_v2",
   "repository": "statsmodels/statsmodels",
   "adapter": "src/research/external_oss/statsmodels_poisson.py",
   "dependency_manifest": "requirements-research.txt",
@@ -72,5 +72,20 @@
     "license": "BSD-3-Clause",
     "cost_model": "open_source_package_no_runtime_service_dependency",
     "evidence_role": "SOURCE_VERIFICATION_ONLY_NOT_PERFORMANCE_EVIDENCE"
+  },
+  "adapter_versions": {
+    "score_model": "src/research/external_oss/statsmodels_poisson.py",
+    "oos_runner": "src/research/external_oss/statsmodels_score_oos.py",
+    "calibration": "src/research/external_oss/score_distribution_calibration.py",
+    "robustness": "src/research/external_oss/statsmodels_robustness.py"
+  },
+  "experiment_contract": {
+    "target": "Score",
+    "feature_set_id": "statsmodels_score_formula_home_away_competition_v1",
+    "calibration": "joint_score_temperature_scaling",
+    "robustness": "chronological_fold_plus_multi_competition_slices",
+    "selection_during_oos": false,
+    "frozen_holdout_access": false,
+    "production_adoption": false
   }
 }
