@@ -119,14 +119,49 @@ def parse_elo_tsv(text: str, elo_codes: dict[str, str]) -> dict[str, float]:
     return ratings
 
 
+def parse_elo_team_name_tsv(text: str) -> dict[str, float]:
+    """Parse World.tsv into normalized team-name -> Elo ratings.
+
+    The public World.tsv layout used by this research lane places the team name
+    in column 2 and Elo in column 4. This mode is intentionally used only for
+    explicitly configured current/imminent research scopes; it does not create
+    historical PIT evidence.
+    """
+    ratings: dict[str, float] = {}
+    for raw in text.splitlines():
+        cells = raw.strip().split("\t")
+        if len(cells) < 4:
+            continue
+        name = _normalized_team(cells[1])
+        try:
+            rating = float(cells[3])
+        except (TypeError, ValueError):
+            continue
+        if name and np.isfinite(rating):
+            ratings[name] = rating
+    return ratings
+
+
 def load_elo(config: dict[str, Any]) -> tuple[dict[str, float], str, str]:
     timeout = float(config["runtime"]["request_timeout_seconds"])
     body, observed_at, digest = _get(
         str(config["sources"]["elo_url"]),
         timeout,
     )
-    ratings = parse_elo_tsv(body.decode("utf-8", errors="replace"), config["team_aliases"]["elo_codes"])
-    missing = [team for team in config["target_teams"] if team not in ratings]
+    text = body.decode("utf-8", errors="replace")
+    elo_codes = config.get("team_aliases", {}).get("elo_codes", {})
+    if elo_codes:
+        ratings = parse_elo_tsv(text, elo_codes)
+        missing = [team for team in config.get("target_teams", []) if team not in ratings]
+    else:
+        ratings = parse_elo_team_name_tsv(text)
+        name_aliases = config.get("team_aliases", {}).get("name_aliases", {})
+        for alias, source_name in name_aliases.items():
+            alias_key = _normalized_team(str(alias))
+            source_key = _normalized_team(str(source_name))
+            if source_key in ratings:
+                ratings[alias_key] = ratings[source_key]
+        missing = []
     if missing:
         raise RuntimeError(f"Elo source missing teams: {missing}")
     return ratings, observed_at, digest
@@ -142,10 +177,32 @@ def find_target(event: dict[str, Any], config: dict[str, Any]) -> str | None:
     if not home or not away:
         return None
     observed = frozenset((_normalized_team(home), _normalized_team(away)))
-    for label, pair in config["target_pairs"].items():
+    for label, pair in config.get("target_pairs", {}).items():
         wanted = frozenset(_normalized_team(x) for x in pair)
         if observed == wanted:
             return str(label)
+
+    target_competitions = {
+        _normalized_team(str(value))
+        for value in config.get("target_competitions", [])
+        if str(value).strip()
+    }
+    if target_competitions:
+        tournament = event.get("tournament") or {}
+        unique = tournament.get("uniqueTournament") or {}
+        candidates = {
+            _normalized_team(str(value))
+            for value in (
+                tournament.get("name"),
+                tournament.get("slug"),
+                unique.get("name"),
+                unique.get("slug"),
+            )
+            if value
+        }
+        if candidates & target_competitions:
+            event_id = str(event.get("id") or "").strip()
+            return f"competition:{next(iter(candidates & target_competitions))}:{event_id}"
     return None
 
 
