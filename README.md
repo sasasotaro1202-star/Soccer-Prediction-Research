@@ -64,3 +64,13 @@ The output includes 1X2 probabilities, Top-3 scorelines, current score/status, u
 This lane is always NOT_PRODUCTION. It does not bypass the adopted-model registry, OOS, calibration, robustness, frozen-holdout or adoption gates.
 
 See docs/live-research-forecast.md for the complete contract.
+
+## Performance evidence snapshot
+
+Every robust research run now emits:
+
+- `artifacts/performance_snapshot.json`
+- `artifacts/performance_snapshot.csv`
+- `artifacts/performance_snapshot.md`
+
+The snapshot separates 1X2, Score, O/U, BTTS and MOM. A failed PIT/audit gate produces `BLOCKED` rather than a performance claim. O/U and BTTS are not relabeled from score-model-derived fields; they require target-specific OOS artifacts. This keeps the displayed record aligned with the project's target-isolation and fail-closed rules.
