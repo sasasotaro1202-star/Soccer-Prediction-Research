@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "research_id": "statsmodels_poisson_score_v1",
+  "repository": "statsmodels/statsmodels",
+  "adapter": "src/research/external_oss/statsmodels_poisson.py",
+  "dependency_manifest": "requirements-research.txt",
+  "dependency_pin": "statsmodels==0.15.0",
+  "evidence_level": "E2",
+  "status": "RESEARCH_ONLY_NOT_PRODUCTION",
+  "claims_allowed": [
+    "implementation_exists",
+    "isolated_tests_exist",
+    "pit_cutoff_contract_is_encoded"
+  ],
+  "claims_forbidden_until_gates_pass": [
+    "soccer_prediction_improvement",
+    "calibration_improvement",
+    "robustness_improvement",
+    "future_generalization_improvement",
+    "production_readiness"
+  ],
+  "pit_contract": {
+    "pit_verified_required": true,
+    "kickoff_before_prediction_cutoff_required": true,
+    "source_available_at_required": true,
+    "source_available_at_must_be_at_or_before_prediction_cutoff": true,
+    "unknown_timestamp": "FAIL_CLOSED"
+  },
+  "evaluation_path": [
+    "E3_LOCAL_REPRODUCTION",
+    "E4_CHRONOLOGICAL_OOS_WFO",
+    "E5_ROBUSTNESS",
+    "E6_FROZEN_HOLDOUT",
+    "E7_SHADOW_PRODUCTION_EVIDENCE"
+  ],
+  "decision_states": [
+    "ADOPT",
+    "HOLD",
+    "REJECT"
+  ],
+  "automatic_production_adoption": false,
+  "frozen_holdout_access": false
+}
