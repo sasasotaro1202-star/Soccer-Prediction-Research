@@ -31,6 +31,40 @@ def test_orchestrator_refreshes_main_before_dispatch():
     assert 'Re-read main immediately before dispatch' in text
 
 
+def test_orchestrator_and_recovery_reference_existing_workflows():
+    import re
+
+    root = Path(".github/workflows")
+    existing = {p.name for p in root.glob("*.yml")}
+    orchestrator = WORKFLOW.read_text(encoding="utf-8")
+    recovery = Path(".github/workflows/action-failure-recovery.yml").read_text(encoding="utf-8")
+
+    for workflow in re.findall(r'ensure_lane "([^"]+\\.yml)"', orchestrator):
+        assert workflow in existing, workflow
+
+    for workflow in re.findall(r'gh workflow run "([^"]+\\.yml)"', orchestrator):
+        assert workflow in existing, workflow
+
+    assert "Soccer Ultimate Experiment Matrix" not in recovery
+    assert "Soccer Feature Set Research" not in recovery
+
+
+def test_control_plane_action_references_are_full_sha_pinned():
+    import re
+
+    paths = (
+        Path(".github/workflows/ci.yml"),
+        Path(".github/workflows/soccer-autonomous-orchestrator.yml"),
+        Path(".github/workflows/soccer-control-plane-watchdog.yml"),
+        Path(".github/workflows/action-failure-recovery.yml"),
+        Path(".github/workflows/autonomous-github-controller.yml"),
+    )
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
+        for ref in re.findall(r'uses:\s*(actions/[^@\s]+)@([^\s#]+)', text):
+            assert re.fullmatch(r"[0-9a-f]{40}", ref[1]), f"{path}: {ref[0]}@{ref[1]}"
+
+
 def test_orchestrator_reconciles_current_main_ci():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert 'ensure_lane "ci.yml" 360 10' in text
