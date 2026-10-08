@@ -43,6 +43,7 @@ jobs:
           python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt
 
       - name: Locate latest PIT replay artifact
+        id: locate
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -60,27 +61,27 @@ jobs:
               request = urllib.request.Request(url, headers=headers)
               with urllib.request.urlopen(request, timeout=60) as response:
                   return json.load(response)
-          runs = get(f'https://api.github.com/repos/{repo}/actions/runs?per_page=100').get('workflow_runs', [])
-          candidates = sorted([r for r in runs if r.get('name') == 'Soccer Research Robust' and r.get('head_sha') != current], key=lambda r: r.get('created_at', ''), reverse=True)
           selected = None
-          for run in candidates:
-              try:
-                  artifacts = get(f"https://api.github.com/repos/{repo}/actions/runs/{run['id']}/artifacts?per_page=100").get('artifacts', [])
-              except Exception:
-                  continue
+          for page in range(1, 31):
+              data = get(f'https://api.github.com/repos/{repo}/actions/artifacts?per_page=100&page={page}')
+              artifacts = data.get('artifacts', [])
               for artifact in artifacts:
-                  if artifact.get('expired'):
+                  name = str(artifact.get('name', ''))
+                  workflow_run = artifact.get('workflow_run') or {}
+                  head_sha = str(workflow_run.get('head_sha', ''))
+                  if artifact.get('expired') or not name.startswith('soccer-research-robust-') or head_sha == current:
                       continue
-                  selected = {'run_id': run['id'], 'run_sha': run.get('head_sha'), 'artifact_id': artifact['id'], 'artifact_name': artifact.get('name', ''), 'run_status': run.get('status'), 'run_conclusion': run.get('conclusion')}
+                  selected = {'run_id': workflow_run.get('id'), 'run_sha': head_sha, 'artifact_id': artifact['id'], 'artifact_name': name, 'run_status': workflow_run.get('status'), 'run_conclusion': workflow_run.get('conclusion')}
                   break
               if selected:
+                  break
+              if len(artifacts) < 100:
                   break
           if not selected:
               raise SystemExit('No unexpired Soccer Research Robust artifact is available for replay.')
           Path('workspace/artifacts_source.json').write_text(json.dumps(selected, indent=2), encoding='utf-8')
           print(json.dumps(selected))
           PY
-
       - name: Download PIT replay artifact
         env:
           GH_TOKEN: ${{ github.token }}
