@@ -20,6 +20,12 @@ def test_orchestrator_is_fail_closed_and_main_pinned():
     assert '"performance_claim_allowed": False' in text
 
 
+def test_orchestrator_reconciles_current_main_ci():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert 'ensure_lane "ci.yml" 360 10' in text
+    assert "Missing exact-main CI history is dispatched immediately" in text
+
+
 def test_orchestrator_has_pit_and_research_reconciliation_lanes():
     text = WORKFLOW.read_text(encoding="utf-8")
     required = (
