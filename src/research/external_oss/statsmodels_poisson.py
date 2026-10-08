@@ -104,9 +104,7 @@ def _prepare(
     if (pit_rows[["home_goals", "away_goals"]] < 0).any().any():
         raise ValueError("Goal labels must be non-negative")
 
-    own_prediction_cutoff = pit_rows["kickoff_utc"] - pd.Timedelta(
-        minutes=int(cutoff_buffer_minutes)
-    )
+    own_prediction_cutoff = pit_rows["kickoff_utc"] - pd.to_timedelta(int(cutoff_buffer_minutes), unit="min")
     invalid_own_pit = (
         pit_rows["feature_source_max_available_at_utc"] > own_prediction_cutoff
     )

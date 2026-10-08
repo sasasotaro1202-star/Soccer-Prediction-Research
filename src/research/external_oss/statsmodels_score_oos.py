@@ -353,13 +353,9 @@ def run_statsmodels_score_oos(
     fold = 0
 
     while start < len(d):
-        prediction_cutoff = d.iloc[start]["kickoff_utc"] - pd.Timedelta(
-            minutes=int(cutoff_buffer_minutes)
-        )
+        prediction_cutoff = d.iloc[start]["kickoff_utc"] - pd.to_timedelta(int(cutoff_buffer_minutes), unit="min")
         train = d.iloc[:start].copy()
-        train_own_cutoff = train["kickoff_utc"] - pd.Timedelta(
-            minutes=int(cutoff_buffer_minutes)
-        )
+        train_own_cutoff = train["kickoff_utc"] - pd.to_timedelta(int(cutoff_buffer_minutes), unit="min")
         train = train[
             (train["kickoff_utc"] < prediction_cutoff)
             & (train["feature_source_max_available_at_utc"] <= train_own_cutoff)
@@ -383,9 +379,7 @@ def run_statsmodels_score_oos(
 
         # OOS PIT is case-specific: each predictor must be available before that
         # match's own prediction cutoff, not merely before the first OOS cutoff.
-        oos_case_cutoff = oos["kickoff_utc"] - pd.Timedelta(
-            minutes=int(cutoff_buffer_minutes)
-        )
+        oos_case_cutoff = oos["kickoff_utc"] - pd.to_timedelta(int(cutoff_buffer_minutes), unit="min")
         oos_pit_valid = (
             oos["feature_source_max_available_at_utc"] <= oos_case_cutoff
         )

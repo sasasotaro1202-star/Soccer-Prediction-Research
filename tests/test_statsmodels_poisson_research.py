@@ -127,7 +127,7 @@ def test_feature_source_max_availability_is_required():
 
 def test_feature_source_must_precede_row_prediction_cutoff():
     broken = _history()
-    broken.loc[0, "feature_source_max_available_at_utc"] = "2026-01-01T11:30:00Z"
+    broken["feature_source_max_available_at_utc"] = "2026-01-01T11:30:00Z"
     with pytest.raises(ValueError, match="No PIT-verified rows"):
         fit_statsmodels_poisson_score_model(
             broken, prediction_cutoff_utc="2026-02-01T00:00:00Z"
