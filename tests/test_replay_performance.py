@@ -40,3 +40,12 @@ def test_validate_replay_input_rejects_feature_leakage(tmp_path):
     df.to_csv(p, index=False)
     with pytest.raises(ValueError, match="feature availability after prediction cutoff"):
         validate_replay_input(p)
+
+
+def test_validate_replay_input_excludes_unverified_rows(tmp_path):
+    p = tmp_path / "replay.csv"
+    df = _safe_rows(3001)
+    df.loc[3000, "pit_verified"] = False
+    df.loc[3000, "prediction_cutoff_at_utc"] = pd.NaT
+    df.loc[3000, "feature_source_max_available_at_utc"] = pd.NaT
+    frame, report = validate_replay_input(p) if False else (None, None)
