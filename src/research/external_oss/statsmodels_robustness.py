@@ -19,6 +19,7 @@ def evaluate_statsmodels_robustness(
     min_competition_rows: int = 100,
     min_non_regression_fraction: float = 0.70,
     max_material_regression_fraction: float = 0.05,
+    min_competition_slices: int = 2,
 ) -> dict[str, Any]:
     """Evaluate robustness without touching selection or Frozen Holdout.
 
@@ -30,6 +31,9 @@ def evaluate_statsmodels_robustness(
       more than 30% of slices;
     - unsupported/OOD coverage is reported separately, never treated as zero.
     """
+    if int(min_competition_slices) < 1:
+        raise ValueError("min_competition_slices must be at least 1")
+
     if not isinstance(oos_result, Mapping):
         return {"status": "HOLD", "reason": "invalid_oos_result"}
 
@@ -122,6 +126,7 @@ def evaluate_statsmodels_robustness(
         "PASS"
         if (
             fold_fraction >= float(min_non_regression_fraction)
+            and comp_total >= int(min_competition_slices)
             and comp_fraction <= 1.0 - float(min_non_regression_fraction)
         )
         else "HOLD"
@@ -139,6 +144,7 @@ def evaluate_statsmodels_robustness(
         "fold_non_regression_fraction": float(fold_fraction),
         "required_non_regression_fraction": float(min_non_regression_fraction),
         "competition_slice_count": int(comp_total),
+        "required_min_competition_slices": int(min_competition_slices),
         "competition_material_regression_count": int(comp_material),
         "competition_material_regression_fraction": float(comp_fraction),
         "max_material_regression_fraction": float(max_material_regression_fraction),
