@@ -26,3 +26,16 @@ Research-only external OSS challenger: `statsmodels/statsmodels`.
 
 ## Policy
 Failures remain immutable research knowledge. A failed experiment is not converted to PASS by changing the evidence semantics. Any new result must use a new run identity and the exact code/data configuration that produced it.
+
+
+## Failure F3
+- failure_type: `MODEL_SUPPORT_OOD`
+- observed_at: `2026-10-08`
+- workflow: `External OSS Statsmodels Soccer OOS`
+- symptom: incumbent Score model raised `Score model has no PIT-trained rate for one or both fixture teams` during chronological OOS
+- root_cause: the OOS block contained a team/competition outside the support of the training prefix
+- unsafe repair rejected: imputing an arbitrary score rate or silently counting an unavailable prediction as a correct/incorrect outcome
+- repair: construct an explicit common evaluability set across incumbent and statsmodels challenger; exclude unsupported cases from performance metrics while retaining their count as `unsupported_rows` and reporting `common_coverage`
+- interpretation: unsupported/OOD coverage is separate from model accuracy and is itself monitored evidence
+- verification required: fresh Research tests and real-data OOS on the repaired HEAD
+- current state: `REPAIR_APPLIED_PENDING_REVERIFICATION`
