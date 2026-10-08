@@ -45,6 +45,19 @@ REQUIRED = {
     "score_2_probability",
     "score_3",
     "score_3_probability",
+    "over_2_5_probability",
+    "under_2_5_probability",
+    "btts_yes_probability",
+    "btts_no_probability",
+    "mom_status",
+    "mom_1_player",
+    "mom_1_probability",
+    "mom_2_player",
+    "mom_2_probability",
+    "mom_3_player",
+    "mom_3_probability",
+    "mom_4_player",
+    "mom_4_probability",
     "prediction_state",
     "pit_status",
     "production_status",
@@ -809,6 +822,16 @@ def verify(path: str) -> dict[str, Any]:
             errors.append(f"{idx}: uncertainty out of range")
         if not 0.0 <= float(row["predictability"]) <= 1.0:
             errors.append(f"{idx}: predictability out of range")
+        ou = [float(row["over_2_5_probability"]), float(row["under_2_5_probability"])]
+        if any(not np.isfinite(v) or v < 0 or v > 1 for v in ou) or not np.isclose(sum(ou), 1.0, atol=1e-5):
+            errors.append(f"{idx}: invalid O/U probability sum")
+        btts = [float(row["btts_yes_probability"]), float(row["btts_no_probability"])]
+        if any(not np.isfinite(v) or v < 0 or v > 1 for v in btts) or not np.isclose(sum(btts), 1.0, atol=1e-5):
+            errors.append(f"{idx}: invalid BTTS probability sum")
+        if str(row["mom_status"]) != "ABSTAIN_NO_PIT_VERIFIED_PLAYER_MODEL":
+            errors.append(f"{idx}: MOM must remain abstained in this research lane")
+        if any(float(row[f"mom_{rank}_probability"]) != 0.0 for rank in (1, 2, 3, 4)):
+            errors.append(f"{idx}: abstained MOM probabilities must be zero")
         for rank in (1, 2, 3):
             score = str(row[f"score_{rank}"])
             probability = float(row[f"score_{rank}_probability"])
