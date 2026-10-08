@@ -142,6 +142,95 @@ def parse_elo_team_name_tsv(text: str) -> dict[str, float]:
     return ratings
 
 
+def _walk_standing_entries(value: Any):
+    if isinstance(value, dict):
+        entries = value.get("entries")
+        if isinstance(entries, list):
+            for entry in entries:
+                if isinstance(entry, dict):
+                    yield entry
+        for child_key in ("children", "groups", "standings"):
+            child = value.get(child_key)
+            if isinstance(child, list):
+                for item in child:
+                    yield from _walk_standing_entries(item)
+            elif isinstance(child, dict):
+                yield from _walk_standing_entries(child)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _walk_standing_entries(item)
+
+
+def _standing_stats(entry: dict[str, Any]) -> dict[str, float]:
+    stats: dict[str, float] = {}
+    raw = entry.get("stats") or entry.get("statistics") or []
+    if isinstance(raw, dict):
+        raw = [{"name": key, "value": value} for key, value in raw.items()]
+    if not isinstance(raw, list):
+        return stats
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("name") or item.get("abbreviation") or "").strip().lower()
+        value = item.get("value", item.get("displayValue"))
+        try:
+            stats[key] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return stats
+
+
+def parse_espn_standings_strength(payload: dict[str, Any]) -> dict[str, dict[str, float]]:
+    """Parse current ESPN J1 standings into a transparent strength snapshot.
+
+    This is current-observation research input only. It is not historical PIT
+    evidence. The parser is deliberately tolerant of ESPN's nested standings
+    group shape.
+    """
+    strengths: dict[str, dict[str, float]] = {}
+    for entry in _walk_standing_entries(payload):
+        team = entry.get("team") or {}
+        if not isinstance(team, dict):
+            continue
+        name = str(team.get("displayName") or team.get("name") or "").strip()
+        if not name:
+            continue
+        stats = _standing_stats(entry)
+        gp = stats.get("gamesplayed", stats.get("gp", 0.0))
+        wins = stats.get("wins", stats.get("w", 0.0))
+        draws = stats.get("ties", stats.get("draws", stats.get("d", 0.0)))
+        losses = stats.get("losses", stats.get("l", 0.0))
+        gf = stats.get("pointsfor", stats.get("goalsfor", stats.get("f", np.nan)))
+        ga = stats.get("pointsagainst", stats.get("goalsagainst", stats.get("a", np.nan)))
+        points = stats.get("points", stats.get("pts", np.nan))
+        if gp <= 0:
+            gp = wins + draws + losses
+        if gp <= 0 or not np.isfinite(gp):
+            continue
+        if not np.isfinite(points):
+            points = 3.0 * wins + draws
+        if not np.isfinite(gf) or not np.isfinite(ga):
+            continue
+        strengths[_normalized_team(name)] = {
+            "games": float(gp),
+            "ppg": float(points / gp),
+            "gf_per_game": float(gf / gp),
+            "ga_per_game": float(ga / gp),
+            "gd_per_game": float((gf - ga) / gp),
+        }
+    return strengths
+
+
+def load_standings_strength(config: dict[str, Any]) -> tuple[dict[str, dict[str, float]], str, str]:
+    timeout = float(config["runtime"]["request_timeout_seconds"])
+    url = str(config["sources"]["standings_url"])
+    payload, observed_at, digest = _get_json(url, timeout)
+    strengths = parse_espn_standings_strength(payload)
+    if not strengths:
+        raise RuntimeError("ESPN standings returned no parseable team strength entries")
+    return strengths, observed_at, digest
+
+
 def load_elo(config: dict[str, Any]) -> tuple[dict[str, float], str, str]:
     timeout = float(config["runtime"]["request_timeout_seconds"])
     body, observed_at, digest = _get(
@@ -161,15 +250,10 @@ def load_elo(config: dict[str, Any]) -> tuple[dict[str, float], str, str]:
             source_key = _normalized_team(str(source_name))
             if source_key in ratings:
                 ratings[alias_key] = ratings[source_key]
-        missing = []
+        missing = [team for team in config.get("target_teams", []) if team not in ratings]
     if missing:
         raise RuntimeError(f"Elo source missing teams: {missing}")
     return ratings, observed_at, digest
-
-
-def _normalized_team(value: str) -> str:
-    return " ".join(value.strip().lower().replace("türkiye", "turkey").split())
-
 
 def find_target(event: dict[str, Any], config: dict[str, Any]) -> str | None:
     home = str((event.get("homeTeam") or {}).get("name") or "").strip()
