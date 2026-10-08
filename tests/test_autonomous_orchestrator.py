@@ -39,10 +39,10 @@ def test_orchestrator_and_recovery_reference_existing_workflows():
     orchestrator = WORKFLOW.read_text(encoding="utf-8")
     recovery = Path(".github/workflows/action-failure-recovery.yml").read_text(encoding="utf-8")
 
-    for workflow in re.findall(r'ensure_lane "([^"]+\\.yml)"', orchestrator):
+    for workflow in re.findall(r'ensure_lane "([^"]+\.yml)"', orchestrator):
         assert workflow in existing, workflow
 
-    for workflow in re.findall(r'gh workflow run "([^"]+\\.yml)"', orchestrator):
+    for workflow in re.findall(r'gh workflow run "([^"]+\.yml)"', orchestrator):
         assert workflow in existing, workflow
 
     assert "Soccer Ultimate Experiment Matrix" not in recovery
