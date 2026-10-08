@@ -115,6 +115,11 @@ def evaluate_statsmodels_robustness(
     fold_non_regressed = sum(delta <= 0 for delta in fold_deltas)
     fold_fraction = fold_non_regressed / max(1, len(fold_deltas))
     comp_material = sum(1 for flag in material_comp_regressions if flag)
+    unique_competitions = {
+        item["competition"]
+        for item in eligible_competitions
+        if item.get("competition")
+    }
     comp_total = len(material_comp_regressions)
     comp_fraction = (
         comp_material / comp_total
@@ -126,7 +131,7 @@ def evaluate_statsmodels_robustness(
         "PASS"
         if (
             fold_fraction >= float(min_non_regression_fraction)
-            and comp_total >= int(min_competition_slices)
+            and len(unique_competitions) >= int(min_competition_slices)
             and comp_fraction <= 1.0 - float(min_non_regression_fraction)
         )
         else "HOLD"
@@ -144,6 +149,8 @@ def evaluate_statsmodels_robustness(
         "fold_non_regression_fraction": float(fold_fraction),
         "required_non_regression_fraction": float(min_non_regression_fraction),
         "competition_slice_count": int(comp_total),
+        "unique_competition_count": int(len(unique_competitions)),
+        "unique_competitions": sorted(unique_competitions),
         "required_min_competition_slices": int(min_competition_slices),
         "competition_material_regression_count": int(comp_material),
         "competition_material_regression_fraction": float(comp_fraction),
