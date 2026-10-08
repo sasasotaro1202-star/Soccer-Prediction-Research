@@ -43,6 +43,7 @@ def _history(n=48):
 def test_chronological_oos_runner_is_selection_free_and_production_blocked():
     result = run_statsmodels_score_oos(
         _history(), min_train=24, oos_block=8, cutoff_buffer_minutes=1,
+        calibration_min_rows=10,
         tests_passed=True, audit_passed=True
     )
     assert result["status"] == "RESEARCH_OOS_READY"
@@ -59,7 +60,7 @@ def test_unknown_source_timestamp_fails_closed():
     history = _history()
     history.loc[0, "source_available_at_utc"] = None
     with pytest.raises(ValueError, match="availability"):
-        run_statsmodels_score_oos(history, min_train=24, oos_block=8, cutoff_buffer_minutes=1, tests_passed=True, audit_passed=True)
+        run_statsmodels_score_oos(history, min_train=24, oos_block=8, cutoff_buffer_minutes=1, calibration_min_rows=10, tests_passed=True, audit_passed=True)
 
 
 def test_feature_replay_availability_is_used_when_legacy_source_time_is_missing():
@@ -68,6 +69,7 @@ def test_feature_replay_availability_is_used_when_legacy_source_time_is_missing(
     history["source_available_at_utc"] = None
     result = run_statsmodels_score_oos(
         history, min_train=24, oos_block=8, cutoff_buffer_minutes=1,
+        calibration_min_rows=10,
         tests_passed=True, audit_passed=True
     )
     assert result["status"] == "RESEARCH_OOS_READY"
@@ -93,6 +95,7 @@ def test_unsupported_oos_team_is_explicitly_excluded_not_imputed():
     history.loc[50, "home_team"] = "UNSEEN"
     result = run_statsmodels_score_oos(
         history, min_train=24, oos_block=12, cutoff_buffer_minutes=1,
+        calibration_min_rows=10,
         tests_passed=True, audit_passed=True
     )
     assert result["status"] == "RESEARCH_OOS_READY"
