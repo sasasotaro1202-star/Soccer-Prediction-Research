@@ -78,7 +78,7 @@ def test_unverified_rows_do_not_enter_training():
 
 def test_cutoff_and_unknown_timestamps_fail_closed():
     history = _history()
-    history.loc[0, "source_available_at_utc"] = "2026-02-02T00:00:00Z"
+    history.loc[0, "feature_source_max_available_at_utc"] = "2026-02-02T00:00:00Z"
     model = fit_statsmodels_poisson_score_model(
         history, prediction_cutoff_utc="2026-02-01T00:00:00Z"
     )
