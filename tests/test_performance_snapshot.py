@@ -37,6 +37,8 @@ def test_blocked_pit_never_becomes_evaluated(tmp_path):
 def test_weighted_locked_oos_metrics_are_aggregated(tmp_path):
     _write_json(tmp_path, "completion_gate.json", {"full_gate_passed": True})
     _write_json(tmp_path, "audit_gate.json", {"full_gate_passed": True})
+    _write_json(tmp_path, "oos_temporal_integrity.json", {"status": "PASS"})
+    _write_json(tmp_path, "score_oos_temporal_integrity.json", {"status": "PASS"})
     _write_csv(tmp_path, "locked_oos_metrics.csv", [
         {"n": "100", "logloss": "0.60", "accuracy": "0.65", "brier": "0.20", "ece": "0.04"},
         {"n": "300", "logloss": "0.40", "accuracy": "0.70", "brier": "0.16", "ece": "0.02"},
