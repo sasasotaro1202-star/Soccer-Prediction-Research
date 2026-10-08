@@ -19,10 +19,18 @@ It discovers scheduled matches over the configured two-day horizon and can use E
 
 The lane is explicitly research-only:
 
-- current World Elo ratings;
-- configurable home-advantage Elo offset;
+- current ESPN J1 standings-derived strength;
+- configurable home-advantage offset on the internal strength scale;
 - Poisson joint score distribution;
 - uniform probability shrinkage.
+
+Target outputs remain separated:
+
+- 1X2;
+- Score Top3;
+- O/U 2.5;
+- BTTS;
+- MOM Top4 is explicitly abstained because no PIT-verified player model is active in this lane.
 
 No betting-market odds are consumed by the forecast model.
 
