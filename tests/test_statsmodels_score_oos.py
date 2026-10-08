@@ -86,7 +86,7 @@ def test_pit_availability_filter_does_not_lower_training_requirement():
         calibration_min_rows=50, tests_passed=True, audit_passed=True
     )
     assert result["status"] == "RESEARCH_OOS_READY"
-    assert result["rows"][0]["training_rows"] >= 24
+    assert result["rows"][0]["training_rows"] >= 200
     assert all(row["pit_training_boundary_valid"] for row in result["rows"])
     assert all(row["same_kickoff_split_avoided"] for row in result["rows"])
 
