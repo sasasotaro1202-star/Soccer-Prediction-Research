@@ -29,6 +29,7 @@ def _history(n=300):
                 "away_goals": ag,
                 "pit_verified": True,
                 "source_available_at_utc": f"2025-01-{(i % 28) + 1:02d}T18:00:00Z",
+                "feature_source_max_available_at_utc": f"2025-01-{(i % 28) + 1:02d}T10:00:00Z",
             }
         )
     # Use a monotonic sequence because the compact dates above repeat months.
@@ -37,6 +38,7 @@ def _history(n=300):
         "2025-01-01T12:00:00Z", periods=n, freq="2D"
     )
     frame["source_available_at_utc"] = frame["kickoff_utc"] - pd.Timedelta(hours=2)
+    frame["feature_source_max_available_at_utc"] = frame["kickoff_utc"] - pd.Timedelta(hours=2)
     return frame
 
 
@@ -56,14 +58,14 @@ def test_chronological_oos_runner_is_selection_free_and_production_blocked():
         assert pd.Timestamp(row["prediction_cutoff_utc"]) > pd.Timestamp(row["oos_start_utc"]) - pd.Timedelta(minutes=2)
 
 
-def test_unknown_source_timestamp_fails_closed():
+def test_unknown_feature_source_timestamp_fails_closed():
     history = _history()
-    history.loc[0, "source_available_at_utc"] = None
+    history.loc[0, "feature_source_max_available_at_utc"] = None
     with pytest.raises(ValueError, match="availability"):
         run_statsmodels_score_oos(history, min_train=200, oos_block=50, cutoff_buffer_minutes=1, calibration_min_rows=50, tests_passed=True, audit_passed=True)
 
 
-def test_feature_replay_availability_is_used_when_legacy_source_time_is_missing():
+def test_feature_source_availability_is_used_as_pit_authority():
     history = _history()
     history["feature_source_max_available_at_utc"] = history["kickoff_utc"] - pd.Timedelta(minutes=30)
     history["source_available_at_utc"] = None
@@ -117,6 +119,15 @@ def test_case_level_oos_pit_is_enforced():
     history = _history()
     history.loc[250, "source_available_at_utc"] = history.loc[250, "kickoff_utc"] + pd.Timedelta(hours=2)
     with pytest.raises(ValueError, match="case-level predictor PIT"):
+        run_statsmodels_score_oos(
+            history, min_train=200, oos_block=50, cutoff_buffer_minutes=1,
+            calibration_min_rows=50, tests_passed=True, audit_passed=True
+        )
+
+
+def test_source_available_without_feature_source_is_not_pit_authority():
+    history = _history().drop(columns=["feature_source_max_available_at_utc"])
+    with pytest.raises(ValueError, match="feature_source_max_available_at_utc"):
         run_statsmodels_score_oos(
             history, min_train=200, oos_block=50, cutoff_buffer_minutes=1,
             calibration_min_rows=50, tests_passed=True, audit_passed=True
