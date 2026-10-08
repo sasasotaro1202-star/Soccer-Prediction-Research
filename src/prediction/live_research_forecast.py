@@ -230,6 +230,25 @@ def load_standings_strength(config: dict[str, Any]) -> tuple[dict[str, dict[str,
         raise RuntimeError("ESPN standings returned no parseable team strength entries")
     return strengths, observed_at, digest
 
+def standing_strength_ratings(strengths: dict[str, dict[str, float]]) -> dict[str, float]:
+    """Convert current standings into an Elo-like research strength scale."""
+    if not strengths:
+        return {}
+    ppg_values = np.asarray([v["ppg"] for v in strengths.values()], dtype=float)
+    gd_values = np.asarray([v["gd_per_game"] for v in strengths.values()], dtype=float)
+    ppg_mean = float(np.mean(ppg_values))
+    gd_mean = float(np.mean(gd_values))
+    ratings: dict[str, float] = {}
+    for team, value in strengths.items():
+        score = (
+            1500.0
+            + 250.0 * (float(value["ppg"]) - ppg_mean)
+            + 120.0 * (float(value["gd_per_game"]) - gd_mean)
+        )
+        ratings[team] = float(np.clip(score, 1300.0, 1900.0))
+    return ratings
+
+
 
 def load_elo(config: dict[str, Any]) -> tuple[dict[str, float], str, str]:
     timeout = float(config["runtime"]["request_timeout_seconds"])
@@ -663,10 +682,16 @@ def run(output: str, status_path: str) -> dict[str, Any]:
     Path(status_path).parent.mkdir(parents=True, exist_ok=True)
     try:
         config, config_hash = load_config()
-        ratings, elo_at, elo_hash = load_elo(config)
+        if config.get("sources", {}).get("standings_url"):
+            strengths, strength_at, strength_hash = load_standings_strength(config)
+            ratings = standing_strength_ratings(strengths)
+            source_times["espn_j1_standings"] = strength_at
+            source_hashes["espn_j1_standings"] = strength_hash
+        else:
+            ratings, elo_at, elo_hash = load_elo(config)
+            source_times["eloratings_world_tsv"] = elo_at
+            source_hashes["eloratings_world_tsv"] = elo_hash
         events, source_times, source_hashes = collect_events(prediction_time, config)
-        source_times["eloratings_world_tsv"] = elo_at
-        source_hashes["eloratings_world_tsv"] = elo_hash
 
         rows: list[dict[str, Any]] = []
         failures: list[str] = []
