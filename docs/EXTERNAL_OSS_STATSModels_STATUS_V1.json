@@ -45,5 +45,22 @@
     "regularization": "ridge_L2",
     "fit_solver": "statsmodels_GLM_fit_regularized"
   },
-  "notes": "Parameterization is research-locked for reproducible comparison; changes require a new experiment identity."
+  "notes": "Parameterization is research-locked for reproducible comparison; changes require a new experiment identity.",
+  "current_evidence_level": "E2_LOCAL_IMPLEMENTATION_AND_TESTS",
+  "latest_oos_attempt": {
+    "status": "FAILED",
+    "reason": "PIT_SAFE_TRAINING_SIZE_AND_MODEL_SUPPORT_OOD",
+    "failures": [
+      "OOS_PIT_BOUNDARY",
+      "MODEL_SUPPORT_OOD"
+    ],
+    "repair_applied": [
+      "advance_pit_safe_oos_boundary",
+      "avoid_same_kickoff_split",
+      "common_model_support_filtering"
+    ],
+    "re_verification": "PENDING"
+  },
+  "failure_memory": "docs/EXTERNAL_OSS_STATSModels_FAILURE_MEMORY_V1.md",
+  "production_gate": "BLOCKED_UNTIL_E4_E5_E6_E7"
 }
