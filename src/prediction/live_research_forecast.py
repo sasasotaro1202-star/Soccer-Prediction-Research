@@ -592,6 +592,10 @@ def predict(
     probs = result_probs(matrix, float(config["model"]["probability_shrink"]))
     labels = ("Home", "Draw", "Away")
     top = _top_scores(matrix, int(config["model"]["top_scorelines"]))
+    over_2_5 = float(sum(matrix[h, a] for h in range(matrix.shape[0]) for a in range(matrix.shape[1]) if h + a > 2))
+    under_2_5 = float(sum(matrix[h, a] for h in range(matrix.shape[0]) for a in range(matrix.shape[1]) if h + a <= 2))
+    btts_yes = float(sum(matrix[h, a] for h in range(1, matrix.shape[0]) for a in range(1, matrix.shape[1])))
+    btts_no = float(1.0 - btts_yes)
 
     required_state_fields = (
         event.get("id"),
@@ -657,6 +661,19 @@ def predict(
         "score_2_probability": round(top[1][1], 6),
         "score_3": top[2][0],
         "score_3_probability": round(top[2][1], 6),
+        "over_2_5_probability": round(over_2_5, 6),
+        "under_2_5_probability": round(under_2_5, 6),
+        "btts_yes_probability": round(btts_yes, 6),
+        "btts_no_probability": round(btts_no, 6),
+        "mom_status": "ABSTAIN_NO_PIT_VERIFIED_PLAYER_MODEL",
+        "mom_1_player": "",
+        "mom_1_probability": 0.0,
+        "mom_2_player": "",
+        "mom_2_probability": 0.0,
+        "mom_3_player": "",
+        "mom_3_probability": 0.0,
+        "mom_4_player": "",
+        "mom_4_probability": 0.0,
         "uncertainty": round(uncertainty, 6),
         "predictability": round(predictability, 6),
         "data_completeness": round(data_completeness, 6),
