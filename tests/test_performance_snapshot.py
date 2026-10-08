@@ -54,6 +54,7 @@ def test_weighted_locked_oos_metrics_are_aggregated(tmp_path):
 def test_score_derived_ou_btts_do_not_count_as_standalone_targets(tmp_path):
     _write_json(tmp_path, "completion_gate.json", {"full_gate_passed": True})
     _write_json(tmp_path, "audit_gate.json", {"full_gate_passed": True})
+    _write_json(tmp_path, "score_oos_temporal_integrity.json", {"status": "PASS"})
     _write_csv(tmp_path, "score_oos_metrics.csv", [
         {
             "n": "500",
