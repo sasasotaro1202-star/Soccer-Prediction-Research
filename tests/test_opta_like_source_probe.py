@@ -14,7 +14,7 @@ def test_probe_workflow_is_pinned_reproducible_and_fail_closed():
     assert "group: soccer-source-probe" in text
     assert "cancel-in-progress: false" in text
     assert 'PYTHONHASHSEED: "0"' in text
-    assert "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803" in text
+    assert "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10" in text
     assert "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1" in text
     assert "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f" in text
     assert "set -euo pipefail" in text
