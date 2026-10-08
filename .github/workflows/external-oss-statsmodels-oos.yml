@@ -46,7 +46,8 @@ jobs:
             tests/test_statsmodels_poisson_research.py \
             tests/test_statsmodels_score_oos.py \
             tests/test_score_distribution_calibration.py \
-            tests/test_statsmodels_research_boundary.py
+            tests/test_statsmodels_research_boundary.py \
+            tests/test_statsmodels_robustness.py
           echo "TESTS_PASSED=true" >> "$GITHUB_ENV"
 
       - name: Validate PIT replay input
