@@ -175,6 +175,7 @@ def build_snapshot(root: Path) -> dict[str, Any]:
         "score_oos_temporal_integrity.json",
         "calibration_gate.json",
         "adoption_decision.json",
+        "target_oos_status.json",
     ):
         path = root / name
         if path.is_file():
