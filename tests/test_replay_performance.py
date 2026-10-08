@@ -48,4 +48,9 @@ def test_validate_replay_input_excludes_unverified_rows(tmp_path):
     df.loc[3000, "pit_verified"] = False
     df.loc[3000, "prediction_cutoff_at_utc"] = pd.NaT
     df.loc[3000, "feature_source_max_available_at_utc"] = pd.NaT
-    frame, report = validate_replay_input(p) if False else (None, None)
+    df.to_csv(p, index=False)
+    frame, report = validate_replay_input(p)
+    assert len(frame) == 3000
+    assert report["input_rows"] == 3001
+    assert report["pit_verified_rows"] == 3000
+    assert report["non_verified_rows_excluded"] == 1
