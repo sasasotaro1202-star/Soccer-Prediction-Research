@@ -1,4 +1,4 @@
 # Research-only dependencies. Never imported by Production runtime.
 # Install only inside isolated research workflows/environments.
-statsmodels>=0.14,<1
+statsmodels==0.15.0
 pytest>=8,<9
