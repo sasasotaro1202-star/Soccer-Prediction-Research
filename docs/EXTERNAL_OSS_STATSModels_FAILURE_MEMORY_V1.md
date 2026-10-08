@@ -62,3 +62,23 @@ Failures remain immutable research knowledge. A failed experiment is not convert
 - interpretation: cancellation is an operational verification failure, not prediction-performance evidence
 - repair: stop code churn before final verification; directly re-run the latest cancelled research jobs rather than treating cancellation as success
 - current state: `REVERIFICATION_IN_PROGRESS`
+
+
+## Failure F6
+- failure_type: `FEATURE_PIT_AUTHORITY_TEST_MISMATCH`
+- observed_at: `2026-10-08`
+- workflow: `External OSS Statsmodels Research`
+- symptom: latest verification failed 3 tests after tightening predictor-side PIT authority
+- root_causes:
+  - adapter rejected invalid row-level feature availability only by filtering, while the regression test expected fail-closed rejection
+  - OOS runner retained a residual `source_available_at_utc` filter after `feature_source_max_available_at_utc` became the sole predictor-PIT authority
+  - case-level PIT regression test still mutated the legacy source timestamp instead of the authoritative feature-source timestamp
+- repair:
+  - reject any PIT-verified row whose feature-source availability is after its own historical prediction cutoff
+  - remove all legacy `source_available_at_utc` predictor-PIT references from the OOS runner
+  - mutate the authoritative feature-source field in the case-level regression test
+  - preserve `source_available_at_utc` as non-authoritative metadata only
+- current state: `REPAIR_APPLIED_PENDING_REVERIFICATION`
+- performance_claim: `false`
+- production_adoption: `false`
+- frozen_holdout_access: `false`
