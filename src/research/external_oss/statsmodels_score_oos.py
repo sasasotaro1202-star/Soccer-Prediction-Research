@@ -297,49 +297,29 @@ def run_statsmodels_score_oos(
 
     pit_mask = d["pit_verified"].eq(True)
 
-    availability_candidates: list[tuple[str, pd.Series]] = []
-    if "feature_source_max_available_at_utc" in d.columns:
-        availability_candidates.append(
-            (
-                "feature_source_max_available_at_utc",
-                pd.to_datetime(
-                    d["feature_source_max_available_at_utc"],
-                    utc=True,
-                    errors="coerce",
-                ),
-            )
-        )
-    if "source_available_at_utc" in d.columns:
-        availability_candidates.append(
-            (
-                "source_available_at_utc",
-                pd.to_datetime(
-                    d["source_available_at_utc"],
-                    utc=True,
-                    errors="coerce",
-                ),
-            )
-        )
-
-    availability_name = None
-    availability_series = None
-    for name, series in availability_candidates:
-        if pit_mask.any() and bool(series.loc[pit_mask].notna().all()):
-            availability_name = name
-            availability_series = series
-            break
-    if availability_series is None:
+    if "feature_source_max_available_at_utc" not in d.columns:
         raise ValueError(
-            "statsmodels OOS data has no complete explicit predictor-side availability "
-            "timestamp for all PIT-verified rows"
+            "statsmodels OOS data requires feature_source_max_available_at_utc "
+            "as the predictor-side PIT authority"
         )
 
-    d["source_available_at_utc"] = availability_series
+    availability_name = "feature_source_max_available_at_utc"
+    availability_series = pd.to_datetime(
+        d["feature_source_max_available_at_utc"],
+        utc=True,
+        errors="coerce",
+    )
+    if pit_mask.any() and not bool(availability_series.loc[pit_mask].notna().all()):
+        raise ValueError(
+            "statsmodels OOS data contains unknown predictor-side feature availability timestamps"
+        )
+
+    d["feature_source_max_available_at_utc"] = availability_series
     if d.loc[pit_mask, "kickoff_utc"].isna().any():
         raise ValueError("statsmodels OOS data contains unknown kickoff timestamps")
-    if d.loc[pit_mask, "source_available_at_utc"].isna().any():
+    if d.loc[pit_mask, "feature_source_max_available_at_utc"].isna().any():
         raise ValueError(
-            "statsmodels OOS data contains unknown predictor-side availability timestamps"
+            "statsmodels OOS data contains unknown predictor-side feature availability timestamps"
         )
     if (d.loc[pit_mask, ["home_goals", "away_goals"]] < 0).any().any():
         raise ValueError(
@@ -377,9 +357,13 @@ def run_statsmodels_score_oos(
             minutes=int(cutoff_buffer_minutes)
         )
         train = d.iloc[:start].copy()
+        train_own_cutoff = train["kickoff_utc"] - pd.Timedelta(
+            minutes=int(cutoff_buffer_minutes)
+        )
         train = train[
             (train["kickoff_utc"] < prediction_cutoff)
-            & (train["source_available_at_utc"] <= prediction_cutoff)
+            & (train["feature_source_max_available_at_utc"] <= train_own_cutoff)
+            & (train["feature_source_max_available_at_utc"] <= prediction_cutoff)
         ].copy()
 
         if len(train) < int(min_train):
@@ -402,7 +386,9 @@ def run_statsmodels_score_oos(
         oos_case_cutoff = oos["kickoff_utc"] - pd.Timedelta(
             minutes=int(cutoff_buffer_minutes)
         )
-        oos_pit_valid = oos["source_available_at_utc"] <= oos_case_cutoff
+        oos_pit_valid = (
+            oos["feature_source_max_available_at_utc"] <= oos_case_cutoff
+        )
         if not bool(oos_pit_valid.all()):
             raise ValueError(
                 f"Fold {fold}: {int((~oos_pit_valid).sum())} OOS rows violate "
@@ -532,6 +518,7 @@ def run_statsmodels_score_oos(
                 "oos_end_utc": str(oos["kickoff_utc"].max()),
                 "prediction_cutoff_utc": str(prediction_cutoff),
                 "availability_source": availability_name,
+                "predictor_pit_authority": "feature_source_max_available_at_utc",
                 "model_fit_rows": int(len(model_fit)),
                 "calibration_rows": int(len(calibration_common)),
                 "training_rows": int(len(train)),
@@ -635,6 +622,7 @@ def run_statsmodels_score_oos(
         "production_usable": False,
         "target_contract": "Score",
         "feature_set_id": "statsmodels_score_formula_home_away_competition_v1",
+        "predictor_pit_authority": "feature_source_max_available_at_utc",
     }
 
     return {
