@@ -105,3 +105,12 @@ def test_regularization_is_explicit_and_positive():
         regularization_alpha=0.1,
     )
     assert model.regularization_alpha == pytest.approx(0.1)
+
+
+def test_missing_team_identity_is_not_coerced_to_literal_nan():
+    history = _history()
+    history.loc[0, "home_team"] = pd.NA
+    with pytest.raises(ValueError, match="No PIT-verified rows|missing"):
+        fit_statsmodels_poisson_score_model(
+            history, prediction_cutoff_utc="2026-02-01T00:00:00Z"
+        )
