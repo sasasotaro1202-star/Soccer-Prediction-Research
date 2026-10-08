@@ -138,6 +138,18 @@ jobs:
           RESEARCH_RETRY_BACKOFF: "10"
           PIT_ENABLE_ARCHIVE_AUDIT: "1"
         run: python -m src.research.safe_runner
+      - name: Build target-isolated performance snapshot
+        id: performance_snapshot
+        if: always()
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m src.research.performance_snapshot \
+            --artifacts-dir artifacts \
+            --json-output artifacts/performance_snapshot.json \
+            --csv-output artifacts/performance_snapshot.csv \
+            --markdown-output artifacts/performance_snapshot.md
       - name: Prepare future fixtures when supplied
         id: prepare_future
         env:
