@@ -66,9 +66,9 @@ def _prepare(history: pd.DataFrame, *, prediction_cutoff_utc: str | pd.Timestamp
     if pd.isna(cutoff):
         raise ValueError("prediction_cutoff_utc must be a valid timezone-aware timestamp")
 
-    d["home_team"] = d["home_team"].astype(str).str.strip()
-    d["away_team"] = d["away_team"].astype(str).str.strip()
-    d["competition"] = d["competition"].astype(str).str.strip()
+    d["home_team"] = d["home_team"].astype("string").str.strip()
+    d["away_team"] = d["away_team"].astype("string").str.strip()
+    d["competition"] = d["competition"].astype("string").str.strip()
     d["kickoff_utc"] = pd.to_datetime(d["kickoff_utc"], utc=True, errors="coerce")
     d["source_available_at_utc"] = pd.to_datetime(
         d["source_available_at_utc"], utc=True, errors="coerce"
