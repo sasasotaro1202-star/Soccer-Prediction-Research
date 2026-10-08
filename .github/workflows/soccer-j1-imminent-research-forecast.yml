@@ -1,6 +1,13 @@
 name: Soccer J1 Imminent Research Forecast
 
 on:
+  push:
+    paths:
+      - "src/prediction/live_research_forecast.py"
+      - "tests/test_live_research_forecast.py"
+      - "config/j1_imminent_research_forecast.json"
+      - ".github/workflows/soccer-j1-imminent-research-forecast.yml"
+      - "requirements.txt"
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch: {}
