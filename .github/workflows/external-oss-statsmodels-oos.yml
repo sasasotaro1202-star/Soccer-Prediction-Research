@@ -38,6 +38,17 @@ jobs:
           python -m pip install --disable-pip-version-check --retries 5 --timeout 60 -r requirements.txt
           python -m pip install --disable-pip-version-check --retries 5 --timeout 60 -r requirements-research.txt
 
+      - name: Run research gate tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -q \
+            tests/test_statsmodels_poisson_research.py \
+            tests/test_statsmodels_score_oos.py \
+            tests/test_score_distribution_calibration.py \
+            tests/test_statsmodels_research_boundary.py
+          echo "TESTS_PASSED=true" >> "$GITHUB_ENV"
+
       - name: Validate PIT replay input
         shell: bash
         run: |
@@ -68,6 +79,7 @@ jobs:
           print("selection_performed=false")
           print("production_usable=false")
           PY
+          echo "AUDIT_PASSED=true" >> "$GITHUB_ENV"
 
       - name: Run statsmodels chronological OOS
         env:
@@ -76,6 +88,7 @@ jobs:
           python - <<'PY'
           import hashlib
           import json
+          import os
           from pathlib import Path
 
           import pandas as pd
@@ -87,23 +100,33 @@ jobs:
           data_hash = hashlib.sha256(raw).hexdigest()
           df = pd.read_csv(path)
 
+          tests_passed = os.getenv("TESTS_PASSED", "false").lower() == "true"
+          audit_passed = os.getenv("AUDIT_PASSED", "false").lower() == "true"
           result = run_statsmodels_score_oos(
               df,
               min_train=1000,
               oos_block=2000,
               cutoff_buffer_minutes=60,
+              calibration_fraction=0.20,
+              calibration_min_rows=100,
+              tests_passed=tests_passed,
+              audit_passed=audit_passed,
           )
 
           rows = pd.DataFrame(result["rows"])
           numeric = rows.select_dtypes(include="number")
           summary = {
-              "research_id": "statsmodels_poisson_score_v1",
+              "research_id": "statsmodels_poisson_score_v2",
               "status": result["status"],
-              "evidence_level": "E4_CHRONOLOGICAL_OOS",
+              "evidence_level": "E4_CHRONOLOGICAL_OOS" if result["status"] == "RESEARCH_OOS_READY" else "BLOCKED",
               "production_usable": False,
               "selection_performed": False,
               "frozen_holdout_used": False,
-              "git_sha": "${GITHUB_SHA}",
+              "tests_passed": tests_passed,
+              "audit_passed": audit_passed,
+              "experiment_config": result.get("experiment_config"),
+              "experiment_config_fingerprint": result.get("experiment_config_fingerprint"),
+              "git_sha": os.getenv("GITHUB_SHA", "unknown"),
               "dataset_path": str(path),
               "dataset_sha256": data_hash,
               "fold_count": int(result["fold_count"]),
@@ -112,6 +135,7 @@ jobs:
                   k: float(v)
                   for k, v in numeric.mean().items()
                   if "logloss" in k or "brier" in k or "ece" in k or "top" in k
+                  or "coverage" in k or "temperature" in k
               },
               "folds": result["rows"],
           }
@@ -126,6 +150,7 @@ jobs:
               "production_usable": False,
               "selection_performed": False,
               "frozen_holdout_used": False,
+              "experiment_config_fingerprint": summary["experiment_config_fingerprint"],
           }, ensure_ascii=False))
           PY
 
