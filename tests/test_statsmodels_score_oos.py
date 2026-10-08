@@ -36,7 +36,7 @@ def _history(n=48):
     frame["kickoff_utc"] = pd.date_range(
         "2025-01-01T12:00:00Z", periods=n, freq="2D"
     )
-    frame["source_available_at_utc"] = frame["kickoff_utc"] + pd.Timedelta(hours=6)
+    frame["source_available_at_utc"] = frame["kickoff_utc"] - pd.Timedelta(hours=2)
     return frame
 
 
@@ -59,7 +59,7 @@ def test_unknown_source_timestamp_fails_closed():
     history = _history()
     history.loc[0, "source_available_at_utc"] = None
     with pytest.raises(ValueError, match="availability"):
-        run_statsmodels_score_oos(history, min_train=24, oos_block=8, cutoff_buffer_minutes=1)
+        run_statsmodels_score_oos(history, min_train=24, oos_block=8, cutoff_buffer_minutes=1, tests_passed=True, audit_passed=True)
 
 
 def test_feature_replay_availability_is_used_when_legacy_source_time_is_missing():
@@ -67,7 +67,8 @@ def test_feature_replay_availability_is_used_when_legacy_source_time_is_missing(
     history["feature_source_max_available_at_utc"] = history["kickoff_utc"] - pd.Timedelta(minutes=30)
     history["source_available_at_utc"] = None
     result = run_statsmodels_score_oos(
-        history, min_train=24, oos_block=8, cutoff_buffer_minutes=1
+        history, min_train=24, oos_block=8, cutoff_buffer_minutes=1,
+        tests_passed=True, audit_passed=True
     )
     assert result["status"] == "RESEARCH_OOS_READY"
     assert result["fold_count"] == 3
@@ -91,7 +92,8 @@ def test_unsupported_oos_team_is_explicitly_excluded_not_imputed():
     history = _history(60)
     history.loc[50, "home_team"] = "UNSEEN"
     result = run_statsmodels_score_oos(
-        history, min_train=24, oos_block=12, cutoff_buffer_minutes=1
+        history, min_train=24, oos_block=12, cutoff_buffer_minutes=1,
+        tests_passed=True, audit_passed=True
     )
     assert result["status"] == "RESEARCH_OOS_READY"
     assert sum(row["unsupported_rows"] for row in result["rows"]) >= 1
