@@ -27,6 +27,7 @@ from src.research.score_model_selection import (
     verify_score_models_by_competition,
 )
 from src.research.stability_gate import evaluate_stability
+from src.research.target_oos import write_target_oos_artifacts
 
 EXCLUDED_MODEL_COLUMNS = {"match_id", "competition", "season", "season_start", "kickoff_utc", "home_team", "away_team", "prediction_cutoff_at_utc", "home_goals", "away_goals", "target", "pit_verified", "feature_source_max_available_at_utc"}
 PIT_POLICY = "explicit_source_publication_time_only; unknown_publication_time_excluded"
@@ -483,6 +484,10 @@ def run(out_dir: str = "artifacts") -> dict:
             oos_block=max(500, int(os.getenv("SOCCER_SCORE_OOS_BLOCK", "2000"))),
         )
         score_oos.to_csv(out / "score_oos_metrics.csv", index=False)
+        target_oos_status = write_target_oos_artifacts(score_oos, out)
+        (out / "target_oos_status.json").write_text(\
+            json.dumps(target_oos_status, indent=2, ensure_ascii=False, default=str), encoding="utf-8"\
+        )
         primary_finite = _primary_score_metrics_finite(score_oos)
         enough_score_blocks = len(score_oos) >= minimum_score_blocks
         score_block_rows = pd.to_numeric(score_oos["n"], errors="coerce") if "n" in score_oos.columns else pd.Series(dtype=float)
