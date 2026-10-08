@@ -147,7 +147,7 @@ jobs:
                   encoding="utf-8",
               )
               print(json.dumps(failure_report, ensure_ascii=False))
-              raise SystemExit(1)
+              raise SystemExit(0)
 
           experiment_identity = {
               "research_id": "statsmodels_poisson_score_v2",
@@ -258,3 +258,30 @@ jobs:
             research_python_version.txt
           if-no-files-found: error
           retention-days: 14
+
+      - name: Enforce research OOS success after artifact preservation
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = Path("statsmodels_score_oos_report.json")
+          if not report.is_file():
+              raise SystemExit("missing statsmodels_score_oos_report.json")
+          payload = json.loads(report.read_text(encoding="utf-8"))
+          status = payload.get("status")
+          if status != "RESEARCH_OOS_READY":
+              print(json.dumps({
+                  "status": status,
+                  "action": "BLOCK_WORKFLOW",
+                  "reason": "OOS evidence did not reach RESEARCH_OOS_READY",
+              }, ensure_ascii=False))
+              raise SystemExit(1)
+          print(json.dumps({
+              "status": status,
+              "action": "ALLOW",
+          }, ensure_ascii=False))
+          PY
