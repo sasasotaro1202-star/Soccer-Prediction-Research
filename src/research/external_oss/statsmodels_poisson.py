@@ -49,6 +49,7 @@ class StatsmodelsPoissonScoreModel:
     home_fit: Any
     away_fit: Any
     training_rows: int
+    regularization_alpha: float
     categories_home_team: tuple[str, ...]
     categories_away_team: tuple[str, ...]
     categories_competition: tuple[str, ...]
@@ -104,8 +105,11 @@ def fit_statsmodels_poisson_score_model(
     history: pd.DataFrame,
     *,
     prediction_cutoff_utc: str | pd.Timestamp,
+    regularization_alpha: float = 0.1,
 ) -> StatsmodelsPoissonScoreModel:
-    """Fit only on PIT-verified observations strictly before the locked cutoff."""
+    """Fit a bounded ridge-regularized Poisson challenger on PIT-safe history."""
+    if not np.isfinite(float(regularization_alpha)) or float(regularization_alpha) <= 0:
+        raise ValueError("regularization_alpha must be finite and positive")
     d = _prepare(history, prediction_cutoff_utc=prediction_cutoff_utc)
 
     # Categorical terms make team/competition effects explicit while keeping the
@@ -117,17 +121,18 @@ def fit_statsmodels_poisson_score_model(
         formula=formula_home,
         data=d,
         family=sm.families.Poisson(),
-    ).fit()
+    ).fit_regularized(alpha=float(regularization_alpha), L1_wt=0.0, maxiter=1000)
     away_fit = smf.glm(
         formula=formula_away,
         data=d,
         family=sm.families.Poisson(),
-    ).fit()
+    ).fit_regularized(alpha=float(regularization_alpha), L1_wt=0.0, maxiter=1000)
 
     return StatsmodelsPoissonScoreModel(
         home_fit=home_fit,
         away_fit=away_fit,
         training_rows=int(len(d)),
+        regularization_alpha=float(regularization_alpha),
         categories_home_team=tuple(sorted(d["home_team"].unique())),
         categories_away_team=tuple(sorted(d["away_team"].unique())),
         categories_competition=tuple(sorted(d["competition"].unique())),
