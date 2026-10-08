@@ -73,6 +73,10 @@ def load_config() -> tuple[dict[str, Any], str]:
     return payload, hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _normalized_team(value: str) -> str:
+    return " ".join(str(value).strip().lower().replace("türkiye", "turkey").split())
+
+
 def _get(url: str, timeout: float) -> tuple[bytes, str, str]:
     at = now_utc().isoformat()
     response = requests.get(
