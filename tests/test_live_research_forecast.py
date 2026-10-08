@@ -132,3 +132,70 @@ def test_verify_accepts_research_contract(tmp_path):
     }
     pd.DataFrame([row]).to_csv(path, index=False)
     assert verify(str(path))["status"] == "VERIFIED"
+
+
+
+def test_espn_event_adapter_preserves_current_match_state():
+    from src.prediction.live_research_forecast import _espn_event_adapter, find_target
+
+    raw = {
+        "id": "98765",
+        "date": "2026-10-08T18:45:00Z",
+        "competitions": [{
+            "competitors": [
+                {"homeAway": "home", "team": {"displayName": "France"}, "score": "2"},
+                {"homeAway": "away", "team": {"displayName": "Belgium"}, "score": "1"},
+            ]
+        }],
+        "status": {"type": {"state": "in", "name": "STATUS_IN_PROGRESS"}},
+    }
+    event = _espn_event_adapter(raw, "uefa.nations")
+    assert event is not None
+    assert event["id"] == "espn:uefa.nations:98765"
+    assert event["homeTeam"]["name"] == "France"
+    assert event["awayTeam"]["name"] == "Belgium"
+    assert event["homeScore"]["current"] == 2
+    assert event["awayScore"]["current"] == 1
+    assert event["status"]["type"] == "inprogress"
+    assert find_target(event, load_config()[0]) == "France-Belgium"
+
+
+def test_collect_events_uses_espn_fallback_when_sofascore_live_fails(monkeypatch):
+    import src.prediction.live_research_forecast as module
+
+    config, _ = load_config()
+    config["runtime"]["schedule_days"] = 1
+    calls = []
+
+    espn_payload = {
+        "events": [{
+            "id": "24680",
+            "date": "2026-10-08T18:45:00Z",
+            "competitions": [{
+                "competitors": [
+                    {"homeAway": "home", "team": {"displayName": "Italy"}, "score": "0"},
+                    {"homeAway": "away", "team": {"displayName": "Turkey"}, "score": "0"},
+                ]
+            }],
+            "status": {"type": {"state": "pre", "name": "STATUS_SCHEDULED"}},
+        }]
+    }
+
+    def fake_get_json(url, timeout):
+        calls.append(url)
+        if "sofascore.com/api/v1" in url:
+            raise RuntimeError("403 Forbidden")
+        assert "site.api.espn.com/apis/site/v2/sports/soccer/" in url
+        return espn_payload, "2026-10-08T17:00:00Z", "digest"
+
+    monkeypatch.setattr(module, "_get_json", fake_get_json)
+    prediction_time = pd.Timestamp("2026-10-08T17:00:00Z")
+    events, source_times, source_hashes = module.collect_events(prediction_time, config)
+
+    assert len(events) == 1
+    assert events[0]["id"].startswith("espn:")
+    assert events[0]["homeTeam"]["name"] == "Italy"
+    assert events[0]["awayTeam"]["name"] == "Turkey"
+    assert any("espn.uefa.nations" in key for key in source_times)
+    assert "digest" in source_hashes.values()
+    assert calls
