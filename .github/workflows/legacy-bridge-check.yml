@@ -11,6 +11,7 @@ on:
       - "src/models/**"
       - "src/prediction/**"
       - "src/legacy/**"
+      - "src/research/**"
       - "tests/test_v9_v12_adapter.py"
       - "tests/test_pit_source_adapter.py"
       - "tests/test_pit_feature_replay.py"
