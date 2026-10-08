@@ -80,7 +80,7 @@ def test_feature_source_availability_is_used_as_pit_authority():
 
 def test_pit_availability_filter_does_not_lower_training_requirement():
     history = _history()
-    history.loc[0, "source_available_at_utc"] = pd.Timestamp(
+    history.loc[0, "feature_source_max_available_at_utc"] = pd.Timestamp(
         "2030-01-01T00:00:00Z"
     )
     result = run_statsmodels_score_oos(
