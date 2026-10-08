@@ -108,3 +108,26 @@ def test_recovery_workflow_has_github_token_and_read_permission():
     assert "actions: write" in text
     assert "contents: read" in text
     assert "GH_TOKEN: ${{ github.token }}" in text
+
+def test_recovery_workflow_has_no_stale_workflow_names():
+    from pathlib import Path
+
+    text = Path(".github/workflows/action-failure-recovery.yml").read_text(encoding="utf-8")
+    assert '"Soccer Ultimate Experiment Matrix"' not in text
+    assert '"Soccer Feature Set Research"' not in text
+    for workflow_name in (
+        "Soccer CI",
+        "Soccer PIT Replay Audit",
+        "Soccer Matchday Intelligence Refresh",
+        "Legacy V9/V12 Bridge Check",
+        "Overnight Integrity",
+        "Soccer Dynamic Simulator Research",
+        "Soccer Prospective In-Play PIT Capture",
+        "Soccer Prospective In-Play Maturity",
+        "Soccer World Model Supervisor",
+        "Soccer 9H Autonomous Research",
+        "Soccer Match State Research",
+        "Soccer Daily Research Forecast",
+        "Soccer Live Research Forecast",
+    ):
+        assert f'"{workflow_name}"' in text
