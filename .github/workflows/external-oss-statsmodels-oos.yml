@@ -154,6 +154,35 @@ jobs:
           }, ensure_ascii=False))
           PY
 
+      - name: Run robustness diagnostic
+        env:
+          PYTHONHASHSEED: "0"
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          from src.research.external_oss.statsmodels_robustness import (
+              evaluate_statsmodels_robustness,
+          )
+
+          report = json.loads(Path("statsmodels_score_oos_report.json").read_text(encoding="utf-8"))
+          robustness = evaluate_statsmodels_robustness(report)
+
+          out = Path("statsmodels_score_robustness_report.json")
+          out.write_text(json.dumps(robustness, ensure_ascii=False, indent=2), encoding="utf-8")
+          print(json.dumps({
+              "status": robustness["status"],
+              "fold_non_regression_fraction": robustness.get("fold_non_regression_fraction"),
+              "competition_slice_count": robustness.get("competition_slice_count"),
+              "coverage_min": robustness.get("coverage_min"),
+              "unsupported_rows_total": robustness.get("unsupported_rows_total"),
+              "production_usable": False,
+              "frozen_holdout_used": False,
+              "selection_performed": False,
+          }, ensure_ascii=False))
+          PY
+
       - name: Upload research evidence
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
@@ -161,5 +190,6 @@ jobs:
           path: |
             statsmodels_score_oos_report.json
             statsmodels_score_oos_folds.csv
+            statsmodels_score_robustness_report.json
           if-no-files-found: error
           retention-days: 14
