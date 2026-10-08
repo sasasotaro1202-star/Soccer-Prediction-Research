@@ -98,3 +98,13 @@ def test_failure_with_no_failed_step_is_not_retryable():
     decision = classify_recovery(conclusion="failure", run_attempt=1, jobs_payload=jobs)
     assert decision["retryable"] is False
     assert decision["reason"] == "job_detail_has_no_failed_step"
+
+
+
+def test_recovery_workflow_has_github_token_and_read_permission():
+    from pathlib import Path
+
+    text = Path(".github/workflows/action-failure-recovery.yml").read_text(encoding="utf-8")
+    assert "actions: write" in text
+    assert "contents: read" in text
+    assert "GH_TOKEN: ${{ github.token }}" in text
