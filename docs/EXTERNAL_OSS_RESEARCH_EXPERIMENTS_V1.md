@@ -56,6 +56,11 @@ A candidate can advance only if:
 8. Shadow behavior is safe.
 9. Complexity / maintenance / security / cost are acceptable.
 
+Decision states after the gate are explicit:
+- ADOPT: all required evidence gates pass and the change is approved for integration/shadow progression.
+- HOLD: evidence is incomplete, mixed, or operationally acceptable but not yet sufficient for adoption.
+- REJECT: a hard gate fails, including PIT failure, material OOS/robustness/calibration regression, security/cost violation, or irreproducible behavior.
+
 No external benchmark or GitHub Star count satisfies these gates.
 
 ---
