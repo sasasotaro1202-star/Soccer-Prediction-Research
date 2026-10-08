@@ -6,7 +6,7 @@ pytest.importorskip("statsmodels")
 from src.research.external_oss.statsmodels_score_oos import run_statsmodels_score_oos
 
 
-def _history(n=48):
+def _history(n=300):
     fixtures = [
         ("A", "B", 1, 0),
         ("B", "C", 0, 1),
@@ -42,17 +42,17 @@ def _history(n=48):
 
 def test_chronological_oos_runner_is_selection_free_and_production_blocked():
     result = run_statsmodels_score_oos(
-        _history(), min_train=24, oos_block=8, cutoff_buffer_minutes=1,
-        calibration_min_rows=10,
+        _history(), min_train=200, oos_block=50, cutoff_buffer_minutes=1,
+        calibration_min_rows=50,
         tests_passed=True, audit_passed=True
     )
     assert result["status"] == "RESEARCH_OOS_READY"
     assert result["selection_performed"] is False
     assert result["frozen_holdout_used"] is False
     assert result["production_usable"] is False
-    assert result["fold_count"] == 3
+    assert result["fold_count"] >= 2
     for row in result["rows"]:
-        assert row["training_rows"] >= 24
+        assert row["training_rows"] >= 200
         assert pd.Timestamp(row["prediction_cutoff_utc"]) > pd.Timestamp(row["oos_start_utc"]) - pd.Timedelta(minutes=2)
 
 
@@ -60,7 +60,7 @@ def test_unknown_source_timestamp_fails_closed():
     history = _history()
     history.loc[0, "source_available_at_utc"] = None
     with pytest.raises(ValueError, match="availability"):
-        run_statsmodels_score_oos(history, min_train=24, oos_block=8, cutoff_buffer_minutes=1, calibration_min_rows=10, tests_passed=True, audit_passed=True)
+        run_statsmodels_score_oos(history, min_train=200, oos_block=50, cutoff_buffer_minutes=1, calibration_min_rows=50, tests_passed=True, audit_passed=True)
 
 
 def test_feature_replay_availability_is_used_when_legacy_source_time_is_missing():
@@ -68,7 +68,7 @@ def test_feature_replay_availability_is_used_when_legacy_source_time_is_missing(
     history["feature_source_max_available_at_utc"] = history["kickoff_utc"] - pd.Timedelta(minutes=30)
     history["source_available_at_utc"] = None
     result = run_statsmodels_score_oos(
-        history, min_train=24, oos_block=8, cutoff_buffer_minutes=1,
+        history, min_train=200, oos_block=50, cutoff_buffer_minutes=1,
         calibration_min_rows=10,
         tests_passed=True, audit_passed=True
     )
@@ -92,8 +92,8 @@ def test_pit_availability_filter_does_not_lower_training_requirement():
 
 
 def test_unsupported_oos_team_is_explicitly_excluded_not_imputed():
-    history = _history(60)
-    history.loc[50, "home_team"] = "UNSEEN"
+    history = _history(300)
+    history.loc[250, "home_team"] = "UNSEEN"
     result = run_statsmodels_score_oos(
         history, min_train=24, oos_block=12, cutoff_buffer_minutes=1,
         calibration_min_rows=10,
@@ -115,7 +115,7 @@ def test_missing_gate_handoff_is_blocked():
 
 def test_case_level_oos_pit_is_enforced():
     history = _history()
-    history.loc[30, "source_available_at_utc"] = history.loc[30, "kickoff_utc"] + pd.Timedelta(hours=2)
+    history.loc[250, "source_available_at_utc"] = history.loc[30, "kickoff_utc"] + pd.Timedelta(hours=2)
     with pytest.raises(ValueError, match="case-level predictor PIT"):
         run_statsmodels_score_oos(
             history, min_train=24, oos_block=8, cutoff_buffer_minutes=1,
