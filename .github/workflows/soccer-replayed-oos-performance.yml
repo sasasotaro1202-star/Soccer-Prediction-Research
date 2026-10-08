@@ -1,0 +1,139 @@
+name: Soccer Replayed OOS Performance
+
+on:
+  push:
+    paths:
+      - "src/research/replay_performance.py"
+      - "tests/test_replay_performance.py"
+      - "src/research/target_oos.py"
+      - "src/research/engine.py"
+      - "src/evaluation/walk_forward.py"
+      - "src/evaluation/score_walk_forward.py"
+      - ".github/workflows/soccer-replayed-oos-performance.yml"
+      - "requirements.txt"
+  schedule:
+    - cron: "30 5 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: soccer-replayed-oos-performance
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 300 -r requirements.txt
+
+      - name: Locate latest PIT replay artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p workspace
+          python - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+          repo = os.environ['GITHUB_REPOSITORY']
+          current = os.environ['GITHUB_SHA']
+          token = os.environ['GH_TOKEN']
+          headers = {'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
+          def get(url):
+              request = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  return json.load(response)
+          runs = get(f'https://api.github.com/repos/{repo}/actions/runs?per_page=100').get('workflow_runs', [])
+          candidates = sorted([r for r in runs if r.get('name') == 'Soccer Research Robust' and r.get('head_sha') != current], key=lambda r: r.get('created_at', ''), reverse=True)
+          selected = None
+          for run in candidates:
+              try:
+                  artifacts = get(f"https://api.github.com/repos/{repo}/actions/runs/{run['id']}/artifacts?per_page=100").get('artifacts', [])
+              except Exception:
+                  continue
+              for artifact in artifacts:
+                  if artifact.get('expired'):
+                      continue
+                  selected = {'run_id': run['id'], 'run_sha': run.get('head_sha'), 'artifact_id': artifact['id'], 'artifact_name': artifact.get('name', ''), 'run_status': run.get('status'), 'run_conclusion': run.get('conclusion')}
+                  break
+              if selected:
+                  break
+          if not selected:
+              raise SystemExit('No unexpired Soccer Research Robust artifact is available for replay.')
+          Path('workspace/artifacts_source.json').write_text(json.dumps(selected, indent=2), encoding='utf-8')
+          print(json.dumps(selected))
+          PY
+
+      - name: Download PIT replay artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p workspace/replay_source
+          artifact_id=$(python -c 'import json; print(json.load(open("workspace/artifacts_source.json"))["artifact_id"])')
+          curl --fail-with-body --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" -o workspace/replay.zip
+          unzip -q -o workspace/replay.zip -d workspace/replay_source
+
+      - name: Validate source artifact
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          test -s workspace/replay_source/pit_replay_features.csv
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+          source = json.loads(Path('workspace/artifacts_source.json').read_text(encoding='utf-8'))
+          df = pd.read_csv('workspace/replay_source/pit_replay_features.csv', low_memory=False)
+          report = {'status': 'PRESENT', 'evidence_scope': 'PIT_VERIFIED_REPLAY_INPUT', 'source_run_id': source['run_id'], 'source_run_sha': source['run_sha'], 'source_artifact_id': source['artifact_id'], 'source_artifact_name': source['artifact_name'], 'source_run_status': source['run_status'], 'source_run_conclusion': source['run_conclusion'], 'rows': int(len(df)), 'pit_verified_rows': int(pd.Series(df['pit_verified']).astype('boolean').fillna(False).sum())}
+          Path('workspace/replay_source_status.json').write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8')
+          print(json.dumps(report, ensure_ascii=False))
+          PY
+
+      - name: Run current-code chronological OOS replay
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m src.research.replay_performance --input workspace/replay_source/pit_replay_features.csv --output-dir artifacts/replayed_oos
+
+      - name: Publish replay performance summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## Replayed OOS Performance'
+            if [ -f artifacts/replayed_oos/replay_performance_snapshot.md ]; then cat artifacts/replayed_oos/replay_performance_snapshot.md; else echo 'Replay performance was not produced.'; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload replay performance artifacts
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: soccer-replayed-oos-performance-${{ github.run_id }}
+          path: |
+            workspace/artifacts_source.json
+            workspace/replay_source_status.json
+            artifacts/replayed_oos/
+          retention-days: 7
+          if-no-files-found: warn
