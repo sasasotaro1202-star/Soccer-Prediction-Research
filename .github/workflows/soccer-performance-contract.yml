@@ -5,6 +5,9 @@ on:
     paths:
       - "src/research/performance_snapshot.py"
       - "tests/test_performance_snapshot.py"
+      - "src/research/target_oos.py"
+      - "tests/test_target_oos.py"
+      - "src/research/engine.py"
       - ".github/workflows/soccer-performance-contract.yml"
   workflow_dispatch: {}
 
@@ -27,7 +30,9 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --disable-pip-version-check --retries 5 --timeout 120 -r requirements.txt
-      - name: Run performance snapshot contract tests
+      - name: Run performance evidence contract tests
         env:
           PYTHONPATH: .
-        run: python -m pytest -q tests/test_performance_snapshot.py
+        run: |
+          set -euo pipefail
+          python -m pytest -q             tests/test_performance_snapshot.py             tests/test_target_oos.py
