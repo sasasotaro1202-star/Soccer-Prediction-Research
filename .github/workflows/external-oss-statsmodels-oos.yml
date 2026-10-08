@@ -38,6 +38,13 @@ jobs:
           python -m pip install --disable-pip-version-check --retries 5 --timeout 60 -r requirements.txt
           python -m pip install --disable-pip-version-check --retries 5 --timeout 60 -r requirements-research.txt
 
+      - name: Freeze research environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -VV 2>&1 | tee research_python_version.txt
+          python -m pip freeze | sort > research_environment.txt
+
       - name: Run research gate tests
         shell: bash
         run: |
@@ -85,6 +92,7 @@ jobs:
       - name: Run statsmodels chronological OOS
         env:
           PYTHONHASHSEED: "0"
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           python - <<'PY'
           import hashlib
@@ -99,10 +107,14 @@ jobs:
           path = Path("artifacts/pit_replay_features.csv")
           raw = path.read_bytes()
           data_hash = hashlib.sha256(raw).hexdigest()
+          environment_bytes = Path("research_environment.txt").read_bytes()
+          environment_hash = hashlib.sha256(environment_bytes).hexdigest()
           df = pd.read_csv(path)
 
           tests_passed = os.getenv("TESTS_PASSED", "false").lower() == "true"
           audit_passed = os.getenv("AUDIT_PASSED", "false").lower() == "true"
+          head_sha = os.getenv("PR_HEAD_SHA", "unknown")
+          merge_sha = os.getenv("GITHUB_SHA", "unknown")
           result = run_statsmodels_score_oos(
               df,
               min_train=1000,
@@ -116,7 +128,27 @@ jobs:
 
           rows = pd.DataFrame(result["rows"])
           numeric = rows.select_dtypes(include="number")
-          git_sha = os.getenv("GITHUB_SHA", "unknown")
+          if result.get("status") != "RESEARCH_OOS_READY":
+              failure_report = {
+                  "research_id": "statsmodels_poisson_score_v2",
+                  "status": result.get("status"),
+                  "handoff": result.get("handoff"),
+                  "production_usable": False,
+                  "selection_performed": False,
+                  "frozen_holdout_used": False,
+                  "head_sha": head_sha,
+                  "merge_sha": merge_sha,
+                  "dataset_sha256": data_hash,
+                  "environment_sha256": environment_hash,
+                  "result": result,
+              }
+              Path("statsmodels_score_oos_report.json").write_text(
+                  json.dumps(failure_report, ensure_ascii=False, indent=2),
+                  encoding="utf-8",
+              )
+              print(json.dumps(failure_report, ensure_ascii=False))
+              raise SystemExit(1)
+
           experiment_identity = {
               "research_id": "statsmodels_poisson_score_v2",
               "repository": "statsmodels/statsmodels",
@@ -131,7 +163,9 @@ jobs:
                   "cutoff_buffer_minutes": 60
               },
               "data_snapshot_sha256": data_hash,
-              "git_sha": git_sha
+              "head_sha": head_sha,
+              "merge_sha": merge_sha,
+              "environment_sha256": environment_hash
           }
           experiment_fingerprint = hashlib.sha256(
               json.dumps(
@@ -220,5 +254,7 @@ jobs:
             statsmodels_score_oos_report.json
             statsmodels_score_oos_folds.csv
             statsmodels_score_robustness_report.json
+            research_environment.txt
+            research_python_version.txt
           if-no-files-found: error
           retention-days: 14
