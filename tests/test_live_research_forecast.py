@@ -196,6 +196,6 @@ def test_collect_events_uses_espn_fallback_when_sofascore_live_fails(monkeypatch
     assert events[0]["id"].startswith("espn:")
     assert events[0]["homeTeam"]["name"] == "Italy"
     assert events[0]["awayTeam"]["name"] == "Turkey"
-    assert any("espn.uefa.nations" in key for key in source_times)
+    assert any("espn_uefa.nations_" in key for key in source_times)
     assert "digest" in source_hashes.values()
     assert calls
