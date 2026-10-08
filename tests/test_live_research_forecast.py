@@ -12,6 +12,7 @@ from src.prediction.live_research_forecast import (
     result_probs,
     score_matrix,
     verify,
+    predict,
 )
 
 
@@ -199,3 +200,33 @@ def test_collect_events_uses_espn_fallback_when_sofascore_live_fails(monkeypatch
     assert any("espn_uefa.nations_" in key for key in source_times)
     assert "digest" in source_hashes.values()
     assert calls
+
+
+
+def test_live_provenance_does_not_promote_retrieval_to_availability():
+    config, config_hash = load_config()
+    event = {
+        "id": "123",
+        "startTimestamp": int(pd.Timestamp("2026-10-08T18:45:00Z").timestamp()),
+        "homeTeam": {"name": "France"},
+        "awayTeam": {"name": "Belgium"},
+        "status": {"type": "scheduled"},
+        "homeScore": {"current": 0},
+        "awayScore": {"current": 0},
+        "tournament": {"uniqueTournament": {"name": "uefa.nations"}},
+    }
+    row = predict(
+        event,
+        {"france": 2070.0, "belgium": 1947.0},
+        pd.Timestamp("2026-10-08T17:00:00Z"),
+        {"espn_uefa.nations_20261008": "2026-10-08T17:00:00Z"},
+        {"espn_uefa.nations_20261008": "digest"},
+        config,
+        config_hash,
+        "elo-digest",
+        event_source="espn",
+    )
+    assert row["source_available_at_utc"] is None
+    assert row["source_available_lower_bound_utc"] is None
+    assert row["source_retrieved_at_utc"] == "2026-10-08T17:00:00Z"
+    assert row["event_source"] == "espn"
