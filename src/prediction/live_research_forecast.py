@@ -692,16 +692,21 @@ def run(output: str, status_path: str) -> dict[str, Any]:
     Path(status_path).parent.mkdir(parents=True, exist_ok=True)
     try:
         config, config_hash = load_config()
+        source_times: dict[str, str] = {}
+        source_hashes: dict[str, str] = {}
         if config.get("sources", {}).get("standings_url"):
             strengths, strength_at, strength_hash = load_standings_strength(config)
             ratings = standing_strength_ratings(strengths)
+            elo_hash = strength_hash
             source_times["espn_j1_standings"] = strength_at
             source_hashes["espn_j1_standings"] = strength_hash
         else:
             ratings, elo_at, elo_hash = load_elo(config)
             source_times["eloratings_world_tsv"] = elo_at
             source_hashes["eloratings_world_tsv"] = elo_hash
-        events, source_times, source_hashes = collect_events(prediction_time, config)
+        events, event_source_times, event_source_hashes = collect_events(prediction_time, config)
+        source_times.update(event_source_times)
+        source_hashes.update(event_source_hashes)
 
         rows: list[dict[str, Any]] = []
         failures: list[str] = []
@@ -735,7 +740,11 @@ def run(output: str, status_path: str) -> dict[str, Any]:
             "prediction_time_utc": prediction_time.isoformat(),
             "rows": len(rows),
             "failures": failures,
-            "model_status": "RESEARCH_ONLY_HEURISTIC_ELO_POISSON",
+            "model_status": (
+                "RESEARCH_ONLY_CURRENT_J1_STANDINGS_POISSON"
+                if config.get("sources", {}).get("standings_url")
+                else "RESEARCH_ONLY_HEURISTIC_ELO_POISSON"
+            ),
             "production_status": "NOT_PRODUCTION",
             "decision_policy": "PREDICT_ONLY_WHEN_CURRENT_EVENT_AND_REQUIRED_STATE_ARE_OBSERVED; OTHERWISE_DEFER",
             "config_sha256": config_hash,
