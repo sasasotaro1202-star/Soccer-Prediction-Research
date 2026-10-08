@@ -155,18 +155,30 @@ jobs:
               "repository": "statsmodels/statsmodels",
               "adapter": "src/research/external_oss/statsmodels_poisson.py",
               "target": "Score",
+              "feature_set_id": "statsmodels_score_formula_home_away_competition_v1",
               "dependency_pin": "statsmodels==0.15.0",
               "regularization_alpha": 0.1,
+              "regularization": "ridge_L2",
               "calibration_method": "joint_score_temperature_scaling",
+              "calibration_fraction": 0.20,
+              "calibration_min_rows": 100,
               "oos_protocol": {
                   "min_train": 1000,
                   "oos_block": 2000,
-                  "cutoff_buffer_minutes": 60
+                  "cutoff_buffer_minutes": 60,
+                  "same_kickoff_boundary_policy": "advance_past_same_kickoff",
+                  "support_policy": "common_model_support_exclude_and_count_ood",
+                  "selection_performed": false,
+                  "frozen_holdout_used": false
               },
               "data_snapshot_sha256": data_hash,
               "head_sha": head_sha,
               "merge_sha": merge_sha,
-              "environment_sha256": environment_hash
+              "environment_sha256": environment_hash,
+              "required_handoff": {
+                  "TESTS_PASSED": true,
+                  "AUDIT_PASSED": true
+              }
           }
           experiment_fingerprint = hashlib.sha256(
               json.dumps(
