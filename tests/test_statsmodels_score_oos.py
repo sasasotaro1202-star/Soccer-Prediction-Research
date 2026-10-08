@@ -42,7 +42,8 @@ def _history(n=48):
 
 def test_chronological_oos_runner_is_selection_free_and_production_blocked():
     result = run_statsmodels_score_oos(
-        _history(), min_train=24, oos_block=8, cutoff_buffer_minutes=1
+        _history(), min_train=24, oos_block=8, cutoff_buffer_minutes=1,
+        tests_passed=True, audit_passed=True
     )
     assert result["status"] == "RESEARCH_OOS_READY"
     assert result["selection_performed"] is False
@@ -95,3 +96,22 @@ def test_unsupported_oos_team_is_explicitly_excluded_not_imputed():
     assert result["status"] == "RESEARCH_OOS_READY"
     assert sum(row["unsupported_rows"] for row in result["rows"]) >= 1
     assert all(row["common_evaluable_rows"] + row["unsupported_rows"] == row["oos_rows"] for row in result["rows"])
+
+
+def test_missing_gate_handoff_is_blocked():
+    result = run_statsmodels_score_oos(
+        _history(), min_train=24, oos_block=8, cutoff_buffer_minutes=1,
+        tests_passed=True, audit_passed=False
+    )
+    assert result["status"] == "BLOCKED"
+    assert result["production_usable"] is False
+
+
+def test_case_level_oos_pit_is_enforced():
+    history = _history()
+    history.loc[30, "source_available_at_utc"] = history.loc[30, "kickoff_utc"] + pd.Timedelta(hours=2)
+    with pytest.raises(ValueError, match="case-level predictor PIT"):
+        run_statsmodels_score_oos(
+            history, min_train=24, oos_block=8, cutoff_buffer_minutes=1,
+            tests_passed=True, audit_passed=True
+        )
