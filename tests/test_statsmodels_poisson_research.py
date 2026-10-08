@@ -31,6 +31,7 @@ def _history() -> pd.DataFrame:
                 "match_id": f"m{i}",
                 "kickoff_utc": f"2026-01-{i + 1:02d}T12:00:00Z",
                 "source_available_at_utc": f"2026-01-{i + 1:02d}T13:00:00Z",
+                "feature_source_max_available_at_utc": f"2026-01-{i + 1:02d}T10:00:00Z",
                 "home_team": home,
                 "away_team": away,
                 "competition": "TEST",
@@ -84,7 +85,7 @@ def test_cutoff_and_unknown_timestamps_fail_closed():
     assert model.training_rows == 11
 
     broken = _history()
-    broken.loc[0, "source_available_at_utc"] = None
+    broken.loc[0, "feature_source_max_available_at_utc"] = None
     with pytest.raises(ValueError, match="missing required field"):
         fit_statsmodels_poisson_score_model(
             broken, prediction_cutoff_utc="2026-02-01T00:00:00Z"
@@ -113,4 +114,21 @@ def test_missing_team_identity_is_not_coerced_to_literal_nan():
     with pytest.raises(ValueError, match="No PIT-verified rows|missing"):
         fit_statsmodels_poisson_score_model(
             history, prediction_cutoff_utc="2026-02-01T00:00:00Z"
+        )
+
+
+def test_feature_source_max_availability_is_required():
+    broken = _history().drop(columns=["feature_source_max_available_at_utc"])
+    with pytest.raises(ValueError, match="missing columns"):
+        fit_statsmodels_poisson_score_model(
+            broken, prediction_cutoff_utc="2026-02-01T00:00:00Z"
+        )
+
+
+def test_feature_source_must_precede_row_prediction_cutoff():
+    broken = _history()
+    broken.loc[0, "feature_source_max_available_at_utc"] = "2026-01-01T11:30:00Z"
+    with pytest.raises(ValueError, match="No PIT-verified rows"):
+        fit_statsmodels_poisson_score_model(
+            broken, prediction_cutoff_utc="2026-02-01T00:00:00Z"
         )
