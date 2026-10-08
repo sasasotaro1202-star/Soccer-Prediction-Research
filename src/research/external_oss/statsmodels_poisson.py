@@ -104,6 +104,18 @@ def _prepare(
     if (pit_rows[["home_goals", "away_goals"]] < 0).any().any():
         raise ValueError("Goal labels must be non-negative")
 
+    own_prediction_cutoff = pit_rows["kickoff_utc"] - pd.Timedelta(
+        minutes=int(cutoff_buffer_minutes)
+    )
+    invalid_own_pit = (
+        pit_rows["feature_source_max_available_at_utc"] > own_prediction_cutoff
+    )
+    if invalid_own_pit.any():
+        raise ValueError(
+            "PIT-verified rows contain feature source availability after "
+            "their row prediction cutoff"
+        )
+
     # Fail closed on unknown timing. The feature-source maximum availability must
     # precede both the row's own historical prediction cutoff and this model's
     # locked evaluation cutoff.
