@@ -1,0 +1,135 @@
+name: External OSS Statsmodels Soccer OOS
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/research/external_oss/**"
+      - "tests/test_statsmodels_score_oos.py"
+      - "requirements-research.txt"
+      - "artifacts/pit_replay_features.csv"
+      - ".github/workflows/external-oss-statsmodels-oos.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  statsmodels-score-oos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install research dependencies
+        run: |
+          python -m pip install --disable-pip-version-check --retries 5 --timeout 60 -r requirements.txt
+          python -m pip install --disable-pip-version-check --retries 5 --timeout 60 -r requirements-research.txt
+
+      - name: Validate PIT replay input
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/pit_replay_features.csv
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+
+          path = Path("artifacts/pit_replay_features.csv")
+          df = pd.read_csv(path)
+          required = {
+              "match_id", "kickoff_utc", "home_team", "away_team",
+              "competition", "home_goals", "away_goals", "pit_verified",
+          }
+          missing = sorted(required - set(df.columns))
+          if missing:
+              raise SystemExit(f"missing required PIT/OOS columns: {missing}")
+          if "source_available_at_utc" not in df.columns and "feature_source_max_available_at_utc" not in df.columns:
+              raise SystemExit("missing explicit predictor-side availability timestamp")
+          if df["match_id"].astype(str).str.strip().eq("").any() or df["match_id"].duplicated().any():
+              raise SystemExit("invalid or duplicate match_id")
+          pit = df["pit_verified"].astype("boolean")
+          if not pit.eq(True).any():
+              raise SystemExit("no PIT-verified rows available")
+          print(f"PIT replay rows={len(df)} PIT-verified={int(pit.eq(True).sum())}")
+          print("frozen_holdout_read=false")
+          print("selection_performed=false")
+          print("production_usable=false")
+          PY
+
+      - name: Run statsmodels chronological OOS
+        env:
+          PYTHONHASHSEED: "0"
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          import pandas as pd
+
+          from src.research.external_oss.statsmodels_score_oos import run_statsmodels_score_oos
+
+          path = Path("artifacts/pit_replay_features.csv")
+          raw = path.read_bytes()
+          data_hash = hashlib.sha256(raw).hexdigest()
+          df = pd.read_csv(path)
+
+          result = run_statsmodels_score_oos(
+              df,
+              min_train=1000,
+              oos_block=2000,
+              cutoff_buffer_minutes=60,
+          )
+
+          rows = pd.DataFrame(result["rows"])
+          numeric = rows.select_dtypes(include="number")
+          summary = {
+              "research_id": "statsmodels_poisson_score_v1",
+              "status": result["status"],
+              "evidence_level": "E4_CHRONOLOGICAL_OOS",
+              "production_usable": False,
+              "selection_performed": False,
+              "frozen_holdout_used": False,
+              "git_sha": "${GITHUB_SHA}",
+              "dataset_path": str(path),
+              "dataset_sha256": data_hash,
+              "fold_count": int(result["fold_count"]),
+              "total_oos_rows": int(rows["oos_rows"].sum()),
+              "metrics_mean": {
+                  k: float(v)
+                  for k, v in numeric.mean().items()
+                  if "logloss" in k or "brier" in k or "ece" in k or "top" in k
+              },
+              "folds": result["rows"],
+          }
+          out = Path("statsmodels_score_oos_report.json")
+          out.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+          rows.to_csv("statsmodels_score_oos_folds.csv", index=False)
+          print(json.dumps({
+              "status": summary["status"],
+              "evidence_level": summary["evidence_level"],
+              "fold_count": summary["fold_count"],
+              "total_oos_rows": summary["total_oos_rows"],
+              "production_usable": False,
+              "selection_performed": False,
+              "frozen_holdout_used": False,
+          }, ensure_ascii=False))
+          PY
+
+      - name: Upload research evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: statsmodels-score-oos-evidence
+          path: |
+            statsmodels_score_oos_report.json
+            statsmodels_score_oos_folds.csv
+          if-no-files-found: error
+          retention-days: 14
