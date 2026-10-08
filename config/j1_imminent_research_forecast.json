@@ -20,7 +20,7 @@
     "espn_fallback_leagues": [
       "jpn.1"
     ],
-    "standings_url": "https://site.api.espn.com/apis/v2/sports/soccer/leagues/jpn.1/standings"
+    "standings_url": "https://site.api.espn.com/apis/v2/sports/soccer/jpn.1/standings"
   },
   "runtime": {
     "request_timeout_seconds": 20,
