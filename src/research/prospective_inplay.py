@@ -234,6 +234,10 @@ def parse_live_snapshot(
     )
     if not home_id or not away_id or kickoff is None or home_score is None or away_score is None:
         return None
+    # A provider-side state flag must never cause a future kickoff to enter
+    # the prospective observation set.
+    if kickoff > observed_at.astimezone(timezone.utc):
+        return None
 
     clock_minutes = clock_seconds / 60.0 if clock_seconds is not None else None
     home_red, away_red, red_known = _red_card_state(
