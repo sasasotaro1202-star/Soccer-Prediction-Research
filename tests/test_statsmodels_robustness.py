@@ -23,6 +23,12 @@ def test_robustness_passes_when_fold_and_slice_are_non_regressed():
                             "n": 200,
                             "incumbent_calibrated_score_logloss": 1.0,
                             "statsmodels_calibrated_score_logloss": 1.0,
+                        },
+                        {
+                            "competition": "B",
+                            "n": 150,
+                            "incumbent_calibrated_score_logloss": 1.0,
+                            "statsmodels_calibrated_score_logloss": 0.99,
                         }
                     ],
                 },
