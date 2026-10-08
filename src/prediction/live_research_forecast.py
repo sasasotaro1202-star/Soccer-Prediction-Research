@@ -626,6 +626,11 @@ def predict(
     revision_id = fingerprint[:24]
 
     source_snapshot_hashes = dict(source_hashes)
+    research_model_status = (
+        "RESEARCH_ONLY_CURRENT_J1_STANDINGS_POISSON"
+        if config.get("sources", {}).get("standings_url")
+        else "RESEARCH_ONLY_HEURISTIC_ELO_POISSON"
+    )
     return {
         "match_id": f"{event_source}:{event.get('id')}",
         "prediction_revision_id": revision_id,
@@ -657,7 +662,7 @@ def predict(
         "data_completeness": round(data_completeness, 6),
         "prediction_state": prediction_state,
         "decision_state": "PREDICT",
-        "model_status": "RESEARCH_ONLY_HEURISTIC_ELO_POISSON",
+        "model_status": research_model_status,
         "production_status": "NOT_PRODUCTION",
         "pit_status": pit_status,
         "source_available_at_utc": None,
@@ -669,9 +674,10 @@ def predict(
         "config_sha256": config_hash,
         "git_commit_sha": git_sha,
         "experiment_fingerprint": fingerprint,
-        "elo_source_url": str(config["sources"]["elo_url"]),
+        "elo_source_url": str(config["sources"].get("standings_url") or config["sources"].get("elo_url") or ""),
         "event_source_url": (f"https://www.sofascore.com/event/{event.get('id')}" if event_source == "sofascore" else f"https://www.espn.com/soccer/match/_/gameId/{event.get('id')}"),
         "calibration_method": "uniform_shrink_only_research_heuristic",
+        "strength_source": "ESPN_current_standings" if config.get("sources", {}).get("standings_url") else "eloratings_World",
     }
 
 
