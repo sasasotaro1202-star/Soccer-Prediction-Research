@@ -112,3 +112,21 @@ def test_legacy_bridge_is_source_scoped():
 def test_legacy_research_cycle_is_not_orchestrated() -> None:
     orchestrator = _read(".github/workflows/soccer-autonomous-orchestrator.yml")
     assert 'ensure_lane "soccer-research-cycle.yml"' not in orchestrator
+
+
+def test_failure_recovery_declares_github_cli_token():
+    text = _read(".github/workflows/action-failure-recovery.yml")
+    assert "GH_TOKEN: ${{ github.token }}" in text
+
+
+def test_live_research_uses_resolvable_checkout_pin():
+    text = _read(".github/workflows/soccer-live-research-forecast.yml")
+    assert "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803" in text
+    assert "actions/checkout@d23441a48e516b6c34aea4fa41551a30af803" not in text
+
+
+def test_opta_watchdog_uses_authenticated_gh_api():
+    text = _read(".github/workflows/soccer-opta-like-24h-watchdog.yml")
+    assert 'gh api "repos/${REPO}/actions/workflows/soccer-opta-like-24h.yml/runs?per_page=50"' in text
+    assert "gh api \"repos/${REPO}/git/ref/heads/main\" --jq '.object.sha'" in text
+    assert 'curl "${CURL_TIMEOUT_ARGS[@]}"' not in text
