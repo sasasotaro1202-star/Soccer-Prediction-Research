@@ -77,6 +77,8 @@ jobs:
                   workflow_run = artifact.get('workflow_run') or {}
                   if artifact.get('expired') or not name.startswith('soccer-research-robust-'):
                       continue
+                  if workflow_run.get('status') != 'completed' or workflow_run.get('conclusion') != 'success':
+                      continue
                   candidates.append((artifact, workflow_run))
               if not candidates:
                   return None
@@ -100,6 +102,8 @@ jobs:
                       workflow_run = artifact.get('workflow_run') or {}
                       head_sha = str(workflow_run.get('head_sha', ''))
                       if artifact.get('expired') or not name.startswith('soccer-research-robust-'):
+                          continue
+                      if workflow_run.get('status') != 'completed' or workflow_run.get('conclusion') != 'success':
                           continue
                       if event_name == 'push' and head_sha == current:
                           continue
