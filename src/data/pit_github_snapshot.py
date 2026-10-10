@@ -104,10 +104,40 @@ def _snapshot_keys(payload: dict) -> set[tuple]:
     return keys
 
 
+# A versioned PIT source may have more than 100 relevant commits for a
+# season file.  Only reading the first page can create false negatives by
+# silently hiding older snapshots that are valid PIT evidence.
+MAX_COMMIT_HISTORY_PAGES = 100
+
+
 def _commits(path: str, timeout: int = 30) -> list[dict]:
-    url = f"{GITHUB_API}/repos/{REPOSITORY}/commits?path={path}&per_page=100"
-    payload = _request(url, timeout=timeout).json()
-    return payload if isinstance(payload, list) else []
+    commits: list[dict] = []
+    for page in range(1, MAX_COMMIT_HISTORY_PAGES + 1):
+        url = (
+            f"{GITHUB_API}/repos/{REPOSITORY}/commits"
+            f"?path={path}&per_page=100&page={page}"
+        )
+        response = _request(url, timeout=timeout)
+        payload = response.json()
+        if not isinstance(payload, list):
+            # Treat a malformed page as an explicit parse failure.  Returning
+            # the already-collected prefix would risk an incomplete evidence
+            # set and therefore a false UNVERIFIABLE result downstream.
+            raise ValueError(f"unexpected GitHub commits response on page {page}")
+        if not payload:
+            break
+        commits.extend(payload)
+        if len(payload) < 100:
+            break
+    else:
+        # A hard upper bound prevents an unexpected API response from creating
+        # an unbounded historical scan.  This is fail-closed: evidence_for_row
+        # converts the ValueError into UNVERIFIABLE rather than using a partial
+        # history as proof.
+        raise ValueError(
+            f"GitHub commit history exceeded {MAX_COMMIT_HISTORY_PAGES} pages"
+        )
+    return commits
 
 
 def _file_at_commit(path: str, sha: str, timeout: int = 30) -> dict:
