@@ -1,0 +1,342 @@
+name: External OSS Statsmodels Soccer OOS
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/research/external_oss/**"
+      - "tests/test_statsmodels_score_oos.py"
+      - "requirements-research.txt"
+      - "artifacts/pit_replay_features.csv"
+      - ".github/workflows/external-oss-statsmodels-oos.yml"
+  workflow_dispatch:
+
+
+concurrency:
+  group: external-oss-statsmodels-oos-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  statsmodels-score-oos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install research dependencies
+        run: |
+          python -m pip install --disable-pip-version-check --retries 5 --timeout 60 -r requirements.txt
+          python -m pip install --disable-pip-version-check --retries 5 --timeout 60 -r requirements-research.txt
+
+      - name: Freeze research environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -VV 2>&1 | tee research_python_version.txt
+          python -m pip freeze | sort > research_environment.txt
+
+      - name: Run research gate tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -q \
+            tests/test_statsmodels_poisson_research.py \
+            tests/test_statsmodels_score_oos.py \
+            tests/test_score_distribution_calibration.py \
+            tests/test_statsmodels_research_boundary.py \
+            tests/test_statsmodels_robustness.py
+          echo "TESTS_PASSED=true" >> "$GITHUB_ENV"
+
+      - name: Validate PIT replay input
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/pit_replay_features.csv
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+
+          path = Path("artifacts/pit_replay_features.csv")
+          df = pd.read_csv(path)
+          required = {
+              "match_id", "kickoff_utc", "home_team", "away_team",
+              "competition", "home_goals", "away_goals", "pit_verified",
+          }
+          missing = sorted(required - set(df.columns))
+          if missing:
+              raise SystemExit(f"missing required PIT/OOS columns: {missing}")
+          if "feature_source_max_available_at_utc" not in df.columns:
+              raise SystemExit(
+                  "missing feature_source_max_available_at_utc; "
+                  "source_available_at_utc is not an accepted predictor-PIT authority"
+              )
+          if df["match_id"].astype(str).str.strip().eq("").any() or df["match_id"].duplicated().any():
+              raise SystemExit("invalid or duplicate match_id")
+          pit = df["pit_verified"].astype("boolean")
+          if not pit.eq(True).any():
+              raise SystemExit("no PIT-verified rows available")
+          print(f"PIT replay rows={len(df)} PIT-verified={int(pit.eq(True).sum())}")
+          feature_available = pd.to_datetime(
+              df["feature_source_max_available_at_utc"],
+              utc=True,
+              errors="coerce",
+          )
+          kickoff = pd.to_datetime(df["kickoff_utc"], utc=True, errors="coerce")
+          pit = df["pit_verified"].astype("boolean")
+          case_cutoff = kickoff - pd.Timedelta(minutes=60)
+          if feature_available.loc[pit.eq(True)].isna().any():
+              raise SystemExit("PIT-verified rows contain unknown feature-source availability")
+          if (
+              feature_available.loc[pit.eq(True)]
+              > case_cutoff.loc[pit.eq(True)]
+          ).any():
+              raise SystemExit(
+                  "PIT-verified rows contain feature data available after their "
+                  "historical prediction cutoff"
+              )
+          print("feature_pit_authority=feature_source_max_available_at_utc")
+          print("frozen_holdout_read=false")
+          print("selection_performed=false")
+          print("production_usable=false")
+          PY
+          echo "AUDIT_PASSED=true" >> "$GITHUB_ENV"
+
+      - name: Run statsmodels chronological OOS
+        env:
+          PYTHONHASHSEED: "0"
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          import pandas as pd
+
+          from src.research.external_oss.statsmodels_score_oos import run_statsmodels_score_oos
+
+          path = Path("artifacts/pit_replay_features.csv")
+          raw = path.read_bytes()
+          data_hash = hashlib.sha256(raw).hexdigest()
+          environment_bytes = Path("research_environment.txt").read_bytes()
+          environment_hash = hashlib.sha256(environment_bytes).hexdigest()
+          df = pd.read_csv(path)
+
+          tests_passed = os.getenv("TESTS_PASSED", "false").lower() == "true"
+          audit_passed = os.getenv("AUDIT_PASSED", "false").lower() == "true"
+          head_sha = os.getenv("PR_HEAD_SHA", "unknown")
+          merge_sha = os.getenv("GITHUB_SHA", "unknown")
+          try:
+              result = run_statsmodels_score_oos(
+                  df,
+                  min_train=1000,
+                  oos_block=2000,
+                  cutoff_buffer_minutes=60,
+                  calibration_fraction=0.20,
+                  calibration_min_rows=100,
+                  tests_passed=tests_passed,
+                  audit_passed=audit_passed,
+              )
+          except Exception as exc:
+              failure_report = {
+                  "research_id": "statsmodels_poisson_score_v2",
+                  "status": "FAILED",
+                  "reason": f"{type(exc).__name__}: {exc}",
+                  "production_usable": False,
+                  "selection_performed": False,
+                  "frozen_holdout_used": False,
+                  "head_sha": head_sha,
+                  "merge_sha": merge_sha,
+                  "dataset_sha256": data_hash,
+                  "environment_sha256": environment_hash,
+              }
+              Path("statsmodels_score_oos_report.json").write_text(
+                  json.dumps(failure_report, ensure_ascii=False, indent=2),
+                  encoding="utf-8",
+              )
+              print(json.dumps(failure_report, ensure_ascii=False))
+              raise SystemExit(0)
+
+          if result.get("status") != "RESEARCH_OOS_READY":
+              failure_report = {
+                  "research_id": "statsmodels_poisson_score_v2",
+                  "status": result.get("status"),
+                  "handoff": result.get("handoff"),
+                  "production_usable": False,
+                  "selection_performed": False,
+                  "frozen_holdout_used": False,
+                  "head_sha": head_sha,
+                  "merge_sha": merge_sha,
+                  "dataset_sha256": data_hash,
+                  "environment_sha256": environment_hash,
+                  "result": result,
+              }
+              Path("statsmodels_score_oos_report.json").write_text(
+                  json.dumps(failure_report, ensure_ascii=False, indent=2),
+                  encoding="utf-8",
+              )
+              print(json.dumps(failure_report, ensure_ascii=False))
+              raise SystemExit(0)
+
+          rows = pd.DataFrame(result["rows"])
+          numeric = rows.select_dtypes(include="number")
+
+          experiment_identity = {
+              "research_id": "statsmodels_poisson_score_v2",
+              "repository": "statsmodels/statsmodels",
+              "adapter": "src/research/external_oss/statsmodels_poisson.py",
+              "target": "Score",
+              "feature_set_id": "statsmodels_score_formula_home_away_competition_v1",
+              "dependency_pin": "statsmodels==0.15.0",
+              "regularization_alpha": 0.1,
+              "regularization": "ridge_L2",
+              "calibration_method": "joint_score_temperature_scaling",
+              "calibration_fraction": 0.20,
+              "calibration_min_rows": 100,
+              "oos_protocol": {
+                  "min_train": 1000,
+                  "oos_block": 2000,
+                  "cutoff_buffer_minutes": 60,
+                  "same_kickoff_boundary_policy": "advance_past_same_kickoff",
+                  "support_policy": "common_model_support_exclude_and_count_ood",
+                  "selection_performed": false,
+                  "frozen_holdout_used": false
+              },
+              "data_snapshot_sha256": data_hash,
+              "head_sha": head_sha,
+              "merge_sha": merge_sha,
+              "environment_sha256": environment_hash,
+              "required_handoff": {
+                  "TESTS_PASSED": true,
+                  "AUDIT_PASSED": true
+              }
+          }
+          experiment_fingerprint = hashlib.sha256(
+              json.dumps(
+                  experiment_identity,
+                  sort_keys=True,
+                  separators=(",", ":"),
+              ).encode("utf-8")
+          ).hexdigest()
+
+          summary = {
+              "research_id": "statsmodels_poisson_score_v2",
+              "status": result["status"],
+              "evidence_level": "E4_CHRONOLOGICAL_OOS" if result["status"] == "RESEARCH_OOS_READY" else "BLOCKED",
+              "production_usable": False,
+              "selection_performed": False,
+              "frozen_holdout_used": False,
+              "tests_passed": tests_passed,
+              "audit_passed": audit_passed,
+              "experiment_config": result.get("experiment_config"),
+              "experiment_config_fingerprint": result.get("experiment_config_fingerprint"),
+              "experiment_identity": experiment_identity,
+              "experiment_fingerprint": experiment_fingerprint,
+              "git_sha": head_sha,
+              "dataset_path": str(path),
+              "dataset_sha256": data_hash,
+              "fold_count": int(result["fold_count"]),
+              "total_oos_rows": int(rows["oos_rows"].sum()),
+              "metrics_mean": {
+                  k: float(v)
+                  for k, v in numeric.mean().items()
+                  if "logloss" in k or "brier" in k or "ece" in k or "top" in k
+                  or "coverage" in k or "temperature" in k
+              },
+              "folds": result["rows"],
+          }
+          out = Path("statsmodels_score_oos_report.json")
+          out.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+          rows.to_csv("statsmodels_score_oos_folds.csv", index=False)
+          print(json.dumps({
+              "status": summary["status"],
+              "evidence_level": summary["evidence_level"],
+              "fold_count": summary["fold_count"],
+              "total_oos_rows": summary["total_oos_rows"],
+              "production_usable": False,
+              "selection_performed": False,
+              "frozen_holdout_used": False,
+              "experiment_config_fingerprint": summary["experiment_config_fingerprint"],
+              "experiment_fingerprint": summary["experiment_fingerprint"],
+          }, ensure_ascii=False))
+          PY
+
+      - name: Run robustness diagnostic
+        env:
+          PYTHONHASHSEED: "0"
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          from src.research.external_oss.statsmodels_robustness import (
+              evaluate_statsmodels_robustness,
+          )
+
+          report = json.loads(Path("statsmodels_score_oos_report.json").read_text(encoding="utf-8"))
+          robustness = evaluate_statsmodels_robustness(report)
+
+          out = Path("statsmodels_score_robustness_report.json")
+          out.write_text(json.dumps(robustness, ensure_ascii=False, indent=2), encoding="utf-8")
+          print(json.dumps({
+              "status": robustness["status"],
+              "fold_non_regression_fraction": robustness.get("fold_non_regression_fraction"),
+              "competition_slice_count": robustness.get("competition_slice_count"),
+              "coverage_min": robustness.get("coverage_min"),
+              "unsupported_rows_total": robustness.get("unsupported_rows_total"),
+              "production_usable": False,
+              "frozen_holdout_used": False,
+              "selection_performed": False,
+          }, ensure_ascii=False))
+          PY
+
+      - name: Upload research evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: statsmodels-score-oos-evidence
+          path: |
+            statsmodels_score_oos_report.json
+            statsmodels_score_oos_folds.csv
+            statsmodels_score_robustness_report.json
+            research_environment.txt
+            research_python_version.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce research OOS success after artifact preservation
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = Path("statsmodels_score_oos_report.json")
+          if not report.is_file():
+              raise SystemExit("missing statsmodels_score_oos_report.json")
+          payload = json.loads(report.read_text(encoding="utf-8"))
+          status = payload.get("status")
+          if status != "RESEARCH_OOS_READY":
+              print(json.dumps({
+                  "status": status,
+                  "action": "BLOCK_WORKFLOW",
+                  "reason": "OOS evidence did not reach RESEARCH_OOS_READY",
+              }, ensure_ascii=False))
+              raise SystemExit(1)
+          print(json.dumps({
+              "status": status,
+              "action": "ALLOW",
+          }, ensure_ascii=False))
+          PY
