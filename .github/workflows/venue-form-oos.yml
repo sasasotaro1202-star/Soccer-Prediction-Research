@@ -1,0 +1,185 @@
+name: Soccer Venue Form Challenger OOS
+
+on:
+  push:
+    branches:
+      - challenger/venue-form-v1
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soccer-venue-form-oos
+  cancel-in-progress: false
+
+jobs:
+  oos:
+    name: PIT-safe venue-form OOS challenger
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --retries 8 --timeout 90 -r requirements.txt
+      - name: Deterministic tests
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+        run: python -m pytest -q
+      - name: Structural audit
+        env:
+          PYTHONPATH: .
+        run: python -m src.data.fixture_field_audit
+      - name: Build strict PIT replay features
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+          PIT_ENABLE_ARCHIVE_AUDIT: "1"
+          PIT_ENABLE_SECONDARY_ARCHIVE: "1"
+        run: python -m src.data.completion_gate
+      - name: Run venue-form ablation OOS comparison
+        env:
+          PYTHONPATH: .
+          PYTHONHASHSEED: "0"
+          SOCCER_OOS_BLOCK: "2000"
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          import numpy as np
+          import pandas as pd
+
+          from src.evaluation.walk_forward import run_walk_forward
+          from src.research.engine import _model_features
+
+          path = Path("artifacts/pit_replay_features.csv")
+          if not path.exists():
+              raise SystemExit("PIT replay feature artifact missing")
+          df = pd.read_csv(path, low_memory=False)
+
+          all_features = _model_features(df)
+          venue_features = [
+              c for c in all_features
+              if c.startswith("home_home_venue_") or c.startswith("away_away_venue_")
+          ]
+          if not venue_features:
+              raise SystemExit("No venue-specific challenger features are present")
+          baseline_features = [c for c in all_features if c not in venue_features]
+          if not baseline_features:
+              raise SystemExit("Removing venue-specific features leaves no baseline features")
+
+          candidate_wf, _ = run_walk_forward(df, all_features)
+          baseline_wf, _ = run_walk_forward(df, baseline_features)
+          if candidate_wf.empty or baseline_wf.empty:
+              raise SystemExit("Venue-form OOS comparison produced no blocks")
+          if len(candidate_wf) != len(baseline_wf):
+              raise SystemExit("Candidate and baseline OOS block counts differ")
+
+          def weighted(frame, col):
+              n = pd.to_numeric(frame["n"], errors="coerce").fillna(0.0).to_numpy(dtype=float)
+              v = pd.to_numeric(frame[col], errors="coerce").to_numpy(dtype=float)
+              mask = np.isfinite(n) & (n > 0) & np.isfinite(v)
+              if not mask.any():
+                  raise SystemExit(f"Non-finite OOS metric: {col}")
+              return float((v[mask] * n[mask]).sum() / n[mask].sum())
+
+          summary = {
+              "blocks": int(len(candidate_wf)),
+              "rows": int(pd.to_numeric(candidate_wf["n"], errors="coerce").sum()),
+              "venue_feature_count": int(len(venue_features)),
+              "candidate_logloss": weighted(candidate_wf, "logloss"),
+              "baseline_logloss": weighted(baseline_wf, "logloss"),
+              "candidate_accuracy": weighted(candidate_wf, "accuracy"),
+              "baseline_accuracy": weighted(baseline_wf, "accuracy"),
+              "candidate_brier": weighted(candidate_wf, "brier"),
+              "baseline_brier": weighted(baseline_wf, "brier"),
+              "candidate_rps": weighted(candidate_wf, "rps"),
+              "baseline_rps": weighted(baseline_wf, "rps"),
+              "candidate_ece": weighted(candidate_wf, "ece"),
+              "baseline_ece": weighted(baseline_wf, "ece"),
+              "candidate_wins_logloss": 0,
+              "candidate_wins_brier": 0,
+              "candidate_wins_accuracy": 0,
+              "candidate_non_worse_calibration_blocks": 0,
+              "worst_logloss_delta": float("inf"),
+              "worst_brier_delta": float("inf"),
+          }
+
+          rows = []
+          for idx, (cand, base) in enumerate(zip(candidate_wf.to_dict("records"), baseline_wf.to_dict("records")), start=1):
+              dl = float(cand["logloss"]) - float(base["logloss"])
+              db = float(cand["brier"]) - float(base["brier"])
+              da = float(cand["accuracy"]) - float(base["accuracy"])
+              de = float(cand["ece"]) - float(base["ece"])
+              summary["candidate_wins_logloss"] += int(dl < 0.0)
+              summary["candidate_wins_brier"] += int(db < 0.0)
+              summary["candidate_wins_accuracy"] += int(da >= 0.0)
+              summary["candidate_non_worse_calibration_blocks"] += int(de <= 0.02)
+              summary["worst_logloss_delta"] = min(summary["worst_logloss_delta"], dl)
+              summary["worst_brier_delta"] = min(summary["worst_brier_delta"], db)
+              rows.append({
+                  "block": idx,
+                  "oos_start": cand.get("oos_start"),
+                  "oos_end": cand.get("oos_end"),
+                  "n": cand.get("n"),
+                  "candidate_logloss": cand.get("logloss"),
+                  "baseline_logloss": base.get("logloss"),
+                  "delta_logloss": dl,
+                  "candidate_accuracy": cand.get("accuracy"),
+                  "baseline_accuracy": base.get("accuracy"),
+                  "delta_accuracy": da,
+                  "candidate_brier": cand.get("brier"),
+                  "baseline_brier": base.get("brier"),
+                  "delta_brier": db,
+                  "candidate_rps": cand.get("rps"),
+                  "baseline_rps": base.get("rps"),
+                  "candidate_ece": cand.get("ece"),
+                  "baseline_ece": base.get("ece"),
+                  "delta_ece": de,
+              })
+
+          summary["candidate_improves_weighted_logloss"] = summary["candidate_logloss"] < summary["baseline_logloss"]
+          summary["candidate_improves_weighted_brier"] = summary["candidate_brier"] < summary["baseline_brier"]
+          summary["candidate_non_worse_weighted_accuracy"] = summary["candidate_accuracy"] >= summary["baseline_accuracy"]
+          summary["candidate_calibration_within_tolerance"] = summary["candidate_ece"] - summary["baseline_ece"] <= 0.02
+          summary["safe_to_consider_for_adoption"] = bool(
+              summary["candidate_improves_weighted_logloss"]
+              and summary["candidate_improves_weighted_brier"]
+              and summary["candidate_non_worse_weighted_accuracy"]
+              and summary["candidate_calibration_within_tolerance"]
+              and summary["candidate_wins_logloss"] >= max(1, summary["blocks"] // 2)
+              and summary["candidate_wins_brier"] >= max(1, summary["blocks"] // 2)
+          )
+
+          Path("artifacts/venue_form_oos_comparison.csv").parent.mkdir(parents=True, exist_ok=True)
+          pd.DataFrame(rows).to_csv("artifacts/venue_form_oos_comparison.csv", index=False)
+          Path("artifacts/venue_form_oos_summary.json").write_text(
+              json.dumps(summary, indent=2, ensure_ascii=False, default=str),
+              encoding="utf-8",
+          )
+          print(json.dumps(summary, indent=2, ensure_ascii=False, default=str))
+          PY
+      - name: Upload OOS evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: soccer-venue-form-oos
+          path: |
+            artifacts/venue_form_oos_comparison.csv
+            artifacts/venue_form_oos_summary.json
+          retention-days: 30
+          if-no-files-found: error
