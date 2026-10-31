@@ -535,6 +535,18 @@ def run(
     if not np.allclose(probs.sum(axis=1), 1.0, atol=1e-6):
         raise RuntimeError("Matchday intelligence produced non-normalized probabilities")
     result = eligible[["match_id", "kickoff_utc", "home_team", "away_team"]].copy()
+    # Preserve predictor-side PIT provenance in the durable prediction record.
+    # These fields are metadata only and are never model features or labels.
+    result["source_available_at_utc"] = pd.to_datetime(
+        eligible["source_available_at_utc"], utc=True, errors="coerce"
+    ).astype("string").to_numpy()
+    result["pit_verified"] = eligible["pit_verified"].astype(bool).to_numpy()
+    if "matchday_available_at_utc" in eligible.columns:
+        result["matchday_available_at_utc"] = pd.to_datetime(
+            eligible["matchday_available_at_utc"], utc=True, errors="coerce"
+        ).astype("string").to_numpy()
+    if "matchday_pit_verified" in eligible.columns:
+        result["matchday_pit_verified"] = eligible["matchday_pit_verified"].astype(bool).to_numpy()
     policy_rows = annotate_predictions(eligible, bundle)
     policy_columns = [c for c in policy_rows.columns if c.startswith("policy_")]
     result = result.join(policy_rows[policy_columns].reset_index(drop=True))
