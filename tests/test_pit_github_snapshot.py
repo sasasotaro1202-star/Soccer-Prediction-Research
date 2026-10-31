@@ -32,3 +32,48 @@ def test_missing_event_time_is_fail_closed():
     assert isinstance(result, GitHubSnapshotEvidence)
     assert result.status == "UNVERIFIABLE"
     assert result.reason == "missing_event_time"
+
+
+def test_commit_history_paginates_beyond_first_100(monkeypatch):
+    import src.data.pit_github_snapshot as module
+
+    calls = []
+
+    class Response:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    def fake_request(url, timeout=None):
+        calls.append(url)
+        page = int(url.rsplit("page=", 1)[1])
+        if page == 1:
+            return Response([{"sha": f"sha-{i}"} for i in range(100)])
+        if page == 2:
+            return Response([{"sha": "sha-100"}])
+        raise AssertionError(f"unexpected page: {page}")
+
+    monkeypatch.setattr(module, "_request", fake_request)
+
+    commits = module._commits("2010-11/en.1.json")
+
+    assert len(commits) == 101
+    assert commits[-1]["sha"] == "sha-100"
+    assert calls[0].endswith("page=1")
+    assert calls[1].endswith("page=2")
+
+
+def test_commit_history_api_malformed_page_is_fail_closed(monkeypatch):
+    import src.data.pit_github_snapshot as module
+
+    class Response:
+        def json(self):
+            return {"unexpected": "shape"}
+
+    monkeypatch.setattr(module, "_request", lambda url, timeout=None: Response())
+
+    import pytest
+    with pytest.raises(ValueError, match="unexpected GitHub commits response on page 1"):
+        module._commits("2010-11/en.1.json")
