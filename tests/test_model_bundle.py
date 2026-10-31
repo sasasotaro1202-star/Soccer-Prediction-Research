@@ -135,6 +135,32 @@ def test_bundle_does_not_promote_unverified_score_selection(tmp_path):
     assert bundle["score_method"] == "primary"
 
 
+def test_load_bundle_rejects_invalid_time_decay_half_life(tmp_path):
+    df = _fixture().copy()
+    df["home_team"] = np.where(np.arange(len(df)) % 2 == 0, "A", "B")
+    df["away_team"] = np.where(np.arange(len(df)) % 2 == 0, "B", "A")
+    df["home_goals"] = np.where(df["target"] == 0, 2, np.where(df["target"] == 1, 1, 3))
+    df["away_goals"] = np.where(df["target"] == 2, 2, np.where(df["target"] == 1, 1, 0))
+    path = tmp_path / "production_model.pkl"
+    train_and_save_bundle(
+        df,
+        ["f1", "f2"],
+        {"weights": {"logistic": 1.0}, "temperature": 1.0},
+        str(path),
+        "test-version",
+        "snapshot-1",
+        score_selection={"selected_method": "time_decay"},
+        score_locked_gate={"selected_method": "time_decay", "status": "PASS"},
+    )
+    with path.open("rb") as fh:
+        bundle = __import__("pickle").load(fh)
+    bundle["score_model"]["half_life_days"] = 0
+    with path.open("wb") as fh:
+        __import__("pickle").dump(bundle, fh)
+    with pytest.raises(RuntimeError, match="half_life_days"):
+        load_bundle(str(path))
+
+
 def test_load_bundle_rejects_unverified_non_primary_score_method(tmp_path):
     df = _fixture().copy()
     df["home_team"] = np.where(np.arange(len(df)) % 2 == 0, "A", "B")
