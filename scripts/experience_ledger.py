@@ -146,6 +146,38 @@ def record_prediction_file(
         raise RuntimeError("prediction ledger contains invalid/missing prediction or kickoff timestamps")
     if bool((cutoffs >= kickoff).any()):
         raise RuntimeError("prediction ledger contains a prediction at/after kickoff; refusing non-pregame state")
+    # A ledger row becomes PIT-PASS only when predictor-side source availability
+    # is explicit, timestamp-valid, and no later than the prediction cutoff.
+    if "source_available_at_utc" not in incoming.columns:
+        raise RuntimeError("prediction ledger requires source_available_at_utc; refusing unknown PIT")
+    source_available = pd.to_datetime(
+        incoming["source_available_at_utc"], utc=True, errors="coerce"
+    )
+    if source_available.isna().any():
+        raise RuntimeError("prediction ledger contains invalid/missing source_available_at_utc")
+    if bool((source_available > cutoffs).any()):
+        raise RuntimeError(
+            "prediction ledger contains source availability after prediction cutoff; refusing PIT-unsafe state"
+        )
+    if "pit_verified" not in incoming.columns:
+        raise RuntimeError("prediction ledger requires explicit pit_verified; refusing unknown PIT")
+    pit_verified = incoming["pit_verified"].astype("string").str.strip().str.lower().isin({"true", "1", "yes"})
+    if not bool(pit_verified.all()):
+        raise RuntimeError("prediction ledger contains pit_verified=false; refusing PIT-unsafe state")
+    if "matchday_pit_verified" in incoming.columns:
+        md_flag = incoming["matchday_pit_verified"].astype("string").str.strip().str.lower().isin({"true", "1", "yes"})
+        if bool(md_flag.any()) and "matchday_available_at_utc" not in incoming.columns:
+            raise RuntimeError("prediction ledger matchday PIT metadata is incomplete")
+        if "matchday_available_at_utc" in incoming.columns and bool(md_flag.any()):
+            md_available = pd.to_datetime(
+                incoming["matchday_available_at_utc"], utc=True, errors="coerce"
+            )
+            if md_available[md_flag].isna().any():
+                raise RuntimeError("prediction ledger contains invalid matchday_available_at_utc")
+            if bool((md_available[md_flag] > cutoffs[md_flag]).any()):
+                raise RuntimeError(
+                    "prediction ledger contains matchday evidence after prediction cutoff"
+                )
     incoming["prediction_pit_cutoff_utc"] = cutoffs.map(lambda ts: pd.Timestamp(ts).isoformat())
     incoming["prediction_recorded_at_utc"] = _now()
     incoming["prediction_pit_gate"] = "PASS"
