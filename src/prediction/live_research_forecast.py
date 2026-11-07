@@ -45,6 +45,19 @@ REQUIRED = {
     "score_2_probability",
     "score_3",
     "score_3_probability",
+    "over_2_5_probability",
+    "under_2_5_probability",
+    "btts_yes_probability",
+    "btts_no_probability",
+    "mom_status",
+    "mom_1_player",
+    "mom_1_probability",
+    "mom_2_player",
+    "mom_2_probability",
+    "mom_3_player",
+    "mom_3_probability",
+    "mom_4_player",
+    "mom_4_probability",
     "prediction_state",
     "pit_status",
     "production_status",
@@ -71,6 +84,10 @@ def load_config() -> tuple[dict[str, Any], str]:
     if not isinstance(payload, dict) or int(payload.get("schema_version", 0)) != 1:
         raise RuntimeError("unsupported live forecast config schema")
     return payload, hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _normalized_team(value: str) -> str:
+    return " ".join(str(value).strip().lower().replace("türkiye", "turkey").split())
 
 
 def _get(url: str, timeout: float) -> tuple[bytes, str, str]:
@@ -119,22 +136,160 @@ def parse_elo_tsv(text: str, elo_codes: dict[str, str]) -> dict[str, float]:
     return ratings
 
 
+def parse_elo_team_name_tsv(text: str) -> dict[str, float]:
+    """Parse World.tsv into normalized team-name -> Elo ratings.
+
+    The public World.tsv layout used by this research lane places the team name
+    in column 2 and Elo in column 4. This mode is intentionally used only for
+    explicitly configured current/imminent research scopes; it does not create
+    historical PIT evidence.
+    """
+    ratings: dict[str, float] = {}
+    for raw in text.splitlines():
+        cells = raw.strip().split("\t")
+        if len(cells) < 4:
+            continue
+        name = _normalized_team(cells[1])
+        try:
+            rating = float(cells[3])
+        except (TypeError, ValueError):
+            continue
+        if name and np.isfinite(rating):
+            ratings[name] = rating
+    return ratings
+
+
+def _walk_standing_entries(value: Any):
+    if isinstance(value, dict):
+        entries = value.get("entries")
+        if isinstance(entries, list):
+            for entry in entries:
+                if isinstance(entry, dict):
+                    yield entry
+        for child_key in ("children", "groups", "standings"):
+            child = value.get(child_key)
+            if isinstance(child, list):
+                for item in child:
+                    yield from _walk_standing_entries(item)
+            elif isinstance(child, dict):
+                yield from _walk_standing_entries(child)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _walk_standing_entries(item)
+
+
+def _standing_stats(entry: dict[str, Any]) -> dict[str, float]:
+    stats: dict[str, float] = {}
+    raw = entry.get("stats") or entry.get("statistics") or []
+    if isinstance(raw, dict):
+        raw = [{"name": key, "value": value} for key, value in raw.items()]
+    if not isinstance(raw, list):
+        return stats
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("name") or item.get("abbreviation") or "").strip().lower()
+        value = item.get("value", item.get("displayValue"))
+        try:
+            stats[key] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return stats
+
+
+def parse_espn_standings_strength(payload: dict[str, Any]) -> dict[str, dict[str, float]]:
+    """Parse current ESPN J1 standings into a transparent strength snapshot.
+
+    This is current-observation research input only. It is not historical PIT
+    evidence. The parser is deliberately tolerant of ESPN's nested standings
+    group shape.
+    """
+    strengths: dict[str, dict[str, float]] = {}
+    for entry in _walk_standing_entries(payload):
+        team = entry.get("team") or {}
+        if not isinstance(team, dict):
+            continue
+        name = str(team.get("displayName") or team.get("name") or "").strip()
+        if not name:
+            continue
+        stats = _standing_stats(entry)
+        gp = stats.get("gamesplayed", stats.get("gp", 0.0))
+        wins = stats.get("wins", stats.get("w", 0.0))
+        draws = stats.get("ties", stats.get("draws", stats.get("d", 0.0)))
+        losses = stats.get("losses", stats.get("l", 0.0))
+        gf = stats.get("pointsfor", stats.get("goalsfor", stats.get("f", np.nan)))
+        ga = stats.get("pointsagainst", stats.get("goalsagainst", stats.get("a", np.nan)))
+        points = stats.get("points", stats.get("pts", np.nan))
+        if gp <= 0:
+            gp = wins + draws + losses
+        if gp <= 0 or not np.isfinite(gp):
+            continue
+        if not np.isfinite(points):
+            points = 3.0 * wins + draws
+        if not np.isfinite(gf) or not np.isfinite(ga):
+            continue
+        strengths[_normalized_team(name)] = {
+            "games": float(gp),
+            "ppg": float(points / gp),
+            "gf_per_game": float(gf / gp),
+            "ga_per_game": float(ga / gp),
+            "gd_per_game": float((gf - ga) / gp),
+        }
+    return strengths
+
+
+def load_standings_strength(config: dict[str, Any]) -> tuple[dict[str, dict[str, float]], str, str]:
+    timeout = float(config["runtime"]["request_timeout_seconds"])
+    url = str(config["sources"]["standings_url"])
+    payload, observed_at, digest = _get_json(url, timeout)
+    strengths = parse_espn_standings_strength(payload)
+    if not strengths:
+        raise RuntimeError("ESPN standings returned no parseable team strength entries")
+    return strengths, observed_at, digest
+
+def standing_strength_ratings(strengths: dict[str, dict[str, float]]) -> dict[str, float]:
+    """Convert current standings into an Elo-like research strength scale."""
+    if not strengths:
+        return {}
+    ppg_values = np.asarray([v["ppg"] for v in strengths.values()], dtype=float)
+    gd_values = np.asarray([v["gd_per_game"] for v in strengths.values()], dtype=float)
+    ppg_mean = float(np.mean(ppg_values))
+    gd_mean = float(np.mean(gd_values))
+    ratings: dict[str, float] = {}
+    for team, value in strengths.items():
+        score = (
+            1500.0
+            + 250.0 * (float(value["ppg"]) - ppg_mean)
+            + 120.0 * (float(value["gd_per_game"]) - gd_mean)
+        )
+        ratings[team] = float(np.clip(score, 1300.0, 1900.0))
+    return ratings
+
+
+
 def load_elo(config: dict[str, Any]) -> tuple[dict[str, float], str, str]:
     timeout = float(config["runtime"]["request_timeout_seconds"])
     body, observed_at, digest = _get(
         str(config["sources"]["elo_url"]),
         timeout,
     )
-    ratings = parse_elo_tsv(body.decode("utf-8", errors="replace"), config["team_aliases"]["elo_codes"])
-    missing = [team for team in config["target_teams"] if team not in ratings]
+    text = body.decode("utf-8", errors="replace")
+    elo_codes = config.get("team_aliases", {}).get("elo_codes", {})
+    if elo_codes:
+        ratings = parse_elo_tsv(text, elo_codes)
+        missing = [team for team in config.get("target_teams", []) if team not in ratings]
+    else:
+        ratings = parse_elo_team_name_tsv(text)
+        name_aliases = config.get("team_aliases", {}).get("name_aliases", {})
+        for alias, source_name in name_aliases.items():
+            alias_key = _normalized_team(str(alias))
+            source_key = _normalized_team(str(source_name))
+            if source_key in ratings:
+                ratings[alias_key] = ratings[source_key]
+        missing = [team for team in config.get("target_teams", []) if team not in ratings]
     if missing:
         raise RuntimeError(f"Elo source missing teams: {missing}")
     return ratings, observed_at, digest
-
-
-def _normalized_team(value: str) -> str:
-    return " ".join(value.strip().lower().replace("türkiye", "turkey").split())
-
 
 def find_target(event: dict[str, Any], config: dict[str, Any]) -> str | None:
     home = str((event.get("homeTeam") or {}).get("name") or "").strip()
@@ -142,10 +297,32 @@ def find_target(event: dict[str, Any], config: dict[str, Any]) -> str | None:
     if not home or not away:
         return None
     observed = frozenset((_normalized_team(home), _normalized_team(away)))
-    for label, pair in config["target_pairs"].items():
+    for label, pair in config.get("target_pairs", {}).items():
         wanted = frozenset(_normalized_team(x) for x in pair)
         if observed == wanted:
             return str(label)
+
+    target_competitions = {
+        _normalized_team(str(value))
+        for value in config.get("target_competitions", [])
+        if str(value).strip()
+    }
+    if target_competitions:
+        tournament = event.get("tournament") or {}
+        unique = tournament.get("uniqueTournament") or {}
+        candidates = {
+            _normalized_team(str(value))
+            for value in (
+                tournament.get("name"),
+                tournament.get("slug"),
+                unique.get("name"),
+                unique.get("slug"),
+            )
+            if value
+        }
+        if candidates & target_competitions:
+            event_id = str(event.get("id") or "").strip()
+            return f"competition:{next(iter(candidates & target_competitions))}:{event_id}"
     return None
 
 
@@ -428,6 +605,10 @@ def predict(
     probs = result_probs(matrix, float(config["model"]["probability_shrink"]))
     labels = ("Home", "Draw", "Away")
     top = _top_scores(matrix, int(config["model"]["top_scorelines"]))
+    over_2_5 = float(sum(matrix[h, a] for h in range(matrix.shape[0]) for a in range(matrix.shape[1]) if h + a > 2))
+    under_2_5 = float(sum(matrix[h, a] for h in range(matrix.shape[0]) for a in range(matrix.shape[1]) if h + a <= 2))
+    btts_yes = float(sum(matrix[h, a] for h in range(1, matrix.shape[0]) for a in range(1, matrix.shape[1])))
+    btts_no = float(1.0 - btts_yes)
 
     required_state_fields = (
         event.get("id"),
@@ -462,6 +643,11 @@ def predict(
     revision_id = fingerprint[:24]
 
     source_snapshot_hashes = dict(source_hashes)
+    research_model_status = (
+        "RESEARCH_ONLY_CURRENT_J1_STANDINGS_POISSON"
+        if config.get("sources", {}).get("standings_url")
+        else "RESEARCH_ONLY_HEURISTIC_ELO_POISSON"
+    )
     return {
         "match_id": f"{event_source}:{event.get('id')}",
         "prediction_revision_id": revision_id,
@@ -488,12 +674,25 @@ def predict(
         "score_2_probability": round(top[1][1], 6),
         "score_3": top[2][0],
         "score_3_probability": round(top[2][1], 6),
+        "over_2_5_probability": round(over_2_5, 6),
+        "under_2_5_probability": round(under_2_5, 6),
+        "btts_yes_probability": round(btts_yes, 6),
+        "btts_no_probability": round(btts_no, 6),
+        "mom_status": "ABSTAIN_NO_PIT_VERIFIED_PLAYER_MODEL",
+        "mom_1_player": "",
+        "mom_1_probability": 0.0,
+        "mom_2_player": "",
+        "mom_2_probability": 0.0,
+        "mom_3_player": "",
+        "mom_3_probability": 0.0,
+        "mom_4_player": "",
+        "mom_4_probability": 0.0,
         "uncertainty": round(uncertainty, 6),
         "predictability": round(predictability, 6),
         "data_completeness": round(data_completeness, 6),
         "prediction_state": prediction_state,
         "decision_state": "PREDICT",
-        "model_status": "RESEARCH_ONLY_HEURISTIC_ELO_POISSON",
+        "model_status": research_model_status,
         "production_status": "NOT_PRODUCTION",
         "pit_status": pit_status,
         "source_available_at_utc": None,
@@ -505,9 +704,10 @@ def predict(
         "config_sha256": config_hash,
         "git_commit_sha": git_sha,
         "experiment_fingerprint": fingerprint,
-        "elo_source_url": str(config["sources"]["elo_url"]),
+        "elo_source_url": str(config["sources"].get("standings_url") or config["sources"].get("elo_url") or ""),
         "event_source_url": (f"https://www.sofascore.com/event/{event.get('id')}" if event_source == "sofascore" else f"https://www.espn.com/soccer/match/_/gameId/{event.get('id')}"),
         "calibration_method": "uniform_shrink_only_research_heuristic",
+        "strength_source": "ESPN_current_standings" if config.get("sources", {}).get("standings_url") else "eloratings_World",
     }
 
 
@@ -522,10 +722,21 @@ def run(output: str, status_path: str) -> dict[str, Any]:
     Path(status_path).parent.mkdir(parents=True, exist_ok=True)
     try:
         config, config_hash = load_config()
-        ratings, elo_at, elo_hash = load_elo(config)
-        events, source_times, source_hashes = collect_events(prediction_time, config)
-        source_times["eloratings_world_tsv"] = elo_at
-        source_hashes["eloratings_world_tsv"] = elo_hash
+        source_times: dict[str, str] = {}
+        source_hashes: dict[str, str] = {}
+        if config.get("sources", {}).get("standings_url"):
+            strengths, strength_at, strength_hash = load_standings_strength(config)
+            ratings = standing_strength_ratings(strengths)
+            elo_hash = strength_hash
+            source_times["espn_j1_standings"] = strength_at
+            source_hashes["espn_j1_standings"] = strength_hash
+        else:
+            ratings, elo_at, elo_hash = load_elo(config)
+            source_times["eloratings_world_tsv"] = elo_at
+            source_hashes["eloratings_world_tsv"] = elo_hash
+        events, event_source_times, event_source_hashes = collect_events(prediction_time, config)
+        source_times.update(event_source_times)
+        source_hashes.update(event_source_hashes)
 
         rows: list[dict[str, Any]] = []
         failures: list[str] = []
@@ -559,7 +770,11 @@ def run(output: str, status_path: str) -> dict[str, Any]:
             "prediction_time_utc": prediction_time.isoformat(),
             "rows": len(rows),
             "failures": failures,
-            "model_status": "RESEARCH_ONLY_HEURISTIC_ELO_POISSON",
+            "model_status": (
+                "RESEARCH_ONLY_CURRENT_J1_STANDINGS_POISSON"
+                if config.get("sources", {}).get("standings_url")
+                else "RESEARCH_ONLY_HEURISTIC_ELO_POISSON"
+            ),
             "production_status": "NOT_PRODUCTION",
             "decision_policy": "PREDICT_ONLY_WHEN_CURRENT_EVENT_AND_REQUIRED_STATE_ARE_OBSERVED; OTHERWISE_DEFER",
             "config_sha256": config_hash,
@@ -607,6 +822,16 @@ def verify(path: str) -> dict[str, Any]:
             errors.append(f"{idx}: uncertainty out of range")
         if not 0.0 <= float(row["predictability"]) <= 1.0:
             errors.append(f"{idx}: predictability out of range")
+        ou = [float(row["over_2_5_probability"]), float(row["under_2_5_probability"])]
+        if any(not np.isfinite(v) or v < 0 or v > 1 for v in ou) or not np.isclose(sum(ou), 1.0, atol=1e-5):
+            errors.append(f"{idx}: invalid O/U probability sum")
+        btts = [float(row["btts_yes_probability"]), float(row["btts_no_probability"])]
+        if any(not np.isfinite(v) or v < 0 or v > 1 for v in btts) or not np.isclose(sum(btts), 1.0, atol=1e-5):
+            errors.append(f"{idx}: invalid BTTS probability sum")
+        if str(row["mom_status"]) != "ABSTAIN_NO_PIT_VERIFIED_PLAYER_MODEL":
+            errors.append(f"{idx}: MOM must remain abstained in this research lane")
+        if any(float(row[f"mom_{rank}_probability"]) != 0.0 for rank in (1, 2, 3, 4)):
+            errors.append(f"{idx}: abstained MOM probabilities must be zero")
         for rank in (1, 2, 3):
             score = str(row[f"score_{rank}"])
             probability = float(row[f"score_{rank}_probability"])

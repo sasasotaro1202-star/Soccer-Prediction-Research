@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "config_version": "j1-imminent-research-forecast-v1",
+  "target_teams": [],
+  "target_pairs": {},
+  "target_competitions": [
+    "jpn.1",
+    "J1",
+    "J1 League",
+    "Meiji Yasuda J1 League"
+  ],
+  "team_aliases": {
+    "elo_codes": {},
+    "name_aliases": {}
+  },
+  "sources": {
+    "sofascore_live_url": "https://www.sofascore.com/api/v1/sport/football/events/live",
+    "sofascore_scheduled_url": "https://www.sofascore.com/api/v1/sport/football/scheduled-events/{date}",
+    "elo_url": "https://www.eloratings.net/World.tsv",
+    "espn_fallback_leagues": [
+      "jpn.1"
+    ],
+    "standings_url": "https://site.api.espn.com/apis/v2/sports/soccer/jpn.1/standings"
+  },
+  "runtime": {
+    "request_timeout_seconds": 20,
+    "schedule_days": 2,
+    "schedule_past_tolerance_minutes": 5
+  },
+  "model": {
+    "home_advantage_elo": 80,
+    "base_total_goals": 2.45,
+    "probability_shrink": 0.85,
+    "max_goals": 8,
+    "top_scorelines": 3,
+    "tempo_ratio_min": 0.65,
+    "tempo_ratio_max": 1.55,
+    "tempo_multiplier_base": 0.7,
+    "tempo_multiplier_slope": 0.3,
+    "tempo_multiplier_min": 0.8,
+    "tempo_multiplier_max": 1.3,
+    "data_quality_uncertainty_penalty": 0.1
+  },
+  "safety": {
+    "production_status": "NOT_PRODUCTION",
+    "research_only": true,
+    "retrieval_is_not_historical_publication": true,
+    "unknown_source_availability_blocks_production": true,
+    "historical_backfill_from_current_page_forbidden": true,
+    "market_odds_used": false
+  }
+}
