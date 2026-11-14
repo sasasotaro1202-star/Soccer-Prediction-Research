@@ -16,7 +16,7 @@ def test_record_deduplicates_prediction_state(tmp_path, monkeypatch):
     monkeypatch.setattr("scripts.experience_ledger.PREDICTION_SNAPSHOTS", snapshots)
     row = {
         "match_id":"espn:1","kickoff_utc":"2026-09-26T10:00:00Z","prediction_time_utc":"2026-09-26T08:00:00Z","home_team":"A","away_team":"B",
-        "competition":"EPL","p_home":0.5,"p_draw":0.25,"p_away":0.25,"model_version":"v1",
+        "competition":"EPL","p_home":0.5,"p_draw":0.25,"p_away":0.25,"source_available_at_utc":"2026-09-26T07:00:00Z","pit_verified":True,"model_version":"v1",
         "score_1":"1-0","score_1_probability":0.2,"score_2":"0-0","score_2_probability":0.1,
         "score_3":"1-1","score_3_probability":0.1,
     }
@@ -51,6 +51,8 @@ def test_record_keeps_distinct_prediction_times_as_distinct_states(tmp_path, mon
         "p_home": 0.5,
         "p_draw": 0.25,
         "p_away": 0.25,
+        "source_available_at_utc": "2026-09-26T07:00:00Z",
+        "pit_verified": True,
         "model_version": "v1",
         "score_1": "1-0",
         "score_1_probability": 0.2,
@@ -95,6 +97,8 @@ def test_record_rejects_invalid_1x2_probabilities(tmp_path, monkeypatch):
         "p_home": 0.8,
         "p_draw": 0.8,
         "p_away": -0.6,
+        "source_available_at_utc": "2026-09-26T07:00:00Z",
+        "pit_verified": True,
         "model_version": "v1",
     }]).to_csv(predictions, index=False)
     with pytest.raises(RuntimeError, match="1X2 probabilities"):
@@ -110,11 +114,11 @@ def test_compute_metrics_includes_proper_probability_scores(tmp_path, monkeypatc
     monkeypatch.setattr(mod, "STATUS", status_path)
     ledger = pd.DataFrame([
         {"kickoff_utc":"2026-09-01T10:00:00Z","actual_result":"H","p_home":0.8,"p_draw":0.1,"p_away":0.1,
-         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"model_version":"v1","competition":"EPL"},
+         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"source_available_at_utc":"2026-09-26T07:00:00Z","pit_verified":True,"model_version":"v1","competition":"EPL"},
         {"kickoff_utc":"2026-09-02T10:00:00Z","actual_result":"D","p_home":0.1,"p_draw":0.8,"p_away":0.1,
-         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"model_version":"v1","competition":"EPL"},
+         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"source_available_at_utc":"2026-09-26T07:00:00Z","pit_verified":True,"model_version":"v1","competition":"EPL"},
         {"kickoff_utc":"2026-09-03T10:00:00Z","actual_result":"A","p_home":0.1,"p_draw":0.1,"p_away":0.8,
-         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"model_version":"v1","competition":"EPL"},
+         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"source_available_at_utc":"2026-09-26T07:00:00Z","pit_verified":True,"model_version":"v1","competition":"EPL"},
     ])
     assert mod.compute_metrics(ledger) > 0
     report = pd.read_csv(metrics_path)
@@ -134,9 +138,9 @@ def test_compute_metrics_status_contains_monitoring_summary(tmp_path, monkeypatc
     monkeypatch.setattr(mod, "STATUS", status_path)
     ledger = pd.DataFrame([
         {"kickoff_utc":"2026-09-01T10:00:00Z","actual_result":"H","p_home":0.8,"p_draw":0.1,"p_away":0.1,
-         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"model_version":"v1","competition":"EPL"},
+         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"source_available_at_utc":"2026-09-26T07:00:00Z","pit_verified":True,"model_version":"v1","competition":"EPL"},
         {"kickoff_utc":"2026-09-02T10:00:00Z","actual_result":"D","p_home":0.1,"p_draw":0.8,"p_away":0.1,
-         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"model_version":"v1","competition":"EPL"},
+         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"source_available_at_utc":"2026-09-26T07:00:00Z","pit_verified":True,"model_version":"v1","competition":"EPL"},
     ])
     mod.compute_metrics(ledger)
     import json
@@ -153,7 +157,7 @@ def test_compute_metrics_rejects_invalid_actual_result_label(tmp_path, monkeypat
     monkeypatch.setattr(mod, "STATUS", tmp_path / "status.json")
     ledger = pd.DataFrame([
         {"kickoff_utc":"2026-09-01T10:00:00Z","actual_result":"HOME","p_home":0.8,"p_draw":0.1,"p_away":0.1,
-         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"model_version":"v1","competition":"EPL"},
+         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"source_available_at_utc":"2026-09-26T07:00:00Z","pit_verified":True,"model_version":"v1","competition":"EPL"},
     ])
     with pytest.raises(RuntimeError, match="invalid actual_result labels"):
         mod.compute_metrics(ledger)
@@ -166,7 +170,7 @@ def test_compute_metrics_rejects_invalid_probability_row(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "STATUS", tmp_path / "status.json")
     ledger = pd.DataFrame([
         {"kickoff_utc":"2026-09-01T10:00:00Z","actual_result":"H","p_home":1.2,"p_draw":-0.1,"p_away":0.0,
-         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"model_version":"v1","competition":"EPL"},
+         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"source_available_at_utc":"2026-09-26T07:00:00Z","pit_verified":True,"model_version":"v1","competition":"EPL"},
     ])
     with pytest.raises(RuntimeError, match="invalid 1X2 probability rows"):
         mod.compute_metrics(ledger)
@@ -194,9 +198,9 @@ def test_compute_metrics_persists_metric_deltas(tmp_path, monkeypatch):
     )
     ledger = pd.DataFrame([
         {"kickoff_utc":"2026-09-01T10:00:00Z","actual_result":"H","p_home":0.8,"p_draw":0.1,"p_away":0.1,
-         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"model_version":"v1","competition":"EPL"},
+         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"source_available_at_utc":"2026-09-26T07:00:00Z","pit_verified":True,"model_version":"v1","competition":"EPL"},
         {"kickoff_utc":"2026-09-02T10:00:00Z","actual_result":"D","p_home":0.1,"p_draw":0.8,"p_away":0.1,
-         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"model_version":"v1","competition":"EPL"},
+         "correct_1x2":1,"score_top1_hit":0,"score_top3_hit":1,"source_available_at_utc":"2026-09-26T07:00:00Z","pit_verified":True,"model_version":"v1","competition":"EPL"},
     ])
     mod.compute_metrics(ledger)
     status = json.loads(status_path.read_text())
@@ -285,6 +289,8 @@ def test_compute_metrics_persists_target_specific_results(tmp_path, monkeypatch)
         "btts_correct": 0,
         "mom_top1_hit": 0,
         "mom_top4_hit": 1,
+        "source_available_at_utc": "2026-09-26T07:00:00Z",
+        "pit_verified": True,
         "model_version": "v1",
         "competition": "EPL",
     }
@@ -318,6 +324,8 @@ def test_record_normalizes_binary_target_probabilities(tmp_path, monkeypatch):
         "market_under_2_5": 0.4,
         "market_btts_yes": 0.7,
         "market_btts_no": 0.3,
+        "source_available_at_utc": "2026-09-26T07:00:00Z",
+        "pit_verified": True,
         "model_version": "v1",
     }
     pd.DataFrame([row]).to_csv(predictions, index=False)
@@ -354,6 +362,8 @@ def test_target_metrics_include_binary_probability_quality(tmp_path, monkeypatch
         "btts_yes": 0.8,
         "btts_no": 0.2,
         "btts_correct": 1,
+        "source_available_at_utc": "2026-09-26T07:00:00Z",
+        "pit_verified": True,
         "model_version": "v1",
         "competition": "EPL",
     }])
@@ -393,6 +403,8 @@ def test_record_prediction_joins_outcome_free_shadow_telemetry(tmp_path, monkeyp
         "p_home": 0.6,
         "p_draw": 0.2,
         "p_away": 0.2,
+        "source_available_at_utc": "2026-09-26T07:00:00Z",
+        "pit_verified": True,
         "model_version": "v1",
     }]).to_csv(predictions, index=False)
     pd.DataFrame([{
@@ -533,7 +545,9 @@ def test_compute_metrics_emits_explicit_scope_breakdowns(tmp_path, monkeypatch):
             "btts_correct": 0,
             "mom_top1_hit": 0,
             "mom_top4_hit": 1,
-            "model_version": "v1",
+            "source_available_at_utc": "2026-09-26T07:00:00Z",
+        "pit_verified": True,
+        "model_version": "v1",
             "competition": comp,
             "season_start": 2025,
             "phase": phase,
@@ -555,3 +569,64 @@ def test_compute_metrics_emits_explicit_scope_breakdowns(tmp_path, monkeypatch):
     assert set(target_report.loc[target_report["scope"] == "competition", "segment"]) == {"EPL", "UCL"}
     assert set(target_report.loc[target_report["scope"] == "phase", "segment"]) == {"REGULAR", "KNOCKOUT"}
 
+
+
+
+def test_record_requires_explicit_source_pit_metadata(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+    ledger = tmp_path / "ledger.csv"
+    snapshots = tmp_path / "snapshots.jsonl"
+    predictions = tmp_path / "predictions.csv"
+    monkeypatch.setattr(mod, "LEDGER", ledger)
+    monkeypatch.setattr(mod, "PREDICTION_SNAPSHOTS", snapshots)
+    row = {
+        "match_id": "m-pit-missing",
+        "kickoff_utc": "2026-09-26T10:00:00Z",
+        "prediction_time_utc": "2026-09-26T08:00:00Z",
+        "home_team": "A", "away_team": "B", "competition": "EPL",
+        "p_home": 0.5, "p_draw": 0.25, "p_away": 0.25, "model_version": "v1",
+        "pit_verified": True,
+    }
+    pd.DataFrame([row]).to_csv(predictions, index=False)
+    with pytest.raises(RuntimeError, match="source_available_at_utc"):
+        mod.record_prediction_file(str(predictions))
+
+
+def test_record_rejects_source_availability_after_cutoff(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+    ledger = tmp_path / "ledger.csv"
+    snapshots = tmp_path / "snapshots.jsonl"
+    predictions = tmp_path / "predictions.csv"
+    monkeypatch.setattr(mod, "LEDGER", ledger)
+    monkeypatch.setattr(mod, "PREDICTION_SNAPSHOTS", snapshots)
+    row = {
+        "match_id": "m-pit-late",
+        "kickoff_utc": "2026-09-26T10:00:00Z",
+        "prediction_time_utc": "2026-09-26T08:00:00Z",
+        "home_team": "A", "away_team": "B", "competition": "EPL",
+        "p_home": 0.5, "p_draw": 0.25, "p_away": 0.25, "model_version": "v1",
+        "source_available_at_utc": "2026-09-26T08:01:00Z", "pit_verified": True,
+    }
+    pd.DataFrame([row]).to_csv(predictions, index=False)
+    with pytest.raises(RuntimeError, match="availability after prediction cutoff"):
+        mod.record_prediction_file(str(predictions))
+
+
+def test_record_rejects_false_pit_verified(tmp_path, monkeypatch):
+    from scripts import experience_ledger as mod
+    ledger = tmp_path / "ledger.csv"
+    snapshots = tmp_path / "snapshots.jsonl"
+    predictions = tmp_path / "predictions.csv"
+    monkeypatch.setattr(mod, "LEDGER", ledger)
+    monkeypatch.setattr(mod, "PREDICTION_SNAPSHOTS", snapshots)
+    row = {
+        "match_id": "m-pit-false",
+        "kickoff_utc": "2026-09-26T10:00:00Z",
+        "prediction_time_utc": "2026-09-26T08:00:00Z",
+        "home_team": "A", "away_team": "B", "competition": "EPL",
+        "p_home": 0.5, "p_draw": 0.25, "p_away": 0.25, "model_version": "v1",
+        "source_available_at_utc": "2026-09-26T07:00:00Z", "pit_verified": False,
+    }
+    pd.DataFrame([row]).to_csv(predictions, index=False)
+    with pytest.raises(RuntimeError, match="pit_verified=false"):
+        mod.record_prediction_file(str(predictions))
