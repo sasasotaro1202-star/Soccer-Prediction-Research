@@ -220,6 +220,30 @@ def test_weather_without_timestamps_remains_unknown():
     assert pd.isna(temp)
 
 
+def test_sofascore_maps_cups_supercups_tournaments_and_friendlies():
+    cases = {
+        "FA Community Shield": "COMMUNITY_SHIELD",
+        "DFL-Supercup": "DFL_SUPER",
+        "Supercopa de España": "SUPERCOPA_ES",
+        "Supercoppa Italiana": "SUPERCOPPA_IT",
+        "Trophée des Champions": "TROPHEE_CHAMPIONS",
+        "Johan Cruyff Shield": "JOHAN_CRUYFF",
+        "MLS Cup": "MLS_CUP",
+        "Leagues Cup": "LEAGUES_CUP",
+        "FIFA World Cup Qualifiers": "WC_QUALI_M",
+        "AFC Asian Cup": "ASIAN_CUP",
+        "Copa América": "COPA_AMERICA",
+        "Africa Cup of Nations": "AFCON",
+        "CONCACAF Gold Cup": "GOLD_CUP",
+        "FIFA Intercontinental Cup": "FIFA_INTERCONTINENTAL",
+        "Club Friendly Matches": "CLUB_FRIENDLY",
+        "Women's International Friendly Matches": "INTL_FRIENDLY_W",
+    }
+    for name, expected in cases.items():
+        assert _sofascore_competition({"tournament": {"name": name}}) == expected
+
+
+
 def test_sofascore_uses_public_api_host():
     from src.data import matchday_intelligence_fetch as m
     source = m.SOFASCORE_COMPETITIONS
