@@ -220,6 +220,28 @@ def test_weather_without_timestamps_remains_unknown():
     assert pd.isna(temp)
 
 
+def test_sofascore_maps_womens_and_global_catalog_entries():
+    cases = {
+        "Women's Super League": "ENGW",
+        "Liga F": "SPAW",
+        "Frauen-Bundesliga": "GERW",
+        "Serie A Women": "ITAW",
+        "National Women's Soccer League": "NWSL",
+        "WE League": "WELEAGUE",
+        "AFC Champions League Elite": "AFC_CL_ELITE",
+        "AFC Champions League Two": "AFC_CL_TWO",
+        "AFC Women's Champions League": "AFC_WCL",
+        "Copa Libertadores": "LIB",
+        "Copa Sudamericana": "SUD",
+        "CAF Champions League": "CAF_CL",
+        "CONCACAF Champions Cup": "CCL",
+        "Chinese Super League": "CSL",
+    }
+    for name, expected in cases.items():
+        assert _sofascore_competition({"tournament": {"name": name}}) == expected
+
+
+
 def test_sofascore_uses_public_api_host():
     from src.data import matchday_intelligence_fetch as m
     source = m.SOFASCORE_COMPETITIONS
