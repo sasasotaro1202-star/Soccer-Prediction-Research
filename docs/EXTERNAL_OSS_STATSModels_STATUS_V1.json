@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "research_id": "statsmodels_poisson_score_v2",
+  "repository": "statsmodels/statsmodels",
+  "adapter": "src/research/external_oss/statsmodels_poisson.py",
+  "dependency_manifest": "requirements-research.txt",
+  "dependency_pin": "statsmodels==0.15.0",
+  "evidence_level": "E2",
+  "status": "RESEARCH_ONLY_NOT_PRODUCTION",
+  "claims_allowed": [
+    "implementation_exists",
+    "isolated_tests_exist",
+    "pit_cutoff_contract_is_encoded"
+  ],
+  "claims_forbidden_until_gates_pass": [
+    "soccer_prediction_improvement",
+    "calibration_improvement",
+    "robustness_improvement",
+    "future_generalization_improvement",
+    "production_readiness"
+  ],
+  "pit_contract": {
+    "pit_verified_required": true,
+    "kickoff_before_prediction_cutoff_required": true,
+    "source_available_at_required": true,
+    "source_available_at_must_be_at_or_before_prediction_cutoff": true,
+    "unknown_timestamp": "FAIL_CLOSED"
+  },
+  "evaluation_path": [
+    "E3_LOCAL_REPRODUCTION",
+    "E4_CHRONOLOGICAL_OOS_WFO",
+    "E5_ROBUSTNESS",
+    "E6_FROZEN_HOLDOUT",
+    "E7_SHADOW_PRODUCTION_EVIDENCE"
+  ],
+  "decision_states": [
+    "ADOPT",
+    "HOLD",
+    "REJECT"
+  ],
+  "automatic_production_adoption": false,
+  "frozen_holdout_access": false,
+  "model_parameters": {
+    "regularization_alpha": 0.1,
+    "regularization": "ridge_L2",
+    "fit_solver": "statsmodels_GLM_fit_regularized"
+  },
+  "notes": "Parameterization is research-locked for reproducible comparison; changes require a new experiment identity.",
+  "current_evidence_level": "E2_LOCAL_IMPLEMENTATION_AND_TESTS",
+  "latest_oos_attempt": {
+    "status": "FAILED",
+    "reason": "PIT_SAFE_TRAINING_SIZE_AND_MODEL_SUPPORT_OOD",
+    "failures": [
+      "OOS_PIT_BOUNDARY",
+      "MODEL_SUPPORT_OOD"
+    ],
+    "repair_applied": [
+      "advance_pit_safe_oos_boundary",
+      "avoid_same_kickoff_split",
+      "common_model_support_filtering"
+    ],
+    "re_verification": "PENDING",
+    "evaluated_head_sha": "1a1d6fcf59a26d52707033f39126f9f09e2e5f9a"
+  },
+  "failure_memory": "docs/EXTERNAL_OSS_STATSModels_FAILURE_MEMORY_V1.md",
+  "production_gate": "BLOCKED_UNTIL_E4_E5_E6_E7",
+  "source_verification": {
+    "verified_at_utc": "2026-10-08T14:34:00+09:00",
+    "official_repository": "https://github.com/statsmodels/statsmodels",
+    "official_release": "https://www.statsmodels.org/stable/release/index.html",
+    "pinned_release": "0.15.0",
+    "release_date": "2026-08-27",
+    "license": "BSD-3-Clause",
+    "cost_model": "open_source_package_no_runtime_service_dependency",
+    "evidence_role": "SOURCE_VERIFICATION_ONLY_NOT_PERFORMANCE_EVIDENCE"
+  },
+  "adapter_versions": {
+    "score_model": "src/research/external_oss/statsmodels_poisson.py",
+    "oos_runner": "src/research/external_oss/statsmodels_score_oos.py",
+    "calibration": "src/research/external_oss/score_distribution_calibration.py",
+    "robustness": "src/research/external_oss/statsmodels_robustness.py"
+  },
+  "experiment_contract": {
+    "target": "Score",
+    "feature_set_id": "statsmodels_score_formula_home_away_competition_v1",
+    "calibration": "joint_score_temperature_scaling",
+    "robustness": "chronological_fold_plus_multi_competition_slices",
+    "selection_during_oos": false,
+    "frozen_holdout_access": false,
+    "production_adoption": false
+  },
+  "latest_verification": {
+    "head_sha": "1a1d6fcf59a26d52707033f39126f9f09e2e5f9a",
+    "latest_test_failure": {
+      "workflow": "External OSS Statsmodels Research",
+      "run_number": 72,
+      "failed_tests": 3,
+      "passed_tests": 19,
+      "root_causes": [
+        "adapter row-level feature-PIT regression test was not enforced fail-closed",
+        "OOS runner retained residual legacy source-availability reference",
+        "case-level PIT test mutated non-authoritative legacy source timestamp"
+      ],
+      "status": "REPAIRED_PENDING_REVERIFICATION"
+    },
+    "current_actions_state": "REVERIFICATION_QUEUED",
+    "performance_claim": false,
+    "production_adoption": false,
+    "frozen_holdout_access": false
+  }
+}
